@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Dependency updates. Actions stay pinned by commit SHA; Dependabot updates
+# the SHA and its version comment. cooldown: a new release waits a week
+# before it is proposed, so a hijacked release is more likely noticed first.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    # Node's types follow the Node that CI runs (.nvmrc), not the newest Node
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]

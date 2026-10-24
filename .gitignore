@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Builds
+/build/
+/build-*/
+/web/dist/
+/web/node_modules/
+/web/test-results/
+/web/playwright-report/
+# Editors and systems
+.vscode/
+.idea/
+.DS_Store
+*.swp
+# The simulator's data folder when kept in the tree
+/sim-data/
