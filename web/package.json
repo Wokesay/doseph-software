@@ -1,0 +1,27 @@
+{
+  "name": "doseph-web",
+  "private": true,
+  "version": "0.1.0-dev",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "description": "Web app of the Doseph mixing robot (served by the device or the simulator)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/size-budget.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.3",
+    "lucide-preact": "1.53.0",
+    "preact": "11.0.1",
+    "uplot": "1.6.32"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
+  }
+}

@@ -1,0 +1,164 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// REST client and types of the robot's API (/api/v1). The web app uses only this API.
+import { msg, t } from "./i18n";
+
+export type Msg = { key: string; text: string; args?: Record<string, unknown> };
+
+export type Quality = "offline" | "no_data" | "stale" | "frozen" | "implausible" | "jump" | "uncalibrated" | "ok";
+export type Channel = "ph" | "ec" | "temp" | "flow";
+
+export type Reading = {
+  value: number | null;
+  quality: Quality;
+  reason: Msg;
+  ageS: number | null;
+  unit: string;
+  decimals: number;
+  usable: boolean;
+};
+
+/** The steps of one check, in order (SD-105); off, stopped and wait stand outside it. */
+export type Phase = "off" | "stopped" | "pump_on" | "prove_flow" | "flush" | "measure" | "dose" | "mix" | "remeasure" | "hold" | "wait";
+
+export type CycleSettings = {
+  recipe: string | null;
+  ecTarget: number | null; ecTolerance: number | null; phTarget: number | null; phTolerance: number | null;
+  volumeL: number | null; flowLpm: number | null; turnoverMin: number | null;
+  // The waits in force (the user's, else the suggestion) and the suggestions from volume and flow
+  waitEcMin: number | null; waitPhMin: number | null; suggestEcMin: number | null; suggestPhMin: number | null;
+  holdMin: number; circulation: Circulation;
+};
+
+export type Cycle = {
+  phase: Phase;
+  since: number;
+  line: Msg;
+  notes: Msg[];
+  // Flush and mix: seconds done of total (mix counts only with flow); hold and wait: the next check
+  progress: { doneS?: number; totalS?: number; paused?: boolean; first?: boolean; nextAt?: number } | null;
+  round: { kind: "ec" | "ph"; n: number; test: boolean; ml: number; from: number | null } | null;
+  last: { ph: number | null; ec: number | null; temp: number | null; at: number } | null;
+  mixPending: boolean;
+  settings: CycleSettings;
+};
+
+export type Assessment = { id: string; label: Msg; status: "ok" | "problem" | "neutral"; text: Msg };
+export type Watchdog = {
+  evaluatedAt: number; overall: "ok" | "problem" | "neutral"; ok: number; problems: number; neutral: number;
+  headline: Msg; items: Assessment[]; stale: boolean;
+};
+
+export type PumpJob = {
+  id: string; type: "calibration" | "prime"; pump: number;
+  state: "running" | "waiting_result" | "done" | "failed";
+  seconds: number; actualS: number; ml: number | null; message: Msg; at: number;
+};
+
+export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawPh: number | null; rawEc: number | null; temp: number | null };
+
+export type RobotState = {
+  now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
+  circulation: boolean | null; flowOk: boolean;
+  readings: Record<Channel, Reading>;
+  cycle: Cycle;
+  watchdog: Watchdog;
+  latches: Record<string, Record<string, unknown>>;
+  jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
+  newTank: boolean;
+  effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
+  dosing: { order: string; purpose: string; bottle: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
+  pumps: { pump: number; bottle: string | null; flowMlPerMin: number | null; at: number | null }[];
+  pumpJob: PumpJob | null;
+  probe: ProbeSession | null;
+  eventId: number;
+  sim?: { speed: number; scenario: string };
+};
+
+export type Circulation = "cycle" | "always" | "external";
+export type Bottle = { id: string; name: string; kind: "nutrient" | "ph_down"; pump: number; pair: string; color: string };
+/** A recipe: ml per litre of each part, its EC target and pH range; a fixed part is never scaled (RAT-085). */
+export type Recipe = { id: string; name: string; note: string; steps: { bottle: string; mlPerL: number | null; fixed: boolean }[]; ecTarget: number | null; ph: [number, number] | null };
+
+export type Config = {
+  schemaVersion: number; revision: number;
+  system: { name: string; language: string; timezone: string; passwordSet: boolean };
+  tank: { volumeL: number | null; circulation: Circulation; waitEcMin: number | null; waitPhMin: number | null; holdMin: number | null };
+  control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
+  limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
+  bottles: Bottle[];
+  recipes: Recipe[];
+  active: { recipe: string; from: number; until: number };
+  pumps: Record<string, { flowMlPerMin: number | null; at: number }>;
+  probes: { ph: { points?: [number, number][]; at?: number } | null; ec: { factor?: number; reference?: number; tempC?: number; at?: number } | null };
+};
+
+export type Info = {
+  product: string; version: string; api: number; schemaVersion: number;
+  platform: { kind: string; simulated?: boolean; scenario?: string };
+  hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; pumpCount: number;
+};
+
+export type RobotEvent = { id: number; ts: number; type: string; severity: "info" | "notice" | "warn" | "alarm"; title: Msg; text: Msg; data: Record<string, any> };
+
+export type SeriesData = { series: string; stepS: number; t: number[]; avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] };
+
+export type TemplateStep = { name: string; nameDe?: string; pair?: string; mlPerL: number };
+export type RecipeTemplate = { id: string; name: string; nameDe?: string; note?: string; noteDe?: string; source?: string; ecTarget?: number; ph?: [number, number]; steps: TemplateStep[] };
+
+// The message is shown in the page language (SD-032).
+export class ApiError extends Error {
+  constructor(public status: number, public key: string, text: string, public body: any) {
+    super(text);
+  }
+}
+
+let onUnauthorized: () => void = () => {};
+export function setUnauthorizedHandler(f: () => void) {
+  onUnauthorized = f;
+}
+
+// A request that got no answer: no connection, or none within its time limit
+export class NetworkError extends Error {}
+
+export async function api<T = any>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
+  let res: Response;
+  let text: string;
+  // AbortController, not AbortSignal.timeout: that is missing before iOS 16, and a
+  // Stop must still be sent from an old phone on the wall
+  const abort = timeoutMs ? new AbortController() : undefined;
+  const timer = abort ? setTimeout(() => abort.abort(), timeoutMs) : undefined;
+  try {
+    res = await fetch(`/api/v1${path}`, {
+      method,
+      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: "same-origin",
+      signal: abort?.signal,
+    });
+    text = await res.text();
+  } catch (e) {
+    throw new NetworkError(e instanceof Error ? e.message : String(e));
+  } finally {
+    clearTimeout(timer);
+  }
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/")) onUnauthorized();
+    const err = data?.error ?? {};
+    throw new ApiError(res.status, err.key ?? "http", err.text ? msg(err) : t("shell.httpError", { status: res.status }), data);
+  }
+  return data as T;
+}
+
+export const get = <T = any>(p: string) => api<T>("GET", p);
+export const post = <T = any>(p: string, b: unknown = {}, timeoutMs?: number) => api<T>("POST", p, b, timeoutMs);
+export const put = <T = any>(p: string, b: unknown) => api<T>("PUT", p, b);
+export const del = <T = any>(p: string) => api<T>("DELETE", p);
+
+// The simulator's controls (simulator only)
+export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${action}`, body);

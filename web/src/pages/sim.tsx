@@ -1,0 +1,209 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// The simulator's panel: time-lapse, the tank as it truly is, faults and
+// scenarios, to try the cycle and its texts without hardware. Simulator only.
+import { useEffect, useState } from "preact/hooks";
+import { FlaskConical } from "lucide-preact";
+import { get, sim } from "../api";
+import { num } from "../format";
+import { t, type TextKey } from "../i18n";
+import { logoutLocal, refreshState, state, toast, toastError } from "../store";
+import { Button, Field, NumberInput, Seg } from "../ui";
+
+type World = {
+  tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
+  pumps: { pump: number; liquid: string; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
+  output: boolean; external: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
+  phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
+};
+
+export function SimPanel() {
+  const [open, setOpen] = useState(false);
+  const [world, setWorld] = useState<World | null>(null);
+  const [vol, setVol] = useState<number | null>(100);
+  const [ec, setEc] = useState<number | null>(0.45);
+  const [ph, setPh] = useState<number | null>(7.6);
+  const [lpm, setLpm] = useState<number | null>(12);
+  const speed = String(state.value?.sim?.speed ?? 1);
+
+  const load = () =>
+    get<{ world: World }>("/sim")
+      .then((s) => setWorld(s.world))
+      .catch(() => {});
+  useEffect(() => {
+    if (!open) return;
+    load();
+    const timer = setInterval(load, 2000);
+    return () => clearInterval(timer);
+  }, [open]);
+
+  const act = async (action: string, body: unknown = {}, done?: string) => {
+    try {
+      await sim(action, body);
+      await load();
+      await refreshState();
+      if (done) toast(done, "info");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
+  if (!open)
+    return (
+      <button class="btn sim-fab" onClick={() => setOpen(true)} data-testid="sim-open">
+        <FlaskConical size={16} /> {t("common.simulator")}
+      </button>
+    );
+  const w = world;
+  return (
+    <aside class="drawer" aria-label={t("common.simulator")}>
+      <div class="row-between">
+        <h2 class="row">
+          <FlaskConical size={18} /> {t("common.simulator")}
+        </h2>
+        <button class="btn sm ghost" onClick={() => setOpen(false)}>
+          {t("common.close")}
+        </button>
+      </div>
+      <p class="muted small">{t("sim.intro")}</p>
+      <Field label={t("sim.speed")} group>
+        <Seg value={speed} onChange={(v) => act("speed", { speed: Number(v) })} options={[["1", "1×"], ["10", "10×"], ["60", "60×"], ["300", "300×"]]} />
+      </Field>
+      {w && (
+        <div class="card flat stack-sm" data-testid="sim-world">
+          <div class="section-title">{t("sim.tankTrue")}</div>
+          <div class="row small">
+            <span>{num(w.tank.volumeL, 1)} L</span>·<span>EC {num(w.tank.ec + w.tank.pendingEc, 2)}</span>·<span>pH {num(w.tank.ph + w.tank.pendingPh, 2)}</span>·
+            <span>{num(w.tank.temp, 1)} °C</span>
+          </div>
+          <div class="small muted">
+            {t("sim.circulation", { state: w.output || w.external ? t("common.on") : t("common.off") })} · {w.flowing ? t("sim.flowing", { lpm: num(w.pumpLpm, 1) }) : t("sim.notFlowing")}
+          </div>
+        </div>
+      )}
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.fill")}</div>
+        <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <NumberInput value={vol} onValue={setVol} unit="L" ariaLabel={t("sim.litres")} />
+          <NumberInput value={ec} onValue={setEc} unit="EC" ariaLabel="EC" />
+          <NumberInput value={ph} onValue={setPh} unit="pH" ariaLabel="pH" />
+        </div>
+        <div class="row">
+          <Button size="sm" onClick={() => act("fill", { volumeL: vol, ec, ph }, t("sim.filled"))}>
+            {t("sim.freshFill")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => act("topup", { litres: 10 }, t("sim.toppedUp"))}>
+            {t("sim.topUp")}
+          </Button>
+        </div>
+      </div>
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.flow")}</div>
+        <div class="row">
+          <NumberInput value={lpm} onValue={setLpm} unit="L/min" ariaLabel={t("sim.pumpLpm")} />
+          <Button size="sm" onClick={() => act("pumpLpm", { lpm })}>
+            {t("sim.set")}
+          </Button>
+        </div>
+        <Seg
+          value={w?.flowFault || "none"}
+          onChange={(f) => act("flowFault", { fault: f === "none" ? "" : f })}
+          label={t("sim.flowFault")}
+          options={[
+            ["none", t("sim.fault.none")],
+            ["blocked", t("sim.fault.blocked")],
+            ["sensor", t("sim.fault.sensor")],
+          ]}
+        />
+        <label class="row small">
+          <input type="checkbox" checked={!!w?.external} onChange={(e) => act("external", { on: (e.target as HTMLInputElement).checked })} /> {t("sim.external")}
+        </label>
+      </div>
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.probes")}</div>
+        <Seg
+          value={w?.probeFault || "none"}
+          onChange={(f) => act("probeFault", { fault: f === "none" ? "" : f })}
+          label={t("sim.probes")}
+          options={([["none", "sim.fault.none"], ["offline", "sim.fault.offline"], ["frozen", "sim.fault.frozen"], ["jump", "sim.fault.jump"], ["ec_zero", "sim.fault.ecZero"]] as [string, TextKey][]).map(
+            ([v, k]) => [v, t(k)] as [string, string],
+          )}
+        />
+        <div class="row">
+          <span class="small muted">{t("sim.buffer")}</span>
+          {[7, 4].map((v) => (
+            <Button size="sm" onClick={() => act("buffer", { kind: "ph", value: v })}>
+              pH {v}
+            </Button>
+          ))}
+          <Button size="sm" onClick={() => act("buffer", { kind: "ec", value: 1.413 })}>
+            {num(1.413, 3)} mS/cm
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              await act("buffer", { kind: "ph" });
+              await act("buffer", { kind: "ec" });
+            }}
+          >
+            {t("sim.backInTank")}
+          </Button>
+        </div>
+        {w && (w.phBuffer !== null || w.ecBuffer !== null) && <p class="small warn-text">{t("sim.inBuffer")}</p>}
+      </div>
+      {w && (
+        <div class="stack-sm">
+          <div class="section-title">{t("sim.pumps")}</div>
+          <div class="list">
+            {w.pumps.map((p) => (
+              <div class="item small">
+                <span class="grow">
+                  {t("sim.pumpLiquid", { n: p.pump, liquid: w.liquids[p.liquid] ?? p.liquid ?? "–" })} <span class="faint">{t("sim.trueFlow", { flow: num(p.trueFlow, 1) })}</span>
+                  {p.cupMl > 0 && <span class="faint"> · {t("sim.cup", { ml: num(p.cupMl, 1) })}</span>}
+                </span>
+                <Button size="sm" onClick={() => act("pumpFault", { pump: p.pump, blocked: !p.blocked, empty: p.empty })}>
+                  {p.blocked ? t("sim.unblock") : t("sim.block")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => act("pumpFault", { pump: p.pump, blocked: p.blocked, empty: !p.empty })}>
+                  {p.empty ? t("sim.refill") : t("sim.empty")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.time")}</div>
+        <div class="row">
+          <Button size="sm" onClick={() => act("fastForward", { hours: 1 }, t("sim.forwarded", { h: 1 }))}>
+            {t("sim.forward", { h: 1 })}
+          </Button>
+          <Button size="sm" onClick={() => act("fastForward", { hours: 6 }, t("sim.forwarded", { h: 6 }))}>
+            {t("sim.forward", { h: 6 })}
+          </Button>
+          <Button size="sm" variant="danger-soft" onClick={() => act("reboot", { outageS: 60 }, t("sim.powerCut"))}>
+            {t("sim.reboot")}
+          </Button>
+        </div>
+      </div>
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.scenario")}</div>
+        <p class="faint small">{t("sim.scenarioNote")}</p>
+        <div class="row">
+          {([["new", "sim.scenarioNew"], ["demo", "sim.scenarioDemo"]] as [string, TextKey][]).map(([n, l]) => (
+            <Button
+              size="sm"
+              onClick={async () => {
+                await act("scenario", { name: n }, t("sim.scenarioLoaded", { name: t(l) }));
+                logoutLocal();
+                location.reload();
+              }}
+            >
+              {t(l)}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
