@@ -1,0 +1,51 @@
+{
+  "recipes": [
+    {
+      "id": "two_part_basic",
+      "name": "Two-part nutrient",
+      "nameDe": "Zweikomponenten-Dünger",
+      "note": "General starting values for A+B nutrient with CalMag, not from a manufacturer chart. Adjust them to your nutrient's label.",
+      "noteDe": "Allgemeine Startwerte für A+B-Dünger mit CalMag, nicht aus einem Herstellerplan. Passe sie an die Angaben deines Düngers an.",
+      "basis": "assumption",
+      "ecTarget": 1.6,
+      "ph": [5.8, 6.2],
+      "steps": [
+        { "name": "Part B", "nameDe": "Teil B", "pair": "AB", "mlPerL": 2.0 },
+        { "name": "Part A", "nameDe": "Teil A", "pair": "AB", "mlPerL": 2.0 },
+        { "name": "CalMag", "nameDe": "CalMag", "mlPerL": 0.5 }
+      ]
+    },
+    {
+      "id": "athena_blended_veg",
+      "name": "Vegetative wk 1–4 (per Athena A01.004)",
+      "nameDe": "Wachstum Wo. 1–4 (nach Athena A01.004)",
+      "note": "Check against the manufacturer's current chart before use. Manufacturer data, not binding; not affiliated with the manufacturer.",
+      "noteDe": "Prüf die Werte vor dem Einsatz am aktuellen Plan des Herstellers. Herstellerangabe, unverbindlich; kein Bezug zum Hersteller.",
+      "source": "Athena Blended Feed Program, metric, edition A01.004 (PDF dated 2025-12-05, checked 2026-09-26)",
+      "basis": "RAT-066",
+      "ecTarget": 2.1,
+      "ph": [5.8, 6.2],
+      "steps": [
+        { "name": "Grow B", "nameDe": "Grow B", "pair": "AB", "mlPerL": 2.9 },
+        { "name": "Grow A", "nameDe": "Grow A", "pair": "AB", "mlPerL": 2.9 },
+        { "name": "CaMg", "nameDe": "CaMg", "mlPerL": 1.0 }
+      ]
+    },
+    {
+      "id": "athena_blended_bloom",
+      "name": "Flowering wk 1–2 (per Athena A01.004)",
+      "nameDe": "Blüte Wo. 1–2 (nach Athena A01.004)",
+      "note": "Higher from week 3, plus a PK booster (phosphorus, potassium). Check against the manufacturer's current chart before use. Manufacturer data, not binding; not affiliated with the manufacturer.",
+      "noteDe": "Ab Woche 3 höher und mit PK-Zusatz (Phosphor, Kalium). Prüf die Werte vor dem Einsatz am aktuellen Plan des Herstellers. Herstellerangabe, unverbindlich; kein Bezug zum Hersteller.",
+      "source": "Athena Blended Feed Program, metric, edition A01.004 (PDF dated 2025-12-05, checked 2026-09-26)",
+      "basis": "RAT-066",
+      "ecTarget": 2.3,
+      "ph": [5.8, 6.2],
+      "steps": [
+        { "name": "Bloom B", "nameDe": "Bloom B", "pair": "AB", "mlPerL": 3.2 },
+        { "name": "Bloom A", "nameDe": "Bloom A", "pair": "AB", "mlPerL": 3.2 },
+        { "name": "CaMg", "nameDe": "CaMg", "mlPerL": 1.0 }
+      ]
+    }
+  ]
+}
