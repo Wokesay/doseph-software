@@ -1,0 +1,255 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// The simulator's host server: serves the web app, binds the core's REST
+// API to HTTP and sends the live state as Server-Sent Events. On the device
+// its own server takes this role.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#endif
+#include <algorithm>
+#include <atomic>
+#include <csignal>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <thread>
+
+#include <httplib.h>
+
+#include "doseph/embedded.hpp"
+#include "doseph/messages.hpp"
+#include "simulation.hpp"
+
+namespace {
+
+std::atomic<bool> g_running{true};
+
+void onSignal(int) { g_running = false; }
+
+std::string tokenOf(const httplib::Request& req) {
+  return doseph::sessionToken(req.get_header_value("Authorization"), req.get_header_value("Cookie"));
+}
+
+doseph::ApiRequest toApi(const httplib::Request& req) {
+  doseph::ApiRequest r;
+  r.method = req.method;
+  r.path = req.path;
+  for (const auto& [k, v] : req.params) r.query[k] = v;
+  r.body = req.body;
+  r.token = tokenOf(req);
+  r.client = doseph::clientKey(req.remote_addr);  // the socket's peer; never X-Forwarded-For
+  return r;
+}
+
+void usage() {
+  std::cout << "Doseph simulator " << doseph::embedded::kVersion << "\n"
+            << "  --port N            HTTP port (8080)\n"
+            << "  --host ADDR         address (127.0.0.1)\n"
+            << "  --scenario NAME     demo | new (demo)\n"
+            << "  --data DIR          keep the data in this folder (else in memory only)\n"
+            << "  --web DIR           built web app (web/dist)\n"
+            << "  --speed X           time-lapse factor (1)\n"
+            << "  --password PW       password of the demo scenario\n"
+            << "  --prefill H         hours of history the demo computes ahead (24)\n"
+            << "  --allow-reset       change the scenario without signing in (automated tests only)\n";
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  sim::Options opts;
+  int port = 8080;
+  std::string host = "127.0.0.1", web;
+  double speed = 1.0;
+  bool allowReset = false;
+  for (int i = 1; i < argc; ++i) {
+    std::string a = argv[i];
+    auto next = [&]() -> std::string {
+      if (i + 1 >= argc) {
+        usage();
+        std::exit(2);
+      }
+      return argv[++i];
+    };
+    try {
+      if (a == "--port") port = std::stoi(next());
+      else if (a == "--host") host = next();
+      else if (a == "--scenario") opts.scenario = next();
+      else if (a == "--data") opts.dataDir = next();
+      else if (a == "--web") web = next();
+      else if (a == "--speed") speed = std::stod(next());
+      else if (a == "--password") opts.password = next();
+      else if (a == "--prefill") opts.prefillHours = std::stod(next());
+      else if (a == "--allow-reset") allowReset = true;
+      else if (a == "--help" || a == "-h") {
+        usage();
+        return 0;
+      } else {
+        usage();
+        return 2;
+      }
+    } catch (const std::exception&) {
+      usage();
+      return 2;
+    }
+  }
+  if (opts.scenario != "demo" && opts.scenario != "new") {
+    usage();
+    return 2;
+  }
+
+  std::cout << "Starting simulator (scenario " << opts.scenario << ") …" << std::flush;
+  sim::Simulation simulation(opts);
+  simulation.speed = std::clamp(speed, 0.0, sim::Simulation::kMaxSpeed);
+  std::cout << " ready.\n";
+
+  httplib::Server svr;
+  if (!svr.bind_to_port(host, port)) {
+    std::cerr << "Port " << port << " not available\n";
+    return 1;
+  }
+  svr.set_default_headers({{"X-Content-Type-Options", "nosniff"},
+                           {"X-Frame-Options", "DENY"},
+                           {"Referrer-Policy", "no-referrer"},
+                           {"Content-Security-Policy",
+                            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+                            "connect-src 'self'; frame-ancestors 'none'"}});
+  svr.set_payload_max_length(1 << 20);
+  // The origin is checked before any handler runs (DNS rebinding, CSRF).
+  svr.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
+    const bool ok = doseph::hostAllowed(req.get_header_value("Host"), host) &&
+                    doseph::writeAllowed(req.method, req.get_header_value("Sec-Fetch-Site"), req.get_header_value("Origin"),
+                                         req.get_header_value("Host"));
+    if (ok) return httplib::Server::HandlerResponse::Unhandled;
+    res.status = 403;
+    res.set_content(doseph::json{{"error", doseph::say("api.origin")}}.dump(), "application/json");
+    return httplib::Server::HandlerResponse::Handled;
+  });
+
+  auto apiHandler = [&](const httplib::Request& req, httplib::Response& res) {
+    doseph::ApiResponse r;
+    {
+      std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+      r = simulation.api().handle(toApi(req));
+    }
+    res.status = r.status;
+    for (const auto& [k, v] : r.headers) res.set_header(k, v);
+    res.set_header("Cache-Control", "no-store");
+    res.set_content(r.body, r.contentType);
+  };
+
+  // The simulator's controls (here only, never on the device)
+  svr.Get("/api/v1/sim", [&](const httplib::Request& req, httplib::Response& res) {
+    std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+    if (!simulation.api().authorized(toApi(req))) {
+      res.status = 401;
+      res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
+      return;
+    }
+    res.set_content(simulation.simState().dump(), "application/json");
+  });
+  svr.Post(R"(/api/v1/sim/(\w+))", [&](const httplib::Request& req, httplib::Response& res) {
+    std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+    std::string action = req.matches[1];
+    // A scenario change without signing in only with --allow-reset (Playwright)
+    const bool open = action == "scenario" && allowReset;
+    if (!open && !simulation.api().authorized(toApi(req))) {
+      res.status = 401;
+      res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
+      return;
+    }
+    auto body = doseph::json::parse(req.body.empty() ? "{}" : req.body, nullptr, false);
+    if (!body.is_object()) body = doseph::json::object();
+    auto out = simulation.control(action, body);
+    res.status = out.contains("error") ? 422 : 200;
+    res.set_content(out.dump(), "application/json");
+  });
+
+  // Live channel: Server-Sent Events, the state once a second
+  svr.Get("/api/v1/events/stream", [&](const httplib::Request& req, httplib::Response& res) {
+    {
+      std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+      if (!simulation.api().authorized(toApi(req))) {
+        res.status = 401;
+        return;
+      }
+    }
+    std::string token = tokenOf(req);
+    res.set_header("Cache-Control", "no-store");
+    res.set_chunked_content_provider("text/event-stream", [&simulation, token](size_t, httplib::DataSink& sink) {
+      std::string msg;
+      {
+        std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+        doseph::ApiRequest r;
+        r.token = token;
+        if (!simulation.api().authorized(r)) return false;
+        doseph::json st = simulation.robot().state();
+        st["sim"] = {{"speed", simulation.speed}, {"scenario", simulation.scenario()}};
+        msg = "event: state\ndata: " + st.dump() + "\n\n";
+      }
+      if (!sink.write(msg.data(), msg.size())) return false;
+      for (int i = 0; i < 10 && g_running; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      return g_running.load();
+    });
+  });
+
+  svr.Get(R"(/api/v1/.*)", apiHandler);
+  svr.Post(R"(/api/v1/.*)", apiHandler);
+  svr.Put(R"(/api/v1/.*)", apiHandler);
+  svr.Patch(R"(/api/v1/.*)", apiHandler);
+  svr.Delete(R"(/api/v1/.*)", apiHandler);
+
+  // The web app from its folder, falling back to index.html (a single-page app)
+  if (web.empty()) web = "web/dist";
+  std::error_code webErr;
+  const bool haveWeb = std::filesystem::exists(std::filesystem::path(web) / "index.html", webErr);
+  if (haveWeb) svr.set_mount_point("/", web);
+  svr.Get(R"(/(?!api/).*)", [&](const httplib::Request&, httplib::Response& res) {
+    if (!haveWeb) {
+      res.set_content("Web app not built: cd web && npm ci && npm run build", "text/plain; charset=utf-8");
+      return;
+    }
+    std::ifstream f(std::filesystem::path(web) / "index.html");
+    std::stringstream ss;
+    ss << f.rdbuf();
+    res.set_content(ss.str(), "text/html; charset=utf-8");
+  });
+
+  std::signal(SIGINT, onSignal);
+  std::signal(SIGTERM, onSignal);
+
+  // The tick: every 100 ms of real time, simulated time × time-lapse
+  std::thread loop([&] {
+    while (g_running) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+      simulation.step(static_cast<doseph::Ms>(100 * simulation.speed));
+    }
+    svr.stop();
+  });
+
+  const std::string url = "http://" + (host == "0.0.0.0" ? std::string("127.0.0.1") : host) + ":" + std::to_string(port);
+  std::cout << "Doseph simulator " << doseph::embedded::kVersion << " running: " << url << "\n";
+  {
+    std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+    if (simulation.scenario() == "demo" && !simulation.demoPassword().empty())
+      std::cout << "Demo password: " << simulation.demoPassword() << " (simulator only)\n";
+    // The first password needs a setup code shown to the owner alone: here the console. Automated
+    // tests (--allow-reset) set it without one.
+    const std::string code = allowReset ? std::string() : simulation.robot().armSetupCode();
+    if (!code.empty()) std::cout << "Setup code for the first password: " << code << "\n";
+  }
+  if (!haveWeb) std::cout << "Note: no web app found at " << web << "\n";
+  std::cout << "To stop: press Ctrl+C.\n" << std::flush;
+  svr.listen_after_bind();
+  g_running = false;
+  loop.join();
+  return 0;
+}

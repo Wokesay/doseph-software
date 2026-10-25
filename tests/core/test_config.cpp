@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include <doctest/doctest.h>
+
+#include <algorithm>
+
+#include "doseph/config.hpp"
+
+using namespace doseph;
+
+namespace {
+
+Config sample() {
+  Config c;
+  c.tank.volumeL = 100;
+  c.bottles = {{"down", "pH−", "ph_down", 1, "", "#c00"},
+               {"a", "Part A", "nutrient", 2, "AB", "#00c"},
+               {"b", "Part B", "nutrient", 3, "AB", "#0c0"},
+               {"cm", "CalMag", "nutrient", 4, "", "#cc0"}};
+  RecipeCfg r;
+  r.id = "r1";
+  r.name = "Veg";
+  r.steps = {{"b", 2.0, false}, {"a", 2.0, false}, {"cm", 0.5, false}};
+  r.ecTarget = 1.6;
+  r.phLow = 5.8;
+  r.phHigh = 6.2;
+  c.recipes = {r};
+  c.pumps[2] = {50.0, 1};
+  return c;
+}
+
+bool has(const std::vector<Msg>& errs, const std::string& key) {
+  return std::any_of(errs.begin(), errs.end(), [&](const Msg& m) { return m.key == key; });
+}
+
+}  // namespace
+
+TEST_CASE("Configuration: there and back through JSON; a missing number stays missing (R5, RAT-006)") {
+  Config c = sample();
+  c.tank.waitEcMin = kNaN;
+  c.recipes[0].phLow = c.recipes[0].phHigh = kNaN;
+  json j = c;
+  CHECK(j["tank"]["waitEcMin"].is_null());
+  CHECK(j["recipes"][0]["ph"].is_null());
+  Config back = configFromJson(j);
+  CHECK(std::isnan(back.tank.waitEcMin));
+  CHECK(std::isnan(back.recipes[0].phLow));
+  CHECK(back.tank.volumeL == 100);
+  CHECK(back.pumpFlow(2) == 50.0);
+  CHECK(std::isnan(back.pumpFlow(3)));
+  CHECK(validateConfig(back, 4).empty());
+  CHECK_THROWS(configFromJson(json{{"tank", {{"volumeL", "a hundred"}}}}));
+  CHECK_THROWS(configFromJson(json{{"schemaVersion", 99}}));
+}
+
+TEST_CASE("Configuration: pH correction is never part of a recipe (RAT-004)") {
+  Config c = sample();
+  c.recipes[0].steps.push_back({"down", 0.1, false});
+  CHECK(has(validateConfig(c, 4), "cfg.recipe.ph"));
+}
+
+TEST_CASE("Configuration: a tolerance of 0 is refused (RAT-008); settings only within their bounds (R7)") {
+  Config c = sample();
+  c.control.ecTolerance = 0;
+  c.control.phTolerance = 0.01;
+  c.limits.maxRunS = 120;
+  auto errs = validateConfig(c, 4);
+  CHECK(has(errs, "cfg.control.ec_tolerance"));
+  CHECK(has(errs, "cfg.control.ph_tolerance"));
+  CHECK(has(errs, "cfg.limits.max_run"));
+  CHECK(c.limits.bounded().maxRunS == kHardMaxRunS);
+}
+
+TEST_CASE("Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)") {
+  Config c = sample();
+  c.recipes[0].steps.erase(c.recipes[0].steps.begin());  // Part B out
+  CHECK(has(validateConfig(c, 4), "cfg.recipe.pair"));
+  c = sample();
+  c.recipes[0].steps[0].fixed = true;
+  CHECK(has(validateConfig(c, 4), "cfg.recipe.fixed_pair"));
+  c = sample();
+  c.recipes[0].steps[2].fixed = true;  // CalMag fixed: allowed
+  CHECK(validateConfig(c, 4).empty());
+  // A pair of one: a bottle may wait for its partner, but no recipe uses it so
+  c = sample();
+  c.bottles[2].pair = "";
+  c.recipes[0].steps.erase(c.recipes[0].steps.begin());
+  CHECK(has(validateConfig(c, 4), "cfg.pair.single"));
+  c.recipes.clear();
+  CHECK(validateConfig(c, 4).empty());
+}
+
+TEST_CASE("Configuration: an EC target far from what the amounts give is refused, naming what fits (RAT-056)") {
+  Config c = sample();
+  c.recipes[0].ecTarget = 0.2;  // 0.2 / 4.5 ml/L = 0.044 per ml/L, below a quarter of 0.275
+  auto errs = validateConfig(c, 4);
+  REQUIRE(has(errs, "cfg.recipe.ec_fit"));
+  CHECK(errs[0].args["low"].get<double>() == doctest::Approx(0.25 * 0.275 * 4.5));
+  c.recipes[0].ecTarget = 21.0;
+  CHECK(has(validateConfig(c, 4), "cfg.recipe.ec_range"));
+}
+
+TEST_CASE("Configuration: one bottle per pump, a pump the device has; the mixing wait within its bounds") {
+  Config c = sample();
+  c.bottles[3].pump = 2;
+  CHECK(has(validateConfig(c, 4), "cfg.bottle.pump_twice"));
+  c = sample();
+  c.bottles[3].pump = 5;
+  CHECK(has(validateConfig(c, 4), "cfg.bottle.pump"));
+  c = sample();
+  c.tank.waitEcMin = 1;  // below 2 min (RAT-052)
+  CHECK(has(validateConfig(c, 4), "cfg.tank.wait"));
+  c.tank.waitEcMin = 30;
+  c.tank.holdMin = 5;
+  CHECK(has(validateConfig(c, 4), "cfg.tank.hold"));
+  c = sample();
+  c.pumps[3] = {0, 1};  // a calibration of 0 is no calibration (RAT-003)
+  CHECK(has(validateConfig(c, 4), "cfg.pump.flow"));
+}
+
+TEST_CASE("Configuration: the recipe in force exists; its end comes after its start") {
+  Config c = sample();
+  c.active = {"nope", 100, 0};
+  CHECK(has(validateConfig(c, 4), "cfg.active.recipe"));
+  c.active = {"r1", 100, 50};
+  CHECK(has(validateConfig(c, 4), "cfg.active.until"));
+  c.active = {"r1", 100, 0};
+  CHECK(validateConfig(c, 4).empty());
+  CHECK(phTarget(c.recipes[0]) == doctest::Approx(6.0));
+}
+
+TEST_CASE("Run-time state: latches, jump locks and learned effects survive; a damaged one throws (RAT-028, RAT-063)") {
+  RuntimeState s;
+  s.latches["ec.no_effect"] = {{"at", 5}};
+  s.jumpLocks["ph"] = {{"until", 900}, {"from", 6.0}, {"to", 7.2}};
+  s.ecEffects["r1"] = 0.31;
+  s.phEffect = 3.2;
+  s.stopped = true;
+  s.newTank = false;
+  json j = s;
+  RuntimeState back = runtimeFromJson(j);
+  CHECK(back.latches.count("ec.no_effect"));
+  CHECK(back.jumpLocks["ph"]["until"] == 900);
+  CHECK(back.ecEffects["r1"] == doctest::Approx(0.31));
+  CHECK(back.phEffect == doctest::Approx(3.2));
+  CHECK(back.stopped);
+  CHECK_FALSE(back.newTank);
+  // A learned value that is no positive number counts as nothing learned (R5)
+  CHECK(runtimeFromJson(json{{"ecEffects", {{"r1", -1}}}, {"phEffect", 0}}).ecEffects.empty());
+  CHECK_THROWS(runtimeFromJson(json{{"latches", 7}}));
+}

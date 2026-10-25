@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Composition root of the core: connects hardware, sensor truth, gateway,
+// doser, dosing journal, cycle, watchdog, history and storage. Runs as one
+// event loop with an injected clock (rule R8); the API calls the public
+// methods under the robot's mutex.
+#pragma once
+
+#include <mutex>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "doseph/auth.hpp"
+#include "doseph/clock.hpp"
+#include "doseph/cycle.hpp"
+#include "doseph/history.hpp"
+#include "doseph/watchdog.hpp"
+
+namespace doseph {
+
+struct Result {
+  int status = 200;
+  json body = json::object();
+  static Result ok(json b = json::object()) { return {200, std::move(b)}; }
+  // An error is a message with key and values, shown in the page's language.
+  static Result fail(int st, const Msg& m, json extra = json::object());
+};
+
+// A pump calibration or priming run, into a cup or the tube (RAT-070).
+struct PumpJob {
+  std::string id, type;  // calibration | prime
+  int pump = 0;
+  std::string state = "running";  // running | waiting_result | done | failed
+  Ms ms = 0, actualMs = 0;
+  double ml = kNaN;  // calibration: what the user measured in the cup
+  Msg message;
+  Epoch at = 0;
+};
+
+class Robot {
+ public:
+  Robot(IHardware& hw, IStorage& storage, const IClock& clock, RandomFn rng);
+
+  void boot();
+  void tick();
+  void flush();     // saves what is not on disk yet: state, new events, history
+  bool saveAuth();  // the password file, on disk when it returns true
+
+  std::recursive_mutex& mutex() { return mtx_; }
+  const Config& config() const { return cfg_; }
+  const RuntimeState& runtime() const { return rt_; }
+  Auth& auth() { return auth_; }
+  // The password was set but auth.json is gone: no setup over the network.
+  bool credentialsLost() const { return cfg_.system.passwordSet && !auth_.hasPassword(); }
+  void markPasswordSet();
+  // The platform shows the code to its owner alone (a label, a display, the
+  // simulator's console); "" when a password is set.
+  std::string armSetupCode(Ms validFor = 0);
+  void setPlatform(json p) { platform_ = std::move(p); }
+
+  // ---- Reading
+  json info() const;
+  json state();
+  Epoch now() const { return clock_.epoch(); }
+  json configJson() const;
+  json history(const std::string& series, Epoch from, Epoch to, size_t points) const;
+  json events(Epoch from, Epoch to, const std::string& type, size_t limit) const;
+  static json templates();
+  const MixCycle& cycle() const { return cycle_; }
+  const SensorTruth& truth() const { return truth_; }
+
+  // ---- Settings
+  Result setSystem(const json& j);
+  Result putTank(const json& j);
+  Result putControl(const json& j);
+  Result newTank();
+  Result putBottle(const json& j);
+  Result deleteBottle(const std::string& id);
+  Result putRecipe(const json& j);
+  Result deleteRecipe(const std::string& id);
+  Result setActive(const json& j);
+
+  // ---- Operation
+  Result prime(int pump, double seconds);
+  Result startCalibration(int pump, double seconds);
+  Result calibrationResult(double ml);
+  Result cancelPumpJob();
+  Result probe(const json& j);
+  Result ackLatch(const std::string& id, const json& body);
+  Result stop(const Msg& who);
+  Result resume();
+
+  // An event from the API (a sign-in, for example), logged for security
+  void logEvent(const std::string& type, const std::string& sev, Msg title, Msg text = {});
+
+ private:
+  Ctx ctx();
+  bool flowOk() const;
+  Result saveConfig(Config next, const std::optional<Msg>& what);
+  void saveState(bool force = false);
+  void saveEvents();
+  void sampleHistory(Epoch epoch);
+  void snapshot(Epoch epoch);
+  void pumpJobDone(const DoseProgress& p);
+  Result startPumpJob(const std::string& type, int pump, double seconds);
+  bool pumpJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
+  void restartCycle();
+
+  mutable std::recursive_mutex mtx_;
+  IHardware& hw_;
+  IStorage& store_;
+  HubClock clock_;
+  RandomFn rng_;
+  json platform_ = json::object();
+
+  Config cfg_;
+  RuntimeState rt_;
+  Auth auth_;
+  SensorTruth truth_;
+  Actuators act_;
+  Doser doser_;
+  DoseJournal journal_;
+  MixCycle cycle_;
+  History history_;
+  EventLog log_;
+  WatchResult watch_;
+  std::optional<PumpJob> job_;
+  // A probe calibration: the kind, its points and when the last step was
+  // taken. It holds the cycle until it is saved or cancelled; it explains
+  // jumps for 30 min after its last step (RAT-042).
+  struct ProbeSession {
+    std::string kind;  // ph | ec
+    json points = json::array();
+    double tempC = kNaN;
+    Ms lastStep = 0;
+  };
+  std::optional<ProbeSession> probe_;
+
+  Epoch bootEpoch_ = 0;
+  Ms bootMs_ = 0;
+  Epoch lastSample_ = 0, lastWatch_ = 0, lastStateSave_ = 0, lastSnapshot_ = 0;
+  std::string savedState_;
+  std::uint64_t savedEventId_ = 0;
+  int idSeq_ = 0;
+};
+
+}  // namespace doseph

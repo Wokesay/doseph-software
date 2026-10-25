@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Licensing information for files that cannot carry a header. Source files
+# carry their own "SPDX-License-Identifier" header; the license of this
+# repository is not decided yet, so the headers stay as they came
+# (docs/PROVENANCE.md).
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+
+# Files without comment syntax
+[[annotations]]
+path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
