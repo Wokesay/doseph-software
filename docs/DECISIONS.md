@@ -417,3 +417,27 @@ counts.
   robot had and the file keeps (#18).
 - **Later:** the drop sensor (SD-111) is what sees a canister run dry;
   the count only warns ahead of it.
+
+
+## SD-120: How a pair's missing parts are counted
+
+2026-10-27. How SD-114 is built; SD-114 stands.
+
+- **What is missing.** The robot keeps, for the pair parts of each
+  nutrient round, the amount planned and the amount that went in, booked
+  as each part's dose ends. Once the round is over (measured, cut, or
+  ended by a Stop), every part is brought to the share of its plan that
+  the furthest part reached, so the pair keeps its ratio (RAT-054). A
+  part missing less than 0.1 ml is left as it is.
+- **A restart.** The part that was dosing counts what its runs booked in
+  the journal, and a run the restart cut as if it went in whole. The
+  other side of the pair is then caught up; the robot never doses more
+  of a part than its plan.
+- **The catch-up round** doses the missing amounts in the recipe's order
+  and owes them whole: cut short again, what is still missing is caught
+  up next. It counts as a nutrient round of the check, learns nothing
+  (RAT-057), and waits like any dose for the canister's level (SD-119).
+  An amount too small for one run, or one the run limits cannot take,
+  drops the catch-up with a note.
+- **The app** shows a pending catch-up on the status page with the parts
+  and amounts, and "Don't catch up" ends it (`DELETE /api/v1/catchup`).

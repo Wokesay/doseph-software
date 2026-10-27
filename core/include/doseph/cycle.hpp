@@ -44,6 +44,7 @@ constexpr double kNoEffectEc = 0.02;          // a round that raised EC by less 
 constexpr double kNoEffectPh = 0.03;          // … a pH− dose that lowered pH by less (RAT-020, RAT-041)
 constexpr double kSmallRoundEc = 0.06;        // rounds made smaller that should raise less are judged as a sum (RAT-055)
 constexpr int kNoEffectLatch = 2;             // rounds without effect in a row, then a latch
+constexpr double kCatchUpMinMl = 0.1;         // a pair part missing less is not caught up (SD-114)
 
 // What a check measured once the readings were stable: the means of the window
 struct Measured {
@@ -64,6 +65,13 @@ struct CycleSettings {
   std::string circulation = "cycle";
 };
 CycleSettings cycleSettings(const Ctx& c);
+
+// Drops what a pair still misses, with an event naming the parts and why
+// (SD-114): the recipe changed its parts, a new tank, or a person ended it.
+void dropCatchUp(Ctx& c, const Msg& why);
+// A pair part dosing when the robot restarted: what its runs booked counts,
+// a run cut by the restart as if it all went in (SD-114)
+void pairAfterRestart(RuntimeState& rt, const std::vector<JournalRun>& runs);
 
 class MixCycle {
  public:
@@ -104,6 +112,10 @@ class MixCycle {
   void startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph);
   void learn(Ctx& c, Actuators& act);
   void holdNow(Ctx& c, Actuators& act);
+  // SD-114: the pair parts of a round, and what they miss once it ended
+  void recordPairs(Ctx& c, const std::string& recipe, const std::vector<DoseStep>& steps, bool catchUp);
+  void settlePairs(Ctx& c);
+  bool startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, double ec);
 
   Phase phase_ = Phase::Off;
   Ms since_ = 0;        // the phase began (monotonic)

@@ -380,6 +380,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["phEffect"] = numOrNull(s.phEffect);
   j["ecEffects"] = s.ecEffects;
   j["stockMl"] = s.stockMl;
+  j["pairRound"] = s.pairRound;
+  j["catchUp"] = s.catchUp;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -412,6 +414,8 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("stockMl") && j["stockMl"].is_object())
     for (const auto& [k, v] : j["stockMl"].items())
       if (v.is_number() && isNum(v.get<double>())) s.stockMl[k] = v.get<double>();
+  if (j.contains("pairRound") && j["pairRound"].is_object()) s.pairRound = j["pairRound"];
+  if (j.contains("catchUp") && j["catchUp"].is_object()) s.catchUp = j["catchUp"];
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

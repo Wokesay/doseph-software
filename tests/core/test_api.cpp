@@ -87,7 +87,8 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
   REQUIRE(c.login("demo-password"));
   json st = c.get("state");
   for (const char* k : {"now", "stopped", "online", "circulation", "flowOk", "readings", "cycle", "watchdog", "latches",
-                        "jumpLocks", "newTank", "effects", "dosing", "pumps", "pumpJob", "probe", "eventId"})
+                        "jumpLocks", "newTank", "effects", "dosing", "pumps", "stock", "catchUp", "pumpJob", "probe",
+                        "maintenanceUntil", "eventId"})
     CHECK_MESSAGE(st.contains(k), k);
   for (const char* ch : {"ph", "ec", "temp", "flow"}) {
     REQUIRE(st["readings"].contains(ch));
@@ -104,6 +105,8 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
     CHECK_MESSAGE(st["cycle"]["settings"].contains(k), k);
   CHECK(st["watchdog"].contains("stale"));
   CHECK(st["pumps"].size() == 4);
+  for (const auto& [id, x] : st["stock"].items()) CHECK((x.contains("ml") && x["status"].is_string()));
+  CHECK(c.call("DELETE", "catchup").status == 404);  // nothing to catch up
   json cfg = c.get("config");
   for (const char* k : {"system", "tank", "control", "canisters", "recipes", "active", "pumps", "probes"}) CHECK(cfg.contains(k));
   CHECK(c.get("templates")["recipes"].size() == 3);

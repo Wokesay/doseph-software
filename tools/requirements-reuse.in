@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# The license checker for CI; tools/requirements-reuse.txt pins it with hashes.
+reuse==6.2.0

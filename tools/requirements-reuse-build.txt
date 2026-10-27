@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# The build backend of reuse: reuse 6.2.0 has no wheel for the CI's Python,
+# so pip builds it from its hashed source with this backend instead of
+# fetching one unchecked. Generated with pip-tools from
+# requirements-reuse-build.in, options as in requirements-reuse.txt:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-header \
+#     -o tools/requirements-reuse-build.txt tools/requirements-reuse-build.in
+poetry-core==2.5.0 \
+    --hash=sha256:81d04c9253b19d0604718268d781867c8f7b2128e5b25bbf1e84141eec6b89c4 \
+    --hash=sha256:98ee465b66f7e14bb9fbe68fb5e00d0cff184f036993ec94610ae4b5612f3add
+    # via -r requirements-reuse-build.in

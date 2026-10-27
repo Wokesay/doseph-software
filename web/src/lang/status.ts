@@ -65,6 +65,10 @@ export const de = {
   "widgets.chartMin": "Min",
   "widgets.chartMax": "Max",
   "widgets.chartEmpty": "Für diesen Zeitraum gibt es keine Werte.",
+  "status.catchUp": "Einem Paar fehlt etwas aus einer abgebrochenen Runde: {parts}. Die nächste Nährstoffrunde dosiert zuerst nur das.",
+  "status.catchUpPart": "{name} {ml} ml",
+  "status.catchUpEnd": "Nicht nachholen",
+  "status.catchUpEnded": "Wird nicht nachgeholt",
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
@@ -132,4 +136,8 @@ export const en: Record<keyof typeof de, string> = {
   "widgets.chartMin": "Min",
   "widgets.chartMax": "Max",
   "widgets.chartEmpty": "There are no values for this period.",
+  "status.catchUp": "A pair misses something from a round cut short: {parts}. The next nutrient round doses only that first.",
+  "status.catchUpPart": "{name} {ml} ml",
+  "status.catchUpEnd": "Don't catch up",
+  "status.catchUpEnded": "Not caught up",
 };
