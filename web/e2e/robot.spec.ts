@@ -35,6 +35,18 @@ test("status says why the robot doses or not (RAT-037)", async ({ page }) => {
   await expect(page.getByTestId("checks-ph")).toContainText("pH− ready");
 });
 
+test("maintenance holds the robot until it is ended (RAT-042)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/tank");
+  await page.getByTestId("maintenance").getByRole("button", { name: "30\u00a0min" }).click();
+  await expect(page.getByTestId("maintenance-until")).toBeVisible();
+  await page.goto("/#/");
+  await expect(page.getByTestId("cycle-line")).toContainText("Maintenance");
+  await page.goto("/#/tank");
+  await page.getByRole("button", { name: "End maintenance" }).click();
+  await expect(page.getByTestId("maintenance-until")).toHaveCount(0);
+});
+
 test("Stop switches everything off and holds until Resume", async ({ page }) => {
   await login(page);
   await page.getByTestId("stop").click();

@@ -33,6 +33,7 @@ struct Ctx {
   bool stopped = false;
   bool flowOk = false;  // flow through the device proven now: no dose without it (SD-105)
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
+  Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool pumpJob = false;           // a pump is being calibrated or primed: no dose starts meanwhile
 };
 

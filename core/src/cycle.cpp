@@ -511,6 +511,15 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
+  // Maintenance: someone works at tank or device. The cycle holds and the pump is off until it ends.
+  if (c.maintenanceUntil > 0) {
+    if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.maintenance")) {
+      restart(c, act, doser);
+      wait(c, act, say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}}), 0);
+    }
+    circulation(c, act, false);
+    return;
+  }
   if (!s.off.key.empty()) {
     if (phase_ != Phase::Off) {
       restart(c, act, doser);  // a round going on is cut: what went in is mixed first later
@@ -714,8 +723,9 @@ json MixCycle::checks(const Ctx& c) const {
   const bool volumeLatch = c.rt.latches.count("tank.volume") > 0;
   all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
   all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
-  const bool busy = c.pumpJob || c.probeCalibrating;
-  all.push_back(item(!busy, say(c.probeCalibrating ? "check.probe_job" : c.pumpJob ? "check.pump_job" : "check.no_job")));
+  const bool busy = c.pumpJob || c.probeCalibrating || c.maintenanceUntil > 0;
+  all.push_back(item(!busy, c.maintenanceUntil > 0 ? say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}})
+                            : say(c.probeCalibrating ? "check.probe_job" : c.pumpJob ? "check.pump_job" : "check.no_job")));
 
   json ec = json::array();
   if (r) {

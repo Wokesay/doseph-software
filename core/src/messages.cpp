@@ -64,6 +64,14 @@ constexpr Entry kMessages[] = {
     {"cycle.note.ph_invalid", "pH: {reason}"},
     {"cycle.note.ph_latched", "pH dosing is locked: pH didn't fall after dosing – check the pH− canister, pump and probe, then release"},
     {"cycle.note.ph_max", "pH: {n} doses without reaching the target – the next check tries again"},
+    // Maintenance mode
+    {"maint.minutes", "Maintenance lasts 1 to {max:0} minutes, or 0 to end it"},
+    {"cycle.wait.maintenance", "Maintenance: the robot doses nothing and the pump is off until it ends"},
+    {"ev.maintenance", "Maintenance started"},
+    {"ev.maintenance.text", "For {min:0} min the robot doses nothing, the pump is off and jumps of the probes count as the work."},
+    {"ev.maintenance_end", "Maintenance ended"},
+    {"ev.maintenance_over", "Maintenance time is over"},
+    {"watch.maintenance", "Maintenance: not judged"},
     {"cycle.note.ph_too_small", "The pH− dose ({ml:2} ml) is too small for the pump – nothing dosed"},
     // Why the robot doses or not (MixCycle::checks)
     {"check.stopped", "Stopped: nothing runs until Resume"},

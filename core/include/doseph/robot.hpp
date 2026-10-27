@@ -93,6 +93,12 @@ class Robot {
   Result ackLatch(const std::string& id, const json& body);
   Result stop(const Msg& who);
   Result resume();
+  // Maintenance mode for `minutes` (at most kMaxMaintenanceMin; 0 ends it): the
+  // cycle holds, the pump is off, jumps of the probes are taken as the work
+  // and the watchdog does not judge the targets. Locks stay. In memory only:
+  // a restart ends it.
+  Result maintenance(double minutes);
+  static constexpr double kMaxMaintenanceMin = 240;
 
   // An event from the API (a sign-in, for example), logged for security
   void logEvent(const std::string& type, const std::string& sev, Msg title, Msg text = {});
@@ -139,6 +145,9 @@ class Robot {
     Ms lastStep = 0;
   };
   std::optional<ProbeSession> probe_;
+
+  Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none
+  Epoch maintenanceUntil() const;
 
   Epoch bootEpoch_ = 0;
   Ms bootMs_ = 0;

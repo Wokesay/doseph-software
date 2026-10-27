@@ -74,6 +74,8 @@ export type RobotState = {
   pumps: { pump: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
   pumpJob: PumpJob | null;
   probe: ProbeSession | null;
+  // Maintenance mode until then (epoch seconds); null when off
+  maintenanceUntil: number | null;
   eventId: number;
   sim?: { speed: number; scenario: string };
 };

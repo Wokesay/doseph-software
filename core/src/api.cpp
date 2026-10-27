@@ -295,6 +295,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("POST", {"probe"})) return fromResult(robot_.probe(body));
   if (is("POST", {"latches", "*", "ack"})) return fromResult(robot_.ackLatch(p[1], body));
   if (is("POST", {"stop"})) return fromResult(robot_.stop(say("stop.app")));
+  if (is("POST", {"maintenance"})) return fromResult(robot_.maintenance(jnum(body, "minutes")));
   if (is("POST", {"resume"})) return fromResult(robot_.resume());
   return fail(404, say("api.not_found"));
 }
