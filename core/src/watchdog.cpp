@@ -92,6 +92,16 @@ WatchResult evaluate(const WatchInput& in) {
       else if (!isNum(in.cfg.pumpFlow(b->pump))) add("canister." + b->id, say("watch.pumps"), "problem", say("watch.pump_uncalibrated", {{"name", b->name}, {"pump", b->pump}}));
     }
   }
+  // Canister levels counted from use, where known (SD-119, RAT-071)
+  for (const auto& b : in.cfg.canisters) {
+    const std::string st = stockStatus(b, in.rt);
+    if (st == "unknown") continue;
+    const double ml = in.rt.stockMl.at(b.id);
+    const Msg label = say("watch.stock", {{"name", b.name}});
+    if (st == "empty") add("stock." + b.id, label, "problem", say("watch.stock_empty", {{"ml", ml}}));
+    else if (st == "low") add("stock." + b.id, label, "problem", say("watch.stock_low", {{"ml", ml}}));
+    else add("stock." + b.id, label, "ok", say("watch.stock_ok", {{"ml", ml}}));
+  }
   if (in.stopped) add("stop", say("watch.stop"), "neutral", say("watch.stopped"));
 
   for (const auto& a : w.items) {

@@ -469,7 +469,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-071 – Minimum stock per canister: 150 ml, pH− 20 ml
 
-- **Dropped:** the grow controller only (stock of bottles (not built)); not part of the mixing robot (SD-105).
+- **Rule:** The watchdog reports a canister as a problem ("refill soon") when its counted level falls below 150 ml for a nutrient and 20 ml for pH−; a level below zero by the count is a problem of its own; an unknown level is not judged. A dose the counted level cannot cover is not started.
+- **Why:** Refilling should not fall into a mixing run: a canister that runs dry part way through a dose quietly doses less than planned, and the round then teaches the robot a wrong effect. pH− is used in very small amounts, so it has its own, lower threshold.
+- **Evidence:** Calculated from the reference installation's figures (2026): a whole run needed about 30 ml of pH− (from 2 to 114 ml) against roughly 0.7 to 3.3 L of each nutrient product.
+- **Changed:** brought back with the canister level (SD-119), which counts every run of a canister's pump; a dose the count cannot cover now waits for a refill.
+- **Implemented in:** `core/include/doseph/config.hpp`, `core/src/config.cpp`, `core/src/cycle.cpp`, `core/src/gateway.cpp`, `core/src/robot.cpp`, `core/src/watchdog.cpp`
+- **Tests:** `tests/core/test_cycle.cpp` "Canisters: the level is counted run by run; low and used up are problems; a dose the count cannot cover waits for a refill (SD-119, RAT-071)"
 
 ### RAT-072 – Normal states are counted, only deviations are listed
 

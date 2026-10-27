@@ -37,6 +37,15 @@ std::string mmss(Ms ms) {
   return std::to_string(s / 60) + ":" + (sec.size() < 2 ? "0" + sec : sec);
 }
 
+// A dose needs at least its amount in the canister where the level is known; an unknown level is
+// no reason to hold (SD-119)
+std::optional<Msg> shortOf(const RuntimeState& rt, const DoseStep& d) {
+  auto it = rt.stockMl.find(d.canister);
+  if (it == rt.stockMl.end() || !isNum(it->second) || !isNum(d.ml) || it->second >= d.ml) return std::nullopt;
+  return say(it->second <= kStockBelowZeroMl ? "cycle.wait.stock_empty" : "cycle.wait.stock",
+             {{"name", d.name}, {"need", d.ml}, {"have", it->second}});
+}
+
 }  // namespace
 
 CycleSettings cycleSettings(const Ctx& c) {
@@ -323,6 +332,11 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
     wait(c, act, say("cycle.wait.ec_plan", {{"reason", plan.reason}}));
     return;
   }
+  for (const auto& st : plan.steps)
+    if (auto why = shortOf(c.rt, st)) {
+      wait(c, act, *why);
+      return;
+    }
   kind_ = Kind::Ec;
   queue_ = plan.steps;
   roundRecipe_ = r.id;
@@ -370,6 +384,10 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
       return;
     }
     wait(c, act, say("cycle.wait.ph_plan", {{"reason", err}}));
+    return;
+  }
+  if (auto why = shortOf(c.rt, step)) {
+    wait(c, act, *why);
     return;
   }
   kind_ = Kind::Ph;
@@ -739,6 +757,13 @@ json MixCycle::checks(const Ctx& c) const {
         break;
       }
     ec.push_back(item(missing.empty(), missing.empty() ? say("check.parts_ready") : say("check.part_not_ready", {{"name", missing}})));
+    std::string empty;
+    for (const auto& st : r->steps)
+      if (const CanisterCfg* b = c.cfg.canister(st.canister); b && !st.fixed && stockStatus(*b, c.rt) == "empty") {
+        empty = b->name;
+        break;
+      }
+    ec.push_back(item(empty.empty(), empty.empty() ? say("check.stock_ok") : say("check.stock_empty", {{"name", empty}})));
   }
   ec.push_back(reading(Channel::Ec, "check.ec_ok", "check.ec_bad"));
   const bool ecLatch = c.rt.latches.count("ec.no_effect") > 0;
@@ -753,6 +778,10 @@ json MixCycle::checks(const Ctx& c) const {
   ph.push_back(reading(Channel::Ph, "check.ph_ok", "check.ph_bad"));
   const CanisterCfg* down = c.cfg.phDown();
   ph.push_back(item(ready(down), ready(down) ? say("check.ph_down", {{"name", down->name}}) : say("check.no_ph_down")));
+  if (down) {
+    const bool empty = stockStatus(*down, c.rt) == "empty";
+    ph.push_back(item(!empty, empty ? say("check.stock_empty", {{"name", down->name}}) : say("check.stock_ok")));
+  }
   // pH needs ions to be read: only above the EC floor (RAT-046)
   const Reading& ecNow = c.truth.get(Channel::Ec);
   if (ecNow.usable()) {

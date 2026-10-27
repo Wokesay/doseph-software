@@ -123,7 +123,8 @@ void to_json(json& j, const Config& c) {
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
-    canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"pump", b.pump}, {"pair", b.pair}, {"color", b.color}});
+    canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"pump", b.pump}, {"pair", b.pair}, {"color", b.color},
+                         {"capacityMl", numOrNull(b.capacityMl)}});
   j["canisters"] = canisters;
   json recipes = json::array();
   for (const auto& r : c.recipes) {
@@ -215,6 +216,7 @@ Config configFromJson(const json& in) {
     x.pump = intOr(b, "pump", 0);
     x.pair = jstr(b, "pair");
     x.color = jstr(b, "color", x.color);
+    x.capacityMl = numOrNaN(b, "capacityMl");
     c.canisters.push_back(x);
   }
   for (const auto& r : arrayAt(j, "recipes")) {
@@ -306,6 +308,8 @@ std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
     else if (b.pump > 0 && !pumps.insert(b.pump).second) err(say("cfg.canister.pump_twice", {{"name", b.name}, {"pump", b.pump}}));
     if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));
     if (b.pair.size() > 8) err(say("cfg.canister.pair_name", {{"name", b.name}}));
+    if (!std::isnan(b.capacityMl) && !inRange(b.capacityMl, kCapacityMinMl, kCapacityMaxMl))
+      err(say("cfg.canister.capacity", {{"name", b.name}, {"min", kCapacityMinMl}, {"max", kCapacityMaxMl}}));
     if (!b.pair.empty()) pairCount[b.pair]++;
   }
 
@@ -375,12 +379,20 @@ void to_json(json& j, const RuntimeState& s) {
   j["jumpLocks"] = s.jumpLocks;
   j["phEffect"] = numOrNull(s.phEffect);
   j["ecEffects"] = s.ecEffects;
+  j["stockMl"] = s.stockMl;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
   j["flowAt"] = s.flowAt;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
+}
+
+std::string stockStatus(const CanisterCfg& b, const RuntimeState& rt) {
+  auto it = rt.stockMl.find(b.id);
+  if (it == rt.stockMl.end() || !isNum(it->second)) return "unknown";
+  if (it->second <= kStockBelowZeroMl) return "empty";
+  return it->second < (b.role == "ph_down" ? kStockLowPhDownMl : kStockLowNutrientMl) ? "low" : "ok";
 }
 
 RuntimeState runtimeFromJson(const json& j) {
@@ -396,6 +408,10 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("ecEffects") && j["ecEffects"].is_object())
     for (const auto& [k, v] : j["ecEffects"].items())
       if (v.is_number() && isNum(v.get<double>()) && v.get<double>() > 0) s.ecEffects[k] = v.get<double>();
+  // A level is any finite number, below zero too (SD-119); anything else is unknown
+  if (j.contains("stockMl") && j["stockMl"].is_object())
+    for (const auto& [k, v] : j["stockMl"].items())
+      if (v.is_number() && isNum(v.get<double>())) s.stockMl[k] = v.get<double>();
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

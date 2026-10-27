@@ -411,3 +411,92 @@ TEST_CASE("Maintenance: the cycle holds and the pump is off, probe jumps count a
   t.step(30 * kSecond);
   CHECK_FALSE(st(t)["jumpLocks"].empty());
 }
+
+TEST_CASE("Canisters: the level is counted run by run; low and used up are problems; a dose the count cannot cover waits for a refill (SD-119, RAT-071)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  // The demo's canisters are full: 1 L of each nutrient, 0.5 L of pH−
+  CHECK(st(s)["stock"]["part_a"]["ml"] == 1000);
+  CHECK(st(s)["stock"]["ph_down"]["ml"] == 500);
+  CHECK(st(s)["stock"]["part_a"]["status"] == "ok");
+
+  // A dose the count cannot cover is not started: the check waits and names the canister
+  REQUIRE(r.setStock("part_a", {{"ml", 0.2}}).status == 200);
+  REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.wait.stock"; }, 15 * 60));
+  CHECK_FALSE(dosing(s));
+  CHECK(st(s)["cycle"]["line"]["args"]["name"] == "Part A");
+  // Marked refilled: its size again, and the check starts anew at once
+  REQUIRE(r.setStock("part_a", {{"full", true}}).status == 200);
+  CHECK(hasEvent(s, "ev.stock.set"));
+  CHECK(phase(s) != "wait");
+
+  // To the first hold: every dose taken from its canister, as the dose events book it
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+  std::map<std::string, double> dosed;
+  for (const auto& e : r.events(0, std::numeric_limits<Epoch>::max(), "dose", 1000))
+    if (e["title"]["key"] == "ev.dose") dosed[e["data"]["canister"]] += e["data"]["ml"].get<double>();
+  REQUIRE(dosed["part_a"] > 0);
+  REQUIRE(dosed["ph_down"] > 0);
+  CHECK(st(s)["stock"]["part_a"]["ml"].get<double>() == doctest::Approx(1000 - dosed["part_a"]).epsilon(1e-6));
+  CHECK(st(s)["stock"]["part_b"]["ml"].get<double>() == doctest::Approx(1000 - dosed["part_b"]).epsilon(1e-6));
+  CHECK(st(s)["stock"]["ph_down"]["ml"].get<double>() == doctest::Approx(500 - dosed["ph_down"]).epsilon(1e-6));
+  // An edit keeps the count; a level is never entered below zero, nor "full" without a size
+  REQUIRE(r.putCanister({{"id", "calmag"}, {"name", "CalMag 2"}}).status == 200);
+  CHECK(st(s)["stock"]["calmag"]["ml"].get<double>() == doctest::Approx(1000 - dosed["calmag"]));
+  CHECK(r.setStock("part_b", {{"ml", -5}}).status == 422);
+  CHECK(r.setStock("nope", {{"ml", 5}}).status == 404);
+  REQUIRE(r.putCanister({{"id", "spare"}, {"name", "Spare"}}).status == 200);
+  CHECK(st(s)["stock"]["spare"]["status"] == "unknown");  // never assumed full (RAT-015)
+  CHECK(r.setStock("spare", {{"full", true}}).status == 422);
+
+  // Low below 150 ml of a nutrient, 20 ml of pH− (RAT-071); used up below zero, reported once
+  REQUIRE(r.setStock("part_b", {{"ml", 120}}).status == 200);
+  REQUIRE(r.setStock("ph_down", {{"ml", 25}}).status == 200);
+  s.step(6 * kSecond);
+  auto item = [&](const std::string& id) {
+    const json w = st(s)["watchdog"];
+    for (const auto& a : w["items"])
+      if (a["id"] == id) return a;
+    return json(nullptr);
+  };
+  CHECK(item("stock.part_b")["status"] == "problem");
+  CHECK(item("stock.part_b")["text"]["key"] == "watch.stock_low");
+  CHECK(item("stock.ph_down")["status"] == "ok");
+  CHECK(st(s)["stock"]["part_b"]["status"] == "low");
+  // A line fill takes from the canister too; below zero by the count is reported once (SD-119)
+  REQUIRE(r.setStock("part_b", {{"ml", 2}}).status == 200);
+  REQUIRE(r.prime(3, 10).status == 200);
+  s.step(12 * kSecond, 500);
+  const double fill = r.config().pumpFlow(3) * 10 / 60;
+  CHECK(r.runtime().stockMl.at("part_b") == doctest::Approx(2 - fill).epsilon(0.05));
+  REQUIRE(r.cancelPumpJob().status == 200);
+  REQUIRE(r.prime(3, 2).status == 200);
+  s.step(4 * kSecond, 500);
+  REQUIRE(r.cancelPumpJob().status == 200);
+  int below = 0;
+  for (const auto& k : eventKeys(s)) below += k == "ev.stock.below_zero";
+  CHECK(below == 1);
+  s.step(6 * kSecond);
+  CHECK(item("stock.part_b")["text"]["key"] == "watch.stock_empty");
+  CHECK(st(s)["stock"]["part_b"]["status"] == "empty");
+  bool listed = false;
+  const json checks = st(s)["cycle"]["checks"];
+  for (const auto& x : checks["ec"]) listed |= x["key"] == "check.stock_empty";
+  CHECK(listed);
+
+  // A restart keeps the count; deleting a canister drops it
+  const double left = r.runtime().stockMl.at("part_b");
+  CHECK(left < 0);
+  s.reboot();
+  CHECK(s.robot().runtime().stockMl.at("part_b") == doctest::Approx(left));
+  Robot& again = s.robot();
+  REQUIRE(again.setStock("spare", {{"ml", 50}}).status == 200);
+  REQUIRE(again.deleteCanister("spare").status == 200);
+  CHECK(again.runtime().stockMl.count("spare") == 0);
+  // A backup keeps the count of a canister the robot had and the file keeps, and only that
+  json file = again.configJson();
+  REQUIRE(again.putCanister({{"id", "spare"}, {"name", "Spare"}, {"stockMl", 50}}).status == 200);
+  REQUIRE(again.importConfig(file).status == 200);
+  CHECK(again.runtime().stockMl.count("spare") == 0);
+  CHECK(again.runtime().stockMl.at("part_b") == doctest::Approx(left));
+}

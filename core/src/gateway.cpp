@@ -166,6 +166,19 @@ void Doser::book(const Ctx& c, Ms ms) {
   progress_.msDone += ms;
   if (isNum(ml)) progress_.mlDone += ml;
   c.journal.end(o.id, static_cast<int>(progress_.run) + 1, ms, ml);
+  // The canister's level, run by run: a dose and a line fill take from it alike; a calibration is
+  // booked from the cup when its amount is entered (SD-119). Kept below zero, never hidden as 0 (RAT-015).
+  if (o.purpose != "calibration") takeStock(c, o.step.canister, o.step.name, ml);
+}
+
+void takeStock(const Ctx& c, const std::string& canister, const std::string& name, double ml) {
+  auto st = c.rt.stockMl.find(canister);
+  if (st == c.rt.stockMl.end() || !isNum(st->second) || !isNum(ml)) return;  // unknown stays unknown
+  const bool covered = st->second > kStockBelowZeroMl;
+  st->second -= ml;
+  if (covered && st->second <= kStockBelowZeroMl)
+    c.log.add(c.epoch, "dose", "warn", say("ev.stock.below_zero", {{"name", name}}), say("ev.stock.below_zero.text", {{"name", name}}),
+              {{"canister", canister}, {"stockMl", st->second}});
 }
 
 void Doser::logOrder(const Ctx& c) {

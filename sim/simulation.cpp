@@ -197,6 +197,11 @@ void Simulation::configureDemo() {
     r.calibrationResult(world_.pumps[static_cast<size_t>(i)].cupMl);
     r.cancelPumpJob();  // closed, as the app does
   }
+  // Their sizes, freshly filled: 1 L of each nutrient, 0.5 L of pH− (an assumption)
+  for (int i = 0; i < 4; ++i) {
+    r.putCanister({{"id", ids[i]}, {"capacityMl", i == 0 ? 500 : 1000}});
+    r.setStock(ids[i], {{"full", true}});
+  }
   // Probes calibrated against the twin's own errors: pH 7 and 4 buffers, EC 1.413 mS/cm
   r.probe({{"action", "start"}, {"kind", "ph"}});
   world_.phBuffer = 7.0;

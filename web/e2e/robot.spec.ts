@@ -214,3 +214,18 @@ test("settings are backed up and restored; a broken backup is refused with every
   await expect(page.getByTestId("backup-errors")).toHaveCount(0);
   await expect(page.locator("input[name=name]")).toHaveValue("From the backup");
 });
+
+test("a canister's level is counted, entered by hand and set full when refilled (SD-119)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/pumps");
+  const level = page.getByTestId("level-part_b");
+  await expect(level).toContainText(/of 1,?000 ml/);
+  await page.getByRole("button", { name: "Enter level: Part B" }).click();
+  await page.locator("input[name=level]").fill("100");
+  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await expect(level).toContainText(/^100 of 1,?000 ml/);
+  await expect(level).toContainText("nearly empty");
+  await page.getByTestId("refilled-part_b").click();
+  await expect(level).toContainText(/1,?000 of 1,?000 ml/);
+  await expect(level).not.toContainText("nearly empty");
+});
