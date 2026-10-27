@@ -250,7 +250,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
     return;
   }
   const double ec = measured_.ec, ph = measured_.ph;
-  const BottleCfg* down = c.cfg.phDown();
+  const CanisterCfg* down = c.cfg.phDown();
   const bool phLatched = c.rt.latches.count("ph.no_effect") > 0;
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
   // EC aims below its target by what the pH− dose that follows adds (RAT-053)
@@ -344,7 +344,7 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
 }
 
 void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph) {
-  const BottleCfg* down = c.cfg.phDown();
+  const CanisterCfg* down = c.cfg.phDown();
   const double eff = clampEffect(c.rt.phEffect, kPhStartEffect);
   const bool test = c.rt.newTank;
   auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, c.cfg.control.phMaxMlPerDose, test ? kTestDropPh : kNaN);
@@ -353,7 +353,7 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
     return;
   }
   DoseStep step;
-  step.bottle = down->id;
+  step.canister = down->id;
   step.name = down->name;
   step.pump = down->pump;
   step.color = down->color;
@@ -530,19 +530,19 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     flowSum_ += *flow.value;
     flowN_++;
   };
-  auto announceCell = [&] {  // the cell's water changes from standing to the tank's (RAT-042)
+  auto announceChamber = [&] {  // the chamber's water changes from standing to the tank's (RAT-042)
     for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) c.truth.expectChange(ch, c.now + kAnnounceMs);
   };
 
   switch (phase_) {
     case Phase::PumpOn:
-      announceCell();
+      announceChamber();
       circulation(c, act, true);
       enter(c, Phase::ProveFlow);
       line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.pump_on");
       break;
     case Phase::ProveFlow:
-      announceCell();
+      announceChamber();
       if (s.circulation == "always" || s.circulation == "cycle") circulation(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
@@ -564,14 +564,14 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       break;
     case Phase::Flush:
-      announceCell();
+      announceChamber();
       if (!c.flowOk) {
         enter(c, Phase::ProveFlow);
         break;
       }
       flushedMs_ += dt;
       noteFlow();
-      // The cell is flushed with tank water before every measurement: no decision on an old reading (RAT-043)
+      // The measuring chamber is flushed with tank water before every measurement: no decision on an old reading (RAT-043)
       line_ = say("cycle.flush", {{"left", mmss(kFlushMs - flushedMs_)}});
       if (flushedMs_ >= kFlushMs) {
         if (flowN_ > 0) {
@@ -703,7 +703,7 @@ json MixCycle::checks(const Ctx& c) const {
     return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
   };
   // A pump that can dose: on a pump, with a calibration (RAT-015)
-  auto ready = [&](const BottleCfg* b) { return b && b->pump > 0 && isNum(c.cfg.pumpFlow(b->pump)); };
+  auto ready = [&](const CanisterCfg* b) { return b && b->pump > 0 && isNum(c.cfg.pumpFlow(b->pump)); };
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));
@@ -723,9 +723,9 @@ json MixCycle::checks(const Ctx& c) const {
                                                                : say("cycle.note.no_ec_target", {{"name", r->name}})));
     std::string missing;
     for (const auto& st : r->steps)
-      if (!st.fixed && !ready(c.cfg.bottle(st.bottle))) {
-        const BottleCfg* b = c.cfg.bottle(st.bottle);
-        missing = b ? b->name : st.bottle;
+      if (!st.fixed && !ready(c.cfg.canister(st.canister))) {
+        const CanisterCfg* b = c.cfg.canister(st.canister);
+        missing = b ? b->name : st.canister;
         break;
       }
     ec.push_back(item(missing.empty(), missing.empty() ? say("check.parts_ready") : say("check.part_not_ready", {{"name", missing}})));
@@ -741,7 +741,7 @@ json MixCycle::checks(const Ctx& c) const {
                                                    : say("cycle.note.no_ph_range", {{"name", r->name}})));
   }
   ph.push_back(reading(Channel::Ph, "check.ph_ok", "check.ph_bad"));
-  const BottleCfg* down = c.cfg.phDown();
+  const CanisterCfg* down = c.cfg.phDown();
   ph.push_back(item(ready(down), ready(down) ? say("check.ph_down", {{"name", down->name}}) : say("check.no_ph_down")));
   // pH needs ions to be read: only above the EC floor (RAT-046)
   const Reading& ecNow = c.truth.get(Channel::Ec);

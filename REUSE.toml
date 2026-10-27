@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Licensing information for files that cannot carry a header. Source files
-# carry their own "SPDX-License-Identifier" header; the license of this
-# repository is not decided yet, so the headers stay as they came
-# (docs/PROVENANCE.md).
+# carry their own "SPDX-License-Identifier" header: AGPL-3.0-or-later,
+# with the additional permission in ADDITIONAL_PERMISSION.md (SD-116).
 version = 1
 
 [[annotations]]
@@ -12,7 +11,14 @@ SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software c
 
 # Files without comment syntax
 [[annotations]]
-path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc"]
+path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc", "sim/README.txt"]
 precedence = "closest"
 SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# The license text quoted in the simulator's third-party notices
+[[annotations]]
+path = "tools/licenses/Apache-2.0.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "2004 The Apache Software Foundation"
+SPDX-License-Identifier = "Apache-2.0"

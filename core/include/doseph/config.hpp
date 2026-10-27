@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Configuration of the mixing robot: the tank, the bottles on the pumps,
+// Configuration of the mixing robot: the tank, the canisters on the pumps,
 // the recipes and which one is in force, and the calibrations. The run-time
 // state (latches, jump locks, learned effects) is stored apart in
 // RuntimeState, so a dose does not make a new configuration revision.
@@ -14,20 +14,21 @@
 
 namespace doseph {
 
-constexpr int kSchemaVersion = 1;
+// 2: bottles became canisters, their kind a role (SD-107)
+constexpr int kSchemaVersion = 2;
 constexpr int kMaxPumps = 8;
 
 // A liquid on a dosing pump.
-struct BottleCfg {
+struct CanisterCfg {
   std::string id, name;
-  std::string kind = "nutrient";  // nutrient | ph_down
+  std::string role = "nutrient";  // nutrient | ph_down (SD-108)
   int pump = 0;                   // 1..pumpCount; 0: on no pump
   std::string pair;               // pair group, e.g. "AB": its parts keep their ratio (RAT-054)
   std::string color = "#4c9a52";
 };
 
 struct RecipeStep {
-  std::string bottle;
+  std::string canister;
   double mlPerL = kNaN;
   // A fixed addition (a cleanser, for example): per litre of the tank, never
   // scaled to the EC (RAT-085); never part of a pair
@@ -77,7 +78,7 @@ struct ControlCfg {
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
 constexpr double kHardMaxRunS = 60.0;   // longer doses in partial runs (RAT-055)
-constexpr int kHardMaxPartialRuns = 6;  // partial runs per bottle and round
+constexpr int kHardMaxPartialRuns = 6;  // partial runs per canister and round
 // A recipe's start effect, mS/cm per ml/L of the recipe (RAT-055). A recipe's
 // EC may imply an effect from a quarter to four times of it (RAT-056).
 constexpr double kEcStartEffect = 0.275;
@@ -114,7 +115,7 @@ struct Config {
   TankCfg tank;
   ControlCfg control;
   Limits limits;
-  std::vector<BottleCfg> bottles;
+  std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
   ActiveCfg active;
   std::map<int, PumpCal> pumps;
@@ -122,16 +123,21 @@ struct Config {
   // EC {factor, at}; null when not calibrated (RAT-025)
   json phCal = nullptr, ecCal = nullptr;
 
-  const BottleCfg* bottle(const std::string& id) const;
-  const BottleCfg* bottleOnPump(int pump) const;
+  const CanisterCfg* canister(const std::string& id) const;
+  const CanisterCfg* canisterOnPump(int pump) const;
   const RecipeCfg* recipe(const std::string& id) const;
-  // The pH− bottle on a pump, the first one listed
-  const BottleCfg* phDown() const;
+  // The pH− canister on a pump, the first one listed
+  const CanisterCfg* phDown() const;
   double pumpFlow(int pump) const;  // NaN when not calibrated
 };
 
 void to_json(json& j, const Config& c);
-Config configFromJson(const json& j);  // throws on structure errors
+// Brings a configuration of an older schema to the current one, one step
+// at a time; a newer one than this software knows, or one without a whole
+// version number, throws. Pure: the stored file changes only when it is
+// saved again.
+json migrateConfig(json j);
+Config configFromJson(const json& j);  // migrates first; throws on structure errors
 
 // Checks references and the rules of the domain and of safety; pumpCount is
 // how many pumps the device has.

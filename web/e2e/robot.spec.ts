@@ -59,7 +59,7 @@ test("a recipe is put in force for a number of days", async ({ page }) => {
   await expect(page.getByTestId("active-recipe")).toContainText("without an end");
 });
 
-test("a recipe made from a template takes the bottles of the same name", async ({ page }) => {
+test("a recipe made from a template takes the canisters of the same name", async ({ page }) => {
   await login(page);
   await page.goto("/#/recipe");
   await page.getByTestId("template-two_part_basic").getByRole("button").click();
@@ -71,7 +71,7 @@ test("a recipe made from a template takes the bottles of the same name", async (
   await expect(page.locator("[data-testid^=recipe-]").filter({ hasText: "Copy" })).toContainText("Part B 2.00, Part A 2.00, CalMag 0.50");
 });
 
-test("a pH− bottle is refused in a recipe, with the robot's reason", async ({ page }) => {
+test("a pH− canister is refused in a recipe, with the robot's reason", async ({ page }) => {
   await login(page);
   await page.goto("/#/recipe");
   await page.getByTestId("new-recipe").click();
@@ -145,4 +145,16 @@ test("history draws the four curves", async ({ page }) => {
   await expect(page.locator(".chart")).toHaveCount(4);
   await page.getByRole("button", { name: "Doses" }).click();
   await expect(page.getByTestId("event").first()).toBeVisible();
+});
+
+test("history downloads as CSV in the page's format (RAT-016)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/history");
+  const href = await page.getByTestId("history-csv").getAttribute("href");
+  expect(href).toContain("lang=en");
+  const res = await page.request.get(href!);
+  expect(res.status()).toBe(200);
+  const text = await res.text();
+  expect(text.startsWith("time_utc,ph,ec,temp,flow\n")).toBe(true);
+  expect(text.split("\n").length).toBeGreaterThan(10);
 });

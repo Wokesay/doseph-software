@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Feedback or idea
+description: Tried a prototype? Tell us what worked, where you got stuck and what you would need.
+labels: ["feedback", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying Doseph! Issues are public: please leave out passwords, Wi-Fi details and where you live.
+  - type: textarea
+    id: what
+    attributes:
+      label: Your feedback or idea
+      placeholder: e.g. On the tank page I did not understand when the robot measures again.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Status and the mixing cycle
+        - Recipes
+        - Tank
+        - History
+        - Pumps and probes
+        - Settings and sign-in
+        - Simulator
+        - Something new
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the menu.
+      placeholder: 0.1.0-proto.5
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup (optional)
+      description: Tank size, nutrients, what you grow – whatever helps to understand your use.

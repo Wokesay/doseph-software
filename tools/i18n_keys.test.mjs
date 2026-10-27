@@ -211,7 +211,8 @@ test("a number and its unit of time are joined with a no-break space", () => {
 // app's German texts and in the German names of the recipe templates.
 test("no German outside the German texts", () => {
   const umlaut = /[äöüßÄÖÜ„“]/;  // ok: German
-  const skip = new Set(["msg.ts"]);
+  // msg.ts: the robot's texts in German; README.txt: the download's readme, in both languages
+  const skip = new Set(["msg.ts", "README.txt"]);
   const walk = (d) =>
     readdirSync(join(root, d), { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? walk(join(d, e.name)) : /\.(cpp|hpp|ts|tsx|mjs|css|cmake|sh|txt)$|CMakeLists\.txt$/.test(e.name) ? [join(d, e.name)] : [],

@@ -7,7 +7,7 @@ rules are as they are is in `docs/RATIONALE.md`.
 ## One core, two platforms
 
 The domain core is platform-neutral C++17 (`core/`). The same code runs in
-the simulator (`sim/`), against a digital twin of tank, measuring cell,
+the simulator (`sim/`), against a digital twin of tank, measuring chamber,
 flow, pumps and probes, and later on the device, where only the platform
 interfaces are replaced: `IHardware` (pumps, circulation pump, raw
 readings), `IStorage` (files), `IClock` (time) and the HTTP binding.
@@ -68,4 +68,4 @@ app shows them in German by that key.
 ## Out of scope for now
 
 Notifications, a store app, a server, access from outside the home
-network, stock of bottles. Decided by the product session when they come.
+network, stock of canisters. Decided by the product session when they come.

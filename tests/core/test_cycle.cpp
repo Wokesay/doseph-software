@@ -237,7 +237,7 @@ TEST_CASE("Cycle: a Stop switches everything off at once, holds across a restart
   CHECK(st(s)["cycle"]["progress"]["first"] == true);
 }
 
-TEST_CASE("Cycle: an empty bottle: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
+TEST_CASE("Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
   sim::Simulation s(demo());
   s.world().pumps[1].empty = true;  // Part A
   s.world().pumps[2].empty = true;  // Part B
@@ -352,13 +352,13 @@ TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the
   REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 5 * 60));
   CHECK(item("ph", "check.rest_left")["ok"] == false);  // pH rests after a nutrient dose (RAT-046)
   // A part on no pump: the round cannot be planned, and the list names it (RAT-015)
-  json b = s.robot().configJson()["bottles"][2];
+  json b = s.robot().configJson()["canisters"][2];
   b["pump"] = 0;
-  REQUIRE(s.robot().putBottle(b).status == 200);
+  REQUIRE(s.robot().putCanister(b).status == 200);
   CHECK(item("ec", "check.part_not_ready")["args"]["name"] == b["name"]);
   // A pump calibration and the Stop
   b["pump"] = 3;
-  REQUIRE(s.robot().putBottle(b).status == 200);
+  REQUIRE(s.robot().putCanister(b).status == 200);
   REQUIRE(s.robot().startCalibration(4, 10).status == 200);
   CHECK(item("all", "check.pump_job")["ok"] == false);
   REQUIRE(s.robot().stop(say("stop.app")).status == 200);

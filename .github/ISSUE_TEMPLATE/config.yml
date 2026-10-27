@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability (private)
+    url: https://github.com/Wokesay/doseph-software/security/advisories/new
+    about: Never as an issue. Process and contact in SECURITY.md.

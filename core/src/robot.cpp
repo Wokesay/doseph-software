@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <map>
 #include <set>
 
 #include "doseph/embedded.hpp"
@@ -133,7 +135,7 @@ void Robot::boot() {
   for (const auto& r : journal_.closeOpen()) {
     if (r.intoTank())
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
-               say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"bottle", r.bottle}, {"ml", numOrNull(r.ml)}});
+               say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});
     else
       log_.add(bootEpoch_, "dose", "notice", say("ev.boot.cut_cup", {{"pump", r.pump}}), say("ev.boot.cut_cup.text"));
   }
@@ -201,7 +203,7 @@ void Robot::tick() {
 }
 
 void Robot::sampleHistory(Epoch epoch) {
-  // pH, EC and temperature only with flow: without it the cell holds standing water, not the tank's;
+  // pH, EC and temperature only with flow: without it the measuring chamber holds standing water, not the tank's;
   // a gap stays a gap (RAT-016)
   const bool flow = flowOk();
   std::vector<std::pair<std::string, double>> samples;
@@ -289,16 +291,20 @@ json Robot::state() {
   watch["stale"] = clock_.epoch() - watch_.evaluatedAt > kWatchStaleS;  // an old assessment is none (RAT-073)
   json dosing = nullptr;
   if (const auto& a = doser_.active())
-    dosing = {{"order", a->id},           {"purpose", a->purpose},
-              {"bottle", a->step.bottle}, {"name", a->step.name},
-              {"ml", numOrNull(a->step.ml)}, {"mlDone", doser_.progress().mlDone},
-              {"run", doser_.progress().run + 1}, {"runs", a->step.runs.size()}};
+    dosing = {{"order", a->id},
+              {"purpose", a->purpose},
+              {"canister", a->step.canister},
+              {"name", a->step.name},
+              {"ml", numOrNull(a->step.ml)},
+              {"mlDone", doser_.progress().mlDone},
+              {"run", doser_.progress().run + 1},
+              {"runs", a->step.runs.size()}};
   json pumps = json::array();
   for (int n = 1; n <= hw_.pumpCount(); ++n) {
-    const BottleCfg* b = cfg_.bottleOnPump(n);
+    const CanisterCfg* b = cfg_.canisterOnPump(n);
     auto it = cfg_.pumps.find(n);
     pumps.push_back({{"pump", n},
-                     {"bottle", b ? json(b->id) : json(nullptr)},
+                     {"canister", b ? json(b->id) : json(nullptr)},
                      {"flowMlPerMin", it == cfg_.pumps.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
                      {"at", it == cfg_.pumps.end() ? json(nullptr) : json(it->second.at)}});
   }
@@ -351,6 +357,44 @@ json Robot::history(const std::string& series, Epoch from, Epoch to, size_t poin
     return a;
   };
   return {{"series", series}, {"stepS", p.stepS}, {"t", p.t}, {"avg", arr(p.avg)}, {"min", arr(p.min)}, {"max", arr(p.max)}};
+}
+
+std::string Robot::historyCsv(const std::vector<std::string>& series, Epoch from, Epoch to, const std::string& lang) const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const bool de = lang == "de";
+  const char sep = de ? ';' : ',';
+  std::string out = de ? "zeit_utc" : "time_utc";
+  std::map<Epoch, std::vector<double>> rows;
+  std::vector<int> decimals;
+  for (size_t i = 0; i < series.size(); ++i) {
+    out += sep;
+    out += series[i];
+    int d = 3;
+    for (Channel ch : kChannels)
+      if (series[i] == channelName(ch)) d = channelDef(ch).decimals + 1;  // a mean carries one digit more
+    decimals.push_back(d);
+    const SeriesPoints p = history_.query(series[i], from, to, 0);
+    for (size_t k = 0; k < p.t.size(); ++k) {
+      auto& row = rows[p.t[k]];
+      row.resize(series.size(), kNaN);
+      row[i] = p.avg[k];
+    }
+  }
+  out += '\n';
+  char buf[64];
+  for (const auto& [t, row] : rows) {
+    out += utcText(t);
+    for (size_t i = 0; i < row.size(); ++i) {
+      out += sep;
+      if (!isNum(row[i])) continue;  // a gap stays empty, never 0 (RAT-016, RAT-006)
+      std::snprintf(buf, sizeof buf, "%.*f", decimals[i], row[i]);
+      std::string n(buf);
+      if (de) std::replace(n.begin(), n.end(), '.', ',');
+      out += n;
+    }
+    out += '\n';
+  }
+  return out;
 }
 
 json Robot::events(Epoch from, Epoch to, const std::string& type, size_t limit) const {
@@ -444,45 +488,45 @@ Result Robot::newTank() {
   return Result::ok();
 }
 
-Result Robot::putBottle(const json& j) {
+Result Robot::putCanister(const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   Config next = cfg_;
   std::string id = jstr(j, "id");
-  BottleCfg* b = nullptr;
-  for (auto& x : next.bottles)
+  CanisterCfg* b = nullptr;
+  for (auto& x : next.canisters)
     if (x.id == id) b = &x;
   if (!b) {
     if (id.empty()) {
       do id = "b" + std::to_string(++idSeq_);
-      while (next.bottle(id));
+      while (next.canister(id));
     }
-    next.bottles.push_back(BottleCfg{});
-    b = &next.bottles.back();
+    next.canisters.push_back(CanisterCfg{});
+    b = &next.canisters.back();
     b->id = id;
   }
   b->name = utf8Prefix(jstr(j, "name", b->name), 60);
-  b->kind = jstr(j, "kind", b->kind);
+  b->role = jstr(j, "role", b->role);
   if (j.contains("pump")) {
-    if (!j["pump"].is_number_integer()) return Result::fail(422, say("cfg.bottle.pump", {{"name", b->name}, {"max", hw_.pumpCount()}}));
+    if (!j["pump"].is_number_integer()) return Result::fail(422, say("cfg.canister.pump", {{"name", b->name}, {"max", hw_.pumpCount()}}));
     b->pump = j["pump"].get<int>();
   }
   b->pair = jstr(j, "pair", b->pair);
   b->color = jstr(j, "color", b->color);
-  Result r = saveConfig(next, changed("cfg.what.bottles"));
+  Result r = saveConfig(next, changed("cfg.what.canisters"));
   if (r.status == 200) r.body["id"] = id;
   return r;
 }
 
-Result Robot::deleteBottle(const std::string& id) {
+Result Robot::deleteCanister(const std::string& id) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (!cfg_.bottle(id)) return Result::fail(404, say("api.not_found"));
+  if (!cfg_.canister(id)) return Result::fail(404, say("api.not_found"));
   for (const auto& r : cfg_.recipes)
     for (const auto& s : r.steps)
-      if (s.bottle == id) return Result::fail(409, say("bottle.in_recipe", {{"name", r.name}}));
+      if (s.canister == id) return Result::fail(409, say("canister.in_recipe", {{"name", r.name}}));
   Config next = cfg_;
-  next.bottles.erase(std::remove_if(next.bottles.begin(), next.bottles.end(), [&](const BottleCfg& b) { return b.id == id; }),
-                     next.bottles.end());
-  return saveConfig(next, changed("cfg.what.bottles"));
+  next.canisters.erase(std::remove_if(next.canisters.begin(), next.canisters.end(), [&](const CanisterCfg& b) { return b.id == id; }),
+                     next.canisters.end());
+  return saveConfig(next, changed("cfg.what.canisters"));
 }
 
 Result Robot::putRecipe(const json& j) {
@@ -511,7 +555,7 @@ Result Robot::putRecipe(const json& j) {
   if (j.contains("steps") && j["steps"].is_array())
     for (const auto& s : j["steps"]) {
       if (!s.is_object()) return Result::fail(422, say("api.bad_input"));
-      r.steps.push_back(RecipeStep{jstr(s, "bottle"), jnum(s, "mlPerL"), jbool(s, "fixed", false)});
+      r.steps.push_back(RecipeStep{jstr(s, "canister"), jnum(s, "mlPerL"), jbool(s, "fixed", false)});
     }
   bool replaced = false;
   for (auto& x : next.recipes)
@@ -595,7 +639,7 @@ Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {
   if (doser_.busy() || cycle_.dosing()) return Result::fail(409, say("job.cycle_dosing"));
   const Limits lim = cfg_.limits.bounded();
   if (!isNum(seconds) || seconds < 1 || seconds > lim.maxRunS) return Result::fail(422, say("job.seconds", {{"max", lim.maxRunS}}));
-  const BottleCfg* b = cfg_.bottleOnPump(pump);
+  const CanisterCfg* b = cfg_.canisterOnPump(pump);
   PumpJob job;
   job.id = (type == "calibration" ? "cal-" : "prime-") + std::to_string(++idSeq_);
   job.type = type;
@@ -606,7 +650,7 @@ Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {
   o.id = job.id;
   o.purpose = type;
   o.step.pump = pump;
-  o.step.bottle = b ? b->id : "";
+  o.step.canister = b ? b->id : "";
   o.step.name = b ? b->name : say("pump.n", {{"pump", pump}}).text;
   o.step.runs = {job.ms};
   Ctx c = ctx();
@@ -708,7 +752,7 @@ Result Robot::probe(const json& j) {
       probe_->points.push_back({s->raw, ref});
       return Result::ok({{"points", probe_->points}});
     }
-    // EC: one reference solution, its value at 25 °C as printed on the bottle; the water
+    // EC: one reference solution, its value at 25 °C as printed on the canister; the water
     // temperature is needed to compensate (RAT-089)
     const Reading& t = truth_.get(Channel::Temp);
     if (!isNum(ref) || ref < 0.1 || ref > 20) return Result::fail(422, say("probe.ec_ref"));

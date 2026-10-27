@@ -162,7 +162,7 @@ export function logoutLocal() {
 }
 
 // What several pages need
-export const bottles = computed(() => config.value?.bottles ?? []);
+export const canisters = computed(() => config.value?.canisters ?? []);
 export const recipes = computed(() => config.value?.recipes ?? []);
 export const activeRecipe = computed(() => recipes.value.find((r) => r.id === config.value?.active.recipe));
 /** The middle of a recipe's pH range, its pH target (RAT-066); null without a range. */

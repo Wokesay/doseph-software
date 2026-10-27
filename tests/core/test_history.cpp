@@ -246,3 +246,11 @@ TEST_CASE("Event journal: events after the snapshot come back by id, a torn line
   const Event& next = torn.add(130, "system", "info", Msg{"ev.c", "C", json::object()});
   CHECK(next.id == 3);  // ids go on after the journal
 }
+
+TEST_CASE("History: a time in UTC as a spreadsheet reads it (RAT-016)") {
+  CHECK(utcText(0) == "1970-01-01 00:00:00");
+  CHECK(utcText(946684799) == "1999-12-31 23:59:59");
+  CHECK(utcText(1767225600) == "2026-01-01 00:00:00");
+  CHECK(utcText(1835440496) == "2028-02-29 12:34:56");
+  CHECK(utcText(4107542400) == "2100-03-01 00:00:00");
+}

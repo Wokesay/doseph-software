@@ -62,7 +62,7 @@ class Actuators {
   bool cutLogged_ = false;
 };
 
-// A dose order = one bottle, split into partial runs. Booked per run from
+// A dose order = one canister, split into partial runs. Booked per run from
 // the actual run time (RAT-070), not only at the end; each run is written to
 // the journal before the pump starts (SD-106).
 struct DoseOrder {
