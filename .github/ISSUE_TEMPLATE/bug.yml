@@ -35,6 +35,12 @@ body:
     validations:
       required: true
   - type: input
+    id: report
+    attributes:
+      label: Report ID
+      description: From Settings → Report a problem. Please attach the downloaded package (doseph-diagnostics-….json) to this report as well.
+      placeholder: DP-1a2b3c4d
+  - type: input
     id: system
     attributes:
       label: System and browser

@@ -170,3 +170,47 @@ test("history downloads as CSV in the page's format (RAT-016)", async ({ page })
   expect(text.startsWith("time_utc,ph,ec,temp,flow\n")).toBe(true);
   expect(text.split("\n").length).toBeGreaterThan(10);
 });
+
+test("a problem is reported with a diagnostics package that holds no secret", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("report");
+  await card.locator("textarea[name=what]").fill("The cycle stayed at the flow check");
+  await card.getByRole("button", { name: "Create diagnostics package" }).click();
+  await expect(page.getByTestId("report-id")).toContainText(/Package DP-[0-9a-f]{8}: \d+ events/);
+  await card.getByRole("button", { name: "Show contents" }).click();
+  await expect(page.getByTestId("report-contents")).toContainText('"reportId"');
+  await expect(page.getByTestId("report-contents")).not.toContainText('"salt"');
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("report-download").click()]);
+  expect(download.suggestedFilename()).toMatch(/^doseph-diagnostics-DP-[0-9a-f]{8}\.json$/);
+  const href = new URL((await page.getByTestId("report-issue").getAttribute("href"))!);
+  expect(href.pathname).toBe("/Wokesay/doseph-software/issues/new");
+  expect(href.searchParams.get("template")).toBe("bug.yml");
+  expect(href.searchParams.get("report")).toMatch(/^DP-[0-9a-f]{8}$/);
+  expect(href.searchParams.get("what")).toBe("The cycle stayed at the flow check");
+});
+
+test("settings are backed up and restored; a broken backup is refused with every reason", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("backup");
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("backup-download").click()]);
+  expect(download.suggestedFilename()).toMatch(/^doseph-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  const backup = JSON.parse(await (await page.request.get("/api/v1/config/export")).text());
+  const choose = card.locator("input[name=restore]");
+
+  // A file that breaks two rules: nothing changes, and both reasons are shown
+  const broken = { ...backup, system: { ...backup.system, name: "" }, probes: { ...backup.probes, ec: { factor: 5 } } };
+  await choose.setInputFiles({ name: "broken.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(broken)) });
+  await card.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByTestId("backup-errors").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("backup-errors")).toContainText("EC calibration in the backup");
+
+  // The good one comes back under another name
+  const renamed = { ...backup, system: { ...backup.system, name: "From the backup" } };
+  await choose.setInputFiles({ name: "good.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(renamed)) });
+  await expect(card).toContainText('Restore "good.json"?');
+  await card.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByTestId("backup-errors")).toHaveCount(0);
+  await expect(page.locator("input[name=name]")).toHaveValue("From the backup");
+});

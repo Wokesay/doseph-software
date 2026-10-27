@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <doctest/doctest.h>
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -230,6 +231,39 @@ TEST_CASE("API: the history as CSV in the page's format; a gap stays an empty fi
   CHECK(c.call("GET", "export.csv", nullptr, {{"series", "ph,ph"}}).status == 422);
 }
 
+TEST_CASE("API: the diagnostics package of \"Report a problem\" carries the states and events, never a secret") {
+  sim::Simulation s(demo());
+  s.step(5 * kMinute);
+  Client c{s, "", "192.168.1.20"};
+  CHECK(c.call("GET", "diagnostics").status == 401);
+  REQUIRE(c.login("demo-password"));
+  auto r = c.call("GET", "diagnostics");
+  REQUIRE(r.status == 200);
+  const json d = json::parse(r.body);
+  const std::string id = d["reportId"];
+  CHECK(id.size() == 11);
+  CHECK(id.rfind("DP-", 0) == 0);
+  for (const char* k : {"createdAt", "info", "config", "readings", "cycle", "watchdog", "latches", "jumpLocks", "pumps", "events", "redacted"})
+    CHECK_MESSAGE(d.contains(k), k);
+  CHECK(d["info"]["version"].is_string());
+  CHECK_FALSE(d["events"].empty());
+  CHECK(d["cycle"].contains("checks"));
+  // No secret: none of the password file's values (hash, salt, sessions), no address of a client
+  json rest = d;
+  rest.erase("redacted");  // names what is left out, by key
+  const std::string all = rest.dump();
+  std::vector<std::string> secrets = {"192.168.1.20", c.token};
+  std::function<void(const json&)> collect = [&](const json& j) {
+    if (j.is_string() && j.get<std::string>().size() >= 16) secrets.push_back(j.get<std::string>());
+    if (j.is_structured())
+      for (const auto& v : j) collect(v);
+  };
+  collect(s.robot().auth().toJson());
+  REQUIRE(secrets.size() > 3);
+  for (const auto& secret : secrets) CHECK_MESSAGE(all.find(secret) == std::string::npos, secret);
+  CHECK(json::parse(c.call("GET", "diagnostics").body)["reportId"] != d["reportId"]);  // a number per report
+}
+
 TEST_CASE("API: origin checks for the transport (DNS rebinding, CSRF) and the session cookie") {
   CHECK(hostAllowed("192.168.1.5:8080"));
   CHECK(hostAllowed("doseph.local"));
@@ -243,4 +277,117 @@ TEST_CASE("API: origin checks for the transport (DNS rebinding, CSRF) and the se
   CHECK(sessionToken("", "a=1; dp_session=tok; b=2") == "tok");
   CHECK(sessionToken("", "dp_session=one; dp_session=two").empty());
   CHECK(sessionToken("", "xdp_session=tok").empty());
+}
+
+TEST_CASE("API: a backup restores the settings, checked like a change; never the password lock, and learning only where kept (RAT-025, RAT-085)") {
+  sim::Simulation s(demo());
+  s.step(5 * kMinute);
+  Client c{s};
+  CHECK(c.call("GET", "config/export").status == 401);
+  CHECK(c.call("POST", "config/import", s.robot().configJson()).status == 401);
+  REQUIRE(c.login("demo-password"));
+  auto r = c.call("GET", "config/export");
+  REQUIRE(r.status == 200);
+  bool named = false;
+  for (const auto& [k, v] : r.headers) named |= k == "Content-Disposition" && v.find("filename=\"doseph-backup-20") != std::string::npos;
+  CHECK(named);
+  const json backup = json::parse(r.body);
+  CHECK(backup == s.robot().configJson());
+  const int rev = backup["revision"];
+
+  // Refused, and nothing changes: not a backup, a newer one, a damaged one, one that breaks a rule,
+  // one with a calibration that a probe could not have given (RAT-025)
+  auto refused = [&](const json& file) {
+    auto x = c.call("POST", "config/import", file);
+    CHECK(x.status == 422);
+    CHECK(s.robot().configJson()["revision"] == rev);
+    return json::parse(x.body)["error"]["key"].get<std::string>();
+  };
+  CHECK(c.call("POST", "config/import", json::array({1, 2})).status == 400);  // the API takes objects only
+  CHECK(s.robot().importConfig(json::array({1, 2})).body["error"]["key"] == "config.not_object");
+  json f = backup;
+  f["schemaVersion"] = kSchemaVersion + 1;
+  CHECK(refused(f) == "config.newer");
+  f = backup;
+  f["canisters"] = "none";
+  CHECK(refused(f) == "config.import");
+  f = backup;
+  f["system"]["timezone"] = "Europe/../passwd";
+  CHECK(refused(f) == "cfg.system.timezone");
+  f = backup;
+  f["probes"]["ph"] = {{"points", {{1.0, 4.0}, {1.2, 7.0}}}};  // a slope no probe has
+  CHECK(refused(f) == "cfg.calibration.ph");
+  f = backup;
+  f["probes"]["ec"] = {{"factor", 5.0}};
+  CHECK(refused(f) == "cfg.calibration.ec");
+
+  // An older schema comes in through the same migration as the stored file
+  f = backup;
+  f["schemaVersion"] = 1;
+  f["bottles"] = f["canisters"];
+  f.erase("canisters");
+  for (auto& b : f["bottles"]) {
+    b["kind"] = b["role"];
+    b.erase("role");
+  }
+  for (auto& rc : f["recipes"])
+    for (auto& st : rc["steps"]) {
+      st["bottle"] = st["canister"];
+      st.erase("canister");
+    }
+  // The file says no password was set: the lock against a second first setup stays all the same
+  f["system"]["passwordSet"] = false;
+  f["system"]["name"] = "Restored";
+  REQUIRE(c.call("POST", "config/import", f).status == 200);
+  const json now = s.robot().configJson();
+  CHECK(now["revision"] == rev + 1);
+  CHECK(now["system"]["name"] == "Restored");
+  CHECK(now["system"]["passwordSet"] == true);
+  CHECK(now["canisters"] == backup["canisters"]);
+  CHECK(now["recipes"] == backup["recipes"]);
+  CHECK(now["probes"] == backup["probes"]);
+  bool logged = false;
+  for (const auto& e : c.get("events")) logged |= e["title"]["key"] == "ev.config.imported";
+  CHECK(logged);
+
+  // And the other way round: a file never sets the lock on a robot without a password
+  sim::Simulation fresh(newRobot());
+  json g = backup;
+  g["system"]["passwordSet"] = true;
+  REQUIRE(fresh.robot().importConfig(g).status == 200);
+  CHECK(fresh.robot().configJson()["system"]["passwordSet"] == false);
+}
+
+TEST_CASE("API: a backup is not restored while a pump runs; what the robot learned stays only where the file keeps it (RAT-085)") {
+  sim::Simulation s(demo());
+  s.step(6 * kHour);
+  Robot& robot = s.robot();
+  const json backup = robot.configJson();
+  REQUIRE_FALSE(robot.runtime().ecEffects.empty());
+  const std::string learned = robot.runtime().ecEffects.begin()->first;
+  REQUIRE(isNum(robot.runtime().phEffect));
+
+  // The same file keeps everything learned
+  const auto effects = robot.runtime().ecEffects;
+  REQUIRE(robot.importConfig(backup).status == 200);
+  CHECK(robot.runtime().ecEffects == effects);
+  CHECK(isNum(robot.runtime().phEffect));
+
+  // A file without that recipe, with another pH− canister: both start afresh
+  json f = backup;
+  f["active"] = {{"recipe", ""}, {"from", 0}, {"until", 0}};
+  json kept = json::array();
+  for (const auto& rc : f["recipes"])
+    if (rc["id"] != learned) kept.push_back(rc);
+  f["recipes"] = kept;
+  for (auto& b : f["canisters"])
+    if (b["role"] == "ph_down") b["name"] = "pH down, another make";
+  REQUIRE(robot.importConfig(f).status == 200);
+  CHECK(robot.runtime().ecEffects.count(learned) == 0);
+  CHECK_FALSE(isNum(robot.runtime().phEffect));
+
+  // A pump run (or a dose, or a probe calibration) is not cut by a restore
+  REQUIRE(robot.prime(1, 30).status == 200);
+  CHECK(robot.importConfig(backup).status == 409);
+  CHECK(robot.configJson()["recipes"] == kept);
 }

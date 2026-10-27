@@ -243,7 +243,15 @@ ApiResponse Api::route(const ApiRequest& req) {
   }
   if (is("GET", {"state"})) return jsonResp(200, robot_.state());
   if (is("GET", {"config"})) return jsonResp(200, robot_.configJson());
+  if (is("GET", {"config", "export"})) {
+    ApiResponse r = jsonResp(200, robot_.configJson());
+    const std::string day = utcText(robot_.now()).substr(0, 10);
+    r.headers.emplace_back("Content-Disposition", "attachment; filename=\"doseph-backup-" + day + ".json\"");
+    return r;
+  }
+  if (is("POST", {"config", "import"})) return fromResult(robot_.importConfig(body));
   if (is("GET", {"templates"})) return jsonResp(200, Robot::templates());
+  if (is("GET", {"diagnostics"})) return jsonResp(200, robot_.diagnostics());
   if (is("GET", {"history"})) {
     const Epoch now = robot_.now();
     auto it = req.query.find("series");
