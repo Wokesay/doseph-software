@@ -48,7 +48,8 @@ The app speaks English and German.
 
 1. Download the package for your system (Windows, macOS or Linux) from
    [Releases](https://github.com/Wokesay/doseph-software/releases) and
-   unpack it. Each release lists the checksums of its files.
+   unpack it. Each release lists the checksums of its files, with SBOMs
+   and a provenance attestation ([`docs/RELEASE.md`](docs/RELEASE.md)).
 2. Start `doseph-simulator` (on Windows `doseph-simulator.exe`) with a
    double-click. Windows may warn about an unknown app, and macOS needs
    one command first: both are explained in the `README.txt` of the
@@ -92,8 +93,8 @@ All checks, as CI runs them: `tools/ci.sh`.
 | `sim/` | the simulator: twin of tank, measuring chamber, flow, pumps and probes; HTTP server for the web app |
 | `web/` | the web app (Preact, TypeScript); end-to-end tests against the simulator |
 | `tests/core/` | the core's tests (doctest) |
-| `tools/` | checks: architecture rules, text keys, the rule register, packaging and release helpers |
-| `docs/` | concept, decisions (SD), rationale register (RAT), simulator, provenance |
+| `tools/` | checks: architecture rules, text keys, the rule register, licenses and provenance of dependencies; packaging, SBOMs and release helpers |
+| `docs/` | concept, decisions (SD), rationale register (RAT), invariants, later steps, simulator, release, provenance |
 
 ## Documentation
 
@@ -101,6 +102,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) – software decisions (SD-105 the mixing cycle)
 - [`docs/RATIONALE.md`](docs/RATIONALE.md) – the rules learned from practice (RAT-xxx)
 - [`docs/INVARIANTS.md`](docs/INVARIANTS.md) – the rules by module, with their code and tests
+- [`docs/LATER.md`](docs/LATER.md) – what later steps of the order of work rebuild
 - [`docs/SIMULATOR.md`](docs/SIMULATOR.md) – running and steering the simulator
 - [`docs/PROVENANCE.md`](docs/PROVENANCE.md) – where the code comes from
 - [`docs/RELEASE.md`](docs/RELEASE.md) – how a prototype is released
