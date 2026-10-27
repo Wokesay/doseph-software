@@ -358,6 +358,34 @@ band.
   does not change.
 
 
+## SD-118: Canisters stand below the device, confirmed at commissioning and before a head change
+
+2026-10-27. Product requirement (from PD-463). It replaces "canisters
+stand no higher than the device" in SD-108 and the reason given for
+drops without a running pump in SD-111.
+
+- **The rule.** The top of every canister stands lower than the bottom of
+  the device. Then no canister can siphon through a stopped pump into the
+  tank.
+- **Confirmed at commissioning.** The setup assistant (#10, later step)
+  has a step that shows the rule and asks for its confirmation; until it
+  is confirmed no line is filled and nothing doses. The robot keeps the
+  confirmation with its time in the configuration and logs it as an
+  event. A backup brings everything but this: placement is physical, so a
+  restored or new device asks again, as it never takes `passwordSet`
+  from a file.
+- **Confirmed before every head change.** The app shows the rule and asks
+  again before it lets a head be fitted, removed or changed; without it
+  the head change does not start. The head's channel doses nothing until
+  it is calibrated again, as before (SD-108).
+- **The safety net stays.** Drops without a running pump (SD-111) still
+  raise an alarm and latch the channel; its text now names the likely
+  cause: a canister stands higher than the bottom of the device.
+- The confirmation is a statement of the owner, not a measurement: the
+  robot cannot see where a canister stands. It is kept simple on purpose
+  (minimal principle); the drop sensor is what catches a wrong one.
+
+
 ## SD-119: The canister level is counted from use
 
 2026-10-27. Step 2.7 of #10. The robot cannot see into a canister; it
@@ -389,7 +417,6 @@ counts.
   robot had and the file keeps (#18).
 - **Later:** the drop sensor (SD-111) is what sees a canister run dry;
   the count only warns ahead of it.
-
 
 
 ## SD-120: How a pair's missing parts are counted
