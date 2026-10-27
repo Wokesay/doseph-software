@@ -65,7 +65,11 @@ checks against DNS rebinding and cross-site requests. The app speaks
 English and German; the robot sends English messages with a key, and the
 app shows them in German by that key.
 
-## Out of scope for now
+## Not built yet
 
-Notifications, a store app, a server, access from outside the home
-network, stock of canisters. Decided by the product session when they come.
+These follow in the order of work of #10: the twin of the new water path
+with drop sensors, push notifications and maintenance reminders, plant
+recipes with phases and a calendar, the app and commissioning, coupling
+two devices, Shelly and ESP devices (climate, light, watering, a refill
+valve), and an optional account. Control stays on the device in every
+step.

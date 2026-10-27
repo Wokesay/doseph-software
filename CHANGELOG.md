@@ -75,6 +75,8 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- `README.md` says what the prototype does and how to try it, step by
+  step; `docs/CONCEPT.md` lists what is not built yet.
 - Started from growcontroller-software at a3b00d1 without its history
   (`docs/PROVENANCE.md`); grow-only parts left behind.
 - The repository is public, under AGPL-3.0-or-later with the additional
