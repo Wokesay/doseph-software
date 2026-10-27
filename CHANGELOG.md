@@ -68,6 +68,10 @@ All notable changes to this software. The format follows
   check again. What the robot learned stays only for the recipes and the
   pH− canister the file keeps (RAT-085); another tank volume makes the
   next dose a test dose.
+- One simulator per data folder: with `--data` it holds `simulator.lock`
+  in the folder while it runs, and a second start on the same folder ends
+  with a message before it reads a file. A link under that name is not
+  followed.
 
 ### Changed
 
