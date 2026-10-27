@@ -1,18 +1,28 @@
 # Doseph – software
 
-Doseph is a mixing robot for nutrient solution: a standalone device at the
-nutrient tank that only mixes. A circulation pump pushes tank water through
-the device. The robot proves the flow, measures pH, EC and temperature,
-doses pH− and nutrients per recipe in small doses, and mixes again only
-after the run-through time the user set for the tank – not all the time.
+Doseph is a mixing robot for nutrient solution: a standalone device next
+to the nutrient tank. It draws tank water through itself, proves the
+flow, measures pH, EC and temperature, and doses pH− and up to three
+nutrients per recipe in small doses. It mixes again only once the tank
+has mixed, not all the time.
 
 This repository holds its software: the core (C++17), a simulator with a
 digital twin of tank and device, and the web app the device serves. The
-firmware of the device follows. The software is operated only through the
-web app on the device, on the home network: no cloud, no account, no
-store app.
+firmware of the device follows. Control always runs on the device: it
+works offline on the home network, and a server or an account is never
+needed for it.
 
-> Status: development. Not released; for testing only.
+> **Status: prototype.** For trying in the simulator only; do not dose
+> into a real tank with it. A prototype comes out weekly while there is
+> something new.
+
+## Try a prototype
+
+Download the latest prototype for your system under
+[Releases](https://github.com/Wokesay/doseph-software/releases), start it
+and open the address it prints. Tell us what you think with the
+[feedback form](https://github.com/Wokesay/doseph-software/issues/new?template=feedback.yml);
+where to report what is in [`SUPPORT.md`](SUPPORT.md).
 
 ## Build and try
 
@@ -36,7 +46,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 | Path | What |
 |---|---|
 | `core/` | platform-neutral core: sensor truth, dose planning, the mixing cycle, gateway, watchdog, configuration, API |
-| `sim/` | the simulator: twin of tank, cell, flow, pumps and probes; HTTP server for the web app |
+| `sim/` | the simulator: twin of tank, measuring chamber, flow, pumps and probes; HTTP server for the web app |
 | `web/` | the web app (Preact, TypeScript); end-to-end tests against the simulator |
 | `tests/core/` | the core's tests (doctest) |
 | `tools/` | checks: architecture rules, text keys, test runner |
@@ -49,9 +59,13 @@ All checks, as CI runs them: `tools/ci.sh`.
 - `docs/RATIONALE.md` – the rules learned from practice (RAT-xxx)
 - `docs/SIMULATOR.md` – running and steering the simulator
 - `docs/PROVENANCE.md` – where the code comes from
+- `SUPPORT.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` –
+  getting help, reporting a vulnerability, how the project takes
+  contributions, how we treat each other
 
 ## License
 
-Not decided yet. The files carry the license of the code they come from
-(`LICENSE`, AGPL-3.0-or-later, with `ADDITIONAL_PERMISSION.md`) until the
-decision is made.
+AGPL-3.0-or-later (`LICENSE`), with an additional permission for the
+binary-only libraries of the device's platform
+([`ADDITIONAL_PERMISSION.md`](ADDITIONAL_PERMISSION.md)). Decided by the
+owner on 2026-10-27 (SD-116).

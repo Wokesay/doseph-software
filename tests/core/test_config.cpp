@@ -12,10 +12,10 @@ namespace {
 Config sample() {
   Config c;
   c.tank.volumeL = 100;
-  c.bottles = {{"down", "pH−", "ph_down", 1, "", "#c00"},
-               {"a", "Part A", "nutrient", 2, "AB", "#00c"},
-               {"b", "Part B", "nutrient", 3, "AB", "#0c0"},
-               {"cm", "CalMag", "nutrient", 4, "", "#cc0"}};
+  c.canisters = {{"down", "pH−", "ph_down", 1, "", "#c00"},
+                 {"a", "Part A", "nutrient", 2, "AB", "#00c"},
+                 {"b", "Part B", "nutrient", 3, "AB", "#0c0"},
+                 {"cm", "CalMag", "nutrient", 4, "", "#cc0"}};
   RecipeCfg r;
   r.id = "r1";
   r.name = "Veg";
@@ -52,6 +52,39 @@ TEST_CASE("Configuration: there and back through JSON; a missing number stays mi
   CHECK_THROWS(configFromJson(json{{"schemaVersion", 99}}));
 }
 
+TEST_CASE("Configuration: a file of schema 1 names bottles; read, they are canisters with a role (SD-107)") {
+  json v1 = {{"schemaVersion", 1},
+             {"bottles", json::array({{{"id", "down"}, {"name", "pH−"}, {"kind", "ph_down"}, {"pump", 1}},
+                                      {{"id", "a"}, {"name", "Part A"}, {"kind", "nutrient"}, {"pump", 2}, {"pair", "AB"}},
+                                      {{"id", "b"}, {"name", "Part B"}, {"kind", "nutrient"}, {"pump", 3}, {"pair", "AB"}}})},
+             {"recipes", json::array({{{"id", "r1"},
+                                       {"name", "Veg"},
+                                       {"steps", json::array({{{"bottle", "b"}, {"mlPerL", 2.0}}, {{"bottle", "a"}, {"mlPerL", 2.0}}})},
+                                       {"ecTarget", 1.2},
+                                       {"ph", {5.8, 6.2}}}})}};
+  const json m = migrateConfig(v1);
+  CHECK(m["schemaVersion"] == kSchemaVersion);
+  CHECK_FALSE(m.contains("bottles"));
+  CHECK(m["canisters"][0]["role"] == "ph_down");
+  CHECK_FALSE(m["canisters"][0].contains("kind"));
+  CHECK(m["recipes"][0]["steps"][0]["canister"] == "b");
+  Config c = configFromJson(v1);
+  REQUIRE(c.canisters.size() == 3);
+  CHECK(c.canisters[0].role == "ph_down");
+  CHECK(c.canisters[1].role == "nutrient");
+  CHECK(c.canisters[2].pair == "AB");
+  CHECK(c.recipes[0].steps[1].canister == "a");
+  CHECK(c.phDown() == &c.canisters[0]);
+  CHECK(validateConfig(c, 4).empty());
+  // The current schema passes unchanged; an unknown or broken version is refused
+  json now = sample();
+  CHECK(migrateConfig(now) == now);
+  CHECK_THROWS(migrateConfig(json{{"schemaVersion", 0}}));
+  CHECK_THROWS(migrateConfig(json{{"schemaVersion", kSchemaVersion + 1}}));
+  CHECK_THROWS(migrateConfig(json{{"schemaVersion", "1"}}));
+  CHECK_THROWS(migrateConfig(json::array()));
+}
+
 TEST_CASE("Configuration: pH correction is never part of a recipe (RAT-004)") {
   Config c = sample();
   c.recipes[0].steps.push_back({"down", 0.1, false});
@@ -80,9 +113,9 @@ TEST_CASE("Configuration: a pair keeps all its parts; none of them is fixed (RAT
   c = sample();
   c.recipes[0].steps[2].fixed = true;  // CalMag fixed: allowed
   CHECK(validateConfig(c, 4).empty());
-  // A pair of one: a bottle may wait for its partner, but no recipe uses it so
+  // A pair of one: a canister may wait for its partner, but no recipe uses it so
   c = sample();
-  c.bottles[2].pair = "";
+  c.canisters[2].pair = "";
   c.recipes[0].steps.erase(c.recipes[0].steps.begin());
   CHECK(has(validateConfig(c, 4), "cfg.pair.single"));
   c.recipes.clear();
@@ -99,13 +132,13 @@ TEST_CASE("Configuration: an EC target far from what the amounts give is refused
   CHECK(has(validateConfig(c, 4), "cfg.recipe.ec_range"));
 }
 
-TEST_CASE("Configuration: one bottle per pump, a pump the device has; the mixing wait within its bounds") {
+TEST_CASE("Configuration: one canister per pump, a pump the device has; the mixing wait within its bounds") {
   Config c = sample();
-  c.bottles[3].pump = 2;
-  CHECK(has(validateConfig(c, 4), "cfg.bottle.pump_twice"));
+  c.canisters[3].pump = 2;
+  CHECK(has(validateConfig(c, 4), "cfg.canister.pump_twice"));
   c = sample();
-  c.bottles[3].pump = 5;
-  CHECK(has(validateConfig(c, 4), "cfg.bottle.pump"));
+  c.canisters[3].pump = 5;
+  CHECK(has(validateConfig(c, 4), "cfg.canister.pump"));
   c = sample();
   c.tank.waitEcMin = 1;  // below 2 min (RAT-052)
   CHECK(has(validateConfig(c, 4), "cfg.tank.wait"));

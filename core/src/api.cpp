@@ -282,8 +282,8 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("PUT", {"tank"})) return fromResult(robot_.putTank(body));
   if (is("POST", {"tank", "new"})) return fromResult(robot_.newTank());
   if (is("PUT", {"control"})) return fromResult(robot_.putControl(body));
-  if (is("POST", {"bottles"})) return fromResult(robot_.putBottle(body));
-  if (is("DELETE", {"bottles", "*"})) return fromResult(robot_.deleteBottle(p[1]));
+  if (is("POST", {"canisters"})) return fromResult(robot_.putCanister(body));
+  if (is("DELETE", {"canisters", "*"})) return fromResult(robot_.deleteCanister(p[1]));
   if (is("POST", {"recipes"})) return fromResult(robot_.putRecipe(body));
   if (is("DELETE", {"recipes", "*"})) return fromResult(robot_.deleteRecipe(p[1]));
   if (is("PUT", {"active"})) return fromResult(robot_.setActive(body));

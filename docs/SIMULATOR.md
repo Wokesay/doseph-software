@@ -1,7 +1,7 @@
 # Simulator
 
 The simulator runs the real core against a digital twin of the tank, the
-measuring cell, the flow, the dosing pumps and the probes, and serves the
+measuring chamber, the flow, the dosing pumps and the probes, and serves the
 web app. Development, tests and demos need no hardware.
 
 ## Start
@@ -36,7 +36,7 @@ http://localhost:5173 (the API is passed through).
 | | |
 |---|---|
 | Tank | volume, EC, pH, temperature; a dose spreads with the flow (time constant about one turnover, at least 20 s), pH with a dead time of 60 s |
-| Measuring cell | holds what flows through it; without flow it keeps its water |
+| Measuring chamber | holds what flows through it; without flow it keeps its water |
 | Flow | the circulation pump delivers 12 L/min; faults: blocked, broken sensor; an outside pump |
 | Dosing pumps | four, each with its own true flow (42–53 ml/min), may be blocked or empty; calibration and priming go into a cup |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |

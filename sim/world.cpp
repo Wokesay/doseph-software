@@ -21,7 +21,7 @@ void World::reset(int n) {
   now_ = 0;
   lastSample_ = -100000;
   tank = Tank{};
-  cell = Cell{};
+  chamber = Chamber{};
   output = external = false;
   pumpLpm = 12.0;
   flowFault.clear();
@@ -172,15 +172,15 @@ void World::step(Ms dt) {
   tank.ph = std::clamp(tank.ph, 2.5, 9.5);
   phTrail_.emplace_back(now_, tank.ph);
   while (phTrail_.size() > 2 && phTrail_[1].first <= now_ - kPhDeadMs) phTrail_.pop_front();
-  // The cell: with flow it holds the intake's water within seconds; without, it stands and takes the room's temperature
+  // The measuring chamber: with flow it holds the intake's water within seconds; without, it stands and takes the room's temperature
   if (flowing()) {
     const double kc = 1.0 - std::exp(-dts / 5.0);
     const double delayedPh = phTrail_.empty() ? tank.ph : phTrail_.front().second;
-    cell.ec += (tank.ec + kPlume * tank.pendingEc - cell.ec) * kc;
-    cell.ph += (delayedPh + kPlume * tank.pendingPh - cell.ph) * kc;
-    cell.temp += (tank.temp - cell.temp) * kc;
+    chamber.ec += (tank.ec + kPlume * tank.pendingEc - chamber.ec) * kc;
+    chamber.ph += (delayedPh + kPlume * tank.pendingPh - chamber.ph) * kc;
+    chamber.temp += (tank.temp - chamber.temp) * kc;
   } else {
-    cell.temp += (roomTemp - cell.temp) * (1.0 - std::exp(-dts / 1200.0));
+    chamber.temp += (roomTemp - chamber.temp) * (1.0 - std::exp(-dts / 1200.0));
   }
   if (probeFault != "offline" && now_ - lastSample_ >= kSampleMs) lastSample_ = now_;
   if (probeFault == "frozen" && !frozenSet_) {
@@ -193,7 +193,7 @@ void World::step(Ms dt) {
 
 double World::rawPh() const {
   if (probeFault == "frozen" && frozenSet_) return frozenPh_;
-  double truth = phBuffer ? *phBuffer : cell.ph;
+  double truth = phBuffer ? *phBuffer : chamber.ph;
   if (!phBuffer && tank.volumeL < 0.5) truth = 7.3 + noise(0.2);  // a dry probe
   double raw = 7.0 + (truth - 7.0) / phSlope + phOffset + noise(0.006);
   if (probeFault == "jump") raw += 2.1;
@@ -203,13 +203,13 @@ double World::rawPh() const {
 double World::rawEc() const {
   if (probeFault == "frozen" && frozenSet_) return frozenEc_;
   if (probeFault == "ec_zero") return std::round(std::max(0.0, 0.01 + noise(0.004)) * 1000.0) / 1000.0;
-  // The solution's EC at 25 °C, read at the cell's temperature (not compensated)
-  const double ec25 = ecBuffer ? *ecBuffer : (tank.volumeL < 0.5 ? 0.0 : cell.ec);
-  const double raw = ec25 * (1.0 + kTwinEcCoeff * (cell.temp - 25.0)) * ecFactor + noise(0.004);
+  // The solution's EC at 25 °C, read at the chamber's temperature (not compensated)
+  const double ec25 = ecBuffer ? *ecBuffer : (tank.volumeL < 0.5 ? 0.0 : chamber.ec);
+  const double raw = ec25 * (1.0 + kTwinEcCoeff * (chamber.temp - 25.0)) * ecFactor + noise(0.004);
   return std::max(0.0, std::round(raw * 1000.0) / 1000.0);
 }
 
-double World::rawTemp() const { return std::round((cell.temp + noise(0.02)) * 100.0) / 100.0; }
+double World::rawTemp() const { return std::round((chamber.temp + noise(0.02)) * 100.0) / 100.0; }
 
 double World::rawFlow() const {
   if (flowFault == "sensor" || !flowing()) return 0.0;
@@ -227,7 +227,7 @@ json World::toJson() const {
   for (const auto& [k, v] : liquids) liq[k] = v.name;
   return {{"tank", {{"volumeL", tank.volumeL}, {"ec", tank.ec}, {"ph", tank.ph}, {"temp", tank.temp},
                     {"pendingEc", tank.pendingEc}, {"pendingPh", tank.pendingPh}}},
-          {"cell", {{"ec", cell.ec}, {"ph", cell.ph}, {"temp", cell.temp}}},
+          {"chamber", {{"ec", chamber.ec}, {"ph", chamber.ph}, {"temp", chamber.temp}}},
           {"pumps", ps},
           {"output", output},
           {"external", external},

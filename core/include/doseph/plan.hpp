@@ -15,7 +15,7 @@
 namespace doseph {
 
 struct DoseStep {
-  std::string bottle, name, pair, color;
+  std::string canister, name, pair, color;
   int pump = 0;
   double mlPerL = kNaN;
   double ml = kNaN;

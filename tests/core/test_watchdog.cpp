@@ -24,7 +24,7 @@ struct Fix {
   RuntimeState rt;
   Fix() {
     cfg.tank.volumeL = 100;
-    cfg.bottles = {{"a", "Part A", "nutrient", 2, "", "#00c"}, {"down", "pH−", "ph_down", 1, "", "#c00"}};
+    cfg.canisters = {{"a", "Part A", "nutrient", 2, "", "#00c"}, {"down", "pH−", "ph_down", 1, "", "#c00"}};
     cfg.pumps[1] = {40, 1};
     cfg.pumps[2] = {50, 1};
     RecipeCfg r{"r", "Veg", "", {{"a", 2.0}}};
@@ -123,7 +123,7 @@ TEST_CASE("Watchdog: latches, an ended recipe and an uncalibrated pump are probl
   CHECK(w.overall == "problem");
   CHECK(w.problems == 2);
   CHECK(item(w, "latch.ec.no_effect").text.key == "latch.ec.no_effect");
-  CHECK(item(w, "bottle.a").text.key == "watch.pump_uncalibrated");
+  CHECK(item(w, "canister.a").text.key == "watch.pump_uncalibrated");
   CHECK(w.headline.key == "watch.headline_more");
   f.cfg.active.until = 4000;
   CHECK(item(evaluate(f.input(6.0, 1.6)), "recipe").status == "problem");

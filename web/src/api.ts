@@ -66,8 +66,8 @@ export type RobotState = {
   jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
   newTank: boolean;
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
-  dosing: { order: string; purpose: string; bottle: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
-  pumps: { pump: number; bottle: string | null; flowMlPerMin: number | null; at: number | null }[];
+  dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
+  pumps: { pump: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
   pumpJob: PumpJob | null;
   probe: ProbeSession | null;
   eventId: number;
@@ -75,9 +75,9 @@ export type RobotState = {
 };
 
 export type Circulation = "cycle" | "always" | "external";
-export type Bottle = { id: string; name: string; kind: "nutrient" | "ph_down"; pump: number; pair: string; color: string };
+export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; pump: number; pair: string; color: string };
 /** A recipe: ml per litre of each part, its EC target and pH range; a fixed part is never scaled (RAT-085). */
-export type Recipe = { id: string; name: string; note: string; steps: { bottle: string; mlPerL: number | null; fixed: boolean }[]; ecTarget: number | null; ph: [number, number] | null };
+export type Recipe = { id: string; name: string; note: string; steps: { canister: string; mlPerL: number | null; fixed: boolean }[]; ecTarget: number | null; ph: [number, number] | null };
 
 export type Config = {
   schemaVersion: number; revision: number;
@@ -85,7 +85,7 @@ export type Config = {
   tank: { volumeL: number | null; circulation: Circulation; waitEcMin: number | null; waitPhMin: number | null; holdMin: number | null };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
-  bottles: Bottle[];
+  canisters: Canister[];
   recipes: Recipe[];
   active: { recipe: string; from: number; until: number };
   pumps: Record<string, { flowMlPerMin: number | null; at: number }>;

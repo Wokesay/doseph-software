@@ -39,6 +39,30 @@ Left behind as grow-only: light, climate, watering, tank refill, drain,
 devices and sensor slots on the bus, Home Assistant, mixing in a bucket or
 watering can, grow phases and harvest, stock of bottles.
 
+## The base: main, not the last prototype tag (#10)
+
+The brief (#10) takes growcontroller-software `main` as the code source,
+at least `1ef8d75` (2026-10-25), not the tag of 0.1.0-proto.4. Checked on
+2026-10-27: `1ef8d75` is the only commit after `a3b00d1`, and it changes
+only `README.md`, `SECURITY.md` and `CHANGELOG.md` (the project is no
+longer developed). The code of `main` is therefore the code of `a3b00d1`,
+which this repository started from; there are no later code fixes to
+bring over.
+
+The fixes made on `main` after 0.1.0-proto.4 came along with `a3b00d1`.
+The security fixes among them, and where they stand here:
+
+| Fix in the predecessor | Here |
+|---|---|
+| The first password needs a setup code (gc#79) | `core/src/auth.cpp`, `core/src/api.cpp`: the device shows the code, the simulator prints it |
+| The sign-in lockout counts per client (gc SD-051) | `core/src/auth.cpp` |
+| Random numbers from the operating system, not RDSEED (CVE-2025-62626) | `sim/simulation.cpp` (`getentropy()`) |
+| An import gives a calibration only to a class that offers it | not applicable yet: there is no import; the backup and import that come back (#10 step 2) keep the rule for the probes' calibrations |
+| A new sign-in ends the session used longest ago (gc#131) | `core/src/auth.cpp` |
+
+What the brief brings back beyond the 24 Oct carry-over is recorded below
+as it comes back, with the pull request that brings it.
+
 ## References to the predecessor
 
 - `SD-001` to `SD-103` are the predecessor's software decisions; this

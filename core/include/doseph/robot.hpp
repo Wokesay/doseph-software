@@ -78,8 +78,8 @@ class Robot {
   Result putTank(const json& j);
   Result putControl(const json& j);
   Result newTank();
-  Result putBottle(const json& j);
-  Result deleteBottle(const std::string& id);
+  Result putCanister(const json& j);
+  Result deleteCanister(const std::string& id);
   Result putRecipe(const json& j);
   Result deleteRecipe(const std::string& id);
   Result setActive(const json& j);

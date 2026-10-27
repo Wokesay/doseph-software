@@ -250,7 +250,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
     return;
   }
   const double ec = measured_.ec, ph = measured_.ph;
-  const BottleCfg* down = c.cfg.phDown();
+  const CanisterCfg* down = c.cfg.phDown();
   const bool phLatched = c.rt.latches.count("ph.no_effect") > 0;
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
   // EC aims below its target by what the pH− dose that follows adds (RAT-053)
@@ -344,7 +344,7 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
 }
 
 void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph) {
-  const BottleCfg* down = c.cfg.phDown();
+  const CanisterCfg* down = c.cfg.phDown();
   const double eff = clampEffect(c.rt.phEffect, kPhStartEffect);
   const bool test = c.rt.newTank;
   auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, c.cfg.control.phMaxMlPerDose, test ? kTestDropPh : kNaN);
@@ -353,7 +353,7 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
     return;
   }
   DoseStep step;
-  step.bottle = down->id;
+  step.canister = down->id;
   step.name = down->name;
   step.pump = down->pump;
   step.color = down->color;
@@ -530,19 +530,19 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     flowSum_ += *flow.value;
     flowN_++;
   };
-  auto announceCell = [&] {  // the cell's water changes from standing to the tank's (RAT-042)
+  auto announceChamber = [&] {  // the chamber's water changes from standing to the tank's (RAT-042)
     for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) c.truth.expectChange(ch, c.now + kAnnounceMs);
   };
 
   switch (phase_) {
     case Phase::PumpOn:
-      announceCell();
+      announceChamber();
       circulation(c, act, true);
       enter(c, Phase::ProveFlow);
       line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.pump_on");
       break;
     case Phase::ProveFlow:
-      announceCell();
+      announceChamber();
       if (s.circulation == "always" || s.circulation == "cycle") circulation(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
@@ -564,14 +564,14 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       break;
     case Phase::Flush:
-      announceCell();
+      announceChamber();
       if (!c.flowOk) {
         enter(c, Phase::ProveFlow);
         break;
       }
       flushedMs_ += dt;
       noteFlow();
-      // The cell is flushed with tank water before every measurement: no decision on an old reading (RAT-043)
+      // The measuring chamber is flushed with tank water before every measurement: no decision on an old reading (RAT-043)
       line_ = say("cycle.flush", {{"left", mmss(kFlushMs - flushedMs_)}});
       if (flushedMs_ >= kFlushMs) {
         if (flowN_ > 0) {

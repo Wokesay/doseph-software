@@ -51,7 +51,7 @@ test("a recipe is put in force for a number of days", async ({ page }) => {
   await expect(page.getByTestId("active-recipe")).toContainText("without an end");
 });
 
-test("a recipe made from a template takes the bottles of the same name", async ({ page }) => {
+test("a recipe made from a template takes the canisters of the same name", async ({ page }) => {
   await login(page);
   await page.goto("/#/recipe");
   await page.getByTestId("template-two_part_basic").getByRole("button").click();
@@ -63,7 +63,7 @@ test("a recipe made from a template takes the bottles of the same name", async (
   await expect(page.locator("[data-testid^=recipe-]").filter({ hasText: "Copy" })).toContainText("Part B 2.00, Part A 2.00, CalMag 0.50");
 });
 
-test("a pH− bottle is refused in a recipe, with the robot's reason", async ({ page }) => {
+test("a pH− canister is refused in a recipe, with the robot's reason", async ({ page }) => {
   await login(page);
   await page.goto("/#/recipe");
   await page.getByTestId("new-recipe").click();

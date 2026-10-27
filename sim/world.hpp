@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Digital twin of the mixing robot at its tank: the tank, the circulation
-// pump that pushes tank water through the robot's flow cell, the dosing
-// pumps and the probes in the cell. Numbers are measured where possible
+// pump that pushes tank water through the robot's measuring chamber, the dosing
+// pumps and the probes in the chamber. Numbers are measured where possible
 // (docs/SIMULATOR.md), otherwise marked as assumptions. It models no
 // particular hardware: what the device is, is the product side's.
 #pragma once
@@ -31,7 +31,7 @@ struct Pump {
   std::string liquid;   // key in World::liquids; "" = nothing connected
   double trueFlow = 50; // ml/min, the real one
   bool blocked = false; // the motor stalls: the run fails
-  bool empty = false;   // the bottle is empty: it runs, nothing comes
+  bool empty = false;   // the canister is empty: it runs, nothing comes
   // Run state
   std::string jobId;
   Ms requested = 0, elapsed = 0;
@@ -49,8 +49,8 @@ struct Tank {
   double pendingPh = 0;
 };
 
-// The water in the robot's flow cell, what the probes see
-struct Cell {
+// The water in the robot's measuring chamber, what the probes see
+struct Chamber {
   double ec = 0.02, ph = 7.0, temp = 20.5;
 };
 
@@ -93,7 +93,7 @@ class World {
   json toJson() const;
 
   Tank tank;
-  Cell cell;
+  Chamber chamber;
   std::map<std::string, Liquid> liquids;
   double roomTemp = 22.0;
   // The probes' errors before a calibration (assumptions)
