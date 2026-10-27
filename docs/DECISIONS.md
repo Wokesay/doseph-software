@@ -332,3 +332,27 @@ band.
 - **Recipe templates** name no manufacturer until the product side has
   checked brand rights (#10); the values of a manufacturer's chart stay,
   with a neutral name.
+
+
+## SD-117: Doseph stands alone; the predecessor is deleted
+
+2026-10-27. Decided by the owner.
+
+- **No advisories.** The predecessor's software runs on no device and
+  nobody downloaded it, so advisories would protect nobody.
+- **The predecessor's repositories** are private and archived. The owner
+  deletes them once everything Doseph needs is in this repository. No
+  backup is kept.
+- **No references to the predecessor.** Code, rules and their reasons
+  live here. No `gc#n`, no `gc PD-`, `gc SD-` or `gc RAT-` IDs, no commit
+  hashes, no links. Where a reference carries a reason, the reason is
+  written here (this log, `docs/RATIONALE.md`, or the comment itself);
+  otherwise the reference is dropped. RAT and SD IDs keep their numbers.
+  New work adds no such reference.
+- **Last import step:** the remaining references go, `docs/PROVENANCE.md`
+  and the ID section of `CLAUDE.md` are rewritten to need nothing outside
+  this repository, and `tools/arch_check.sh` checks that none comes back.
+  Then the predecessor can be deleted.
+- **Copyright.** `REUSE.toml` names "The doseph-software contributors".
+  The predecessor's contributors are the same, so the copyright holder
+  does not change.
