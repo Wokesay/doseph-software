@@ -49,6 +49,3 @@ keeping the details confidential until disclosure.
 
 Prototypes are for trying the software in the simulator. Do not dose
 into a real tank with them.
-
-The predecessor growcontroller-software has its own policy and advisories
-in its repository.
