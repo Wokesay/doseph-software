@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <map>
 #include <set>
 
 #include "doseph/embedded.hpp"
@@ -351,6 +353,44 @@ json Robot::history(const std::string& series, Epoch from, Epoch to, size_t poin
     return a;
   };
   return {{"series", series}, {"stepS", p.stepS}, {"t", p.t}, {"avg", arr(p.avg)}, {"min", arr(p.min)}, {"max", arr(p.max)}};
+}
+
+std::string Robot::historyCsv(const std::vector<std::string>& series, Epoch from, Epoch to, const std::string& lang) const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const bool de = lang == "de";
+  const char sep = de ? ';' : ',';
+  std::string out = de ? "zeit_utc" : "time_utc";
+  std::map<Epoch, std::vector<double>> rows;
+  std::vector<int> decimals;
+  for (size_t i = 0; i < series.size(); ++i) {
+    out += sep;
+    out += series[i];
+    int d = 3;
+    for (Channel ch : kChannels)
+      if (series[i] == channelName(ch)) d = channelDef(ch).decimals + 1;  // a mean carries one digit more
+    decimals.push_back(d);
+    const SeriesPoints p = history_.query(series[i], from, to, 0);
+    for (size_t k = 0; k < p.t.size(); ++k) {
+      auto& row = rows[p.t[k]];
+      row.resize(series.size(), kNaN);
+      row[i] = p.avg[k];
+    }
+  }
+  out += '\n';
+  char buf[64];
+  for (const auto& [t, row] : rows) {
+    out += utcText(t);
+    for (size_t i = 0; i < row.size(); ++i) {
+      out += sep;
+      if (!isNum(row[i])) continue;  // a gap stays empty, never 0 (RAT-016, RAT-006)
+      std::snprintf(buf, sizeof buf, "%.*f", decimals[i], row[i]);
+      std::string n(buf);
+      if (de) std::replace(n.begin(), n.end(), '.', ',');
+      out += n;
+    }
+    out += '\n';
+  }
+  return out;
 }
 
 json Robot::events(Epoch from, Epoch to, const std::string& type, size_t limit) const {

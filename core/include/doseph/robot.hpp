@@ -64,6 +64,10 @@ class Robot {
   Epoch now() const { return clock_.epoch(); }
   json configJson() const;
   json history(const std::string& series, Epoch from, Epoch to, size_t points) const;
+  // The history as CSV for a spreadsheet: a row per time in UTC, a column
+  // per series. German ("de") with semicolons and a decimal comma, else
+  // commas and a decimal point; a gap stays an empty field (RAT-016).
+  std::string historyCsv(const std::vector<std::string>& series, Epoch from, Epoch to, const std::string& lang) const;
   json events(Epoch from, Epoch to, const std::string& type, size_t limit) const;
   static json templates();
   const MixCycle& cycle() const { return cycle_; }

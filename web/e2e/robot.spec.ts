@@ -138,3 +138,15 @@ test("history draws the four curves", async ({ page }) => {
   await page.getByRole("button", { name: "Doses" }).click();
   await expect(page.getByTestId("event").first()).toBeVisible();
 });
+
+test("history downloads as CSV in the page's format (RAT-016)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/history");
+  const href = await page.getByTestId("history-csv").getAttribute("href");
+  expect(href).toContain("lang=en");
+  const res = await page.request.get(href!);
+  expect(res.status()).toBe(200);
+  const text = await res.text();
+  expect(text.startsWith("time_utc,ph,ec,temp,flow\n")).toBe(true);
+  expect(text.split("\n").length).toBeGreaterThan(10);
+});
