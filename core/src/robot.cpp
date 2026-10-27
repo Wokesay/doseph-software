@@ -666,6 +666,62 @@ Result Robot::setActive(const json& j) {
   return r;
 }
 
+Result Robot::importConfig(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("config.not_object"));
+  // A newer schema in words of its own, before anything a newer version may write differently
+  if (j.contains("schemaVersion") && j["schemaVersion"].is_number() && j["schemaVersion"].get<double>() > kSchemaVersion)
+    return Result::fail(422, say("config.newer"));
+  Config next;
+  try {
+    next = configFromJson(j);
+  } catch (const std::exception& e) {
+    return Result::fail(422, say("config.import", {{"reason", e.what()}}));
+  }
+  auto errs = validateConfig(next, hw_.pumpCount());
+  // A calibration in a file is checked as if it were made now: a broken one is refused, not taken (RAT-025)
+  if (!next.phCal.is_null())
+    if (auto e = SensorTruth::checkPh(next.phCal)) errs.push_back(say("cfg.calibration.ph", {{"reason", *e}}));
+  if (!next.ecCal.is_null())
+    if (auto e = SensorTruth::checkEc(next.ecCal)) errs.push_back(say("cfg.calibration.ec", {{"reason", *e}}));
+  if (!errs.empty()) return Result::fail(422, errs.front(), {{"errors", errs}});
+  if (pumpJobActive() || probe_ || doser_.busy() || cycle_.dosing()) return Result::fail(409, say("config.busy"));
+  // The lock against a second first setup never comes from a file
+  next.system.passwordSet = cfg_.system.passwordSet || auth_.hasPassword();
+  const Config before = cfg_;
+  Result r = saveConfig(next, say("ev.config.imported"));
+  if (r.status != 200) return r;
+  // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
+  // would leave it (RAT-085); one the file leaves out or brings new starts afresh
+  for (const auto& old : before.recipes)
+    if (!cfg_.recipe(old.id)) rt_.ecEffects.erase(old.id);
+  for (const auto& nr : cfg_.recipes) {
+    const RecipeCfg* was = before.recipe(nr.id);
+    if (!was) {
+      rt_.ecEffects.erase(nr.id);
+      continue;
+    }
+    const EffectEdit e = editEcEffect(*was, nr, learnedEcEffect(rt_, nr.id));
+    if (isNum(e.learned)) rt_.ecEffects[nr.id] = e.learned;
+    else rt_.ecEffects.erase(nr.id);
+  }
+  // The pH effect belongs to the pH− canister: another one starts afresh
+  const CanisterCfg* phWas = before.phDown();
+  const CanisterCfg* phNow = cfg_.phDown();
+  if (!phWas || !phNow || phWas->id != phNow->id || phWas->name != phNow->name) rt_.phEffect = kNaN;
+  // Another volume: the next dose checks it again (SD-105)
+  const bool sameVolume = (std::isnan(before.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) || before.tank.volumeL == cfg_.tank.volumeL;
+  if (!sameVolume) {
+    rt_.newTank = true;
+    rt_.latches.erase("tank.volume");
+  }
+  // Everything off, and the check starts again with what the file says
+  act_.stopAll();
+  restartCycle();
+  saveState(true);
+  return r;
+}
+
 // ---------------------------------------------------------------- pumps
 
 Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {

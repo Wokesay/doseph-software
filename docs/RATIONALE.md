@@ -177,7 +177,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Clamping turns a defect into a plausible-looking number, and a frozen or invalid value that is still numeric passes every simple guard. Control must stop on its existing safe path instead of acting on such values.
 - **Evidence:** Observed on the reference installation (2026): clamping turned a 3.5 V raw signal, i.e. a defect, into a clean-looking pH 0, and four control loops (water heater, humidity, CO2, nutrients) had no check against frozen or stale readings.
 - **Implemented in:** `core/include/doseph/common.hpp`, `core/include/doseph/config.hpp`, `core/include/doseph/readmodel.hpp`, `core/include/doseph/truth.hpp`, `core/src/truth.cpp`
-- **Tests:** `tests/core/test_truth.cpp` "Sensor truth: no reading is never 0, and a probe without calibration gives no value for control (RAT-006, RAT-025)"; `tests/core/test_truth.cpp` "Sensor truth: pH from two buffers; a slope or zero point out of band is refused (RAT-025, RAT-026)"
+- **Tests:** `tests/core/test_truth.cpp` "Sensor truth: no reading is never 0, and a probe without calibration gives no value for control (RAT-006, RAT-025)"; `tests/core/test_truth.cpp` "Sensor truth: pH from two buffers; a slope or zero point out of band is refused (RAT-025, RAT-026)"; `tests/core/test_api.cpp` "API: a backup restores the settings, checked like a change; never the password lock, and learning only where kept (RAT-025, RAT-085)"
 
 ### RAT-026 – Validity limits come from the calibration, not from a guess
 
@@ -557,7 +557,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Manufacturer charts scale the base nutrients to a target EC in a fixed ratio, but give additives such as a cleanser a fixed rate per volume. Scaled with an EC correction, an additive is overdosed in every round; driven by EC, its step can take a tank that is already at EC as done and skip itself.
 - **Evidence:** Found in the review of SD-057 (the fixed addition is one of its review safeguards); the scaling to a target EC in a fixed ratio: SD-057 sources [1][2]. Observed on the reference installation (2026, see RAT-011): a Ca/Mg step controlled to EC took its target as met and skipped itself, so the fresh water got none.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/plan.cpp`, `core/src/robot.cpp`, `web/src/api.ts`
-- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: a fixed addition is neither dosed nor scaled; the round goes to the other parts in their ratio (RAT-085)"; `tests/core/test_plan.cpp` "EC effect after an edit: scaled up by parts no longer scaled, kept only at or above the new start (RAT-085)"
+- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: a fixed addition is neither dosed nor scaled; the round goes to the other parts in their ratio (RAT-085)"; `tests/core/test_plan.cpp` "EC effect after an edit: scaled up by parts no longer scaled, kept only at or above the new start (RAT-085)"; `tests/core/test_api.cpp` "API: a backup is not restored while a pump runs; what the robot learned stays only where the file keeps it (RAT-085)"
 
 ### RAT-086 – Watering stops only on water clearly not fit for it
 

@@ -87,6 +87,11 @@ class Robot {
   Result putRecipe(const json& j);
   Result deleteRecipe(const std::string& id);
   Result setActive(const json& j);
+  // Restores a backup (a configuration as GET /config gives it): checked like
+  // every change and its calibrations like a new one; refused while a dose,
+  // a pump run or a probe calibration goes on. Never takes passwordSet from
+  // the file. What the robot learned stays only where the file keeps it.
+  Result importConfig(const json& j);
 
   // ---- Operation
   Result prime(int pump, double seconds);

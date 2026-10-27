@@ -213,6 +213,7 @@ constexpr Entry kMessages[] = {
     {"ev.boot.mix_first", "Mixing first"},
     {"ev.boot.mix_first.text", "Doses from before the restart are not mixed in and measured yet: the first check mixes {min:0} min with flow before it measures, and learns nothing from them."},
     {"ev.config.changed", "Settings changed: {what}"},
+    {"ev.config.imported", "Settings restored from a backup"},
     {"cfg.what.system", "device"},
     {"cfg.what.tank", "tank"},
     {"cfg.what.control", "control"},
@@ -256,6 +257,10 @@ constexpr Entry kMessages[] = {
     {"ev.resume", "Resumed"},
     {"stop.app", "Stop in the app"},
     {"store.failed", "Not saved: the device cannot write its storage"},
+    {"config.not_object", "This file is not a settings backup – choose one saved with \"Back up settings\""},
+    {"config.newer", "This backup comes from a newer version – update the robot first, then restore it"},
+    {"config.import", "This file can't be restored – it is damaged or not a settings backup ({reason})"},
+    {"config.busy", "Not restored: a dose, a pump run or a probe calibration is going on – try again when it is done"},
     {"canister.in_recipe", "The recipe {name} uses this canister – remove it there first"},
     {"recipe.in_force", "This recipe is in force – choose another one first"},
     {"active.days", "Between {min} and {max} days"},
@@ -326,6 +331,8 @@ constexpr Entry kMessages[] = {
     {"cfg.active.until", "The recipe's end must come after its start"},
     {"cfg.pump.number", "Pump {pump} does not exist on this device"},
     {"cfg.pump.flow", "Pump {pump}: the calibration value is invalid"},
+    {"cfg.calibration.ph", "The pH calibration in the backup is not usable: {reason}"},
+    {"cfg.calibration.ec", "The EC calibration in the backup is not usable: {reason}"},
 
     // API and sign-in (api.cpp, auth.cpp)
     {"api.bad_input", "The input has the wrong format"},
