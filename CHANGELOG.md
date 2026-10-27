@@ -26,6 +26,13 @@ All notable changes to this software. The format follows
 
 - Started from growcontroller-software at a3b00d1 without its history
   (`docs/PROVENANCE.md`); grow-only parts left behind.
+- The repository is public, under AGPL-3.0-or-later with the additional
+  permission (SD-116). New: `SUPPORT.md`, `CODE_OF_CONDUCT.md`, issue
+  forms for bugs and feedback; `SECURITY.md` reports through GitHub's
+  private vulnerability reporting.
+- Two recipe templates name no manufacturer any more: "Three-part feed,
+  vegetative wk 1–4" and "… flowering wk 1–2", with the same values
+  (SD-116).
 - Doseph's terms (SD-107): a bottle is now a canister, and what it holds
   is its role (nutrient or pH−); the flow cell is the measuring chamber.
   The API names them `canisters`, `canister` and `role`

@@ -1,7 +1,8 @@
 # Third-party notices
 
-The software uses the third-party components below. The license of this
-repository is not decided yet (`README.md`); all of them are permissive.
+The software uses the third-party components below. This repository is
+licensed under AGPL-3.0-or-later (`README.md`); all of them are
+permissive.
 
 As of 2026-10-24.
 
