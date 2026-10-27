@@ -89,6 +89,8 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- Web app: `lucide-preact` 1.59.0, `vite` 8.3.4, `@playwright/test`
+  1.64.1.
 - `README.md` says what the prototype does and how to try it, step by
   step; `docs/CONCEPT.md` lists what is not built yet.
 - Started from growcontroller-software at a3b00d1 without its history
