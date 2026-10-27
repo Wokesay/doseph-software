@@ -48,6 +48,13 @@ All notable changes to this software. The format follows
   version, the report ID and what happened. Never in it: the password
   file's values, sessions, addresses, Wi-Fi details
   (`GET /api/v1/diagnostics`). The bug form asks for the report ID.
+- A pair with a part missing is caught up first (SD-114, SD-120): when a
+  nutrient round stops part way – a failed run, a Stop, a restart – the
+  next nutrient round doses only what the pair misses, so the parts keep
+  their ratio (RAT-054), mixes it in and measures, and learns nothing
+  from it (RAT-057). A new tank, another recipe or "Don't catch up" on
+  the status page drops it with a note; a missing part that cannot be
+  dosed holds the other parts of its pair. The state has `catchUp`.
 - The canister level, counted from use (SD-119): a size and the level
   now per canister, a "Refilled" button and "Enter level" on the pumps
   page. Every run of a canister's pump takes from it, doses and line

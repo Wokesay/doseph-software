@@ -91,6 +91,8 @@ class Robot {
   // A canister's level by hand: {"ml": n} as measured, or {"full": true} for
   // its size after a refill (SD-119)
   Result setStock(const std::string& id, const json& j);
+  // A person ends the catch-up of a pair's missing parts (SD-114)
+  Result endCatchUp();
   Result putRecipe(const json& j);
   Result deleteRecipe(const std::string& id);
   Result setActive(const json& j);

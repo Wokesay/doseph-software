@@ -168,6 +168,12 @@ struct RuntimeState {
   // Canister → its level in ml, counted from use; missing: unknown, never
   // assumed full (RAT-015); may fall below zero (SD-119)
   std::map<std::string, double> stockMl;
+  // The pair parts of the nutrient round under way: {recipe, order, canister,
+  // catchUp, parts: {canister: {planned, done}}}; null without one (SD-114)
+  json pairRound = nullptr;
+  // What a pair still misses after a round that stopped part way:
+  // {recipe, parts: {canister: ml}}; null when nothing is missing (SD-114)
+  json catchUp = nullptr;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

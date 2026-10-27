@@ -500,3 +500,104 @@ TEST_CASE("Canisters: the level is counted run by run; low and used up are probl
   CHECK(again.runtime().stockMl.count("spare") == 0);
   CHECK(again.runtime().stockMl.at("part_b") == doctest::Approx(left));
 }
+
+namespace {
+
+// A nutrient round cut short: part A's pump blocks, so part B (first in the recipe) goes in alone;
+// then a Stop ends the round and the robot works out what the pair misses
+void cutPair(sim::Simulation& s) {
+  s.control("pumpFault", {{"pump", 2}, {"blocked", true}});
+  REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.dose_incomplete"); }, 3 * 3600));
+  s.control("pumpFault", {{"pump", 2}, {"blocked", false}});
+  REQUIRE(s.robot().stop(say("stop.app")).status == 200);
+  REQUIRE(hasEvent(s, "ev.cycle.pair_short"));
+}
+
+double dosedOf(sim::Simulation& s, const std::string& canister) {
+  double ml = 0;
+  for (const auto& e : s.robot().events(0, std::numeric_limits<Epoch>::max(), "dose", 1000))
+    if (e["data"].value("canister", "") == canister && e["data"]["ml"].is_number()) ml += e["data"]["ml"].get<double>();
+  return ml;
+}
+
+}  // namespace
+
+TEST_CASE("Pairs: a round cut short with a part missing catches it up first, alone, and learns nothing from it (SD-114, RAT-054, RAT-057)") {
+  sim::Simulation s(demo());
+  cutPair(s);
+  json cu = st(s)["catchUp"];
+  REQUIRE(cu.is_object());
+  REQUIRE(cu["parts"].size() == 1);
+  CHECK(cu["parts"][0]["canister"] == "part_a");
+  // Part A misses what part B got beyond its own short run: the same ml/L (the recipe has 2 + 2 ml/L)
+  const double missing = cu["parts"][0]["ml"], aBefore = dosedOf(s, "part_a");
+  CHECK(aBefore < 0.5);
+  CHECK(missing == doctest::Approx(dosedOf(s, "part_b") - aBefore).epsilon(0.01));
+  // The next nutrient round doses part A alone, then the cycle goes on as usual
+  REQUIRE(s.robot().resume().status == 200);
+  REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.dose_catchup"; }, 2 * 3600));
+  CHECK(st(s)["catchUp"].is_null());
+  const double b = dosedOf(s, "part_b"), cal = dosedOf(s, "calmag");
+  REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 10 * 60));
+  CHECK(dosedOf(s, "part_a") == doctest::Approx(aBefore + missing).epsilon(0.01));
+  CHECK(dosedOf(s, "part_b") == b);
+  CHECK(dosedOf(s, "calmag") == cal);
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure" || phase(s) == "dose" || phase(s) == "hold"; }, 2 * 3600));
+  CHECK(s.robot().runtime().ecEffects.count("two_part") == 0);  // nothing learned from the catch-up
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+  // The pair keeps its ratio in the end
+  CHECK(dosedOf(s, "part_a") == doctest::Approx(dosedOf(s, "part_b")).epsilon(0.02));
+}
+
+TEST_CASE("Pairs: a restart while a part doses counts its cut run as gone in; the other part is caught up (SD-114, R6)") {
+  sim::Simulation s(demo());
+  REQUIRE(runUntil(s, [&] { return dosing(s) && st(s)["dosing"]["canister"] == "part_b"; }, 3600));
+  s.step(2 * kSecond);
+  const double planned = s.robot().runtime().pairRound["parts"]["part_b"]["planned"];
+  s.reboot();
+  CHECK(hasEvent(s, "ev.boot.cut_dose"));
+  // Part B counted in full, part A owed in full, once the round is settled
+  REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.dose_catchup"; }, 3 * 3600));
+  CHECK(hasEvent(s, "ev.cycle.pair_short"));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 10 * 60));
+  CHECK(dosedOf(s, "part_a") == doctest::Approx(planned).epsilon(0.03));
+}
+
+TEST_CASE("Pairs: a catch-up is dropped with a note when a person ends it, a new tank starts or the recipe changes; a part that cannot dose holds the pair (SD-114)") {
+  SUBCASE("ended in the app") {
+    sim::Simulation s(demo());
+    cutPair(s);
+    REQUIRE(s.robot().endCatchUp().status == 200);
+    CHECK(st(s)["catchUp"].is_null());
+    CHECK(hasEvent(s, "ev.cycle.catchup_dropped"));
+    CHECK(s.robot().endCatchUp().status == 404);
+  }
+  SUBCASE("a new tank") {
+    sim::Simulation s(demo());
+    cutPair(s);
+    REQUIRE(s.robot().newTank().status == 200);
+    CHECK(st(s)["catchUp"].is_null());
+    CHECK(hasEvent(s, "ev.cycle.catchup_dropped"));
+  }
+  SUBCASE("another recipe in force") {
+    sim::Simulation s(demo());
+    cutPair(s);
+    REQUIRE(s.robot().putRecipe({{"id", "calmag_only"}, {"name", "CalMag only"}, {"ecTarget", 1.6},
+                                 {"steps", json::array({{{"canister", "calmag"}, {"mlPerL", 2.0}}})}}).status == 200);
+    REQUIRE(s.robot().setActive({{"recipe", "calmag_only"}}).status == 200);
+    REQUIRE(s.robot().resume().status == 200);
+    REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.cycle.catchup_dropped"); }, 3 * 3600));
+    CHECK(st(s)["catchUp"].is_null());
+  }
+  SUBCASE("a missing part on no pump holds the other part") {
+    sim::Simulation s(demo());
+    cutPair(s);
+    const double b = dosedOf(s, "part_b");
+    REQUIRE(s.robot().putCanister({{"id", "part_a"}, {"pump", 0}}).status == 200);
+    REQUIRE(s.robot().resume().status == 200);
+    REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.wait.catchup_part"; }, 3 * 3600));
+    CHECK(st(s)["cycle"]["line"]["args"]["name"] == "Part A");
+    CHECK(st(s)["catchUp"].is_object());
+    CHECK(dosedOf(s, "part_b") == b);
+  }
+}

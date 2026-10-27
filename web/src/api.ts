@@ -73,6 +73,8 @@ export type RobotState = {
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   pumps: { pump: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
   stock: Record<string, Stock>;
+  // What a pair still misses after a round cut short; the next nutrient round doses it first (SD-114)
+  catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
   pumpJob: PumpJob | null;
   probe: ProbeSession | null;
   // Maintenance mode until then (epoch seconds); null when off
