@@ -1,0 +1,195 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Release (SD-116): a tag vX.Y.Z[-...] on main produces the simulator's
+# downloads for Windows, macOS and Linux, their checksums and a provenance
+# attestation, as a GitHub release with the matching CHANGELOG section. A
+# version with a suffix (a prototype) is marked as a pre-release.
+#
+# Jobs: `verify` checks version and tag, `packages` and `build` make every
+# file without write access, `publish` only checks the checksums, attests
+# and creates the release; it runs no npm and no build. A pull request that
+# changes the release machinery runs everything but `publish` as a dry run.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .github/workflows/packages.yml
+      - tools/package.sh
+      - tools/third_party.mjs
+      - tools/embed_web.mjs
+      - sim/README.txt
+      - VERSION
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # main as well, to check that the tag points at a commit on it
+          fetch-depth: 0
+      - name: Version and tag
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$(grep -c . VERSION)" != 1 ]; then
+            echo "::error::VERSION must have exactly one line"; exit 1
+          fi
+          v="$(tr -d '\r\n' < VERSION)"
+          if ! printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::VERSION is not a version: $v"; exit 1
+          fi
+          web=$(node -p "require('./web/package.json').version")
+          if [ "$web" != "$v" ]; then
+            echo "::error::web/package.json has $web, VERSION has $v"; exit 1
+          fi
+          if ! git rev-parse -q --verify origin/main > /dev/null; then
+            echo "::error::origin/main was not fetched"; exit 1
+          fi
+          if [ "$EVENT" = push ]; then
+            if [ "v$v" != "$REF_NAME" ]; then
+              echo "::error::Tag $REF_NAME does not match VERSION $v"; exit 1
+            fi
+            rc=0; git merge-base --is-ancestor HEAD origin/main || rc=$?
+            case "$rc" in
+              0) ;;
+              1) echo "::error::Tag $REF_NAME is not on main"; exit 1 ;;
+              *) echo "::error::Could not compare $REF_NAME with main"; exit 1 ;;
+            esac
+            if ! awk -v s="## [$v]" 'index($0, s) == 1 {f=1} END {exit !f}' CHANGELOG.md; then
+              echo "::error::CHANGELOG.md has no section [$v]"; exit 1
+            fi
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  packages:
+    needs: verify
+    uses: ./.github/workflows/packages.yml
+    with:
+      release: true
+
+  build:
+    needs: [verify, packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      sums: ${{ steps.files.outputs.sums }}
+      notes: ${{ steps.files.outputs.notes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          # One folder per artifact: a second artifact cannot overwrite a
+          # package with the same file name.
+          pattern: doseph-simulator-*
+          path: out/pkgs
+      - name: Checksums and release notes
+        id: files
+        env:
+          EVENT: ${{ github.event_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          v="$VERSION"
+          # Exactly the three packages, each unpacked from its own artifact.
+          if [ "$(find out/pkgs -mindepth 1 | wc -l)" != 6 ]; then
+            echo "::error::Expected 3 artifacts with one package each"; find out/pkgs; exit 1
+          fi
+          mkdir -p out/dist
+          for name in linux-x64 macos-universal windows-x64; do
+            f="out/pkgs/doseph-simulator-$name/doseph-simulator-$v-$name.zip"
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing $f"; find out/pkgs; exit 1
+            fi
+            mv "$f" out/dist/
+          done
+          rm -r out/pkgs
+          (cd out/dist && sha256sum -- * > SHA256SUMS)
+          # A tag takes its CHANGELOG section (checked in verify); a dry run
+          # takes it too if it exists, otherwise the unreleased one.
+          section="$v"
+          if [ "$EVENT" != push ] && ! awk -v s="## [$v]" 'index($0, s) == 1 {f=1} END {exit !f}' CHANGELOG.md; then
+            section="Unreleased"
+          fi
+          awk -v s="## [$section]" 'index($0, s) == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md > out/NOTES.md
+          if ! grep -q '[^[:space:]]' out/NOTES.md; then
+            echo "::error::CHANGELOG.md has no section [$section]"; exit 1
+          fi
+          # A prototype says first what it is for (SD-116)
+          case "$v" in
+            *-*) { printf '> **Prototype:** for trying the software in the simulator, not for dosing into a real tank.\n\n'; cat out/NOTES.md; } > out/NOTES.new && mv out/NOTES.new out/NOTES.md ;;
+          esac
+          printf '\n---\n**Try it:** download the simulator for your system, unpack it and start it (README.txt in the package). The window shows the address and the demo password.\n\n**Feedback and bugs:** https://github.com/Wokesay/doseph-software/issues/new/choose\n' >> out/NOTES.md
+          cat out/dist/SHA256SUMS
+          # Later jobs accept only this checksum list and these notes.
+          echo "sums=$(sha256sum out/dist/SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "notes=$(sha256sum out/NOTES.md | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: out/
+          retention-days: 7
+
+  publish:
+    needs: [verify, build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: out
+      - name: Check the files against their checksums
+        env:
+          SUMS: ${{ needs.build.outputs.sums }}
+          NOTES: ${{ needs.build.outputs.notes }}
+        run: |
+          cd out/dist
+          # Checksum list and notes are the ones build produced.
+          echo "$SUMS  SHA256SUMS" | sha256sum -c -
+          echo "$NOTES  ../NOTES.md" | sha256sum -c -
+          sha256sum -c SHA256SUMS
+          # Every file to publish is listed, and every listed file is there.
+          listed=$(awk '{sub(/^\*/, "", $2); print $2}' SHA256SUMS | sort)
+          present=$(find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort)
+          if [ "$listed" != "$present" ]; then
+            echo "::error::SHA256SUMS does not list exactly the files to publish"; exit 1
+          fi
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: out/dist/SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # The tag (looked up as a tag) must still point at the commit that was built.
+          read -r at type < <(gh api "repos/$GH_REPO/git/ref/tags/$REF_NAME" --jq '.object.sha + " " + .object.type')
+          if [ "$type" = tag ]; then at=$(gh api "repos/$GH_REPO/git/tags/$at" --jq .object.sha); fi
+          if [ "$at" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag $REF_NAME moved to $at since the build of $GITHUB_SHA"; exit 1
+          fi
+          pre=""; case "$REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$REF_NAME" $pre --verify-tag --title "Doseph $REF_NAME" --notes-file out/NOTES.md out/dist/*

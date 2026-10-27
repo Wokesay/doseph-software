@@ -21,6 +21,10 @@ All notable changes to this software. The format follows
   calibration of the dosing pumps and probes, settings, and the Stop on
   every page.
 - Simulator with a twin of tank, measuring cell, flow, pumps and probes.
+- Downloads of the simulator with the web app built in, for Linux, macOS
+  and Windows: started without arguments it takes the next free port
+  from 8080 and opens the browser. A tag on `main` releases them with
+  checksums and a provenance attestation (`docs/RELEASE.md`).
 
 ### Changed
 

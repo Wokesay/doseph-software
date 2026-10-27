@@ -49,6 +49,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 - `docs/RATIONALE.md` – the rules learned from practice (RAT-xxx)
 - `docs/SIMULATOR.md` – running and steering the simulator
 - `docs/PROVENANCE.md` – where the code comes from
+- `docs/RELEASE.md` – how a prototype is released
 
 ## License
 

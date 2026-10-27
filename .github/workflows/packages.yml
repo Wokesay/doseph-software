@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Builds the simulator as a download: one file with the web app built in,
+# for Windows, macOS (universal: Apple silicon and Intel) and Linux, each
+# with a smoke test (tools/package.sh). Runs for a pull request that
+# changes how the packages are built, and is called by release.yml
+# (`release: true` builds without a cache).
+name: Packages
+on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/packages.yml
+      - CMakeLists.txt
+      - cmake/**
+      - sim/**
+      - tools/package.sh
+      - tools/embed_web.mjs
+      - tools/third_party.mjs
+permissions:
+  contents: read
+jobs:
+  simulator:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+            bin: doseph-simulator
+            cmake: -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+          - os: macos-14
+            name: macos-universal
+            bin: doseph-simulator
+            cmake: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          - os: windows-2022
+            name: windows-x64
+            bin: doseph-simulator.exe
+            cmake: -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: ${{ !inputs.release && 'npm' || '' }}
+          cache-dependency-path: web/package-lock.json
+          package-manager-cache: ${{ !inputs.release }}
+      - name: Build and embed the web app
+        run: |
+          (cd web && npm ci --ignore-scripts --no-audit --no-fund && npm audit signatures && npm run build)
+          node tools/embed_web.mjs build-pkg/web_assets.cpp
+      - name: Build the simulator
+        run: |
+          cmake -S . -B build-pkg -DCMAKE_BUILD_TYPE=Release -DDP_BUILD_TESTS=OFF -DDP_WERROR=OFF \
+            -DDP_SIM_WEB_ASSETS=build-pkg/web_assets.cpp ${{ matrix.cmake }}
+          cmake --build build-pkg --config Release --target doseph_sim_server
+      - name: Package and smoke test (with arguments and a plain start)
+        run: bash tools/package.sh "${{ matrix.bin }}" "${{ matrix.name }}"
+      - name: Zip
+        run: |
+          cd dist
+          if command -v zip > /dev/null; then zip -r "$PKG_ZIP" "$(basename "$PKG_DIR")"; else 7z a "$PKG_ZIP" "$(basename "$PKG_DIR")"; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: doseph-simulator-${{ matrix.name }}
+          path: dist/*.zip
+          retention-days: 30

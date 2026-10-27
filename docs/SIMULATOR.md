@@ -27,6 +27,10 @@ Open http://localhost:8080. Options (`--help`):
 Without a password set, the console shows the setup code the first
 password needs, as the device will.
 
+The download of a prototype has the web app built in: it needs no
+`--web`, and started without arguments (a double-click) it takes the next
+free port from 8080 and opens the browser (`docs/RELEASE.md`).
+
 For the web app's development server with hot reload: start the
 simulator on port 8080, then `cd web && npm run dev` and open
 http://localhost:5173 (the API is passed through).
