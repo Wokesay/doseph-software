@@ -77,8 +77,9 @@ device. The brief and the order of work are in #10.
 - Build and test: `tools/ci.sh` (core, simulator, sanitizers, text keys,
   web app, end-to-end). Fast loop: `cmake --build build && tools/core_tests.sh`.
 - Run the simulator: `docs/SIMULATOR.md`.
-- New domain rule: next free RAT ID, entry in `docs/RATIONALE.md`, a test
-  that names it.
+- New domain rule: next free RAT ID, entry in `docs/RATIONALE.md`, a row
+  in its module of `docs/INVARIANTS.md`, a test that names it
+  (`tools/rationale.test.mjs` checks all three).
 - New texts: English key in `core/src/messages.cpp` with its German twin in
   `web/src/lang/msg.ts`; app texts in `web/src/lang/*.ts`, German and
   English (`tools/i18n_keys.test.mjs`).
