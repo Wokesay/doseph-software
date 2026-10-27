@@ -371,7 +371,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** A pH value that stops updating keeps looking plausible while the tank changes. Acid dosed against it can drive the real pH far from target, so the age of the value has to show and has to stop dosing.
 - **Evidence:** Observed on the reference installation (2026): for about five hours the pH reading still showed 7.01 from a buffer test, while the target check and the overall status stayed green. At that time only the pH-raising path checked the age of the reading; the lowering path would have dosed on the old value.
 - **Implemented in:** `core/src/cycle.cpp`
-- **Tests:** —
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: pH waits below the EC floor and after a nutrient dose, and is dosed only on a fresh reading (RAT-046, RAT-043)"
 
 ### RAT-044 – Jump locks survive a restart; no pH dosing on an unsecured measurement
 
@@ -396,7 +396,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** A glass pH electrode needs ions in the solution to read reliably; in almost pure water its value is arbitrary, and acid dosed on it is a guess. The gate uses only a valid EC, so a stale value left from the previous batch cannot open it. The rest after an EC dose makes sure the smoothed EC no longer includes samples from before that dose. With no EC dose on record there is nothing to wait for, so missing history does not block pH control.
 - **Evidence:** Measured on the reference installation (2026): in reverse-osmosis water (EC about 0.04 mS/cm) two freshly calibrated pH probes differed by 2.2 pH (5.06 and 7.3); in tap water the same probes read 7.02 and 7.2. The 240 s rest was twice the 120 s smoothing window of the EC reading there.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/src/cycle.cpp`
-- **Tests:** —
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: pH waits below the EC floor and after a nutrient dose, and is dosed only on a fresh reading (RAT-046, RAT-043)"
 
 ### RAT-047 – Circulation dry-run protection with its own thresholds
 
@@ -453,7 +453,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Acid adds ions, and the pH step always follows the EC step, so dosing EC exactly to target and then lowering pH ends above the EC target. Ending slightly low is the safe side: a shortfall is made up by the next dose, while surplus nutrients can only be removed by diluting.
 - **Evidence:** Measured on the reference installation (2026): 4.9 ml of pH− in 20.4 L (0.24 ml/L) raised EC from 2.96 to 3.21 mS/cm, i.e. 1.04 mS/cm per ml/L – almost four times the effect of the nutrient pair itself (0.275). That run ended 7 % above the EC target. For a 1.0 pH gap the reserve is 1.0 ÷ 5.0 × 1.04 ≈ 0.21 mS/cm.
 - **Implemented in:** `core/src/cycle.cpp`
-- **Tests:** —
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an EC round aims below its target by the reserve for the pH− dose that follows (RAT-053)"
 
 ### RAT-054 – Paired nutrients keep their ratio at every limit
 

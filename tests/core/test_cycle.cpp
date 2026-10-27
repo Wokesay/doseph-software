@@ -601,3 +601,81 @@ TEST_CASE("Pairs: a catch-up is dropped with a note when a person ends it, a new
     CHECK(dosedOf(s, "part_b") == b);
   }
 }
+
+TEST_CASE("Cycle: an EC round aims below its target by the reserve for the pH− dose that follows (RAT-053)") {
+  sim::Simulation s(demo());
+  // The fresh fill is above the pH range, so the rounds after the test dose keep a reserve
+  REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.dose_ec"; }, 8 * 3600));
+  const json j = st(s);
+  const double ph = j["cycle"]["last"]["ph"], aim = j["cycle"]["line"]["args"]["aim"];
+  REQUIRE(ph > 6.0 + 0.15);
+  const double eff = j["effects"]["ph"].is_number() ? j["effects"]["ph"].get<double>() : 5.0;
+  CHECK(aim == doctest::Approx(1.6 - std::min(0.3, (ph - 6.0) / eff * 1.04)).epsilon(0.001));
+  CHECK(aim < 1.6);
+}
+
+TEST_CASE("Cycle: pH waits below the EC floor and after a nutrient dose, and is dosed only on a fresh reading (RAT-046, RAT-043)") {
+  SUBCASE("below the EC floor, and with readings that stopped") {
+    sim::Simulation s(demo());
+    Robot& r = s.robot();
+    // pH only: a recipe without an EC target doses no nutrients (R5)
+    REQUIRE(r.putRecipe({{"id", "ph_only"}, {"name", "pH only"}, {"ph", {5.8, 6.2}},
+                         {"steps", json::array({{{"canister", "part_a"}, {"mlPerL", 2.0}}, {{"canister", "part_b"}, {"mlPerL", 2.0}}})}}).status == 200);
+    REQUIRE(r.setActive({{"recipe", "ph_only"}}).status == 200);
+    auto noted = [&](const char* key) {
+      const json notes = st(s)["cycle"]["notes"];
+      for (const auto& n : notes)
+        if (n["key"] == key) return true;
+      return false;
+    };
+    auto phDosed = [&] {
+      for (const auto& e : r.events(0, std::numeric_limits<Epoch>::max(), "dose", 1000))
+        if (e["data"].value("canister", "") == "ph_down") return true;
+      return false;
+    };
+    // Weak solution: the probe reads unreliably, nothing is dosed
+    s.control("fill", {{"volumeL", 100}, {"ec", 0.3}, {"ph", 7.6}});
+    REQUIRE(r.newTank().status == 200);
+    REQUIRE(runUntil(s, [&] { return noted("cycle.note.ph_gate"); }, 30 * 60));
+    s.step(30 * kMinute);
+    CHECK_FALSE(phDosed());
+    // Enough ions, but the readings stopped: still nothing on the old values
+    s.control("fill", {{"volumeL", 100}, {"ec", 1.2}, {"ph", 7.6}});
+    s.control("probeFault", {{"fault", "offline"}});
+    REQUIRE(r.newTank().status == 200);
+    s.step(30 * kMinute);
+    CHECK_FALSE(phDosed());
+    CHECK(st(s)["readings"]["ph"]["usable"] == false);
+    // Fresh readings again: pH is lowered
+    s.control("probeFault", {{"fault", ""}});
+    REQUIRE(runUntil(s, [&] { return phDosed(); }, 60 * 60));
+  }
+  SUBCASE("240 s after a nutrient dose") {
+    sim::Simulation s(demo());
+    Robot& r = s.robot();
+    // Once the test dose found the volume, the shortest wait after nutrients: a pH dose could follow soon
+    REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.cycle.test_ok"); }, 4 * 3600));
+    REQUIRE(r.putTank({{"waitEcMin", 2}}).status == 200);
+    // Right after a nutrient dose the checklist says pH rests
+    REQUIRE(runUntil(s, [&] { const json c = st(s)["cycle"]; return phase(s) == "mix" && c["round"].is_object() && c["round"]["kind"] == "ec"; }, 2 * 3600));
+    bool rests = false;
+    const json checks = st(s)["cycle"]["checks"];
+    for (const auto& x : checks["ph"]) rests |= x["key"] == "check.rest_left" && x["ok"] == false;
+    CHECK(rests);
+    REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+    CHECK(hasEvent(s, "ev.cycle.ec_round"));
+    Epoch lastEc = 0;
+    int ph = 0;
+    const json ev = r.events(0, std::numeric_limits<Epoch>::max(), "dose", 1000);
+    for (auto it = ev.rbegin(); it != ev.rend(); ++it) {  // oldest first
+      const std::string canister = (*it)["data"].value("canister", "");
+      if (canister == "ph_down") {
+        ph++;
+        CHECK((*it)["ts"].get<Epoch>() - lastEc >= 240);
+      } else if (!canister.empty()) {
+        lastEc = (*it)["ts"];
+      }
+    }
+    CHECK(ph > 0);
+  }
+}
