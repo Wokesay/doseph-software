@@ -31,10 +31,10 @@ of its own.
 | EC is only raised; an EC above target is left as it is, with the reason | RAT-012 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | One line says what the robot does; everything it leaves as it is stands as a note with its reason, and the checklist says why it doses or not | RAT-037 | ✓ | `cycle.hpp`, `cycle.cpp`, `status.tsx` · test_cycle.cpp, robot.spec.ts |
 | pH is only lowered; pH− without effect latches; a pH below target is left as it is, with the reason | RAT-041 | ✓ | `cycle.hpp`, `cycle.cpp`, `truth.cpp` · test_cycle.cpp, test_truth.cpp |
-| No pH dose on an old reading: the cycle measures afresh after flushing before every decision | RAT-043 | ◐ | `cycle.cpp` · no test of its own |
-| No pH dose below the EC floor, nor within 240 s after a nutrient dose | RAT-046 | ◐ | `config.hpp`, `cycle.hpp`, `cycle.cpp` · no test of its own |
+| No pH dose on an old reading: the cycle measures afresh after flushing before every decision | RAT-043 | ✓ | `cycle.cpp` · test_cycle.cpp |
+| No pH dose below the EC floor, nor within 240 s after a nutrient dose | RAT-046 | ✓ | `config.hpp`, `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | After a dose it mixes with flow before it measures again; pH waits longer than EC | RAT-052 | ✓ | `config.hpp`, `cycle.cpp`, `world.cpp` · test_cycle.cpp |
-| An EC round keeps a reserve for the pH− dose that follows | RAT-053 | ◐ | `cycle.cpp` · no test of its own |
+| An EC round keeps a reserve for the pH− dose that follows | RAT-053 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | The wait after a dose covers the time to tolerance (the user's wait, else the suggestion from volume and flow) | RAT-058 | ◐ | `cycle.cpp` · no test of its own |
 | A latch only after a dose without effect or a test dose that did not fit; its reason is frozen | RAT-062 | ✓ | `watchdog.cpp` · test_cycle.cpp |
 

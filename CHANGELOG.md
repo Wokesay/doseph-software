@@ -53,7 +53,8 @@ All notable changes to this software. The format follows
   history, simulator) and the code rules, with where they are kept.
   `tools/rationale.test.mjs` checks that every rule in force is placed
   there once with a fitting status, and that the files and tests the
-  register names exist.
+  register names exist. RAT-043, RAT-046 and RAT-053 got tests of their
+  own.
 - A pair with a part missing is caught up first (SD-114, SD-120): when a
   nutrient round stops part way – a failed run, a Stop, a restart – the
   next nutrient round doses only what the pair misses, so the parts keep
