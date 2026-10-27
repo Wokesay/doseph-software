@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <atomic>
 #include <csignal>
+#include <cstdlib>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -26,6 +28,12 @@
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
 #include "simulation.hpp"
+#ifndef DP_EMBEDDED_WEB
+#define DP_EMBEDDED_WEB 0
+#endif
+#if DP_EMBEDDED_WEB
+#include "web_assets.hpp"
+#endif
 
 namespace {
 
@@ -48,13 +56,30 @@ doseph::ApiRequest toApi(const httplib::Request& req) {
   return r;
 }
 
+// Opens the page in the default browser: a download started by a double-click
+// has no console to read the address from.
+void openBrowser(const std::string& url) {
+  std::thread([url] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+#if defined(_WIN32)
+    const std::string cmd = "start \"\" \"" + url + "\"";
+#elif defined(__APPLE__)
+    const std::string cmd = "open \"" + url + "\" >/dev/null 2>&1";
+#else
+    const std::string cmd = "xdg-open \"" + url + "\" >/dev/null 2>&1";
+#endif
+    const int rc = std::system(cmd.c_str());
+    (void)rc;
+  }).detach();
+}
+
 void usage() {
   std::cout << "Doseph simulator " << doseph::embedded::kVersion << "\n"
-            << "  --port N            HTTP port (8080)\n"
+            << "  --port N            HTTP port (8080; without it the next free one up to 8089)\n"
             << "  --host ADDR         address (127.0.0.1)\n"
             << "  --scenario NAME     demo | new (demo)\n"
             << "  --data DIR          keep the data in this folder (else in memory only)\n"
-            << "  --web DIR           built web app (web/dist)\n"
+            << "  --web DIR           built web app (web/dist; the download has it built in)\n"
             << "  --speed X           time-lapse factor (1)\n"
             << "  --password PW       password of the demo scenario\n"
             << "  --prefill H         hours of history the demo computes ahead (24)\n"
@@ -68,7 +93,9 @@ int main(int argc, char** argv) {
   int port = 8080;
   std::string host = "127.0.0.1", web;
   double speed = 1.0;
-  bool allowReset = false;
+  bool allowReset = false, portGiven = false;
+  // Started without arguments (a double-click on the download): the next free port, and the browser opens
+  const bool plain = argc == 1;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -79,7 +106,10 @@ int main(int argc, char** argv) {
       return argv[++i];
     };
     try {
-      if (a == "--port") port = std::stoi(next());
+      if (a == "--port") {
+        port = std::stoi(next());
+        portGiven = true;
+      }
       else if (a == "--host") host = next();
       else if (a == "--scenario") opts.scenario = next();
       else if (a == "--data") opts.dataDir = next();
@@ -110,11 +140,22 @@ int main(int argc, char** argv) {
   simulation.speed = std::clamp(speed, 0.0, sim::Simulation::kMaxSpeed);
   std::cout << " ready.\n";
 
-  httplib::Server svr;
-  if (!svr.bind_to_port(host, port)) {
-    std::cerr << "Port " << port << " not available\n";
+  // A port in use: without --port the next nine are tried. A failed bind leaves a server unusable,
+  // so each try has its own.
+  std::unique_ptr<httplib::Server> server;
+  for (int p = port; p < port + (portGiven ? 1 : 10) && p <= 65535; ++p) {
+    auto s = std::make_unique<httplib::Server>();
+    if (s->bind_to_port(host, p)) {
+      server = std::move(s);
+      port = p;
+      break;
+    }
+  }
+  if (!server) {
+    std::cerr << "Port " << port << (portGiven ? "" : " and the next nine") << " not available\n";
     return 1;
   }
+  httplib::Server& svr = *server;
   svr.set_default_headers({{"X-Content-Type-Options", "nosniff"},
                            {"X-Frame-Options", "DENY"},
                            {"Referrer-Policy", "no-referrer"},
@@ -206,13 +247,34 @@ int main(int argc, char** argv) {
   svr.Patch(R"(/api/v1/.*)", apiHandler);
   svr.Delete(R"(/api/v1/.*)", apiHandler);
 
-  // The web app from its folder, falling back to index.html (a single-page app)
-  if (web.empty()) web = "web/dist";
+  // The web app from its folder (development) or built in (the download), falling back to
+  // index.html (a single-page app)
+  if (web.empty() && !DP_EMBEDDED_WEB) web = "web/dist";
   std::error_code webErr;
-  const bool haveWeb = std::filesystem::exists(std::filesystem::path(web) / "index.html", webErr);
-  if (haveWeb) svr.set_mount_point("/", web);
-  svr.Get(R"(/(?!api/).*)", [&](const httplib::Request&, httplib::Response& res) {
-    if (!haveWeb) {
+  const bool haveDir = !web.empty() && std::filesystem::exists(std::filesystem::path(web) / "index.html", webErr);
+  const bool haveWeb = haveDir || DP_EMBEDDED_WEB;
+  if (haveDir) svr.set_mount_point("/", web);
+  svr.Get(R"(/(?!api/).*)", [&](const httplib::Request& req, httplib::Response& res) {
+#if DP_EMBEDDED_WEB
+    if (!haveDir) {
+      const sim::WebAsset* hit = nullptr;
+      const sim::WebAsset* index = nullptr;
+      for (std::size_t i = 0; i < sim::kWebAssetCount; ++i) {
+        if (req.path == sim::kWebAssets[i].path) hit = &sim::kWebAssets[i];
+        if (std::string(sim::kWebAssets[i].path) == "/index.html") index = &sim::kWebAssets[i];
+      }
+      if (!hit) hit = index;
+      if (hit) {
+        res.set_header("Content-Encoding", "gzip");
+        res.set_header("Cache-Control", hit == index ? "no-cache" : "public, max-age=31536000, immutable");
+        res.set_content(std::string(reinterpret_cast<const char*>(hit->data), hit->size), hit->type);
+        return;
+      }
+    }
+#else
+    (void)req;
+#endif
+    if (!haveDir) {
       res.set_content("Web app not built: cd web && npm ci && npm run build", "text/plain; charset=utf-8");
       return;
     }
@@ -247,7 +309,8 @@ int main(int argc, char** argv) {
     if (!code.empty()) std::cout << "Setup code for the first password: " << code << "\n";
   }
   if (!haveWeb) std::cout << "Note: no web app found at " << web << "\n";
-  std::cout << "To stop: press Ctrl+C.\n" << std::flush;
+  std::cout << "To stop: press Ctrl+C or close this window.\n" << std::flush;
+  if (plain && haveWeb) openBrowser(url);
   svr.listen_after_bind();
   g_running = false;
   loop.join();

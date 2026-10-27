@@ -11,7 +11,14 @@ SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software c
 
 # Files without comment syntax
 [[annotations]]
-path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc"]
+path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc", "sim/README.txt"]
 precedence = "closest"
 SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# The license text quoted in the simulator's third-party notices
+[[annotations]]
+path = "tools/licenses/Apache-2.0.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "2004 The Apache Software Foundation"
+SPDX-License-Identifier = "Apache-2.0"

@@ -19,6 +19,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <sys/random.h>  // getentropy
+#endif
 #endif
 
 #include "doseph/messages.hpp"
