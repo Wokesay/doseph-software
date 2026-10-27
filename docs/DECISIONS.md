@@ -85,3 +85,225 @@ the tank before it measures and learns nothing from it (R6, RAT-028). A
 damaged journal counts as "a dose may be in", never as nothing (R5).
 Calibration and priming runs go into a cup and are only recorded. The
 journal is cleared when the tank is on target.
+
+
+## SD-107: Doseph's terms
+
+2026-10-27. The product brief (#4, #5) names the parts of the device; the
+software uses the same words, in code, API, texts and docs. A term from
+the predecessor that names something else is replaced when its module is
+next touched; the import (#5, step 2) renames canister and measuring
+chamber, the twin (#5, step 3) renames channel and suction pump.
+
+| Term | Meaning | Replaces |
+|---|---|---|
+| channel | one dosing path: pump with head, line, outlet with drop sensor, the canister on it; numbered only for the user | dosing pump (`pump` 1..n) |
+| role | what a channel's canister holds: `ph_down`, `nutrient`; logic reads roles, never channel numbers (SD-108) | bottle `kind` |
+| canister | the liquid on a channel, with its name, colour, pair and level | bottle |
+| head | the pump head of a channel: size `S`, `M`, `L` or none | – |
+| suction pump | the device's own self-priming pump that draws tank water through it | circulation pump |
+| measuring chamber | the open chamber with pH, EC and temperature probes; a weir keeps them wet | flow cell, cell |
+| mixing chamber | where the outlets drip through an air gap, downstream of the probes | – |
+| return | the way back to the tank: by gravity, or by a return pump | – |
+| hardware release | the switch-off below the firmware: stop, leak, high level, a hung controller; no flow locks dosing (SD-110) | – |
+| check | one run of the mixing cycle (SD-105) | – |
+
+`Channel` in the sensor truth (pH, EC, temperature, flow) becomes
+`Signal`, so "channel" means a dosing channel only.
+
+
+## SD-108: The device reports what it has; logic reads roles and capabilities
+
+2026-10-27. One firmware for Home and Pro (#4, PD-447, PD-450). At start
+the hardware layer reports a profile: line (`home`, `pro`), variant name
+(e.g. "Pro 30"), and capabilities: the channels with pump type
+(`brushed`, `brushless`, `stepper`) and head size, whether a channel has a
+drop sensor, the flow method (`turbine`, `outlet_level`), the return
+(`gravity`, `pump`), the network interfaces. Coupled peers follow with
+#5 step 8.
+
+- **Logic reads roles and capabilities**, never a channel number or a
+  line name. Which code path runs follows from a capability ("has a
+  return pump"), never from "is a Pro".
+- **Roles** are set by the user per canister: one `ph_down` at most, the
+  rest `nutrient`. pH− never in a recipe (RAT-004) stays.
+- **A head that changes** (fitted, removed, another size) makes the
+  channel's calibration invalid: it doses nothing until it is calibrated
+  again (PD-407). A channel without a head doses nothing. Before a head
+  is changed the app says that canisters stand no higher than the device
+  (PD-455).
+- **Board profiles are hardware data** and stay private, outside this
+  repository. Numbers the control needs from a profile (flow of the
+  suction pump over speed, the daily cap per head, SD-113) come through
+  the profile; the code holds a safe ceiling of its own. The simulator
+  ships example profiles "Home" and "Pro" whose numbers are assumptions,
+  marked as such.
+
+
+## SD-109: The water path: suction pump, flow proof by method, calibration with everything stopped
+
+2026-10-27. The water path of #4 (PD-444, PD-456) replaces the circulation
+pump of SD-105. The steps of the check stay.
+
+- **Suction pump.** The device's own pump runs for a check and is off in
+  Hold and Wait. The modes `cycle`, `always` and `external` of SD-105 go
+  away; a customer's circulation pump becomes an optional role on a
+  smart plug later (#5 step 9, PD-421).
+- **Flow proof by method.** `turbine`: at least 0.5 L/min for 10 s without
+  a break (SD-105). `outlet_level`: the outlet's level sensor reports
+  water and the suction pump runs, for 10 s without a break. The hardware
+  locks dosing without flow on its own; the core proves flow as well and
+  never doses without it (SD-105).
+- **Flow for the turnover.** `turbine`: the flow measured while proven.
+  `outlet_level`: estimated from the suction pump's speed with the
+  profile's curve, taken at its low end, so a turnover errs long and the
+  mixing wait with it (SD-112).
+- **Priming.** No flow within 2 min: the pump goes off, the check waits
+  5 min and tries again (SD-105). After 3 failed tries in a row the
+  robot latches "no flow" (the pump may run dry: suction line out of the
+  water, tank empty, filter blocked); a person releases it in the app
+  (the dry-run pattern of the predecessor, gc RAT-047 and RAT-051).
+- **Return.** By gravity there is nothing to switch. A return pump runs
+  while the chamber reports water to return; a return pump that runs for
+  60 s without the level falling is off and latched ("return pump dry or
+  blocked"). High level in the chamber is the hardware's (SD-110).
+- **Calibration.** A probe or channel calibration stops the check and the
+  suction pump first (#5, 27 Oct). A channel is calibrated with its outlet
+  taken off and held over a measuring cup; a probe is lifted out and put
+  in buffer cups. The check starts anew afterwards, and the probes'
+  readings are announced as changing (RAT-042).
+
+
+## SD-110: The hardware release and the lock reasons
+
+2026-10-27. Below the firmware, leak, high level, the stop button and a
+hung controller switch off, and no flow locks dosing (#5, 27 Oct). The
+core reads the release state and never overrides it.
+
+- **The gateway refuses** a run while the release is off, and says which
+  input holds it. The cycle shows it as its line; the watchdog lists it.
+- **Leak**: everything off, latched "leak" until a person releases it.
+- **High level** in the chamber: the hardware stops the suction pump and
+  dosing; the core latches "high level (return blocked or return pump
+  failed)" until a person releases it.
+- **Stop button**: the same as Stop in the app (RAT-036); it survives a
+  restart, and Resume is in the app.
+- **No flow**: as SD-105 and SD-109.
+- **Per channel**: outlet blocked and drops without a running pump
+  (SD-111), no head, not calibrated. A channel lock holds only that
+  channel; a lock on the `ph_down` channel holds pH dosing, one on a
+  nutrient channel holds every recipe that uses it.
+- **Release off without a known input**: no dose, shown as "hardware
+  release off".
+- **Releases**: a person releases a latch in the app once the cause is
+  fixed (#5, 27 Oct). A latch survives a restart (RAT-063); a restart
+  never releases one.
+
+
+## SD-111: The drop sensor confirms each run; the outlet is pulled back after a dose
+
+2026-10-27. Each outlet has a drop sensor (PD-445). The numbers below are
+starting points until bench tests give better ones.
+
+- **A run needs drops.** The expected time per drop is a drop of about
+  0.05 ml at the channel's calibrated flow. If no drop falls within four
+  times that, at least 5 s, from the start of a run, or a gap of the same
+  length opens while it runs, the gateway stops the run at once and
+  latches the channel: "no drops: outlet or line blocked, canister empty,
+  tube kinked or pump head failed". A run shorter than that is judged at
+  its end plus the same time. What ran is booked from the run time
+  (RAT-070) and the check learns nothing from that round (RAT-057).
+- **Drops without a running pump** (a canister above the device siphons,
+  PD-455), outside 10 s after a run of that channel: an alarm with the
+  channel, the channel latched, and the next check mixes first and learns
+  nothing, as after a cut dose (SD-106).
+- **Pull back after a dose.** After the last run of a dose the pump runs
+  backwards briefly, about 0.2 ml and at most 1 s (pump types that can),
+  so nothing dries at the tip. The next run of that channel first runs
+  the same time forwards, not booked as a dose, so the dose itself stays
+  the planned amount.
+- **Filling a line** runs in runs of at most 60 s until the first drops
+  fall, at most 5 min in all, and stops. It drips into the tank, so it is
+  a dose: written to the journal before it starts (SD-106) and mixed and
+  measured by the next check. The first fill of the lines counts as the
+  first dose (PD-425). A channel calibration still runs into a cup.
+- **The acceptance target** of the twin and tests: the drop sensor sees
+  every dose on every channel (#5, 27 Oct).
+
+
+## SD-112: The mixing wait: one turnover, then stable; the user may only lengthen it
+
+2026-10-27. Answers #1 (PD-433) and replaces the mixing wait of SD-105 and
+the user's two waits per tank.
+
+- **At least one turnover** after a dose: volume ÷ flow through the
+  device (SD-109), at least 2 min. The mixing clock runs only with flow
+  (SD-105).
+- **Then stable.** The re-measurement after the wait is the existing one:
+  pH within 0.05 and EC within 0.03, now over a window of 60 s or a fifth
+  of a turnover, whichever is longer, at most 10 min. Not stable within
+  the window plus 15 min: wait and try again (SD-105).
+- **The user may lengthen it**, never shorten it: one value per tank, "at
+  least N min after a dose", 0 to 600 min. It applies when it is longer
+  than the robot's own wait.
+- **pH waits like EC.** The fixed 2 and 3 turnovers go away; pH keeps its
+  rest of 240 s after an EC dose (RAT-046), and stability decides the
+  rest (RAT-052, RAT-058).
+- **Large tanks** (more than 150 L, where the flow through the device is
+  only a sample stream and the customer's pump mixes, PD-450): the minimum
+  is the settling time learned from earlier doses instead of the
+  turnover. A dose's settling time is the time from its end until the
+  readings stay within the band of their final value; the robot reads it
+  from its own history after the dose. Learned: 1.5 × the longest of the
+  last three clean doses (RAT-057), 5 to 600 min. Before anything is
+  learned: 60 min. The first dose of a new tank is small (the test dose,
+  SD-105).
+- The web app drops the two wait fields; it shows the wait in force and
+  why (turnover, learned settling, or the user's).
+
+
+## SD-113: Caps that cannot be switched off; users set values below them
+
+2026-10-27. The firmware's caps are in code and the gateway applies them
+to every run (#5, 27 Oct; R7). Settings only tighten them.
+
+- **One channel at a time** (RAT-018), also across coupled devices later
+  (#5 step 8).
+- **Run time per run**: at most 60 s, at most 6 partial runs per canister
+  and round (RAT-055); a run under 1 s is not made (RAT-050). With an S
+  head 1 s is about the smallest dose of 0.05–0.1 ml (#5, 27 Oct); a
+  shorter pulse needs bench data first.
+- **Daily amount per channel**: run time in a rolling 24 h, at most the
+  profile's value for the head (SD-108), never more than 60 min in code.
+  A run that would pass it is refused with the reason; the user may set
+  ml per day below it. The count survives a restart (RAT-028).
+- **Releases**: locks are released by a person in the app, and only the
+  app sets limits and releases; MQTT does not (PD-461).
+
+
+## SD-114: A pair with a part missing is caught up first
+
+2026-10-27. The predecessor's "pair errors with catch-up" (gc SD-057), for
+the cycle. A round of a pair can stop with some parts in and others not
+(a failed run, no drops, a Stop, a restart).
+
+- The robot keeps the missing amount of each part, with the recipe, in
+  the run-time state (it survives a restart, RAT-028).
+- The next EC round of that recipe doses only the missing parts, mixes
+  them in and measures; then the cycle goes on as usual. It learns
+  nothing from that round (RAT-057).
+- The catch-up is dropped, with a note naming the parts and amounts, when
+  the recipe changed its parts, a new tank starts, or a person ends it in
+  the app. While a missing part's channel is locked the robot doses no
+  other part of that pair and says so.
+
+
+## SD-115: EC rising without a dose means water is missing
+
+2026-10-27. Refill comes back only with a float switch (PD-460); without
+one, the robot only tells. When EC is above its target band at a check
+and the robot dosed no nutrients since the last check that found it
+within the band, the robot raises "top up water" (also as a push, #5
+step 5). It doses no nutrients while EC is above the band anyway
+(RAT-012); pH dosing goes on. The message goes when EC is back within the
+band.
