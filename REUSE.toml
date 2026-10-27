@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Licensing information for files that cannot carry a header. Source files
-# carry their own "SPDX-License-Identifier" header; the license of this
-# repository is not decided yet, so the headers stay as they came
-# (docs/PROVENANCE.md).
+# carry their own "SPDX-License-Identifier" header: AGPL-3.0-or-later,
+# with the additional permission in ADDITIONAL_PERMISSION.md (SD-116).
 version = 1
 
 [[annotations]]

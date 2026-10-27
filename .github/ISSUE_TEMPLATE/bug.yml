@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Bug report
+description: Something does not work as described.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! Issues are public: please do not post passwords, access tokens, Wi-Fi details or where you live.
+        A vulnerability goes never here, but through SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      placeholder: e.g. The cycle stayed at "Checking the flow" although the simulator's pump ran.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the simulator with --scenario demo
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the menu.
+      placeholder: 0.1.0-proto.5
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System and browser
+      description: Operating system, how you ran it, and the browser; no addresses.
+      placeholder: e.g. Windows 11, prototype download, Firefox
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: A pump ran although it should not have, or a dose went in without flow.
