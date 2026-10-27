@@ -1,7 +1,12 @@
 # Contributing
 
-This repository is private; changes come from the project's sessions and
-its owner.
+Bug reports, feedback and ideas are welcome as issues
+([`SUPPORT.md`](SUPPORT.md)). Code comes only from the project's own
+sessions and its owner for now: pull requests from outside are not
+merged, so the project keeps one copyright holder while the product takes
+shape. If you have a fix, describe it in an issue.
+
+How the project works on its code:
 
 - **Language:** everything in the repository is English.
 - **Branches and pull requests:** one topic per branch, a draft pull
@@ -16,6 +21,7 @@ its owner.
   exact board data), no names, numbers or texts of private sources, no
   prices – also not in issues. Refer to them as "private sources" or
   "reference installation".
-- **Headers:** a new source file carries the same SPDX header as the
-  others; `LICENSE` and the headers stay unchanged until the license is
-  decided.
+- **Headers:** every source file carries
+  `SPDX-License-Identifier: AGPL-3.0-or-later`.
+- **Releases:** a prototype comes out weekly while there is something new
+  (SD-116).
