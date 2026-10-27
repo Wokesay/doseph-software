@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# CI: architecture rules, the core with sanitizers, text keys, the web app,
+# CI: licenses of the files (reuse lint) and the provenance of the web
+# app's npm packages first, then architecture rules, the core with
+# sanitizers, the tool tests, the licenses of the npm packages, the web app
 # and end-to-end in the browser against the simulator (tools/ci.sh).
-# Actions are pinned by commit SHA; Dependabot keeps them current.
+# Actions are pinned by commit SHA (tools/workflows.test.mjs); Dependabot
+# keeps them current.
 name: CI
 on:
   push:
@@ -27,14 +30,33 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          # reuse and everything it needs only with the hashes in tools/:
+          # wheels only, except reuse itself, built from its hashed source
+          # with the hashed build backend, never with one fetched on the side
+          python3 -m venv "$RUNNER_TEMP/reuse"
+          "$RUNNER_TEMP/reuse/bin/pip" install --require-hashes --no-deps --only-binary :all: -r tools/requirements-reuse-build.txt
+          "$RUNNER_TEMP/reuse/bin/pip" install --require-hashes --no-deps --no-build-isolation --only-binary :all: --no-binary reuse -r tools/requirements-reuse.txt
+      - name: Licenses of the files (REUSE)
+        run: |
+          "$RUNNER_TEMP/reuse/bin/reuse" lint
+      # Before any package is installed: no package in the lockfile may have
+      # lost the provenance a lower version had, or have it from another
+      # source repository (tools/check_provenance.mjs).
+      - name: Provenance of the web app's packages
+        run: node tools/check_provenance.mjs
       - name: Browser for end-to-end
         working-directory: web
-        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm audit signatures && npx playwright install --with-deps chromium
       - name: All checks
         env:
           E2E: "1"
         run: tools/ci.sh
+      - name: Registry signatures, npm's reasons if their check failed
+        if: failure()
+        timeout-minutes: 5
+        run: node tools/signatures_report.mjs web
       - name: End-to-end report on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

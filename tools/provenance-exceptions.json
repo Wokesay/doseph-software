@@ -1,0 +1,12 @@
+{
+  "accepted": {
+    "@rolldown/pluginutils@1.0.1": {
+      "problem": "@rolldown/pluginutils@1.0.1 has provenance from https://github.com/rolldown/plugins, but 1.0.0 from https://github.com/rolldown/rolldown",
+      "reason": "Build tool only. Moved between two repositories of the rolldown organisation (GitHub owner id 94954945): 1.0.0 from rolldown/rolldown (repository id 693187866, publish-to-npm.yml), 1.0.1 from rolldown/plugins (repository id 1162376091, publish.yml), both by GitHub Actions on GitHub-hosted runners with provenance, the same four maintainers, and the package's repository field names the new repository. Reviewed 2026-10-13, checked again 2026-10-27."
+    },
+    "undici-types@6.21.0": {
+      "problem": "undici-types@6.21.0 has no provenance, but 6.19.2 had",
+      "reason": "Build tool only, types only (no main, bin or scripts). 6.19.3 to 6.21.0 (2024-07 to 2024-11) were published by hand by the maintainer account matteo.collina without provenance, as was 6.19.2 with provenance before them; 6.21.0's gitHead 61ec3531 is the commit of the v6.21.0 tag of nodejs/undici. 6.19.2 and 6.23.0 have provenance from the same source: nodejs/undici, release.yml, repository id 133092972, owner id 9950313 (6.23.0 by trusted publishing). @types/node 22 pins ~6.21.0, and Node's types follow the Node that CI runs (.nvmrc), so moving would break that match. Reviewed 2026-10-13, checked again 2026-10-27."
+    }
+  }
+}

@@ -21,7 +21,12 @@ How the project works on its code:
   exact board data), no names, numbers or texts of private sources, no
   prices – also not in issues. Refer to them as "private sources" or
   "reference installation".
-- **Headers:** every source file carries
-  `SPDX-License-Identifier: AGPL-3.0-or-later`.
+- **Headers:** every source file carries <!-- REUSE-IgnoreStart -->
+  `SPDX-License-Identifier: AGPL-3.0-or-later`<!-- REUSE-IgnoreEnd -->;
+  files without comment syntax (Markdown, JSON) are covered by
+  `REUSE.toml`. CI runs `reuse lint` (installed from the hashed
+  `tools/requirements-reuse*.txt`) and checks the licenses of the web
+  app's npm packages (`tools/check_licenses.mjs`): a new runtime package
+  needs an allowed license and a row in `THIRD_PARTY_NOTICES.md`.
 - **Releases:** a prototype comes out weekly while there is something new
   (SD-116).

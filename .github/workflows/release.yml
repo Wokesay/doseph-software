@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Release (SD-116): a tag vX.Y.Z[-...] on main produces the simulator's
-# downloads for Windows, macOS and Linux, their checksums and a provenance
-# attestation, as a GitHub release with the matching CHANGELOG section. A
-# version with a suffix (a prototype) is marked as a pre-release.
+# downloads for Windows, macOS and Linux, two SBOMs (CycloneDX: the web
+# app's runtime npm packages, the C++ libraries), their checksums and a
+# provenance attestation, as a GitHub release with the matching CHANGELOG
+# section. A version with a suffix (a prototype) is marked as a pre-release.
 #
 # Jobs: `verify` checks version and tag, `packages` and `build` make every
 # file without write access, `publish` only checks the checksums, attests
 # and creates the release; it runs no npm and no build. A pull request that
 # changes the release machinery runs everything but `publish` as a dry run.
+# tools/workflows.test.mjs keeps these rules.
 name: Release
 on:
   push:
@@ -18,6 +20,8 @@ on:
       - .github/workflows/packages.yml
       - tools/package.sh
       - tools/third_party.mjs
+      - tools/sbom_cpp.mjs
+      - tools/sbom_web.mjs
       - tools/embed_web.mjs
       - sim/README.txt
       - VERSION
@@ -94,13 +98,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          # No cache in a release build.
+          package-manager-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           # One folder per artifact: a second artifact cannot overwrite a
           # package with the same file name.
           pattern: doseph-simulator-*
           path: out/pkgs
-      - name: Checksums and release notes
+      - name: SBOMs, checksums and release notes
         id: files
         env:
           EVENT: ${{ github.event_name }}
@@ -120,6 +129,11 @@ jobs:
             mv "$f" out/dist/
           done
           rm -r out/pkgs
+          # The SBOMs list what ships, not the build tools: the web app's
+          # runtime packages from the lockfile the packages were installed
+          # from, and the C++ libraries pinned in cmake/deps.cmake.
+          (cd web && npm sbom --sbom-format cyclonedx --package-lock-only) | node tools/sbom_web.mjs web/package-lock.json > out/dist/sbom-web.cdx.json
+          node tools/sbom_cpp.mjs "$v" > out/dist/sbom-simulator-cpp.cdx.json
           (cd out/dist && sha256sum -- * > SHA256SUMS)
           # A tag takes its CHANGELOG section (checked in verify); a dry run
           # takes it too if it exists, otherwise the unreleased one.
