@@ -49,6 +49,7 @@ Ctx Robot::ctx() {
   c.stopped = rt_.stopped;
   c.flowOk = flowOk();
   c.probeCalibrating = probe_.has_value();
+  c.maintenanceUntil = maintenanceUntil();
   c.pumpJob = pumpJobActive();
   return c;
 }
@@ -167,6 +168,15 @@ void Robot::tick() {
   // A probe calibration explains jumps while someone works on it (RAT-042)
   if (probe_ && now - probe_->lastStep < kProbeIdle)
     for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) truth_.expectChange(ch, now + 10 * kSecond);
+  // Maintenance explains them too, 10 s ahead and never past its end (RAT-042); once over, it is logged
+  if (maintenanceUntilMs_ > 0 && now >= maintenanceUntilMs_) {
+    maintenanceUntilMs_ = 0;
+    log_.add(epoch, "system", "info", say("ev.maintenance_over"));
+    restartCycle();
+  }
+  if (maintenanceUntilMs_ > 0)
+    for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp})
+      truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
   Ctx c = ctx();
   act_.enforce(c);
   doser_.tick(c, act_);
@@ -194,6 +204,7 @@ void Robot::tick() {
     in.epoch = epoch;
     in.bootEpoch = bootEpoch_;
     in.stopped = rt_.stopped;
+    in.maintenance = maintenanceUntilMs_ > 0;
     in.pumpCount = hw_.pumpCount();
     watch_ = evaluate(in);
   }
@@ -345,6 +356,7 @@ json Robot::state() {
           {"pumps", pumps},
           {"pumpJob", job},
           {"probe", probe},
+          {"maintenanceUntil", c.maintenanceUntil > 0 ? json(c.maintenanceUntil) : json(nullptr)},
           {"eventId", log_.lastId()}};
 }
 
@@ -834,6 +846,30 @@ Result Robot::stop(const Msg& who) {
   if (!was) log_.add(clock_.epoch(), "system", "warn", say("ev.stop"), who);
   saveEvents();
   return Result::ok();
+}
+
+Epoch Robot::maintenanceUntil() const {
+  if (maintenanceUntilMs_ <= 0) return 0;
+  return clock_.epoch() + (std::max<Ms>(0, maintenanceUntilMs_ - clock_.nowMs()) + 999) / 1000;
+}
+
+Result Robot::maintenance(double minutes) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!isNum(minutes) || minutes < 0 || minutes > kMaxMaintenanceMin)
+    return Result::fail(422, say("maint.minutes", {{"max", kMaxMaintenanceMin}}));
+  const bool was = maintenanceUntilMs_ > 0;
+  maintenanceUntilMs_ = minutes > 0 ? clock_.nowMs() + static_cast<Ms>(std::llround(minutes * 60.0)) * kSecond : 0;
+  if (minutes > 0) log_.add(clock_.epoch(), "system", "info", say("ev.maintenance"), say("ev.maintenance.text", {{"min", minutes}}));
+  else if (was) log_.add(clock_.epoch(), "system", "info", say("ev.maintenance_end"));
+  // The cycle holds at once, or starts anew once the work is done
+  if (minutes > 0) {
+    Ctx c = ctx();
+    cycle_.tick(c, act_, doser_);
+  } else if (was) {
+    restartCycle();
+  }
+  saveEvents();
+  return Result::ok({{"maintenanceUntil", maintenanceUntil() > 0 ? json(maintenanceUntil()) : json(nullptr)}});
 }
 
 Result Robot::resume() {

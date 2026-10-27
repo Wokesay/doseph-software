@@ -3,9 +3,9 @@
 // turnover, how long a dose is mixed in, the pause between checks and the
 // control's settings.
 import { useState } from "preact/hooks";
-import { Clock, RefreshCw, SlidersHorizontal, Waves } from "lucide-preact";
+import { Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
 import { post, put, type Circulation } from "../api";
-import { num } from "../format";
+import { num, time } from "../format";
 import { t } from "../i18n";
 import { LIMITS, config, refreshConfig, refreshState, state, toast } from "../store";
 import { Banner, Button, Card, Field, Modal, NumberInput, Seg, Term } from "../ui";
@@ -206,6 +206,39 @@ function ControlCard() {
   );
 }
 
+// Maintenance: the robot holds while someone works at tank or device (RAT-042)
+function MaintenanceCard() {
+  const until = state.value!.maintenanceUntil;
+  const set = async (minutes: number) => {
+    await post("/maintenance", { minutes });
+    await refreshState();
+    toast(t(minutes > 0 ? "tank.maint.started" : "tank.maint.ended"));
+  };
+  return (
+    <Card title={t("tank.maint")} icon={<Wrench size={18} />}>
+      <div class="stack-sm" data-testid="maintenance">
+        <p class="muted small">{t("tank.maint.intro")}</p>
+        {until ? (
+          <div class="row">
+            <span data-testid="maintenance-until">{t("tank.maint.until", { time: time(until) })}</span>
+            <Button size="sm" onClick={() => set(0)}>
+              {t("tank.maint.end")}
+            </Button>
+          </div>
+        ) : (
+          <div class="row">
+            {[30, 60, 120].map((m) => (
+              <Button size="sm" onClick={() => set(m)}>
+                {t("tank.maint.start", { min: m })}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function TankPage() {
   const rev = config.value!.revision;
   return (
@@ -215,6 +248,7 @@ export function TankPage() {
         <CirculationCard />
       </div>
       <WaitCard key={`w${rev}`} />
+      <MaintenanceCard />
       <ControlCard key={`c${rev}`} />
     </div>
   );

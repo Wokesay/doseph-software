@@ -57,6 +57,7 @@ WatchResult evaluate(const WatchInput& in) {
   auto checkTarget = [&](const char* id, const char* labelKey, double value, double want, double tol, int decimals) {
     const Msg label = say(labelKey);
     if (in.stopped) return add(id, label, "neutral", say("watch.stopped"));
+    if (in.maintenance) return add(id, label, "neutral", say("watch.maintenance"));
     if (!inForce) return add(id, label, "neutral", say("watch.no_recipe"));
     if (!isNum(want)) return add(id, label, "neutral", say("watch.no_target"));
     if (grace) return add(id, label, "neutral", say("watch.grace"));

@@ -366,3 +366,48 @@ TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the
   REQUIRE(s.robot().resume().status == 200);
   CHECK(item("all", "check.not_stopped")["ok"] == true);
 }
+
+TEST_CASE("Maintenance: the cycle holds and the pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)") {
+  sim::Simulation s(demo());
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 3 * 60));
+  CHECK(s.robot().maintenance(-1).status == 422);
+  CHECK(s.robot().maintenance(Robot::kMaxMaintenanceMin + 1).status == 422);
+  REQUIRE(s.robot().maintenance(30).status == 200);
+  json j = st(s);
+  CHECK(j["maintenanceUntil"].is_number_integer());
+  CHECK(j["cycle"]["phase"] == "wait");
+  CHECK(j["cycle"]["line"]["key"] == "cycle.wait.maintenance");
+  CHECK_FALSE(s.world().output);  // the pump is off at once
+  CHECK(hasEvent(s, "ev.maintenance"));
+  // Someone dips the pH probe into a buffer: the jump is the work, no jump lock (RAT-042)
+  s.control("buffer", {{"kind", "ph"}, {"value", 4.0}});
+  s.step(30 * kSecond);
+  s.control("buffer", {{"kind", "ph"}});
+  s.step(10 * kSecond);
+  j = st(s);
+  CHECK(j["jumpLocks"].empty());
+  CHECK_FALSE(s.world().output);
+  for (const auto& i : j["watchdog"]["items"])
+    if (i["id"] == "target.ph" || i["id"] == "target.ec") CHECK(i["text"]["key"] == "watch.maintenance");
+  // Ended by hand: a new check starts
+  REQUIRE(s.robot().maintenance(0).status == 200);
+  CHECK(st(s)["maintenanceUntil"].is_null());
+  CHECK(hasEvent(s, "ev.maintenance_end"));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow" || phase(s) == "flush"; }, 30));
+  // Over by time
+  REQUIRE(s.robot().maintenance(1).status == 200);
+  REQUIRE(runUntil(s, [&] { return st(s)["maintenanceUntil"].is_null(); }, 70));
+  CHECK(hasEvent(s, "ev.maintenance_over"));
+  CHECK(st(s)["cycle"]["line"]["key"] != "cycle.wait.maintenance");
+  // In memory only: a restart ends it (R6)
+  REQUIRE(s.robot().maintenance(30).status == 200);
+  s.reboot();
+  CHECK(st(s)["maintenanceUntil"].is_null());
+  // Outside maintenance the same jump locks dosing (RAT-039)
+  sim::Simulation t(demo());
+  REQUIRE(t.robot().stop(say("stop.app")).status == 200);  // nothing the robot does announces a change
+  t.step(2 * kMinute);
+  t.control("buffer", {{"kind", "ph"}, {"value", 4.0}});
+  t.step(30 * kSecond);
+  CHECK_FALSE(st(t)["jumpLocks"].empty());
+}

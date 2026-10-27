@@ -26,6 +26,11 @@ All notable changes to this software. The format follows
   default): a row per time in UTC; in German with semicolons and a
   decimal comma, in English with commas and a decimal point; a gap stays
   an empty field (RAT-016, from the predecessor).
+- Maintenance mode on the tank page, for 30, 60 or 120 minutes (at most
+  240 through `POST /api/v1/maintenance`): while someone works at tank or
+  device the robot doses nothing, the pump is off, jumps of the probes
+  count as the work and the targets are not judged; locks stay, and a
+  restart ends it (RAT-042, from the predecessor).
 - Downloads of the simulator with the web app built in, for Linux, macOS
   and Windows: started without arguments it takes the next free port
   from 8080 and opens the browser. A tag on `main` releases them with

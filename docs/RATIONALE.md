@@ -278,11 +278,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-042 – Announced interventions explain sensor jumps
 
-- **Rule:** An announced intervention explains jumps: a new tank explains jumps of pH, EC and temperature for 10 min, a dose the cycle made explains the change it causes while it is mixed in.
+- **Rule:** An announced intervention explains jumps: a new tank explains jumps of pH, EC and temperature for 10 min, a dose the cycle made explains the change it causes while it is mixed in, and maintenance mode explains them while it lasts (at most 240 min, ended by a restart).
 - **Why:** The jump lock exists to catch a misbehaving sensor. A step that follows a known action is not a fault; treating it as one blocks dosing and trains users to ignore alarms.
 - **Evidence:** Observed on the reference installation (2026): taking the probes out for a buffer test made EC fall from 1.19 to 0.0 mS/cm and come back at 1.21 about 2.5 min later. The jump lock did what it should, but its alarm only reported a planned intervention.
 - **Implemented in:** `core/include/doseph/robot.hpp`, `core/include/doseph/truth.hpp`, `core/src/cycle.cpp`, `core/src/robot.cpp`, `core/src/truth.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"; `tests/core/test_cycle.cpp` "Maintenance: the cycle holds and the pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)"; `web/e2e/robot.spec.ts` "maintenance holds the robot until it is ended (RAT-042)"
 
 ### RAT-043 – No pH correction on an old reading
 

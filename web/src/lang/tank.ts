@@ -41,6 +41,13 @@ export const de = {
   "tank.ctl.phMaxMlPerDose": "Größte pH−-Gabe",
   "tank.ctl.maxEcRounds": "Nährstoffrunden je Prüfung",
   "tank.ctl.maxPhDoses": "pH-Gaben je Prüfung",
+  "tank.maint": "Wartung",
+  "tank.maint.intro": "Während du an Tank oder Gerät arbeitest – Sonden reinigen, Schläuche tauschen, Wasser wechseln –, dosiert der Roboter nichts, die Pumpe ist aus und Sprünge der Messwerte gelten als deine Arbeit. Sperren bleiben. Ein Neustart beendet die Wartung.",
+  "tank.maint.start": "{min}\u00a0Min.",
+  "tank.maint.until": "Wartung bis {time}",
+  "tank.maint.end": "Wartung beenden",
+  "tank.maint.started": "Wartung begonnen",
+  "tank.maint.ended": "Wartung beendet",
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
@@ -84,4 +91,11 @@ export const en: Record<keyof typeof de, string> = {
   "tank.ctl.phMaxMlPerDose": "Largest pH− dose",
   "tank.ctl.maxEcRounds": "Nutrient rounds per check",
   "tank.ctl.maxPhDoses": "pH doses per check",
+  "tank.maint": "Maintenance",
+  "tank.maint.intro": "While you work at the tank or the device – cleaning probes, changing tubes, changing the water – the robot doses nothing, the pump is off and jumps of the readings count as your work. Locks stay. A restart ends maintenance.",
+  "tank.maint.start": "{min}\u00a0min",
+  "tank.maint.until": "Maintenance until {time}",
+  "tank.maint.end": "End maintenance",
+  "tank.maint.started": "Maintenance started",
+  "tank.maint.ended": "Maintenance ended",
 };
