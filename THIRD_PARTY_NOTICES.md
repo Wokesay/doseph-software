@@ -16,7 +16,7 @@ As of 2026-10-24.
 | `@preact/signals` | 2.11.3 | MIT | https://github.com/preactjs/signals |
 | `@preact/signals-core` | 1.14.4 | MIT | https://github.com/preactjs/signals |
 | `uplot` | 1.6.32 | MIT | https://github.com/leeoniya/uPlot |
-| `lucide-preact` | 1.53.0 | ISC | https://github.com/lucide-icons/lucide |
+| `lucide-preact` | 1.59.0 | ISC | https://github.com/lucide-icons/lucide |
 
 ### C++ (single headers, pinned with SHA-256 in `cmake/deps.cmake`)
 
