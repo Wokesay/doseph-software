@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Build backend of reuse; tools/requirements-reuse-build.txt pins it with hashes.
+poetry-core==2.5.0

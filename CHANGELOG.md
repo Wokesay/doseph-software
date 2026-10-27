@@ -93,3 +93,14 @@ All notable changes to this software. The format follows
   showing a form, and an alarm is logged. Nobody is told to reset the
   robot, since a restart may read the file again (`GET /api/v1/info`
   has `passwordProblem`).
+- Supply-chain checks in CI: `reuse lint`, with `reuse` installed only
+  from hashed requirement files; the licenses of the web app's npm
+  packages against an allow list; no npm package may have lost the
+  provenance a lower version had (accepted cases in
+  `tools/provenance-exceptions.json`); `npm audit signatures` right after
+  every `npm ci`, which runs without install scripts, and a report of
+  npm's reasons when it fails; every action pinned by commit SHA with its
+  version (`tools/workflows.test.mjs`).
+- A release carries two SBOMs (CycloneDX): the web app's runtime npm
+  packages and the simulator's C++ libraries, covered by `SHA256SUMS`
+  and the provenance attestation (`docs/RELEASE.md`).
