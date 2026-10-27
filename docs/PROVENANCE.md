@@ -57,7 +57,7 @@ The security fixes among them, and where they stand here:
 | The first password needs a setup code (gc#79) | `core/src/auth.cpp`, `core/src/api.cpp`: the device shows the code, the simulator prints it |
 | The sign-in lockout counts per client (gc SD-051) | `core/src/auth.cpp` |
 | Random numbers from the operating system, not RDSEED (CVE-2025-62626) | `sim/simulation.cpp` (`getentropy()`) |
-| An import gives a calibration only to a class that offers it | not applicable yet: there is no import; the backup and import that come back (#10 step 2) keep the rule for the probes' calibrations |
+| An import gives a calibration only to a class that offers it | `core/src/robot.cpp` (`importConfig`): the robot has no other classes; a backup's probe calibrations are checked as if made now, and a broken one refuses the file |
 | A new sign-in ends the session used longest ago (gc#131) | `core/src/auth.cpp` |
 
 What the brief brings back beyond the 24 Oct carry-over is recorded below

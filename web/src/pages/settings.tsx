@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Settings: language and look, the device's name and time zone, the
-// password, reporting a problem, signing out, the version.
+// password, backup and restore, reporting a problem, signing out, the version.
 import { useState } from "preact/hooks";
-import { Bug, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor } from "lucide-preact";
-import { get, post, put } from "../api";
+import { Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Upload } from "lucide-preact";
+import { ApiError, get, post, put, type Msg } from "../api";
 import { timeZone } from "../format";
-import { lang, setLang, t, type Lang } from "../i18n";
+import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, toast } from "../store";
 import { currentTheme, setTheme, type Theme } from "../theme";
 import { Banner, Button, Card, Field, LANGS, Seg } from "../ui";
@@ -124,6 +124,89 @@ function PasswordCard() {
   );
 }
 
+// Backup and restore: the configuration as a file, and back. The robot checks
+// a file like any change and says every reason it refuses one.
+function BackupCard() {
+  const [file, setFile] = useState<{ name: string; data: object } | null>(null);
+  const [errors, setErrors] = useState<Msg[]>([]);
+  return (
+    <Card title={t("settings.backup")} icon={<DatabaseBackup size={18} />}>
+      <div class="stack" data-testid="backup">
+        <p class="muted">{t("settings.backup.intro")}</p>
+        <div class="row">
+          <a class="btn" href="/api/v1/config/export" download data-testid="backup-download">
+            <Download size={16} /> {t("settings.backup.save")}
+          </a>
+          <label class="btn">
+            <Upload size={16} /> {t("settings.backup.choose")}
+            <input
+              type="file"
+              accept="application/json,.json"
+              class="sr-only"
+              name="restore"
+              onChange={async (e) => {
+                const input = e.target as HTMLInputElement;
+                const f = input.files?.[0];
+                input.value = "";
+                setErrors([]);
+                if (!f) return;
+                try {
+                  const data = JSON.parse(await f.text());
+                  if (data === null || typeof data !== "object" || Array.isArray(data)) throw new SyntaxError();
+                  setFile({ name: f.name, data });
+                } catch {
+                  setFile(null);
+                  toast(t("settings.backup.notJson"), "error");
+                }
+              }}
+            />
+          </label>
+        </div>
+        {file && (
+          <Banner tone="warn">
+            <div class="stack">
+              <span>{t("settings.backup.confirm", { file: file.name })}</span>
+              <div class="row">
+                <Button
+                  variant="primary"
+                  onClick={async () => {
+                    try {
+                      await post("/config/import", file.data);
+                    } catch (e) {
+                      const list = e instanceof ApiError ? (e.body?.errors as Msg[] | undefined) : undefined;
+                      if (!list?.length) throw e;
+                      setErrors(list);
+                      return;
+                    }
+                    setFile(null);
+                    await refreshConfig();
+                    toast(t("settings.backup.restored"));
+                  }}
+                >
+                  {t("settings.backup.restore")}
+                </Button>
+                <Button onClick={() => setFile(null)}>{t("common.cancel")}</Button>
+              </div>
+            </div>
+          </Banner>
+        )}
+        {errors.length > 0 && (
+          <Banner tone="bad">
+            <div class="stack" data-testid="backup-errors">
+              <span>{t("settings.backup.refused")}</span>
+              <ul>
+                {errors.map((m, i) => (
+                  <li key={i}>{msg(m)}</li>
+                ))}
+              </ul>
+            </div>
+          </Banner>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // Where a report goes: the public bug form, filled in from here
 export const REPO = "https://github.com/Wokesay/doseph-software";
 
@@ -211,6 +294,7 @@ export function SettingsPage() {
         <DeviceCard key={rev} />
       </div>
       <PasswordCard />
+      <BackupCard />
       <ReportCard />
       <Card title={t("settings.about")}>
         <div class="stack">

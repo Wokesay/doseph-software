@@ -196,6 +196,7 @@ export const msgDe: Record<string, string> = {
   "ev.boot.mix_first": "Erst einmischen",
   "ev.boot.mix_first.text": "Gaben von vor dem Neustart sind noch nicht eingemischt und gemessen: Die erste Prüfung mischt {min:0} min mit Durchfluss, bevor sie misst, und lernt nichts aus ihnen.",
   "ev.config.changed": "Einstellungen geändert: {what}",
+  "ev.config.imported": "Einstellungen aus einer Sicherung wiederhergestellt",
   "cfg.what.system": "Gerät",
   "cfg.what.tank": "Tank",
   "cfg.what.control": "Regelung",
@@ -239,6 +240,10 @@ export const msgDe: Record<string, string> = {
   "ev.resume": "Fortgesetzt",
   "stop.app": "Stopp in der App",
   "store.failed": "Nicht gespeichert: Das Gerät kann seinen Speicher nicht schreiben",
+  "config.not_object": "Diese Datei ist keine Sicherung der Einstellungen – wähl eine, die mit „Einstellungen sichern“ gespeichert wurde",
+  "config.newer": "Diese Sicherung stammt aus einer neueren Version – bring zuerst den Roboter auf den neuen Stand, dann stell sie wieder her",
+  "config.import": "Diese Datei lässt sich nicht wiederherstellen – sie ist beschädigt oder keine Sicherung der Einstellungen ({reason})",
+  "config.busy": "Nicht wiederhergestellt: Gerade läuft eine Dosis, ein Pumpenlauf oder eine Sondenkalibrierung – versuch es danach noch einmal",
   "canister.in_recipe": "Das Rezept {name} nutzt diesen Kanister – entferne ihn dort zuerst",
   "recipe.in_force": "Dieses Rezept ist in Kraft – wähle zuerst ein anderes",
   "active.days": "Zwischen {min} und {max}\u00a0Tagen",
@@ -309,6 +314,8 @@ export const msgDe: Record<string, string> = {
   "cfg.active.until": "Das Ende des Rezepts muss nach seinem Beginn liegen",
   "cfg.pump.number": "Pumpe {pump} gibt es an diesem Gerät nicht",
   "cfg.pump.flow": "Pumpe {pump}: Der Einmesswert ist ungültig",
+  "cfg.calibration.ph": "Die pH-Kalibrierung in der Sicherung ist nicht brauchbar: {reason}",
+  "cfg.calibration.ec": "Die EC-Kalibrierung in der Sicherung ist nicht brauchbar: {reason}",
 
   // API and sign-in (api.cpp, auth.cpp)
   "api.bad_input": "Die Eingabe hat das falsche Format",

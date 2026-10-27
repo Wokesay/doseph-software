@@ -48,6 +48,16 @@ All notable changes to this software. The format follows
   version, the report ID and what happened. Never in it: the password
   file's values, sessions, addresses, Wi-Fi details
   (`GET /api/v1/diagnostics`). The bug form asks for the report ID.
+- Backup and restore in the settings: all settings as a file
+  (`GET /api/v1/config/export`) and back (`POST /api/v1/config/import`).
+  A file is checked like any change and its probe calibrations as if made
+  now (RAT-025); a refusal lists every reason and changes nothing. A
+  backup of the older schema is migrated. It never sets or clears the
+  lock against a second first setup, is refused while a dose, a pump run
+  or a probe calibration goes on, switches off what runs and starts the
+  check again. What the robot learned stays only for the recipes and the
+  pH− canister the file keeps (RAT-085); another tank volume makes the
+  next dose a test dose.
 
 ### Changed
 
