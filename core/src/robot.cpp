@@ -146,6 +146,7 @@ void Robot::boot() {
     else
       log_.add(bootEpoch_, "dose", "notice", say("ev.boot.cut_cup", {{"pump", r.pump}}), say("ev.boot.cut_cup.text"));
   }
+  pairAfterRestart(rt_, journal_.runs());
   if (journal_.anyIntoTank()) {
     // Doses not mixed in and measured yet: the first cycle mixes first and learns nothing (SD-106)
     Ctx c = ctx();
@@ -392,6 +393,16 @@ json Robot::state() {
           {"dosing", dosing},
           {"pumps", pumps},
           {"stock", stock},
+          {"catchUp", [&] {
+             if (!rt_.catchUp.is_object()) return json(nullptr);
+             json parts = json::array();
+             const json missing = rt_.catchUp.value("parts", json::object());
+             for (const auto& [id, ml] : missing.items()) {
+               const CanisterCfg* b = cfg_.canister(id);
+               parts.push_back({{"canister", id}, {"name", b ? b->name : id}, {"ml", ml}});
+             }
+             return json{{"recipe", rt_.catchUp.value("recipe", "")}, {"parts", parts}};
+           }()},
           {"pumpJob", job},
           {"probe", probe},
           {"maintenanceUntil", c.maintenanceUntil > 0 ? json(c.maintenanceUntil) : json(nullptr)},
@@ -499,9 +510,11 @@ Result Robot::putTank(const json& j) {
   Result r = saveConfig(next, changed("cfg.what.tank"));
   if (r.status != 200) return r;
   if (volumeChanged) {
-    // Another volume: the next dose checks it again (SD-105)
+    // Another volume: the next dose checks it again (SD-105); a pair is not caught up in another tank (SD-114)
     rt_.newTank = true;
     rt_.latches.erase("tank.volume");
+    Ctx c = ctx();
+    dropCatchUp(c, say("catchup.new_tank"));
   }
   restartCycle();
   saveState(true);
@@ -530,6 +543,10 @@ Result Robot::newTank() {
   rt_.newTank = true;
   rt_.latches.erase("tank.volume");
   rt_.jumpLocks.clear();
+  {
+    Ctx c = ctx();
+    dropCatchUp(c, say("catchup.new_tank"));  // a new fill has no missing part (SD-114)
+  }
   const Ms now = clock_.nowMs();
   for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   log_.add(clock_.epoch(), "control", "info", say("ev.tank.new"), say("ev.tank.new.text"));
@@ -580,6 +597,15 @@ Result Robot::putCanister(const json& j) {
   else if (created) rt_.stockMl.erase(id);
   saveState(true);
   return r;
+}
+
+Result Robot::endCatchUp() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!rt_.catchUp.is_object()) return Result::fail(404, say("api.not_found"));
+  Ctx c = ctx();
+  dropCatchUp(c, say("catchup.by_hand"));
+  saveState(true);
+  return Result::ok();
 }
 
 Result Robot::setStock(const std::string& id, const json& j) {

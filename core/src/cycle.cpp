@@ -160,6 +160,7 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
   queue_.clear();
   clean_ = false;
   mixingFirst_ = false;
+  settlePairs(c);  // the round is over; a part still dosing is settled when its result comes (SD-114)
   // The state says so at once, not only at the next tick
   const CycleSettings s = cycleSettings(c);
   if (c.stopped) {
@@ -175,6 +176,14 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
 }
 
 void MixCycle::doseFinished(Ctx& c, const DoseProgress& p) {
+  // A pair part's amount, also for a round that ended meanwhile (SD-114)
+  json& pr = c.rt.pairRound;
+  if (pr.is_object() && jstr(pr, "order") == p.orderId) {
+    json& part = pr["parts"][jstr(pr, "canister")];
+    part["done"] = jnum(part, "done", 0) + p.mlDone;
+    pr["order"] = "";
+    if (kind_ == Kind::None) settlePairs(c);  // its round was ended meanwhile
+  }
   if (kind_ == Kind::None) return;  // a round ended meanwhile: its journal makes the next cycle mix first
   mlRound_ += p.mlDone;
   if (kind_ == Kind::Ec && p.msDone > 0) lastEcDoseAt_ = c.epoch;
@@ -326,6 +335,9 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   const RecipeCfg& r = *s.recipe;
   const RecipeEffect eff = recipeEffect(r, learnedEcEffect(c.rt, r.id));
   // The first dose of a new tank is a small test dose (SD-105)
+  // A pair that misses a part from a round cut short gets it first, alone (SD-114)
+  settlePairs(c);
+  if (c.rt.catchUp.is_object() && startCatchUp(c, act, s, ec)) return;
   const bool test = c.rt.newTank;
   auto plan = planEcDose(c.cfg, r, s.volumeL, aim - ec, eff.dose, eff.largest, c.cfg.control.maxEcStep, test ? kTestRiseEc : kNaN);
   if (!plan.ok) {
@@ -337,6 +349,7 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
       wait(c, act, *why);
       return;
     }
+  recordPairs(c, r.id, plan.steps, false);
   kind_ = Kind::Ec;
   queue_ = plan.steps;
   roundRecipe_ = r.id;
@@ -408,6 +421,150 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   line_ = say(test ? "cycle.dose_ph_test" : "cycle.dose_ph", {{"from", ph}, {"target", s.phTarget}, {"n", phDoses_}, {"ml", plan.ml}});
 }
 
+// ---------------------------------------------------------------- pairs (SD-114)
+
+namespace {
+
+// "Part A, Part B" and the sum of their amounts
+std::pair<std::string, double> namesOf(const Config& cfg, const json& parts) {
+  std::string names;
+  double total = 0;
+  for (const auto& [id, ml] : parts.items()) {
+    const CanisterCfg* b = cfg.canister(id);
+    names += (names.empty() ? "" : ", ") + (b ? b->name : id);
+    total += ml.is_number() ? ml.get<double>() : 0;
+  }
+  return {names, total};
+}
+
+}  // namespace
+
+void dropCatchUp(Ctx& c, const Msg& why) {
+  if (!c.rt.catchUp.is_object()) return;
+  const json parts = c.rt.catchUp.value("parts", json::object());
+  const auto [names, total] = namesOf(c.cfg, parts);
+  c.rt.catchUp = nullptr;
+  c.log.add(c.epoch, "dose", "notice", say("ev.cycle.catchup_dropped", {{"names", names}}),
+            say("ev.cycle.catchup_dropped.text", {{"names", names}, {"ml", total}, {"reason", why}}), {{"parts", parts}});
+}
+
+void pairAfterRestart(RuntimeState& rt, const std::vector<JournalRun>& runs) {
+  json& pr = rt.pairRound;
+  if (!pr.is_object() || jstr(pr, "order").empty()) return;
+  double ml = 0;
+  for (const auto& r : runs)
+    if (r.order == jstr(pr, "order")) ml += r.cut || !isNum(r.mlDone) ? (isNum(r.ml) ? r.ml : 0) : r.mlDone;
+  json& part = pr["parts"][jstr(pr, "canister")];
+  part["done"] = jnum(part, "done", 0) + ml;
+  pr["order"] = "";
+}
+
+void MixCycle::recordPairs(Ctx& c, const std::string& recipe, const std::vector<DoseStep>& steps, bool catchUp) {
+  json parts = json::object();
+  for (const auto& st : steps)
+    if (!st.pair.empty()) parts[st.canister] = {{"planned", st.ml}, {"done", 0.0}};
+  c.rt.pairRound = parts.empty() ? json(nullptr)
+                                 : json{{"recipe", recipe}, {"order", ""}, {"canister", ""}, {"catchUp", catchUp}, {"parts", parts}};
+}
+
+// Once a round's parts are all done or given up: each part of a pair is brought to the share of
+// its plan the furthest part reached, so the pair keeps its ratio (RAT-054); a catch-up round
+// owes its whole amounts. A part still dosing is settled when it ends.
+void MixCycle::settlePairs(Ctx& c) {
+  json& pr = c.rt.pairRound;
+  if (!pr.is_object() || !jstr(pr, "order").empty()) return;
+  const bool catchUp = jbool(pr, "catchUp", false);
+  const json parts = pr.value("parts", json::object());
+  double top = 0;
+  for (const auto& [id, p] : parts.items()) {
+    const double planned = jnum(p, "planned"), done = jnum(p, "done", 0);
+    if (isNum(planned) && planned > 0) top = std::max(top, done / planned);
+  }
+  json missing = json::object();
+  for (const auto& [id, p] : parts.items()) {
+    const double planned = jnum(p, "planned"), done = jnum(p, "done", 0);
+    if (!isNum(planned) || planned <= 0) continue;
+    const double m = (catchUp ? planned : std::min(1.0, top) * planned) - done;
+    if (m >= kCatchUpMinMl) missing[id] = m;
+  }
+  const std::string recipe = jstr(pr, "recipe");
+  pr = nullptr;
+  if (missing.empty()) return;
+  c.rt.catchUp = {{"recipe", recipe}, {"parts", missing}};
+  const auto [names, total] = namesOf(c.cfg, missing);
+  c.log.add(c.epoch, "dose", "warn", say("ev.cycle.pair_short", {{"names", names}}),
+            say("ev.cycle.pair_short.text", {{"names", names}, {"ml", total}}), {{"recipe", recipe}, {"parts", missing}});
+}
+
+// The missing parts alone, in the recipe's order; the round learns nothing (RAT-057). A part that
+// cannot be dosed holds the others of its pair. False when the catch-up no longer fits and was dropped.
+bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, double ec) {
+  const RecipeCfg& r = *s.recipe;
+  const json parts = c.rt.catchUp.value("parts", json::object());
+  std::vector<DoseStep> steps;
+  bool fits = jstr(c.rt.catchUp, "recipe") == r.id && !parts.empty();
+  for (const auto& rs : r.steps) {
+    if (!fits || !parts.contains(rs.canister)) continue;
+    const CanisterCfg* b = c.cfg.canister(rs.canister);
+    if (!b || rs.fixed || b->pair.empty() || !parts[rs.canister].is_number()) {
+      fits = false;
+      break;
+    }
+    DoseStep d;
+    d.canister = b->id;
+    d.name = b->name;
+    d.pump = b->pump;
+    d.pair = b->pair;
+    d.color = b->color;
+    d.mlPerL = rs.mlPerL;
+    d.ml = parts[rs.canister].get<double>();
+    d.flowMlPerMin = c.cfg.pumpFlow(b->pump);
+    steps.push_back(d);
+  }
+  if (fits && steps.size() != parts.size()) fits = false;  // a part the recipe no longer has
+  if (!fits) {
+    dropCatchUp(c, say("catchup.recipe_changed"));
+    return false;
+  }
+  const Limits lim = c.cfg.limits.bounded();
+  double total = 0;
+  for (auto& d : steps) {
+    if (d.pump <= 0 || !isNum(d.flowMlPerMin)) {
+      wait(c, act, say("cycle.wait.catchup_part", {{"name", d.name}}));
+      return true;
+    }
+    Msg err;
+    d.runs = splitRuns(d.ml, d.flowMlPerMin, c.cfg.limits, lim.maxPartialRuns, err);
+    if (!err.key.empty()) {
+      dropCatchUp(c, err);
+      return false;
+    }
+    if (auto why = shortOf(c.rt, d)) {
+      wait(c, act, *why);
+      return true;
+    }
+    total += d.ml;
+  }
+  c.rt.catchUp = nullptr;
+  recordPairs(c, r.id, steps, true);
+  kind_ = Kind::Ec;
+  queue_ = steps;
+  roundRecipe_ = r.id;
+  before_ = measured_;
+  mlRound_ = 0;
+  volRound_ = s.volumeL;
+  clean_ = false;
+  doseFailed_ = false;
+  limited_ = false;
+  testDose_ = false;
+  expectedRise_ = expectedTest_ = kNaN;
+  ecRounds_++;
+  anyDosed_ = true;
+  enter(c, Phase::Dose);
+  line_ = say("cycle.dose_catchup", {{"from", ec}, {"ml", total}, {"names", namesOf(c.cfg, parts).first}});
+  return true;
+}
+
 void MixCycle::learn(Ctx& c, Actuators& act) {
   const Kind kind = kind_;
   kind_ = Kind::None;
@@ -421,6 +578,7 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
               say("ev.cycle.volume.text", {{"implied", std::round(implied)}, {"entered", v}}));
   };
   if (kind == Kind::Ec) {
+    settlePairs(c);
     const double rise = measured_.ec - before_.ec;
     c.log.add(c.epoch, "control", "info", say("ev.cycle.ec_round", {{"n", ecRounds_}}),
               say("ev.cycle.ec_round.text", {{"from", before_.ec}, {"to", measured_.ec}, {"ml", mlRound_}}),
@@ -647,6 +805,11 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         o.step = queue_.front();
         Msg err;
         if (doser.start(c, act, o, err)) {
+          json& pr = c.rt.pairRound;
+          if (pr.is_object() && pr["parts"].contains(o.step.canister)) {
+            pr["order"] = o.id;
+            pr["canister"] = o.step.canister;
+          }
           queue_.erase(queue_.begin());
           break;
         }

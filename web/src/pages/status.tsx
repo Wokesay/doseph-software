@@ -3,7 +3,7 @@
 // locks to release, the monitoring and the latest events.
 import { useEffect, useState } from "preact/hooks";
 import { Activity, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
-import { get, post, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
+import { del, get, post, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
 import { dateTime, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast } from "../store";
@@ -86,6 +86,27 @@ function CycleCard() {
         )}
         {st.newTank && c.phase !== "off" && c.phase !== "stopped" && !c.round?.test && <p class="muted small">{t("status.newTank")}</p>}
         {c.mixPending && <p class="muted small">{t("status.mixPending")}</p>}
+        {st.catchUp && (
+          <Banner tone="info">
+            <div class="stack" data-testid="catch-up">
+              <span>
+                {t("status.catchUp", { parts: st.catchUp.parts.map((p) => t("status.catchUpPart", { name: p.name, ml: num(p.ml, 1) })).join(", ") })}
+              </span>
+              <div>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await del("/catchup");
+                    await refreshState();
+                    toast(t("status.catchUpEnded"), "info");
+                  }}
+                >
+                  {t("status.catchUpEnd")}
+                </Button>
+              </div>
+            </div>
+          </Banner>
+        )}
         {c.notes.map((n) => (
           <Banner tone="warn">
             <span data-testid="cycle-note">{msg(n)}</span>
