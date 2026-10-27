@@ -29,6 +29,9 @@ export type CycleSettings = {
   holdMin: number; circulation: Circulation;
 };
 
+// One thing a kind of dose needs, and whether it holds now (MixCycle::checks)
+export type Check = Msg & { ok: boolean };
+
 export type Cycle = {
   phase: Phase;
   since: number;
@@ -39,6 +42,7 @@ export type Cycle = {
   round: { kind: "ec" | "ph"; n: number; test: boolean; ml: number; from: number | null } | null;
   last: { ph: number | null; ec: number | null; temp: number | null; at: number } | null;
   mixPending: boolean;
+  checks: { all: Check[]; ec: Check[]; ph: Check[] };
   settings: CycleSettings;
 };
 

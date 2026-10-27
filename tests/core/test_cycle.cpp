@@ -327,3 +327,42 @@ TEST_CASE("Pumps: a calibration runs into the cup and is worked out from the act
   s.reboot();
   CHECK_FALSE(hasEvent(s, "ev.boot.mix_first"));
 }
+
+TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the state (RAT-037)") {
+  sim::Simulation s(demo());
+  auto group = [&](const char* g) { return st(s)["cycle"]["checks"][g]; };
+  auto item = [&](const char* g, const std::string& key) {
+    for (const auto& i : group(g))
+      if (i["key"] == key) return i;
+    return json(nullptr);
+  };
+  auto allOk = [&](const char* g) {
+    for (const auto& i : group(g))
+      if (!i["ok"].get<bool>()) return false;
+    return true;
+  };
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 3 * 60));
+  CHECK(allOk("all"));
+  CHECK(item("all", "check.recipe")["args"]["name"].is_string());
+  CHECK(allOk("ec"));
+  CHECK(item("ph", "check.ph_down")["ok"] == true);
+  // An EC round: pH comes after it (RAT-004)
+  REQUIRE(runUntil(s, [&] { return phase(s) == "dose"; }, 15 * 60));
+  CHECK(item("ph", "check.ec_first")["ok"] == false);
+  REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 5 * 60));
+  CHECK(item("ph", "check.rest_left")["ok"] == false);  // pH rests after a nutrient dose (RAT-046)
+  // A part on no pump: the round cannot be planned, and the list names it (RAT-015)
+  json b = s.robot().configJson()["bottles"][2];
+  b["pump"] = 0;
+  REQUIRE(s.robot().putBottle(b).status == 200);
+  CHECK(item("ec", "check.part_not_ready")["args"]["name"] == b["name"]);
+  // A pump calibration and the Stop
+  b["pump"] = 3;
+  REQUIRE(s.robot().putBottle(b).status == 200);
+  REQUIRE(s.robot().startCalibration(4, 10).status == 200);
+  CHECK(item("all", "check.pump_job")["ok"] == false);
+  REQUIRE(s.robot().stop(say("stop.app")).status == 200);
+  CHECK(item("all", "check.stopped")["ok"] == false);
+  REQUIRE(s.robot().resume().status == 200);
+  CHECK(item("all", "check.not_stopped")["ok"] == true);
+}

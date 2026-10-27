@@ -21,6 +21,12 @@ All notable changes to this software. The format follows
   calibration of the dosing pumps and probes, settings, and the Stop on
   every page.
 - Simulator with a twin of tank, measuring cell, flow, pumps and probes.
+- "Why it doses – or not" on the status page: a checklist of what
+  nutrients and pH− each need now – recipe and tank volume, flow at the
+  last check, readings, canisters on calibrated pumps, locks, the EC gate
+  and the rest after a nutrient dose – each ticked or not, with the
+  reason (RAT-037, from the predecessor). The API has it as
+  `cycle.checks`.
 
 ### Changed
 

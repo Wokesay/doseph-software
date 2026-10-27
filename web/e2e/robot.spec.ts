@@ -27,6 +27,14 @@ test("status shows the cycle, the readings and the monitoring", async ({ page })
   await expect(page.getByTestId("event").first()).toBeVisible();
 });
 
+test("status says why the robot doses or not (RAT-037)", async ({ page }) => {
+  await login(page);
+  await page.getByTestId("checks").locator("summary").click();
+  await expect(page.getByTestId("checks-all")).toContainText("Recipe in force: Two-part nutrient");
+  await expect(page.getByTestId("checks-ec")).toContainText("The EC reading");
+  await expect(page.getByTestId("checks-ph")).toContainText("pH− ready");
+});
+
 test("Stop switches everything off and holds until Resume", async ({ page }) => {
   await login(page);
   await page.getByTestId("stop").click();
