@@ -248,8 +248,8 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** What the robot does is shown as one line for the cycle, and everything it leaves as it is stands as a note with its reason; a note goes away with its cause.
 - **Why:** A display based on requests misses devices switched some other way, and "requested but not running" is the state a user most needs to see. Blocks and control states need their own visible line, and that line has to go away with the block, or it turns into a stale message.
 - **Evidence:** Observed on the reference installation (2026): the display showed the requested state, so a pump started some other way appeared as "off" while it ran, and blocks and control states had no visible line.
-- **Implemented in:** `core/include/doseph/cycle.hpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: EC above its target and pH below it are left as they are, with the reason (RAT-012, RAT-037, RAT-041)"
+- **Implemented in:** `core/include/doseph/cycle.hpp`, `core/src/cycle.cpp` (`MixCycle::checks`), `web/src/pages/status.tsx`
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: EC above its target and pH below it are left as they are, with the reason (RAT-012, RAT-037, RAT-041)"; `tests/core/test_cycle.cpp` "Cycle: the checklist says why the robot doses or not, and follows the state (RAT-037)"; `web/e2e/robot.spec.ts` "status says why the robot doses or not (RAT-037)"
 
 ### RAT-038 – Refill stops by time, not by the lagging level reading
 

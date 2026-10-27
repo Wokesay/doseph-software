@@ -3,7 +3,7 @@
 // locks to release, the monitoring and the latest events.
 import { useEffect, useState } from "preact/hooks";
 import { Activity, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
-import { get, post, type Phase, type RobotEvent, type SeriesData } from "../api";
+import { get, post, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
 import { dateTime, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast } from "../store";
@@ -96,8 +96,33 @@ function CycleCard() {
             {t("status.lastMeasured", { ph: num(c.last.ph, 2), ec: num(c.last.ec, 2), time: dateTime(c.last.at) })}
           </p>
         )}
+        <WhyChecks />
       </div>
     </Card>
+  );
+}
+
+// Why the robot doses or not: what each kind of dose needs, and whether it holds now (RAT-037)
+function WhyChecks() {
+  const ch = state.value!.cycle.checks;
+  const groups: [TextKey, Check[]][] = [
+    ["status.why.all", ch.all],
+    ["status.why.ec", ch.ec],
+    ["status.why.ph", ch.ph],
+  ];
+  const open = groups.reduce((n, [, items]) => n + items.filter((i) => !i.ok).length, 0);
+  return (
+    <details data-testid="checks">
+      <summary>{t(open ? "status.why.open" : "status.why", { n: open })}</summary>
+      {groups.map(([label, items]) => (
+        <div class="checks" data-testid={`checks-${label.split(".").pop()}`}>
+          <span class="small muted">{t(label)}</span>
+          {items.map((i) => (
+            <CheckRow ok={i.ok} text={msg(i)} />
+          ))}
+        </div>
+      ))}
+    </details>
   );
 }
 

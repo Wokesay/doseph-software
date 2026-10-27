@@ -690,6 +690,74 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   }
 }
 
+json MixCycle::checks(const Ctx& c) const {
+  const CycleSettings s = cycleSettings(c);
+  const RecipeCfg* r = c.cfg.active.recipe.empty() ? nullptr : c.cfg.recipe(c.cfg.active.recipe);
+  auto item = [](bool ok, const Msg& m) {
+    json j = m;
+    j["ok"] = ok;
+    return j;
+  };
+  auto reading = [&](Channel ch, const char* good, const char* bad) {
+    const Reading& x = c.truth.get(ch);
+    return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
+  };
+  // A pump that can dose: on a pump, with a calibration (RAT-015)
+  auto ready = [&](const CanisterCfg* b) { return b && b->pump > 0 && isNum(c.cfg.pumpFlow(b->pump)); };
+
+  json all = json::array();
+  all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));
+  if (s.off.key == "cycle.off.ended") all.push_back(item(false, s.off));  // its time is over
+  else all.push_back(item(r != nullptr, r ? say("check.recipe", {{"name", r->name}}) : say("cycle.off.no_recipe")));
+  const bool volume = isNum(s.volumeL) && s.volumeL > 0;
+  all.push_back(item(volume, volume ? say("check.volume", {{"volume", s.volumeL}}) : say("cycle.off.no_volume")));
+  const bool volumeLatch = c.rt.latches.count("tank.volume") > 0;
+  all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
+  all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
+  const bool busy = c.pumpJob || c.probeCalibrating;
+  all.push_back(item(!busy, say(c.probeCalibrating ? "check.probe_job" : c.pumpJob ? "check.pump_job" : "check.no_job")));
+
+  json ec = json::array();
+  if (r) {
+    ec.push_back(item(isNum(r->ecTarget), isNum(r->ecTarget) ? say("check.ec_target", {{"target", r->ecTarget}})
+                                                               : say("cycle.note.no_ec_target", {{"name", r->name}})));
+    std::string missing;
+    for (const auto& st : r->steps)
+      if (!st.fixed && !ready(c.cfg.canister(st.canister))) {
+        const CanisterCfg* b = c.cfg.canister(st.canister);
+        missing = b ? b->name : st.canister;
+        break;
+      }
+    ec.push_back(item(missing.empty(), missing.empty() ? say("check.parts_ready") : say("check.part_not_ready", {{"name", missing}})));
+  }
+  ec.push_back(reading(Channel::Ec, "check.ec_ok", "check.ec_bad"));
+  const bool ecLatch = c.rt.latches.count("ec.no_effect") > 0;
+  ec.push_back(item(!ecLatch, say(ecLatch ? "cycle.note.ec_latched" : "check.no_latch")));
+
+  json ph = json::array();
+  if (r) {
+    const double target = phTarget(*r);
+    ph.push_back(item(isNum(target), isNum(target) ? say("check.ph_target", {{"target", target}})
+                                                   : say("cycle.note.no_ph_range", {{"name", r->name}})));
+  }
+  ph.push_back(reading(Channel::Ph, "check.ph_ok", "check.ph_bad"));
+  const CanisterCfg* down = c.cfg.phDown();
+  ph.push_back(item(ready(down), ready(down) ? say("check.ph_down", {{"name", down->name}}) : say("check.no_ph_down")));
+  // pH needs ions to be read: only above the EC floor (RAT-046)
+  const Reading& ecNow = c.truth.get(Channel::Ec);
+  if (ecNow.usable()) {
+    const bool gate = *ecNow.value >= c.cfg.control.ecFloor;
+    ph.push_back(item(gate, say(gate ? "check.gate_ok" : "check.gate_low", {{"ec", *ecNow.value}, {"floor", c.cfg.control.ecFloor}})));
+  }
+  const Epoch since = lastEcDoseAt_ > 0 ? c.epoch - lastEcDoseAt_ : kEcRestS;  // no EC dose on record: nothing to wait for
+  ph.push_back(item(since >= kEcRestS, since >= kEcRestS ? say("check.rest_over")
+                                                        : say("check.rest_left", {{"left", mmss((kEcRestS - since) * kSecond)}})));
+  ph.push_back(item(kind_ != Kind::Ec, say(kind_ == Kind::Ec ? "check.ec_first" : "check.ec_done")));
+  const bool phLatch = c.rt.latches.count("ph.no_effect") > 0;
+  ph.push_back(item(!phLatch, say(phLatch ? "cycle.note.ph_latched" : "check.no_latch")));
+  return {{"all", all}, {"ec", ec}, {"ph", ph}};
+}
+
 json MixCycle::status(const Ctx& c) const {
   const CycleSettings s = cycleSettings(c);
   json j = {{"phase", phaseName(phase_)}, {"since", sinceEpoch_}, {"line", line_}, {"notes", notes_}};
@@ -707,6 +775,7 @@ json MixCycle::status(const Ctx& c) const {
   j["last"] = last_.at > 0 ? json{{"ph", numOrNull(last_.ph)}, {"ec", numOrNull(last_.ec)}, {"temp", numOrNull(last_.temp)}, {"at", last_.at}}
                            : json(nullptr);
   j["mixPending"] = mixPendingMs_ > 0;
+  j["checks"] = checks(c);
   j["settings"] = {{"recipe", s.recipe ? json(s.recipe->id) : json(nullptr)},
                    {"ecTarget", numOrNull(s.ecTarget)},
                    {"ecTolerance", numOrNull(s.ecTol)},

@@ -92,8 +92,12 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
     REQUIRE(st["readings"].contains(ch));
     for (const char* k : {"value", "quality", "reason", "ageS", "unit", "decimals", "usable"}) CHECK(st["readings"][ch].contains(k));
   }
-  for (const char* k : {"phase", "since", "line", "notes", "progress", "round", "last", "settings", "mixPending"})
+  for (const char* k : {"phase", "since", "line", "notes", "progress", "round", "last", "settings", "mixPending", "checks"})
     CHECK_MESSAGE(st["cycle"].contains(k), k);
+  for (const char* g : {"all", "ec", "ph"}) {
+    REQUIRE(st["cycle"]["checks"][g].is_array());
+    for (const auto& i : st["cycle"]["checks"][g]) CHECK((i["ok"].is_boolean() && i["key"].is_string() && i["text"].is_string()));
+  }
   for (const char* k : {"recipe", "ecTarget", "phTarget", "volumeL", "flowLpm", "turnoverMin", "waitEcMin", "waitPhMin",
                         "suggestEcMin", "suggestPhMin", "holdMin", "circulation"})
     CHECK_MESSAGE(st["cycle"]["settings"].contains(k), k);

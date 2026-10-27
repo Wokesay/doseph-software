@@ -88,6 +88,10 @@ class MixCycle {
   bool dosing() const { return phase_ == Phase::Dose; }
   const Measured& last() const { return last_; }
   json status(const Ctx& c) const;
+  // Why the robot doses or not: what each kind of dose needs, each with
+  // whether it holds now ({ok, key, text, args}), in groups "all", "ec"
+  // and "ph". The cycle decides; the list only explains it.
+  json checks(const Ctx& c) const;
 
  private:
   enum class Kind { None, Ec, Ph };

@@ -30,6 +30,12 @@ All notable changes to this software. The format follows
   and Windows: started without arguments it takes the next free port
   from 8080 and opens the browser. A tag on `main` releases them with
   checksums and a provenance attestation (`docs/RELEASE.md`).
+- "Why it doses – or not" on the status page: a checklist of what
+  nutrients and pH− each need now – recipe and tank volume, flow at the
+  last check, readings, canisters on calibrated pumps, locks, the EC gate
+  and the rest after a nutrient dose – each ticked or not, with the
+  reason (RAT-037, from the predecessor). The API has it as
+  `cycle.checks`.
 
 ### Changed
 
