@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <doctest/doctest.h>
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -228,6 +229,39 @@ TEST_CASE("API: the history as CSV in the page's format; a gap stays an empty fi
   CHECK(lines(c.call("GET", "export.csv").body)[0] == "time_utc,ph,ec,temp,flow");
   CHECK(c.call("GET", "export.csv", nullptr, {{"series", "level"}}).status == 422);
   CHECK(c.call("GET", "export.csv", nullptr, {{"series", "ph,ph"}}).status == 422);
+}
+
+TEST_CASE("API: the diagnostics package of \"Report a problem\" carries the states and events, never a secret") {
+  sim::Simulation s(demo());
+  s.step(5 * kMinute);
+  Client c{s, "", "192.168.1.20"};
+  CHECK(c.call("GET", "diagnostics").status == 401);
+  REQUIRE(c.login("demo-password"));
+  auto r = c.call("GET", "diagnostics");
+  REQUIRE(r.status == 200);
+  const json d = json::parse(r.body);
+  const std::string id = d["reportId"];
+  CHECK(id.size() == 11);
+  CHECK(id.rfind("DP-", 0) == 0);
+  for (const char* k : {"createdAt", "info", "config", "readings", "cycle", "watchdog", "latches", "jumpLocks", "pumps", "events", "redacted"})
+    CHECK_MESSAGE(d.contains(k), k);
+  CHECK(d["info"]["version"].is_string());
+  CHECK_FALSE(d["events"].empty());
+  CHECK(d["cycle"].contains("checks"));
+  // No secret: none of the password file's values (hash, salt, sessions), no address of a client
+  json rest = d;
+  rest.erase("redacted");  // names what is left out, by key
+  const std::string all = rest.dump();
+  std::vector<std::string> secrets = {"192.168.1.20", c.token};
+  std::function<void(const json&)> collect = [&](const json& j) {
+    if (j.is_string() && j.get<std::string>().size() >= 16) secrets.push_back(j.get<std::string>());
+    if (j.is_structured())
+      for (const auto& v : j) collect(v);
+  };
+  collect(s.robot().auth().toJson());
+  REQUIRE(secrets.size() > 3);
+  for (const auto& secret : secrets) CHECK_MESSAGE(all.find(secret) == std::string::npos, secret);
+  CHECK(json::parse(c.call("GET", "diagnostics").body)["reportId"] != d["reportId"]);  // a number per report
 }
 
 TEST_CASE("API: origin checks for the transport (DNS rebinding, CSRF) and the session cookie") {

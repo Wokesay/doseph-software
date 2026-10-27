@@ -13,6 +13,8 @@ no guaranteed answer time, but every report is read.
 
 **Before you report:** search the open and closed issues, and say which
 version you use (shown at the bottom of the menu) and how you run it.
+The robot helps with that: Settings → Report a problem creates a
+diagnostics package to attach and opens the bug form filled in.
 
 **Real hardware:** the prototypes run in the simulator and are not meant
 to dose into a real tank, so we cannot help with wiring a real setup yet.

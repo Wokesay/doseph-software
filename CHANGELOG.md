@@ -41,6 +41,13 @@ All notable changes to this software. The format follows
   and the rest after a nutrient dose – each ticked or not, with the
   reason (RAT-037, from the predecessor). The API has it as
   `cycle.checks`.
+- "Report a problem" in the settings: the robot packs a diagnostics
+  package – settings, recipes, calibrations, readings, states and the
+  events of the last three days, with a report ID – that can be looked
+  at and downloaded, and opens the bug form on GitHub filled in with the
+  version, the report ID and what happened. Never in it: the password
+  file's values, sessions, addresses, Wi-Fi details
+  (`GET /api/v1/diagnostics`). The bug form asks for the report ID.
 
 ### Changed
 

@@ -70,6 +70,10 @@ class Robot {
   std::string historyCsv(const std::vector<std::string>& series, Epoch from, Epoch to, const std::string& lang) const;
   json events(Epoch from, Epoch to, const std::string& type, size_t limit) const;
   static json templates();
+  // The package of "Report a problem": version, settings, states and the
+  // events of the last 72 hours, with a report number. No secrets: no
+  // password hash, no sessions, no addresses; the app shows it first.
+  json diagnostics();
   const MixCycle& cycle() const { return cycle_; }
   const SensorTruth& truth() const { return truth_; }
 
