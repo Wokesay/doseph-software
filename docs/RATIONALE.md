@@ -8,7 +8,9 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **IDs are stable** and the same as in the predecessor
   growcontroller-software (`docs/PROVENANCE.md`). An ID is never reused. A
   rule of the grow controller that the mixing robot does not need stays
-  listed as dropped, with the area it belonged to.
+  listed as dropped, with the area it belonged to, the rule as the grow
+  controller had it, and under **Later** the step of the order of work
+  (#10) that would bring it back.
 - **Reference installation** means the private installation on which the
   rules were first developed and measured. Evidence names the year only.
 - **Evidence** says whether a number was measured, observed, calculated
@@ -20,14 +22,25 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
   issues of the predecessor; `SD-001` to `SD-104` are its software
   decisions (`docs/DECISIONS.md`).
 - New rules get the next free ID (now RAT-090), an entry here and a test.
+- What later steps rebuild that is no rule of its own – grow phases and
+  harvest, the setup assistant, the scenario harness, the dry-run latch –
+  is in `docs/LATER.md`.
 
 ### RAT-001 – Fill volume is computed; the level sensor only checks and cuts off
 
 - **Dropped:** the grow controller only (fill volume and level sensor); not part of the mixing robot (SD-105).
+- **Rule:** A refill opens the inlet for a time worked out from the litres missing (target minus present level) and the inlet's set flow rate. The level reading can only end a fill early, once it is 1 L past the target, and serves as the cut-off. Without a set flow rate there is no refill, and the target stays at least 1 L below the tank's capacity.
+- **Why:** A fill that stops on the level sensor alone inherits all of its faults, from slow drift to a value that no longer moves, and can overflow the tank. A computed amount bounds the fill independently, while the sensor remains as plausibility check and cut-off. Logging both the computed and the measured litres of every fill shows drift as it starts.
+- **Evidence:** Observed on the reference installation (2026): the fill target was a setting (100 L by default in a 150 L tank), with a fixed cut-off at 140 L whatever the target. After a move to a 60 L tank that overflowed at 55 L, the cut-off went to 45 L and the target was capped at 40 L.
+- **Later:** step 9 (refill valve and level sensor). Until then the robot only asks for water (SD-115).
 
 ### RAT-002 – Harvest is recorded only by the user
 
 - **Dropped:** the grow controller only (grow runs and harvest); not part of the mixing robot (SD-105).
+- **Rule:** The robot never declares a harvest itself: a harvest is an event with a time that the user records, and closing the grow run is a step of its own (RAT-077). Each phase says whether it moves on by itself after its planned days or only once the user confirms; the harvest always waits for the user.
+- **Why:** Whether a plant is ripe is judged by looking at it, not by counting days. A harvest set off when the planned flowering days run out acts on a guess and can contradict what the user sees.
+- **Evidence:** Observed on the reference installation (2026): a harvest the plan triggered was replaced by the user's confirmation, with a daily reminder that also counted the days past the plan.
+- **Later:** step 6 (grow phases and harvest, `docs/LATER.md`).
 
 ### RAT-003 – One pump job at a time; bad calibration results are rejected
 
@@ -81,14 +94,26 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-009 – Climate targets keep VPD in a corridor
 
 - **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Rule:** The default climate targets are a day temperature of 26 °C in the vegetative phase and 27 °C in flowering, with 70 % relative humidity (about 1.0 kPa VPD) and 62 % (about 1.35 kPa). When the climate is led by VPD, the humidity setpoint follows from the VPD target and the target temperature, not the measured one.
+- **Why:** Extra light or CO2 pays off only when temperature and humidity keep up: with more CO2 the best leaf temperature rises, and at a high VPD the leaves close their stomata and take up no more CO2. Keeping VPD in a corridor of about 1.0–1.4 kPa avoids water stress as well as wasted enrichment.
+- **Evidence:** Observed on the reference installation (2026): day temperatures of 26–27.5 °C in the phases with CO2 enrichment, humidity set for a VPD of 1.0–1.4 kPa. In the last weeks of flowering the corridor was left on purpose (50 % RH, about 1.63 kPa) to lower the risk of mould, accepting a slightly smaller yield. CO2 enrichment there also followed light intensity; without CO2 dosing only the temperature and humidity targets carry over.
+- **Later:** step 9 (climate).
 
 ### RAT-010 – Irrigation is controlled by the number of shots, not the shot size
 
 - **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
+- **Rule:** Each watering shot stays small; the daily amount comes from the number of shots per day, a phase parameter (on rock wool 6 in the vegetative phase, 8–9 in flowering), plus a factor for the first shot and a duration per shot. The drain percentage leads (RAT-014): a drain off its target is corrected through the duration, not the shot count.
+- **Why:** Rock wool cannot take up a large shot at once: the water finds a channel and leaves at the bottom, so the drain looks right while parts of the block stay dry. Few large shots also leave long gaps in which the solution in the block concentrates. The count therefore shapes moisture over the day, and the duration sets the amount.
+- **Evidence:** Observed on the reference installation (2026): the first settings gave shots of 120–200 ml on a 650 ml block, 18–31 % of its volume at once. Shots were then fixed at about 130 ml (about 20 %, 120 s), with 6–9 a day in flowering. Freshly rooted plants got the opposite on purpose: 4 short shots of 36 s, so the block dried in between and the roots grew downwards, since a block that stays wet there risks root rot.
+- **Later:** step 9 (watering); the shots per day are a phase parameter of step 6.
 
 ### RAT-011 – Top-up mixing doses on the fresh water only
 
 - **Dropped:** the grow controller only (mixing into fresh water in a bucket or watering can); not part of the mixing robot (SD-105).
+- **Rule:** When fresh water is added to solution left in a vessel, the recipe's amounts in ml/L are applied to the fresh litres only, never to the whole volume. The whole volume only checks that it fits; without a known amount of fresh water nothing is planned.
+- **Why:** What is left already holds its share of nutrients, so dosing on the full volume overdoses at every top-up. A step driven by EC can also take its target as reached, since the residue lifts the EC it starts from.
+- **Evidence:** Observed on the reference installation (2026): with 20–25 L left in the tank, fixed-rate additives dosed on the whole volume came out 25–50 % too high each day. A calcium/magnesium step driven to a base EC of 0.4 mS/cm started at about 1.3 mS/cm (20 L at 3.0 plus 27 L of fresh water), counted its target as met and skipped itself, so the fresh water got none. The installation fell back to the whole volume when the fresh litres were unknown; refusing to plan is the stricter way (RAT-006).
+- **Later:** not planned (mixing in a bucket or watering can is no part of the robot, which doses towards the measured tank). A refill valve at step 9 needs only the count of fresh litres, for fixed additions (RAT-085).
 
 ### RAT-012 – EC can only be raised
 
@@ -101,10 +126,18 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-013 – Dimming never goes below the lamp's switch-on threshold
 
 - **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Rule:** A dimming value below the lamp driver's switch-on threshold is raised to the threshold; 0 means off and switches the light relay off as well (RAT-029). The threshold is a setting of the light schedule.
+- **Why:** An LED driver lights only above a minimum dimming level and goes dark again a little below it. Between the two, relay and dimmer both look right while the lamps stay dark, and no check notices. The threshold belongs to the driver and its dimming line, so it is measured again whenever either changes.
+- **Evidence:** Measured on the reference installation (2026): a first threshold of about 10 % turned out to come from a wiring fault that held the 0–10 V dimming line at about 7 V. Correctly wired, the lamps came on at 9 % and went out at 6 %.
+- **Later:** step 9 (light).
 
 ### RAT-014 – Drain percentage leads irrigation; substrate readings inform only
 
 - **Dropped:** the grow controller only (drain-to-waste irrigation); not part of the mixing robot (SD-105).
+- **Rule:** The drain percentage – run-off as a share of what was given – leads watering. Substrate readings do not replace it: until there is data behind them they are recorded and shown, with no thresholds and no alarms.
+- **Why:** The drain percentage measures watering directly and is an established measure. One substrate probe sees one spot; controlling on it needs a data basis first, and until then it should neither act nor alarm.
+- **Evidence:** Observed on the reference installation (2026): the drain had no EC measurement, and a weighed drain container stayed the control input. A single substrate probe (moisture, temperature, bulk and pore EC) was only recorded and shown. It sat on purpose in the block that dries fastest, so a control based on it would err towards more water.
+- **Later:** step 9 (watering).
 
 ### RAT-015 – No substitute values for quantities; invalid data is a problem
 
@@ -126,6 +159,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-017 – VPD is air VPD, with no value when an input is missing
 
 - **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Rule:** VPD is air VPD, from air temperature and relative humidity with the FAO-56 saturation vapour pressure: VPD = es(T) · (1 − RH/100), with no leaf offset. With an input missing or not valid, or two readings of the device's own sensors more than 60 s apart, there is no VPD (a gap), never 0. A sensor that reports only when its value changes has no age by its report time, so for it the 60 s pairing gives way to each input's own freshness. A leaf offset may come later, shown as "estimated".
+- **Why:** How much cooler a leaf is than the air under LED light depends on light, air movement and leaf angle. Subtracting a fixed amount would pass a guess off as a measurement, the same mistake as a default standing in for a reading. The phase targets are air VPD anyway.
+- **Evidence:** Observed on the reference installation (2026): a cross-check at 27 °C and 62 % RH gave 1.352 kPa against 1.36 kPa worked out by hand. A run through failure cases (an input missing or offline, implausible humidity, light off) gave no 0 in any of them. Leaf VPD under LED was put at roughly 0.1–0.2 kPa below air VPD, varying. The 60 s limit is an assumption.
+- **Later:** step 9 (climate).
 
 ### RAT-018 – No parallel dosing sequence; time limits sit above the longest legitimate run
 
@@ -138,6 +175,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-019 – Network sockets fail safe on their own
 
 - **Dropped:** the grow controller only (mains outlets on the network); not part of the mixing robot (SD-105).
+- **Rule:** When the robot takes over a smart plug it sets "off after power loss", and for pulse and heating roles it writes an auto-off timer into the plug a little above the software's maximum run time (about 1.11 ×). A role is bound only once these settings were read back, and they are checked again before every switch-on. Loads that run for hours (light, fans, a circulation pump) get no auto-off. Fans were the one exception to "off after power loss" on the grow controller: they came back on, since heat and humidity build up without them and fans carry no risk.
+- **Why:** If the controller fails while a valve or pump is on, nothing switches it off any more – only a timer inside the device still acts. A device's settings can also be lost or changed, by a factory reset or in the maker's own app, so the robot reads them back instead of trusting them.
+- **Evidence:** Observed on the reference installation (2026): at first no smart relay had a fail-safe of its own. Device timers were then set, for example 90 s for the dosing pumps (above the 60 s software cap), 300 s for the CO2 valve and 1800 s for the inlet valve and the watering pump; loads running for hours got none, as a timer would cut the light in the middle of the day. A later read-back of every device found two that still restored their last state after a power loss and one planned auto-off that had never been set. The factor 1.11 for pulse roles is an assumption.
+- **Later:** step 9 (smart plugs).
 
 ### RAT-020 – pH dosing only on plausible readings, and only while it has an effect
 
@@ -158,6 +199,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-022 – Acknowledging an alarm only pauses its repetition
 
 - **Dropped:** the grow controller only (alarm notifications (not built yet)); not part of the mixing robot (SD-105).
+- **Rule:** Acknowledging an alarm only pauses the reminders about it; the status stays red. At night (22:00–07:00) only critical alarms are pushed, repeated after 5, 15 and 60 min; lesser findings wait for a morning report or stay in the app.
+- **Why:** An acknowledgement that cleared the red status would quietly switch monitoring off. The pause is therefore bounded: it ends after a set time (12 h on the reference installation), when all checks are fine again, and at once when another problem appears. Lesser findings are not repeated, since hourly reminders about them would drown the alarms that need someone.
+- **Evidence:** —
+- **Later:** step 5 (push notifications).
 
 ### RAT-023 – Sensor truth always runs; freshness and frozen raw values are checked separately
 
@@ -170,6 +215,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-024 – "Not present" is a finding, not a resting state
 
 - **Dropped:** the grow controller only (sensor slots on the bus); not part of the mixing robot (SD-105).
+- **Rule:** A measurement role with no device assigned has a state of its own, "not assigned": it never carries a value and is never used for control. Once a role is assigned, a device that disappears or stops answering is "offline", and the watchdog counts that as a problem.
+- **Why:** A sensor can vanish without any loud failure – renamed, replaced or removed. If "missing" counts as harmless, monitoring stays green while an input is gone.
+- **Evidence:** Observed on the reference installation (2026): sensors that disappeared were not counted as faults, so the overall health stayed green with a sensor missing.
+- **Later:** step 9 (sensors on network devices, assigned to roles). The robot's own probes come with its profile (SD-108).
 
 ### RAT-025 – Control reads only validated values; no valid calibration, no control value
 
@@ -206,18 +255,34 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-029 – Dimming to zero also switches the light relay off
 
 - **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Rule:** Dimming to 0 means off, and the light relay then switches off too, so relay state and light agree; a value between 0 and the switch-on threshold is raised to the threshold (RAT-013).
+- **Why:** With the relay left on and the dimmer at zero, "relay on" and "lamp lit" disagree: a check based on the relay raises a false critical alarm for light in the dark period, and only power measurement shows whether a lamp really shines.
+- **Evidence:** Measured on the reference installation (2026): with the relays on and the dimmer at 0 V the lamps drew 0–1.3 W and gave no light. A check on power (alarm above 10 W) rightly stayed quiet, while one on the relay state raised a false "light in the dark period" alarm all night.
+- **Later:** step 9 (light).
 
 ### RAT-030 – Refill supervision respects the probe's blind zone and judges the rate over a window
 
 - **Dropped:** the grow controller only (tank refill); not part of the mixing robot (SD-105).
+- **Rule:** Near the bottom of the tank the level probe has a blind zone in which its reading is no measurement: the rate and standstill checks of a refill are not armed there, and a time limit catches a dead valve instead. Above it, the fill rate is judged over a window of at least 5 min against a tolerance, never one reading against the next.
+- **Why:** A smoothed and rounded level does not climb evenly during a fill; judged reading by reading, its normal dips look like a stalled inlet and end good fills. In the blind zone the probe shows no change at all, so only a time limit can catch a dead valve there.
+- **Evidence:** Observed on the reference installation (2026): the level still read 0.0 L when about 4 L had already flowed in, and a rate check on readings 60 s apart cut a good fill short at 2 L. The blind zone's time limit was twice the time worked out to cross it plus 2 min – about 9 min for 5 L at 1.44 L/min; a later 60 L drum had a blind zone of 1 L.
+- **Later:** step 9 (refill valve and level sensor).
 
 ### RAT-031 – No automatic restart after a refill fault
 
 - **Dropped:** the grow controller only (tank refill); not part of the mixing robot (SD-105).
+- **Rule:** When the inlet is shut for a fault – level not valid, capacity reached, valve open too long, a fill after which the level did not rise, or two fills in a row whose rise could not be checked – a latch is set, its reason and time frozen. A start whose saved run-time state cannot be read sets the same latch, since nobody knows whether one stood; the first real fault replaces that reason once. Refilling stays blocked until a person has looked and released it, and the first fill after a release waits until the level reading has settled, since the person may have worked on the tank. A valve found open while the latch stands is closed again.
+- **Why:** An automatic restart comes exactly when the cause is still unknown – a known cause would have been fixed. Letting water run unattended then risks a flood; the safe way is a person who starts the refill and watches it.
+- **Evidence:** —
+- **Later:** step 9 (refill valve).
 
 ### RAT-032 – The inlet's emergency limit follows the valve, not the job
 
 - **Dropped:** the grow controller only (tank refill (inlet valve)); not part of the mixing robot (SD-105).
+- **Rule:** Whenever the inlet valve is open – by the refill, by hand or any other way – the gateway closes it at the tank's capacity, when the level reading turns invalid, or when it has been open longer than allowed. Without a valid level the inlet does not open at all.
+- **Why:** An overflow guard that lives only in the refill routine leaves a valve opened any other way without supervision, and the switching device's own auto-off may act too late.
+- **Evidence:** Calculated on the reference installation (2026): a valve opened by hand had no level supervision, only the device's 30 min auto-off. The inlet delivered about 43 L in 30 min, so a fill starting at 120 L would have overflowed the 150 L tank before the auto-off acted.
+- **Later:** step 9 (refill valve).
 
 ### RAT-033 – Narrow control band, wider alarm band
 
@@ -230,10 +295,18 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-034 – Humidifier and dehumidifier never together; compressor protection
 
 - **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Rule:** The gateway never runs humidifier and dehumidifier at the same time; when the other device's state is unknown (its plug does not answer), the device stays off. A compressor dehumidifier switches on again only 5 min after it was switched off, also after a Stop or a restart; switching off is always allowed.
+- **Why:** The two work against each other: both at once waste energy, and switching between them too fast makes them chase each other. A compressor needs a few minutes to equalise pressure before it restarts; only a quick restart harms it, so a switch-off for safety is never delayed.
+- **Evidence:** Observed on the reference installation (2026): in one test night humidity swung four times between 62 % and 85 % around a target of 70 ± 5 %, because a lock meant for switching on also delayed switching off and so forced a minimum run. The power trace showed a compressor unit: about 3 min of fan only at 32 W, then the compressor starting and rising from 315 W to 420 W. The installation also locked the opposite device for 10 min after each switch-off, ran the dehumidifier at least 10 min and pulsed the humidifier in 30 s steps; those timings are open until the climate function is built.
+- **Later:** step 9 (climate).
 
 ### RAT-035 – Light ramps of 15 minutes inside the light period
 
 - **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Rule:** Sunrise and sunset ramps last 15 min by default and lie inside the light period. A ramp is worked out from the time of day, so it keeps its set length and goes on correctly after a restart.
+- **Why:** Light before or after the light period lengthens the day the plants see, since they respond to dim light too, which matters in flowering. Without ramps the climate control meets the lamps' full heat at once. Short ramps inside the period cost little light. Stepping the dimmer minute by minute did not keep the set length.
+- **Evidence:** Observed on the reference installation (2026): a sunrise set to 30 min was over in 9 min, because per-minute steps were rounded to whole percent. Calculated there: 15-min ramps inside the window lose at most 1.7 % of the daily light integral in flowering (about 0.7 mol/m²/d), against about 5 % (about 2.1 mol/m²/d) with 30- and 60-min ramps; the lamps' heat load was about 500 W.
+- **Later:** step 9 (light).
 
 ### RAT-036 – Stop is an active, idempotent shutdown
 
@@ -254,6 +327,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-038 – Refill stops by time, not by the lagging level reading
 
 - **Dropped:** the grow controller only (tank refill); not part of the mixing robot (SD-105).
+- **Rule:** A refill (RAT-001) closes the valve when its computed run time is up; the level reading ends a fill early only once it is more than 1 L past the target. Without a valid inlet rate there is no refill and no stand-in rate. One fill keeps the valve open at most the allowed time minus 1 min (or minus half of it, if that is shorter), so a planned fill never ends as a fault (RAT-031); the rest follows in steps whose number is fixed at the first. Each fill waits until the level has been undisturbed for 3 min – after watering also until water draining back has stopped raising it, at most 30 min. At the end of a 10 min pause after each fill, on a level read after the valve closed, the level must have risen by at least half of what the set rate should have delivered; otherwise the inlet latches (RAT-031). A rise that cannot be judged (the watering pump on or its state unknown, no valid level, a fill cut by a restart) ends the steps, and two such fills in a row latch as well. Fills too small to judge alone (below 4 L) are added up until a rise is confirmed. A person at the tank (Stop, maintenance, the function switched off, a level calibration) ends a fill, and what flowed stays unconfirmed until the reading has moved by 1 L. While a fill waits and runs, EC and pH start no new round.
+- **Why:** The level reading trails the real level because of smoothing and report intervals: stopping on it overfills, and stopping early to make up for it cuts fills short. The inflow itself stops dead when the valve closes.
+- **Evidence:** Measured on the reference installation (2026): an inlet rate of 1.44 L/min (later set to 1.54 L/min) with no overrun after closing, only a lagging display; stopping on the level had overrun by 2–3 L per fill, and stopping early ended fills too soon. The installation checked the level again 120 s after closing and allowed at most two corrective runs. The 1 min margin, the 50 % threshold, the 4 L bound, the 3 min of settling and the calm level after watering are assumptions, as is a constant inlet rate during a fill; a real rate about 7 % off the set one passes the check easily.
+- **Later:** step 9 (refill valve).
 
 ### RAT-039 – pH/EC safety: jump lock, hand-dose cap, no silent blocks
 
@@ -267,6 +344,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-040 – Book consumption per run, hand doses included; test runs are not consumption
 
 - **Dropped:** the grow controller only (consumption and stock of bottles (not built)); not part of the mixing robot (SD-105).
+- **Rule:** A canister's stock goes down by what actually went into the tank, booked per pump run as it happens, runs that were cut included. A calibration into a cup is no consumption (RAT-070); filling a line drips into the tank and counts (SD-111).
+- **Why:** If only automatic sequences book, every other run vanishes from consumption and cost figures. Test runs mostly go back into the canister and would overstate consumption.
+- **Evidence:** Observed on the reference installation (2026): about 74 ml of pH− given by hand never showed up in the cost figures, because no pump booked its hand runs.
+- **Later:** step 5 (maintenance reminders: a reminder to refill a canister needs its stock booked per run). The dosing journal (SD-106) already records every run into the tank.
 
 ### RAT-041 – Latch pH lowering that has no effect; no pH counter-correction
 
@@ -320,14 +401,26 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-047 – Circulation dry-run protection with its own thresholds
 
 - **Dropped:** the grow controller only (circulation dry-run protection by level; the flow proof (SD-105) takes its place); not part of the mixing robot (SD-105).
+- **Rule:** The circulation pump's dry-run protection acts whoever switched the pump on, and it only ever switches the pump off. It cuts the pump below the tank's minimum level and allows it again only 0.5 L above, the same levels the pump's own control uses; it latches only when the pump was actually running (RAT-062). Dosing runs only while the circulation pump runs.
+- **Why:** What the level probe can measure and when the pump may run are two separate properties; deriving one from the other either stops a pump that still draws water or claims a blind zone that measurement has ruled out. With the same off and release levels as the pump's control, protection and control never work against each other. A dose can only be judged in a mixed tank, so dosing needs circulation.
+- **Evidence:** Measured on the reference installation (2026): the probe read correctly below 4 L, and the pump primed without trouble at 3 L. Raising the shared blind-zone setting to suit the pump would have slowed other checks: a failed inlet valve, for one, would have been noticed about 2.6 min later.
+- **Later:** step 4 (the suction pump's dry-run latch, `docs/LATER.md`). SD-109 puts the flow proof in place of the level: three failed tries in a row latch "no flow". Off and release levels come back only with a level sensor (step 9).
 
 ### RAT-048 – Water temperature is "not applicable" in an empty tank
 
 - **Dropped:** the grow controller only (water heater and level); not part of the mixing robot (SD-105).
+- **Rule:** With the tank level below its minimum, the watchdog rates the water temperature as neutral ("not applicable: tank empty") instead of checking its band; whether the sensor delivers still shows. The app keeps three states apart: not delivering, not calibrated, not applicable.
+- **Why:** In an empty tank the probe measures air, and judging that against water targets gives findings without meaning, such as "too cold" whenever the room cools down.
+- **Evidence:** Observed on the reference installation (2026): over 14 days, all five water-temperature jumps of 0.5 °C or more (out of 6,953 changes) came at 0 L, while the tank was filled or drained.
+- **Later:** step 9 (water heater and level sensor). The robot's probe sits in the measuring chamber, which keeps its water without flow, and temperature is recorded only with flow (RAT-016).
 
 ### RAT-049 – Dry-run detection from pump power (planned)
 
 - **Dropped:** the grow controller only (dry-run detection from pump power); not part of the mixing robot (SD-105).
+- **Rule:** A circulation pump that runs without pumping is detected from its power draw: pump on, start-up grace over, below 2.5 W for more than 20 s. It needs power measurement on the pump's output. Such a dry run switches the pump off in the gateway and latches until a person releases it; the watchdog only reports.
+- **Why:** A level says whether there is water in the tank, not whether the pump moves it. Air in the pump head, a blocked intake or a valve in the wrong position leave the level unchanged.
+- **Evidence:** Measured on the reference installation (2026; a pump of about 3.4 W, three weeks of power readings): about 3.3–3.4 W pumping water and about 1.7 W running dry. 2.5 W told the two apart without false trips, also over past data, where it found a dry run nobody had noticed. Clearing air from the pump head took up to about 2 min, so the start-up grace has to be generous. Thresholds for other pumps are open.
+- **Later:** step 4 (the suction pump's dry-run latch), as a second sign beside the flow proof (SD-109) if the pump's power can be measured – a hardware question for the product session.
 
 ### RAT-050 – Effect-based cap and minimum run time for pH-lowering doses
 
@@ -340,6 +433,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-051 – A dry-run lock is binding for every switching path
 
 - **Dropped:** the grow controller only (dry-run locks); not part of the mixing robot (SD-105).
+- **Rule:** A dry-run latch is enforced in one place, the gateway: a pump found running while its latch stands – whoever switched it on, by hand at the device included – is switched off again. Every other function reads the same lock and does not ask for the pump. Dosing runs only with the pump running, and a running dose stops when the pump is cut.
+- **Why:** If only the protection knows the lock, every other path keeps starting the pump and the protection keeps cutting it, an endless on and off. Dosing without mixing doses against a reading that cannot see the dose.
+- **Evidence:** Observed on the reference installation (2026): when the dry-run protection first went live, the circulation control and a routine running every minute kept restarting the pump, and the protection cut it within 10 s each time, because the lock was invisible to them. A lock caused only by a low level released itself there once the tank was refilled (`docs/LATER.md`).
+- **Later:** step 4 (the suction pump's dry-run latch, SD-109).
 
 ### RAT-052 – Mixing and settling: pH needs much longer than EC
 
@@ -410,10 +507,18 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-060 – Mains outlets protect themselves; no heater without an emergency shutdown
 
 - **Dropped:** the grow controller only (mains outlets and heater); not part of the mixing robot (SD-105).
+- **Rule:** When the robot takes over a smart plug it sets "off after power loss" and, for pulse and heating roles, an auto-off timer in the plug at about 1.11 × the role's maximum run time, rounded up to a whole minute; the role is bound only once both were read back. The robot itself switches off at the maximum run time, and the plug's timer is the fallback if the robot fails. A heater role is offered only once a latching emergency shutdown exists, on level, water temperature, overtemperature, missing heating effect (RAT-061), a failed sensor evaluation and run time.
+- **Why:** A heater without water or with a failed sensor is a fire and scalding risk, and its protection must not depend on the controller, the network or a running grow. A timer inside the device still acts when the controller is gone.
+- **Evidence:** Calculated for the reference installation (2026): a 295 W immersion heater raises 8 L of water by about 47 K in 90 min. The plug's timer there was set to 6,000 s against a 90 min software limit (factor 1.11); using that factor for pulse roles (humidifier, watering pump, inlet) is an assumption.
+- **Later:** step 9 (smart plugs and a water heater).
 
 ### RAT-061 – Heater: judge the heating effect from power and water volume
 
 - **Dropped:** the grow controller only (water heater); not part of the mixing robot (SD-105).
+- **Rule:** Heating runs only through an external switched plug with a latching emergency shutdown (RAT-060). Its "no heating effect" check compares the measured temperature rise with the rise expected from heater power and water volume, minus passive losses, instead of waiting a fixed time. A second check, switched on but below 50 W after 60 s, catches the most common hardware faults within a minute.
+- **Why:** At realistic volumes a fixed minimum rise within a fixed time asks for almost nothing: a heater with little output left still passes, and even a dead one shows only after the full wait. With the expected rise worked out from power and volume, a rise that is too slow is itself the finding.
+- **Evidence:** Observed on the reference installation (2026): with a 295 W heater in 20 L, the old rule (0.125 K within 20 min) asked for only about 3 % of the expected rise of about 4 K. Passive loss measured there: 4.73 W/K × (water − ambient) plus 5.2 W of evaporation from the open tank (R² 0.95 over 56 hourly windows); the heating rate itself was not validated. In simulated tests the rule caught a total failure and a heater at 10 % output in 20 L after 5 min, while 70 % output did not trip it.
+- **Later:** step 9 (water heater).
 
 ### RAT-062 – Switch-on lock vs. latch; latch only after an intervention, reason frozen
 
@@ -434,10 +539,18 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-064 – End-of-run summary is stored with the run
 
 - **Dropped:** the grow controller only (grow runs); not part of the mixing robot (SD-105).
+- **Rule:** At the end of a grow run a summary – water, nutrient amounts and their cost, the phases' durations, a yield entered by hand – is kept with that run's record; the yield can be added later.
+- **Why:** The figures must show the state at the run's end, and what is added later must not be lost when the next run starts.
+- **Evidence:** Observed on the reference installation (2026): end-of-run figures were read as the newest value overall rather than the value at the run's end, and a yield entered by hand was lost when the next run started.
+- **Later:** step 6 (grow runs and harvest).
 
 ### RAT-065 – Drain on EC step-down only when needed; always on product change
 
 - **Dropped:** the grow controller only (drain); not part of the mixing robot (SD-105).
+- **Rule:** When a phase change lowers the EC target by more than 0.2 mS/cm, the app suggests draining the tank completely – unless the solution left plus fresh water ends below the new target and can be dosed up. On a change of nutrient product the drain stays. No partial draining: the robot cannot dilute (RAT-012).
+- **Why:** Draining every time throws away usable solution and nutrients; mixing a new base product onto the old one is not wanted.
+- **Evidence:** Calculated from the reference installation's figures (2026): stepping from EC 3.0 to 2.0, 13.4 L of residue plus 13.7 L of fresh water give about 1.55, below the new target, so no drain is needed; the drain into late flowering stays, since the diluted residue (0.84) is above the 0.8 target. One needless drain would have thrown away 34.8 L of mixed solution.
+- **Later:** step 9 (drain); the advice at a phase change can come with step 6.
 
 ### RAT-066 – Phase defaults and recipe templates follow the manufacturer chart
 
@@ -450,14 +563,26 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-067 – Irrigation needs a minimum tank level
 
 - **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
+- **Rule:** Watering has a minimum level in the tank and does not run below it. A watering cycle that would take the tank below it is dropped as a whole and a refill asked for, with at most one notice a day.
+- **Why:** Watering the tank down past the point where pumps, probes and intake are covered means dry running and false readings.
+- **Evidence:** Observed on the reference installation (2026): the limit equalled the circulation pump's dry-run threshold, 5 L in the first tank and 2.5 L in a 60 L drum in which every submerged part is covered from 2.5 L.
+- **Later:** step 9 (watering and a level sensor); for the robot the minimum also has to keep its suction line in the water.
 
 ### RAT-068 – Irrigation pump only with a valid level above the minimum
 
 - **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
+- **Rule:** The gateway switches the watering pump on only with a valid level reading at least 0.5 L above the tank's minimum, and switches a running one off, with a message, when the level falls below the minimum or turns invalid. The water's pH and EC are a second check beside the level (RAT-086).
+- **Why:** Otherwise the pump can run dry, and a level that cannot be read cannot show that water is there.
+- **Evidence:** Observed on the reference installation (2026): watering was blocked when the level minus the planned cycle's volume fell below the minimum; with an unreadable level it watered anyway and reported it, judging a silent stop of watering the greater risk to the plants. Blocking is the stricter choice; a limited emergency watering when plants are too dry, watering without a level sensor and dry-run detection from the current draw (RAT-049) were asked for and not built.
+- **Later:** step 9 (watering).
 
 ### RAT-069 – "Supply" profile for devices with their own thermostat
 
 - **Dropped:** the grow controller only (room climate devices); not part of the mixing robot (SD-105).
+- **Rule:** A plug profile "supply" for a device that regulates itself, such as a heater with its own thermostat: off after a power loss, no auto-off in the plug, but a power limit in the plug as a net for a thermostat that sticks; the watchdog assesses it.
+- **Why:** Such a device has to stay powered to do its job, so a timer in the plug would end its work a fixed time after every switch-on. A stuck thermostat does not show in how long the relay is on, but in the power the device draws, so the net is a power limit.
+- **Evidence:** Observed on the reference installation (2026): such a heater's relay stayed on for weeks while its thermostat cycled – 19 heating phases above 50 W in about four weeks, the longest 6.8 min, the median 0.3 min, at most 369 W. A limit of about 450 W was proposed instead of the plug's far higher factory limit.
+- **Later:** step 9 (smart plugs).
 
 ### RAT-070 – Calibration is not consumption; book actual run time per run
 
@@ -511,18 +636,34 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-076 – Phases provide parameters, never names
 
 - **Dropped:** the grow controller only (grow phases); not part of the mixing robot (SD-105).
+- **Rule:** A phase is a freely named set of parameters. Control, planning and assessment read only the parameters in force, never the phase's name; a check in CI refuses phase names written into the core.
+- **Why:** Logic that keys on names breaks silently when users rename, add or translate phases; phases that only provide parameters keep behaviour explicit and adjustable.
+- **Evidence:** Observed on the reference installation (2026): several control and monitoring paths branched on particular phase names, so behaviour hung on naming, and changing it took a rebuild.
+- **Later:** step 6 (grow phases, `docs/LATER.md`).
 
 ### RAT-077 – Harvest is an event; "completed" is its own state
 
 - **Dropped:** the grow controller only (harvest); not part of the mixing robot (SD-105).
+- **Rule:** A harvest is an event – a time and a log entry – of a running grow run. Completing the run is a separate, explicit step to the state "completed".
+- **Why:** A harvest held as a state over several days mixes "plants cut" with "run still going" and leaves reports and the next run without a clear end.
+- **Evidence:** Observed on the reference installation (2026): with harvest a state of several days and no state for a finished run, the end of a run could only be read from a timestamp.
+- **Later:** step 6 (grow runs and harvest).
 
 ### RAT-078 – Tank level: piecewise-linear curve and switch-on hysteresis
 
 - **Dropped:** the grow controller only (level sensor); not part of the mixing robot (SD-105).
+- **Rule:** The level comes from the raw value through a piecewise-linear curve: valid from 2 points, raw values rising by at least 3 mV from point to point, volumes never falling; below the first point the first volume, above the last the last slope carried on. Outputs protected by the minimum level switch on again only 0.5 L above their switch-off level.
+- **Why:** A level sensor can be non-linear near the bottom of a vessel, and a straight line through two points misreads the volume exactly where the dry-run thresholds sit. Points too close together give a slope that is mostly noise.
+- **Evidence:** Measured on the reference installation (60 L drum, 2026): 1.9607 V = 0 L, 1.9871 V = 1.0 L, 2.0114 V = 2.0 L, 2.0198 V = 2.5 L, 2.1291 V = 10 L, segment slopes 37.9, 41.2, 59.5 and 68.6 L/V. A two-point line read 3.5 L at a real 2.5 L and 32.6 L at a real 36 L. The thresholds were set to 2.5 L off and 3 L on, since every submerged part is covered from 2.5 L. A check at a real 10 L still read 0.4–0.5 L high (cause unknown), so points should be checked again.
+- **Later:** step 9 (level sensor).
 
 ### RAT-079 – Inlet valve: 25 min maximum, emergency limit by level
 
 - **Dropped:** the grow controller only (inlet valve); not part of the mixing robot (SD-105).
+- **Rule:** The inlet valve stays open at most 25 min; the refill limits more tightly (15 min by default). The plug's own auto-off sits a little above the software limit (28 min: 1.11 ×, rounded up to whole minutes), so the device acts only when the controller fails. A level-based emergency limit is needed all the same (RAT-032).
+- **Why:** If the controller fails, the device must still close the valve, yet within the auto-off time the valve can deliver more water than the tank holds.
+- **Evidence:** Observed on the reference installation (2026): after a switch to a 60 L drum (overflow at 55 L) the old emergency limit of 140 L could never be reached, and only timers and a 30 min device auto-off bounded the inlet – about 46 L per run. The limits then became 45 L, a 25 min software cap and a 25 min device auto-off.
+- **Later:** step 9 (refill valve).
 
 ### RAT-080 – Mixing order is recipe data; CalMag EC effect
 
@@ -551,10 +692,18 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-083 – Light hours are a phase parameter, and phase guidance shows live values
 
 - **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Rule:** The light hours per day are a parameter of each phase (typically 18 h vegetative, 12 h flowering). Guidance that explains a phase shows its duration and targets from these parameters, never as numbers fixed in the text. A phase's planned values are kept apart from the targets in force of the running phase.
+- **Why:** Numbers written into help texts go stale as soon as the user changes a phase, and the guidance then contradicts what the controller does.
+- **Evidence:** Observed on the reference installation (2026): the phase guide read duration and targets live from the phase parameters, so it showed even temporary test values as they were.
+- **Later:** step 6 (phase parameters and their guidance); the light hours act once light comes with step 9.
 
 ### RAT-084 – A skipped pH correction does not stop irrigation, but stays visible
 
 - **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
+- **Rule:** When mixing ends without a pH correction (skipped, held back against overcorrection, the most attempts reached), watering is not blocked. The result names "pH not corrected" and its reason first and shows as a warning, not as success; every way out without a correction carries its reason. The watering check (RAT-086) has a band wide enough that uncorrected tap or RO water does not usually block (tap water above pH 8.5 does).
+- **Why:** In substrate a batch with uncorrected pH does less harm than plants drying out; stopping watering does damage of its own, usually when nobody is there to step in. A skipped correction that is not shown makes the run look clean.
+- **Evidence:** Found in a review on the reference installation (2026): a mix that ended without pH correction could still report a normal finish, and most ways of ending without correction gave no reason.
+- **Later:** step 9 (watering). The reason shown for every skipped dose is in force already (RAT-037, RAT-041).
 
 ### RAT-085 – Mixing to the target EC: the recipe gives ratio and order; a fixed addition goes in per litre of fresh water
 
@@ -567,14 +716,26 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-086 – Watering stops only on water clearly not fit for it
 
 - **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
+- **Rule:** The gateway keeps the watering pump off, and switches a running one off, while the tank's pH is below 4.0 or above 8.5, or its EC is more than 1.0 mS/cm above the EC target (the higher of this phase's and the last phase's), and always above 5.0 mS/cm. There is no lower EC bound. A pH or EC probe without a usable reading, or in a calibration, blocks. After every dosing run and every start watering waits until the dose has mixed in (at least 240 s, 100 s per 20 L in the tank, at most 60 min), and a run that starts stops the watering pump. This holds on every path, by hand too, with no override.
+- **Why:** The worst case of a fertigation controller is a pump that ran too long or dosed too much. The probes see it, and watering would carry the overdose to the roots. The band is wide on purpose: it catches a gross overdose, not a missed recipe, and a narrow band would block uncorrected tap water and leave plants dry (RAT-084). A reading right after a dose does not show it yet (RAT-052), and a missing reading is never fit (RAT-006).
+- **Evidence:** Calculated from measured rates: one 60 s run of parts A and B together (52.8 and 39.6 ml/min, RAT-054) adds about 1.3 mS/cm in 20 L at 0.275 per ml/L (RAT-055), caught when the tank was within about 0.3 of its target; in 100 L it adds about 0.25 and passes. One 60 s run of pH− at 52.8 ml/min and 5.0 pH per ml/L (RAT-050, measured once) takes 200 L from pH 5.8 to about 4.5, which passes; in 20 L the same run, extended tenfold from that single point, reads below 3 and blocks as implausible (RAT-020) or as a jump (RAT-039). The limits 4.0, 8.5, 1.0 and 5.0 mS/cm and the mixing time's scaling with volume are assumptions.
+- **Later:** step 9 (watering); the robot's mixing wait (SD-112) would set how long watering waits after a dose.
 
 ### RAT-087 – A fixed pattern to a target EC never doses more than the recipe's amounts
 
 - **Dropped:** the grow controller only (mixing a fixed pattern in a bucket); not part of the mixing robot (SD-105).
+- **Rule:** Mixing to a target EC without measuring scales every scaled part of the recipe by one factor of at most 1, worked out from the target, the water's EC and the effect (the recipe's chart EC over all its parts, or a larger learned effect); it never doses more than the recipe's own amounts per litre, and a fixed part goes in per litre of fresh water. It is refused without a chart EC inside the band (a quarter to four times the start effect), a target within the EC target's range or the water's EC; the water's EC is never taken as 0, and one above the target's range is refused as a likely µS/cm. The plan says it does not measure and names the EC to expect.
+- **Why:** A fixed pattern gets no feedback, often with RO water entered as 0 and no meter at hand. A chart EC typed too low still passes the band (1.2 instead of 2.1, RAT-056), so scaled up from it the pattern could dose up to four times the chart's amounts, which only draining and diluting undo (RAT-055). Bounded by the recipe's amounts, a slip doses at most what the recipe says; a target the recipe cannot reach is named, not chased.
+- **Evidence:** — (a safeguard from a review; manufacturer charts scale their base parts to a target EC in a fixed ratio)
+- **Later:** not planned (mixing without a probe, in a bucket, is no part of the robot, which measures before every dose).
 
 ### RAT-088 – A mix to the target measures the mixed water first, and its first step must raise EC
 
 - **Dropped:** the grow controller only (mixing in a bucket; the test dose of a new tank (SD-105) takes the place of judging the first step); not part of the mixing robot (SD-105).
+- **Rule:** Mixing to the target with a probe first circulates the water – 100 s per 20 L and at least the EC settle time, at least 100 s and at most 60 min, counted from when the pump runs – then reads its EC and works the amounts out again. Nothing is dosed while it measures. A pump that does not run, the inlet opening, or a probe not usable or in a calibration end it with nothing in and the reason. The first step is 0.8 × the gap, at most the step limit, converted with the largest known effect, and no more than the recipe's own amounts while the recipe has neither a chart EC nor a learned effect. Once mixed in, the step is judged before anything is learned: a rise below the larger of 0.02 mS/cm and a quarter of the expected one locks EC dosing with its own text, and one above four times the expected is named. Only a clean step is learned (RAT-057).
+- **Why:** Fresh or topped-up water is often not mixed at the probe yet, and the first step is worked out from that reading. A dry or misplaced probe reads about 0 and still counts as usable: without the check, up to two more rounds at the full step limit would follow before the no-effect lock (RAT-055), into a tank the probe cannot see, and a wrong rise once learned sizes every later round wrong. A product of unknown strength could make the first step several times the step limit, so it stays within the recipe until its strength is known.
+- **Evidence:** — (a safeguard from a review; the mixing time per volume as for RAT-052 and RAT-058, an assumption)
+- **Later:** not planned (mixing in a bucket). The robot measures after flushing before every decision, and the test dose of a new tank judges its first dose (SD-105).
 
 ### RAT-089 – EC is compensated to 25 °C; without a water temperature it is no value for control
 
