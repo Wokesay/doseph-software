@@ -21,6 +21,11 @@ All notable changes to this software. The format follows
   calibration of the dosing pumps and probes, settings, and the Stop on
   every page.
 - Simulator with a twin of tank, measuring chamber, flow, pumps and probes.
+- History as CSV, from the history page or `GET /api/v1/export.csv`
+  (`series`, `from`, `to`, `lang`; a week of all four curves by
+  default): a row per time in UTC; in German with semicolons and a
+  decimal comma, in English with commas and a decimal point; a gap stays
+  an empty field (RAT-016, from the predecessor).
 
 ### Changed
 

@@ -256,6 +256,21 @@ ApiResponse Api::route(const ApiRequest& req) {
     for (const auto& s : series) out.push_back(robot_.history(s, from, to, points));
     return jsonResp(200, {{"from", from}, {"to", to}, {"series", out}});
   }
+  if (is("GET", {"export.csv"})) {
+    // A week of all four series by default; the page's language decides the format (RAT-016)
+    const Epoch now = robot_.now();
+    auto it = req.query.find("series");
+    std::vector<std::string> series;
+    if (auto e = parseSeries(it == req.query.end() || it->second.empty() ? "ph,ec,temp,flow" : it->second, series)) return fail(422, *e);
+    auto l = req.query.find("lang");
+    const std::string lang = l != req.query.end() && l->second == "de" ? "de" : "en";
+    ApiResponse r;
+    r.contentType = "text/csv; charset=utf-8";
+    r.body = robot_.historyCsv(series, qnum(req, "from", now - 7 * 24 * 3600), qnum(req, "to", now), lang);
+    r.headers.emplace_back("Content-Disposition",
+                           lang == "de" ? "attachment; filename=\"doseph-verlauf.csv\"" : "attachment; filename=\"doseph-history.csv\"");
+    return r;
+  }
   if (is("GET", {"events"})) {
     const Epoch now = robot_.now();
     auto t = req.query.find("type");

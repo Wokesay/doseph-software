@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include <string>
+#include <vector>
 
 #include "simulation.hpp"
 
@@ -162,6 +163,67 @@ TEST_CASE("API: history of ph, ec, temp and flow only; values while flow is prov
   int values = 0;
   for (const auto& v : j["series"][0]["avg"]) values += !v.is_null();
   CHECK(values > 0);
+}
+
+TEST_CASE("API: the history as CSV in the page's format; a gap stays an empty field (RAT-016)") {
+  sim::Simulation s(demo());
+  s.step(10 * kMinute);
+  Client c{s, "", "192.168.1.20"};
+  CHECK(c.call("GET", "export.csv").status == 401);
+  REQUIRE(c.login("demo-password"));
+  // Stopped, the pump is off: flow is still recorded, pH no longer (RAT-016)
+  REQUIRE(c.call("POST", "stop").status == 200);
+  s.step(2 * kMinute);
+  auto lines = [](const std::string& body) {
+    std::vector<std::string> out;
+    size_t pos = 0;
+    while (pos < body.size()) {
+      const size_t nl = body.find('\n', pos);
+      out.push_back(body.substr(pos, nl - pos));
+      pos = nl == std::string::npos ? body.size() : nl + 1;
+    }
+    return out;
+  };
+  auto disposition = [](const ApiResponse& r) {
+    for (const auto& [k, v] : r.headers)
+      if (k == "Content-Disposition") return v;
+    return std::string();
+  };
+  auto en = c.call("GET", "export.csv", nullptr, {{"series", "ph,flow"}, {"lang", "en"}});
+  REQUIRE(en.status == 200);
+  CHECK(en.contentType == "text/csv; charset=utf-8");
+  CHECK(disposition(en).find("doseph-history.csv") != std::string::npos);
+  auto rows = lines(en.body);
+  REQUIRE(rows.size() > 10);
+  CHECK(rows[0] == "time_utc,ph,flow");
+  bool shape = true, phValue = false, phGap = false;
+  for (size_t i = 1; i < rows.size(); ++i) {
+    const std::string& r = rows[i];
+    shape = shape && r.find(';') == std::string::npos && r.size() > 20 && r[4] == '-' && r[13] == ':' && r[19] == ',';
+    if (!shape) break;
+    const std::string ph = r.substr(20, r.find(',', 20) - 20);
+    if (ph.empty()) phGap = true;
+    else phValue = phValue || ph.find('.') != std::string::npos;  // a decimal point
+  }
+  CHECK(shape);
+  CHECK(phValue);
+  CHECK(phGap);  // never 0 for a missing value (RAT-006)
+  auto de = c.call("GET", "export.csv", nullptr, {{"series", "ph,flow"}, {"lang", "de"}});
+  REQUIRE(de.status == 200);
+  CHECK(disposition(de).find("doseph-verlauf.csv") != std::string::npos);
+  rows = lines(de.body);
+  CHECK(rows[0] == "zeit_utc;ph;flow");
+  bool point = false, comma = false;
+  for (size_t i = 1; i < rows.size(); ++i) {
+    point = point || rows[i].find('.') != std::string::npos;
+    comma = comma || rows[i].find(',') != std::string::npos;
+  }
+  CHECK_FALSE(point);
+  CHECK(comma);  // a decimal comma
+  // All four series by default; the same names as the history
+  CHECK(lines(c.call("GET", "export.csv").body)[0] == "time_utc,ph,ec,temp,flow");
+  CHECK(c.call("GET", "export.csv", nullptr, {{"series", "level"}}).status == 422);
+  CHECK(c.call("GET", "export.csv", nullptr, {{"series", "ph,ph"}}).status == 422);
 }
 
 TEST_CASE("API: origin checks for the transport (DNS rebinding, CSRF) and the session cookie") {

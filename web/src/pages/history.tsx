@@ -2,10 +2,10 @@
 // History: pH, EC, water temperature and flow with the target band and the
 // doses marked, and the events.
 import { useEffect, useState } from "preact/hooks";
-import { History, LineChart } from "lucide-preact";
+import { Download, History, LineChart } from "lucide-preact";
 import { get, type RobotEvent, type SeriesData } from "../api";
 import { TimeChart, type Marker } from "../chart";
-import { msg, t, type TextKey } from "../i18n";
+import { lang, msg, t, type TextKey } from "../i18n";
 import { state } from "../store";
 import { Card, Seg } from "../ui";
 import { EventList } from "../widgets";
@@ -67,11 +67,19 @@ export function HistoryPage() {
   const markers = (purpose: string): Marker[] =>
     doses.filter((e) => e.data?.purpose === purpose).map((e) => ({ t: e.ts, label: msg(e.title), color: purpose === "ph" ? "--ph" : "--ec" }));
 
+  const now = st.now;
+  const csv = `/api/v1/export.csv?series=ph,ec,temp,flow&from=${now - span}&to=${now}&lang=${lang.value}`;  // the page's format (RAT-016)
+
   return (
     <div class="stack">
       <div class="page-head">
         <p class="muted">{t("history.intro")}</p>
-        <Seg value={range} onChange={setRange} options={RANGES.map(([v, l]) => [v, t(l)] as [string, string])} />
+        <div class="row">
+          <Seg value={range} onChange={setRange} options={RANGES.map(([v, l]) => [v, t(l)] as [string, string])} />
+          <a class="btn sm" href={csv} download title={t("history.csvFormat")} data-testid="history-csv">
+            <Download size={15} /> CSV
+          </a>
+        </div>
       </div>
       <div class="charts">
         <Card title="pH" icon={<LineChart size={18} />}>

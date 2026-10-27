@@ -120,8 +120,8 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** The data of a finished run is the basis for comparing runs and costs. If gaps turned into zeros, averages and totals would be silently wrong and could not be told apart from real measurements.
 - **Evidence:** Observed on the reference installation (2026): the detailed history was dropped after a retention period, so an export at the end of each run became the lasting record; over about a month the export had no unexplained gaps.
 - **Changed:** Recording only with flow is new: a standing measuring chamber does not measure the tank.
-- **Implemented in:** `core/src/robot.cpp`
-- **Tests:** `tests/core/test_api.cpp` "API: history of ph, ec, temp and flow only; values while flow is proven (RAT-016)"
+- **Implemented in:** `core/src/robot.cpp`, `core/src/api.cpp` (CSV)
+- **Tests:** `tests/core/test_api.cpp` "API: history of ph, ec, temp and flow only; values while flow is proven (RAT-016)"; `tests/core/test_api.cpp` "API: the history as CSV in the page's format; a gap stays an empty field (RAT-016)"; `web/e2e/robot.spec.ts` "history downloads as CSV in the page's format (RAT-016)"
 
 ### RAT-017 – VPD is air VPD, with no value when an input is missing
 
