@@ -367,6 +367,11 @@ json Robot::state() {
   }
   json ecEffects = json::object();
   for (const auto& [k, v] : rt_.ecEffects) ecEffects[k] = numOrNull(v);
+  json stock = json::object();
+  for (const auto& b : cfg_.canisters) {
+    auto it = rt_.stockMl.find(b.id);
+    stock[b.id] = {{"ml", it == rt_.stockMl.end() ? json(nullptr) : numOrNull(it->second)}, {"status", stockStatus(b, rt_)}};
+  }
   return {{"now", c.epoch},
           {"uptimeS", (c.now - bootMs_) / 1000},
           {"clock", clock_.source()},
@@ -386,6 +391,7 @@ json Robot::state() {
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"pumps", pumps},
+          {"stock", stock},
           {"pumpJob", job},
           {"probe", probe},
           {"maintenanceUntil", c.maintenanceUntil > 0 ? json(c.maintenanceUntil) : json(nullptr)},
@@ -556,9 +562,45 @@ Result Robot::putCanister(const json& j) {
   }
   b->pair = jstr(j, "pair", b->pair);
   b->color = jstr(j, "color", b->color);
+  if (j.contains("capacityMl")) {
+    if (!j["capacityMl"].is_null() && !j["capacityMl"].is_number()) return Result::fail(422, say("api.bad_input"));
+    b->capacityMl = j["capacityMl"].is_number() ? j["capacityMl"].get<double>() : kNaN;
+  }
+  // A level entered is a measured amount, never below zero (SD-119)
+  const bool stockGiven = j.contains("stockMl") && !j["stockMl"].is_null();
+  if (stockGiven && (!j["stockMl"].is_number() || !isNum(j["stockMl"].get<double>()) || j["stockMl"].get<double>() < 0))
+    return Result::fail(422, say("canister.stock"));
+  const bool created = !cfg_.canister(id);
   Result r = saveConfig(next, changed("cfg.what.canisters"));
-  if (r.status == 200) r.body["id"] = id;
+  if (r.status != 200) return r;
+  r.body["id"] = id;
+  // A new canister starts with the level entered, else unknown; never with one left behind by
+  // an earlier canister of the same ID. An existing one keeps its count (RAT-015).
+  if (stockGiven) rt_.stockMl[id] = j["stockMl"].get<double>();
+  else if (created) rt_.stockMl.erase(id);
+  saveState(true);
   return r;
+}
+
+Result Robot::setStock(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const CanisterCfg* b = cfg_.canister(id);
+  if (!b) return Result::fail(404, say("api.not_found"));
+  double ml = kNaN;
+  if (jbool(j, "full", false)) {
+    if (!isNum(b->capacityMl)) return Result::fail(422, say("canister.no_capacity", {{"name", b->name}}));
+    ml = b->capacityMl;
+  } else if (j.contains("ml") && j["ml"].is_number()) {
+    ml = j["ml"].get<double>();
+  }
+  if (!isNum(ml) || ml < 0) return Result::fail(422, say("canister.stock"));
+  rt_.stockMl[id] = ml;
+  log_.add(clock_.epoch(), "config", "info", say("ev.stock.set", {{"name", b->name}}), say("ev.stock.set.text", {{"name", b->name}, {"ml", ml}}),
+           {{"canister", id}, {"stockMl", ml}});
+  saveState(true);
+  // A check waiting for a refill tries again now, not at its next retry
+  if (cycle_.phase() == Phase::Wait) restartCycle();
+  return Result::ok({{"stockMl", ml}});
 }
 
 Result Robot::deleteCanister(const std::string& id) {
@@ -570,7 +612,12 @@ Result Robot::deleteCanister(const std::string& id) {
   Config next = cfg_;
   next.canisters.erase(std::remove_if(next.canisters.begin(), next.canisters.end(), [&](const CanisterCfg& b) { return b.id == id; }),
                      next.canisters.end());
-  return saveConfig(next, changed("cfg.what.canisters"));
+  Result r = saveConfig(next, changed("cfg.what.canisters"));
+  if (r.status == 200) {
+    rt_.stockMl.erase(id);  // or a new canister of the same ID would take its count
+    saveState(true);
+  }
+  return r;
 }
 
 Result Robot::putRecipe(const json& j) {
@@ -713,6 +760,10 @@ Result Robot::importConfig(const json& j) {
     if (isNum(e.learned)) rt_.ecEffects[nr.id] = e.learned;
     else rt_.ecEffects.erase(nr.id);
   }
+  // A level stays only for a canister the robot had and the file keeps: a count is never
+  // taken over by another canister (SD-119)
+  for (auto it = rt_.stockMl.begin(); it != rt_.stockMl.end();)
+    it = before.canister(it->first) && cfg_.canister(it->first) ? std::next(it) : rt_.stockMl.erase(it);
   // The pH effect belongs to the pH− canister: another one starts afresh
   const CanisterCfg* phWas = before.phDown();
   const CanisterCfg* phNow = cfg_.phDown();
@@ -753,6 +804,8 @@ Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {
   o.step.canister = b ? b->id : "";
   o.step.name = b ? b->name : say("pump.n", {{"pump", pump}}).text;
   o.step.runs = {job.ms};
+  // A line fill is booked like a dose, from the pump's flow; a calibration from the cup (SD-119)
+  if (type == "prime") o.step.flowMlPerMin = cfg_.pumpFlow(pump);
   Ctx c = ctx();
   Msg err;
   if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
@@ -800,6 +853,12 @@ Result Robot::calibrationResult(double ml) {
   if (r.status != 200) return r;
   job_->ml = ml;
   job_->state = "done";
+  // What went into the cup came out of the canister (SD-119)
+  if (const CanisterCfg* b = cfg_.canisterOnPump(job_->pump)) {
+    Ctx c = ctx();
+    takeStock(c, b->id, b->name, ml);
+    saveState(true);
+  }
   job_->message = say("job.calibrated", {{"pump", job_->pump}, {"flow", flow}});
   log_.add(clock_.epoch(), "calibration", "info", say("ev.pump.calibrated", {{"pump", job_->pump}}),
            say("ev.pump.calibrated.text", {{"flow", flow}, {"ml", ml}, {"s", job_->actualMs / 1000.0}}));

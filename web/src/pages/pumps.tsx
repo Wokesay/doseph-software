@@ -2,8 +2,8 @@
 // Pumps & probes: which canister sits on which pump, calibrating and priming
 // the dosing pumps, calibrating the pH and EC probes.
 import { useEffect, useState } from "preact/hooks";
-import { Beaker, Gauge, Pencil, Plus, Syringe, Trash2 } from "lucide-preact";
-import { del, post, type Canister } from "../api";
+import { Beaker, Gauge, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
+import { del, post, type Canister, type Stock } from "../api";
 import { dateTime, num } from "../format";
 import { msg, t } from "../i18n";
 import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
@@ -12,12 +12,15 @@ import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
 
 function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void }) {
-  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", pump: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], ...p.canister });
+  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", pump: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, ...p.canister });
+  // A new canister: how much is in it now; empty leaves the level unknown (SD-119)
+  const [stockMl, setStockMl] = useState<number | null>(null);
   const pumps = info.value?.pumpCount ?? 0;
   const used = (n: number) => canisters.value.find((x) => x.pump === n && x.id !== b.id);
   const save = async () => {
-    await post("/canisters", { ...b, name: (b.name ?? "").trim(), pair: b.role === "nutrient" ? (b.pair ?? "").trim() : "" });
+    await post("/canisters", { ...b, name: (b.name ?? "").trim(), pair: b.role === "nutrient" ? (b.pair ?? "").trim() : "", ...(b.id ? {} : { stockMl }) });
     await refreshConfig();
+    await refreshState();
     toast(t("pumps.canisterSaved"));
     p.onClose();
   };
@@ -60,6 +63,14 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
             ))}
           </select>
         </Field>
+        <Field label={t("pumps.capacity")} hint={t("pumps.capacityHint")}>
+          <NumberInput value={b.capacityMl} onValue={(v) => setB({ ...b, capacityMl: v })} unit="ml" min={10} max={25000} step={50} name="capacity" />
+        </Field>
+        {!b.id && (
+          <Field label={t("pumps.levelNow")} hint={t("pumps.levelNowHint")}>
+            <NumberInput value={stockMl} onValue={setStockMl} unit="ml" min={0} max={25000} step={50} name="stock" />
+          </Field>
+        )}
         {b.role === "nutrient" && (
           <Field label={<Term topic="pair" />} hint={t("pumps.pairHint")}>
             <input class="input" value={b.pair ?? ""} maxLength={8} onInput={(e) => setB({ ...b, pair: (e.target as HTMLInputElement).value })} name="pair" />
@@ -85,8 +96,69 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
   );
 }
 
+/** Entering what is in a canister now, after measuring it or a partial refill. */
+function LevelDialog(p: { canister: Canister; onClose: () => void }) {
+  const [ml, setMl] = useState<number | null>(null);
+  return (
+    <Modal
+      title={t("pumps.levelOf", { name: p.canister.name })}
+      onClose={p.onClose}
+      footer={
+        <>
+          <button class="btn" onClick={p.onClose}>
+            {t("common.cancel")}
+          </button>
+          <Button
+            variant="primary"
+            disabled={ml === null || ml < 0}
+            onClick={async () => {
+              await post(`/canisters/${encodeURIComponent(p.canister.id)}/stock`, { ml });
+              await refreshState();
+              toast(t("pumps.levelSaved"));
+              p.onClose();
+            }}
+          >
+            {t("common.save")}
+          </Button>
+        </>
+      }
+    >
+      <Field label={t("pumps.levelNow")}>
+        <NumberInput value={ml} onValue={setMl} unit="ml" min={0} max={25000} step={10} name="level" />
+      </Field>
+    </Modal>
+  );
+}
+
+/** The level as counted, with a bar where the size is known (SD-119). */
+function Level(p: { canister: Canister; stock: Stock | undefined }) {
+  const s = p.stock;
+  if (!s || s.status === "unknown" || s.ml === null) return <span class="muted small">{t("pumps.levelUnknown")}</span>;
+  const tone = s.status === "empty" ? "bad" : s.status === "low" ? "warn" : "ok";
+  const cap = p.canister.capacityMl;
+  const text = cap ? t("pumps.levelOfSize", { ml: num(Math.max(0, s.ml), 0), size: num(cap, 0) }) : t("pumps.levelMl", { ml: num(Math.max(0, s.ml), 0) });
+  return (
+    <span class="row" style="gap:8px" data-testid={`level-${p.canister.id}`}>
+      {cap ? (
+        <span class="bar" style="width:80px" aria-hidden="true">
+          <span style={`width:${Math.min(100, Math.max(0, (s.ml / cap) * 100))}%;background:var(--${tone})`} />
+        </span>
+      ) : null}
+      <span class="small">{text}</span>
+      {s.status !== "ok" && <Pill tone={tone}>{t(s.status === "empty" ? "pumps.levelEmpty" : "pumps.levelLow")}</Pill>}
+    </span>
+  );
+}
+
 function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
   const list = canisters.value;
+  const stock = state.value?.stock ?? {};
+  const [levelOf, setLevelOf] = useState<Canister | null>(null);
+  const refilled = async (b: Canister) => {
+    await post(`/canisters/${encodeURIComponent(b.id)}/stock`, { full: true });
+    await refreshState();
+    toast(t("pumps.refilledDone", { name: b.name }));
+  };
   const remove = async (b: Canister) => {
     if (!confirm(t("pumps.deleteAsk", { name: b.name }))) return;
     await del(`/canisters/${encodeURIComponent(b.id)}`);
@@ -116,8 +188,17 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
                   {" · "}
                   {b.pump ? t("pumps.pumpN", { pump: b.pump }) : t("pumps.noPump")}
                 </div>
+                <Level canister={b} stock={stock[b.id]} />
               </div>
               <div class="row-actions">
+                {b.capacityMl ? (
+                  <Button size="sm" onClick={() => refilled(b)} title={t("pumps.refilledHint")} data-testid={`refilled-${b.id}`}>
+                    <RefreshCw size={15} /> {t("pumps.refilled")}
+                  </Button>
+                ) : null}
+                <button class="btn sm" onClick={() => setLevelOf(b)} aria-label={`${t("pumps.enterLevel")}: ${b.name}`} title={t("pumps.enterLevel")}>
+                  <Ruler size={15} />
+                </button>
                 <button class="btn sm" onClick={() => p.onEdit(b)} aria-label={`${t("common.edit")}: ${b.name}`}>
                   <Pencil size={15} />
                 </button>
@@ -131,6 +212,8 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
       ) : (
         <Empty title={t("pumps.noCanisters")} text={t("pumps.noCanistersText")} />
       )}
+      {list.length > 0 && <p class="muted small">{t("pumps.levelNote")}</p>}
+      {levelOf && <LevelDialog canister={levelOf} onClose={() => setLevelOf(null)} />}
     </Card>
   );
 }

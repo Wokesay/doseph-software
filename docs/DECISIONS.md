@@ -384,3 +384,36 @@ drops without a running pump in SD-111.
 - The confirmation is a statement of the owner, not a measurement: the
   robot cannot see where a canister stands. It is kept simple on purpose
   (minimal principle); the drop sensor is what catches a wrong one.
+
+
+## SD-119: The canister level is counted from use
+
+2026-10-27. Step 2.7 of #10. The robot cannot see into a canister; it
+counts.
+
+- **Size and level.** A canister may have a size (10 ml to 25 L). Its
+  level is unknown until the owner enters it, or marks the canister
+  refilled, which sets it to its size. It is never assumed full
+  (RAT-015). A new canister starts with the level entered, else unknown;
+  an edit keeps the count; deleting a canister drops it.
+- **Every run counts, as it goes.** A dose and a line fill take from the
+  canister run by run, from the actual run time and the pump's
+  calibrated flow, as the dose itself is booked (RAT-070). A calibration
+  takes what was in the cup, once its amount is entered: the liquid left
+  the canister wherever it went. A level that is unknown stays unknown.
+- **Below zero is kept.** The count may fall below zero; it is never
+  hidden as 0. Then the canister ran dry, or the level entered or the
+  pump's calibration is wrong. An event reports it once when the count
+  crosses zero; the watchdog shows it until a level is entered.
+- **Low and used up.** Below 150 ml of a nutrient or 20 ml of pH−
+  (RAT-071) the watchdog reports "refill soon". A dose that needs more
+  than the counted level is not started: the check waits and names the
+  canister; "Refilled" or a level entered starts it again at once. An
+  unknown level holds nothing. The checklist (RAT-037) names a canister
+  used up by the count.
+- **Where it lives.** In the run-time state, so it survives a restart and
+  a dose makes no new configuration revision. A backup carries the
+  sizes, not the levels; a restore keeps the level of each canister the
+  robot had and the file keeps (#18).
+- **Later:** the drop sensor (SD-111) is what sees a canister run dry;
+  the count only warns ahead of it.

@@ -81,6 +81,10 @@ struct DoseProgress {
   Msg error;
 };
 
+// Takes `ml` from the canister's counted level, if it is known, and reports
+// once when the count falls below zero (SD-119).
+void takeStock(const Ctx& c, const std::string& canister, const std::string& name, double ml);
+
 class Doser {
  public:
   // The tag of this start, appended to every job ID, so an ID after a

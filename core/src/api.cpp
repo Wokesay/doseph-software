@@ -293,6 +293,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("PUT", {"control"})) return fromResult(robot_.putControl(body));
   if (is("POST", {"canisters"})) return fromResult(robot_.putCanister(body));
   if (is("DELETE", {"canisters", "*"})) return fromResult(robot_.deleteCanister(p[1]));
+  if (is("POST", {"canisters", "*", "stock"})) return fromResult(robot_.setStock(p[1], body));
   if (is("POST", {"recipes"})) return fromResult(robot_.putRecipe(body));
   if (is("DELETE", {"recipes", "*"})) return fromResult(robot_.deleteRecipe(p[1]));
   if (is("PUT", {"active"})) return fromResult(robot_.setActive(body));

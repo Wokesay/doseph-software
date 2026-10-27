@@ -25,7 +25,15 @@ struct CanisterCfg {
   int pump = 0;                   // 1..pumpCount; 0: on no pump
   std::string pair;               // pair group, e.g. "AB": its parts keep their ratio (RAT-054)
   std::string color = "#4c9a52";
+  double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
 };
+
+// The level of a canister, counted from use (SD-119): below these it is low
+// (RAT-071); below zero by the count it ran dry, or the level entered or the
+// pump's calibration is wrong. A rounding difference alone is not below zero.
+constexpr double kStockLowNutrientMl = 150, kStockLowPhDownMl = 20;
+constexpr double kStockBelowZeroMl = -0.5;
+constexpr double kCapacityMinMl = 10, kCapacityMaxMl = 25000;
 
 struct RecipeStep {
   std::string canister;
@@ -157,6 +165,9 @@ struct RuntimeState {
   std::map<std::string, json> jumpLocks;   // channel → {until, from, to, at} (RAT-039, RAT-044)
   double phEffect = kNaN;                  // learned effect of pH− (pH per ml/L), only from clean doses
   std::map<std::string, double> ecEffects; // learned EC effect per recipe, mS/cm per ml/L of its scaled parts (RAT-057)
+  // Canister → its level in ml, counted from use; missing: unknown, never
+  // assumed full (RAT-015); may fall below zero (SD-119)
+  std::map<std::string, double> stockMl;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)
@@ -166,5 +177,8 @@ struct RuntimeState {
 };
 void to_json(json& j, const RuntimeState& s);
 RuntimeState runtimeFromJson(const json& j);
+// A canister's counted level: "unknown", "ok", "low" (below its minimum,
+// RAT-071) or "empty" (at or below zero by the count) (SD-119)
+std::string stockStatus(const CanisterCfg& b, const RuntimeState& rt);
 
 }  // namespace doseph

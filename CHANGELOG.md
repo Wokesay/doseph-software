@@ -48,6 +48,16 @@ All notable changes to this software. The format follows
   version, the report ID and what happened. Never in it: the password
   file's values, sessions, addresses, Wi-Fi details
   (`GET /api/v1/diagnostics`). The bug form asks for the report ID.
+- The canister level, counted from use (SD-119): a size and the level
+  now per canister, a "Refilled" button and "Enter level" on the pumps
+  page. Every run of a canister's pump takes from it, doses and line
+  fills from the run time, a calibration from the cup; an unknown level
+  stays unknown and a count below zero is kept and reported. The
+  watchdog warns below 150 ml of a nutrient or 20 ml of pH− (RAT-071);
+  a dose the count cannot cover waits for a refill. The API:
+  `capacityMl` and `stockMl` on `POST /api/v1/canisters`,
+  `POST /api/v1/canisters/<id>/stock` (`{"ml": n}` or `{"full": true}`),
+  and `stock` in the state. The demo starts with full canisters.
 - Backup and restore in the settings: all settings as a file
   (`GET /api/v1/config/export`) and back (`POST /api/v1/config/import`).
   A file is checked like any change and its probe calibrations as if made

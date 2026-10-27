@@ -72,6 +72,7 @@ export type RobotState = {
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   pumps: { pump: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
+  stock: Record<string, Stock>;
   pumpJob: PumpJob | null;
   probe: ProbeSession | null;
   // Maintenance mode until then (epoch seconds); null when off
@@ -81,7 +82,9 @@ export type RobotState = {
 };
 
 export type Circulation = "cycle" | "always" | "external";
-export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; pump: number; pair: string; color: string };
+export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; pump: number; pair: string; color: string; capacityMl: number | null };
+/** A canister's level counted from use (SD-119): unknown until entered; may fall below zero. */
+export type Stock = { ml: number | null; status: "unknown" | "ok" | "low" | "empty" };
 /** A recipe: ml per litre of each part, its EC target and pH range; a fixed part is never scaled (RAT-085). */
 export type Recipe = { id: string; name: string; note: string; steps: { canister: string; mlPerL: number | null; fixed: boolean }[]; ecTarget: number | null; ph: [number, number] | null };
 

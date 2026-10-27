@@ -88,6 +88,9 @@ class Robot {
   Result newTank();
   Result putCanister(const json& j);
   Result deleteCanister(const std::string& id);
+  // A canister's level by hand: {"ml": n} as measured, or {"full": true} for
+  // its size after a refill (SD-119)
+  Result setStock(const std::string& id, const json& j);
   Result putRecipe(const json& j);
   Result deleteRecipe(const std::string& id);
   Result setActive(const json& j);
