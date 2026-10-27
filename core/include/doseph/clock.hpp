@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Time base of the robot (gc PD-069, gc PD-073, SD-028). The platform clock says
+// Time base of the robot. The platform clock says
 // whether its wall time is secured. Without a secured time after a start,
 // the robot continues from the time it saved last; the outage counts as 0.
 // The operating time is saved too and counts only while the robot runs.

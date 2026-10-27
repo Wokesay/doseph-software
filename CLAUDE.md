@@ -50,12 +50,12 @@ device. The brief and the order of work are in #10.
 
 ## IDs
 
-- `SD-xxx` software decisions (`docs/DECISIONS.md`), continuing the
-  predecessor's numbering from SD-105; `RAT-xxx` rules from practice
-  (`docs/RATIONALE.md`), the same IDs as in the predecessor.
-- `gc#n` and `gc PD-xxx` in code and docs are issues and product decisions
-  of the predecessor growcontroller-software (`docs/PROVENANCE.md`); `#n`
-  alone is an issue of this repository.
+- `SD-xxx` software decisions (`docs/DECISIONS.md`), from SD-105 on;
+  `RAT-xxx` rules from practice (`docs/RATIONALE.md`), with stable IDs: a
+  dropped rule keeps its entry and its ID.
+- `#n` is an issue or pull request of this repository. Nothing refers to
+  the predecessor: none of its IDs, commit hashes or links (SD-117,
+  checked by `tools/arch_check.sh`).
 - Several sessions may work in parallel: a new SD or RAT ID is final only
   on `main`; renumber right before merging if needed.
 

@@ -118,7 +118,7 @@ export type SeriesData = { series: string; stepS: number; t: number[]; avg: (num
 export type TemplateStep = { name: string; nameDe?: string; pair?: string; mlPerL: number };
 export type RecipeTemplate = { id: string; name: string; nameDe?: string; note?: string; noteDe?: string; source?: string; ecTarget?: number; ph?: [number, number]; steps: TemplateStep[] };
 
-// The message is shown in the page language (SD-032).
+// The message is shown in the page language.
 export class ApiError extends Error {
   constructor(public status: number, public key: string, text: string, public body: any) {
     super(text);

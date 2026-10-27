@@ -49,13 +49,21 @@ if [ -n "$rd" ]; then
   err "std::random_device, RDSEED or RDRAND outside the Windows branch of sim::randomBytes"
 fi
 
-# Every own source file carries its SPDX header (the license is not to change
-# until the owner decides, PROVENANCE.md).
+# Every own source file carries its SPDX header (SD-116).
 missing=$(git ls-files -- '*.cpp' '*.hpp' '*.ts' '*.tsx' '*.mjs' '*.sh' '*.cmake' 'CMakeLists.txt' '*.yml' '*.css' 2>/dev/null |
   while read -r f; do head -n 3 "$f" | grep -q 'SPDX-License-Identifier' || echo "$f"; done)
 if [ -n "$missing" ]; then
   echo "$missing"
   err "source file without an SPDX header"
+fi
+
+# Doseph stands alone (SD-117): no issue, decision or repository of the grow
+# controller it started from is referred to. Its decisions were SD-001 to
+# SD-104, its issues and product decisions had a "gc" prefix.
+refs=$(git grep -nE 'gc[#][0-9]|\bgc (PD|SD|RAT)-[0-9]|\bSD-(0[0-9]{2}|10[0-4])\b|growcontroller' -- . ':!tools/arch_check.sh' 2>/dev/null)
+if [ -n "$refs" ]; then
+  echo "$refs"
+  err "a reference to the predecessor (SD-117)"
 fi
 
 [ $fail -eq 0 ] && echo "Architecture rules: ok"

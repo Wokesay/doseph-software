@@ -110,5 +110,5 @@ const base: Record<keyof typeof deBase, string> = {
   "shell.httpError": "Error {status}",
 };
 
-// The base texts plus the texts of each area (gc#18).
+// The base texts plus the texts of each area.
 export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...pumps, ...settings, ...sim };

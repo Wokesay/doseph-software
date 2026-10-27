@@ -27,9 +27,8 @@ namespace {
 constexpr Ms kJumpWindow = 5 * kMinute;    // a jump within 5 min (RAT-039)
 constexpr Ms kFrozenAfter = 15 * kMinute;  // raw value standing still (RAT-023)
 
-// Plausible bands and jump thresholds as the predecessor's catalog had them
-// (RAT-020, RAT-039); flow has no jump check: it jumps whenever the
-// circulation pump starts or stops.
+// Plausible bands and jump thresholds (RAT-020, RAT-039); flow has no jump
+// check: it jumps whenever the circulation pump starts or stops.
 constexpr ChannelDef kDefs[] = {
     {Channel::Ph, "", 2, 3.0, 9.0, 60 * kSecond, 1.0, true},
     {Channel::Ec, "mS/cm", 2, 0.0, 8.0, 60 * kSecond, 0.5, true},

@@ -125,7 +125,7 @@ small, .small { font-size: 0.85rem; }
 .nav a { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 10px; color: var(--muted); font-weight: 550; text-decoration: none; }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a.active { background: var(--accent-weak); color: var(--accent); }
-/* The menu's topics (SD-056): a small heading above each group */
+/* The menu's topics: a small heading above each group */
 .nav-group { display: grid; gap: 2px; }
 .nav-head { padding: 14px 12px 4px; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.02em; color: var(--muted); }
 .modal .nav-group:first-child .nav-head { padding-top: 0; }
@@ -251,7 +251,7 @@ small, .small { font-size: 0.85rem; }
 .term { display: inline-grid; gap: 6px; }
 .field .hint { font-size: 0.8rem; color: var(--faint); }
 .field .err { font-size: 0.8rem; color: var(--bad); }
-/* 16 px: below that iOS Safari zooms in when a field gets the focus and stays zoomed (gc#33) */
+/* 16 px: below that iOS Safari zooms in when a field gets the focus and stays zoomed */
 .input, .select, textarea.input { width: 100%; min-height: 42px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 16px; min-width: 0; }
 .input:focus, .select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
 .input-unit { display: flex; align-items: stretch; }
@@ -260,7 +260,7 @@ small, .small { font-size: 0.85rem; }
 .form-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .seg { display: inline-flex; padding: 3px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border); gap: 2px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; font-size: 0.88rem; }
-.seg.lg button { min-height: 44px; padding: 10px 16px; font-size: 0.95rem; }  /* the first tap on a phone (SD-014) */
+.seg.lg button { min-height: 44px; padding: 10px 16px; font-size: 0.95rem; }  /* the first tap on a phone */
 @media (max-width: 600px) {
   /* a choice that wraps on a phone does so in full rows, each easy to hit */
   .seg.lg { display: flex; width: 100%; }
@@ -290,7 +290,7 @@ small, .small { font-size: 0.85rem; }
 .bar { height: 8px; border-radius: 6px; background: var(--surface-3); overflow: hidden; min-width: 60px; }
 .bar > span { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
 .bar.low > span { background: var(--bad); }
-.bar.unknown { background: transparent; border: 1px dashed var(--border); }  /* unknown is not empty (gc#184) */
+.bar.unknown { background: transparent; border: 1px dashed var(--border); }  /* unknown is not empty */
 .bar.unknown > span { display: none; }
 
 /* ---------- Steps */
@@ -303,10 +303,10 @@ small, .small { font-size: 0.85rem; }
 .step.failed { background: var(--bad-weak); }
 .step.failed .n { background: var(--bad); color: #fff; }
 .warn-text { color: var(--warn); }
-/* A long name without spaces breaks instead of running past its box (gc#159) */
+/* A long name without spaces breaks instead of running past its box */
 .recipe-steps strong, .rtable td strong, .card h3 { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  /* A row of the recipe editor on a phone: the name on top, amount and order below it (gc#159) */
+  /* A row of the recipe editor on a phone: the name on top, amount and order below it */
   .recipe-steps .step { grid-template-columns: 28px minmax(0, 1fr); row-gap: 8px; }
   .recipe-steps .step > .row:last-child { grid-column: 2; }
 }
@@ -324,7 +324,7 @@ small, .small { font-size: 0.85rem; }
 
 /* ---------- Dialogs, messages */
 .overlay { position: fixed; inset: 0; background: rgba(10, 16, 13, 0.45); display: grid; place-items: center; z-index: 50; padding: 16px; }
-.modal:focus { outline: none; }  /* focused as a whole on opening (gc#105); its controls keep their ring */
+.modal:focus { outline: none; }  /* focused as a whole on opening; its controls keep their ring */
 .modal { background: var(--surface); border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25); width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 22px; display: grid; gap: 16px; }
 .modal.wide { width: min(860px, 100%); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

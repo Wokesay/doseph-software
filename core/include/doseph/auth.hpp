@@ -21,17 +21,17 @@ class Auth {
   explicit Auth(RandomFn rng) : rng_(std::move(rng)) {}
 
   bool hasPassword() const { return !hash_.empty(); }
-  // First password (gc#79): a platform that can show a secret to its owner
+  // First password: a platform that can show a secret to its owner
   // alone (the app's log in Home Assistant) arms a one-time setup code, and
   // the first password then needs it. Kept in memory only; arming again
   // voids the one before; used up by the password; refused from `validFor`
-  // after `now` on (0: no time limit; SD-044 gives 15 min). "" when a
+  // after `now` on (0: no time limit). "" when a
   // password is set.
   std::string armSetupCode(Ms now, Ms validFor = 0);
   bool setupCodeRequired() const { return !setupCode_.empty() && !hasPassword(); }
   // Wrong setup codes are counted, never braked: 80 bits leave nothing to
   // guess, and a count shared by every new client would let anyone block the
-  // owner's setup (SD-051). Whether to log a refusal now: the first one, then
+  // owner's setup. Whether to log a refusal now: the first one, then
   // at most one per 15 min, so a loop cannot fill the event log.
   std::int64_t wrongSetupCodes() const { return wrongCodes_; }
   bool logWrongSetupCode(Ms now);
@@ -44,7 +44,7 @@ class Auth {
   std::optional<std::string> login(const std::string& pw, Ms now, Msg& err, const std::string& client);
   bool check(const std::string& token, Ms now);
   // A known client using its session counts as seen now: the one seen
-  // longest ago is the first to lose its own count (SD-051).
+  // longest ago is the first to lose its own count.
   void seen(const std::string& client, Ms now);
   void logout(const std::string& token) { sessions_.erase(token); }
   void logoutAll() { sessions_.clear(); }
@@ -54,8 +54,8 @@ class Auth {
 
   static constexpr std::uint32_t kIterations = 10000;
   static constexpr Ms kSessionIdle = 12 * kHour;
-  static constexpr size_t kMaxSessions = 16;  // a further sign-in ends the session used longest ago (gc#131)
-  // Lockout per client (SD-051): a client that signed in before has a count
+  static constexpr size_t kMaxSessions = 16;  // a further sign-in ends the session used longest ago
+  // Lockout per client: a client that signed in before has a count
   // of its own; every other client shares one, which also brakes guessing
   // from many addresses. Kept in memory only.
   static constexpr size_t kKnownClients = 16;

@@ -11,10 +11,7 @@ here by the minimal principle: affordable, simple, a safety frame instead
 of guarding every scenario; a crash or restart switches off everything
 that can do harm.
 
-**Numbering.** SD-001 to SD-103 are the decisions of the predecessor
-growcontroller-software (`docs/PROVENANCE.md`) and are cited by their
-number. SD-104 is left out, as an open change in the predecessor may have
-taken it. This log continues with SD-105.
+**Numbering.** This log starts at SD-105; lower numbers are not used.
 
 
 ## SD-105: The mixing robot: one check as a state machine, flow first, a test dose for a new tank
@@ -90,9 +87,9 @@ journal is cleared when the tank is on target.
 ## SD-107: Doseph's terms
 
 2026-10-27. The product brief (#9, #10) names the parts of the device; the
-software uses the same words, in code, API, texts and docs. A term from
-the predecessor that names something else is replaced when its module is
-next touched; the import (#10, step 2) renames canister and measuring
+software uses the same words, in code, API, texts and docs. An older
+term that names something else is replaced when its module is next
+touched; the import (#10, step 2) renames canister and measuring
 chamber, the twin (#10, step 3) renames channel and suction pump.
 
 | Term | Meaning | Replaces |
@@ -162,7 +159,7 @@ pump of SD-105. The steps of the check stay.
   5 min and tries again (SD-105). After 3 failed tries in a row the
   robot latches "no flow" (the pump may run dry: suction line out of the
   water, tank empty, filter blocked); a person releases it in the app
-  (the dry-run pattern of the predecessor, gc RAT-047 and RAT-051).
+  (the dry-run pattern of RAT-047 and RAT-051).
 - **Return.** By gravity there is nothing to switch. A return pump runs
   while the chamber reports water to return; a return pump that runs for
   60 s without the level falling is off and latched ("return pump dry or
@@ -283,9 +280,9 @@ to every run (#10; R7). Settings only tighten them.
 
 ## SD-114: A pair with a part missing is caught up first
 
-2026-10-27. The predecessor's "pair errors with catch-up" (gc SD-057), for
-the cycle. A round of a pair can stop with some parts in and others not
-(a failed run, no drops, a Stop, a restart).
+2026-10-27. Catching up a pair after an error, now in the cycle. A round
+of a pair can stop with some parts in and others not (a failed run, no
+drops, a Stop, a restart).
 
 - The robot keeps the missing amount of each part, with the recipe, in
   the run-time state (it survives a restart, RAT-028).

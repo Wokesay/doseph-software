@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// German texts of the robot's messages (SD-032), by the key the robot sends.
+// German texts of the robot's messages, by the key the robot sends.
 // The robot sends English itself (templates in core/src/messages.cpp); both
 // tables have the same keys and placeholders (tools/i18n_keys.test.mjs).
 // {name:2} writes a number with 2 decimals in the page language.

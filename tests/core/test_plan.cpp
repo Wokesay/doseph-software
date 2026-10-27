@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Dose planning; ported from the predecessor's mix tests (PROVENANCE.md).
+// Dose planning.
 #include <doctest/doctest.h>
 
 #include <limits>

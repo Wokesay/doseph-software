@@ -25,12 +25,12 @@ All notable changes to this software. The format follows
   (`series`, `from`, `to`, `lang`; a week of all four curves by
   default): a row per time in UTC; in German with semicolons and a
   decimal comma, in English with commas and a decimal point; a gap stays
-  an empty field (RAT-016, from the predecessor).
+  an empty field (RAT-016).
 - Maintenance mode on the tank page, for 30, 60 or 120 minutes (at most
   240 through `POST /api/v1/maintenance`): while someone works at tank or
   device the robot doses nothing, the pump is off, jumps of the probes
   count as the work and the targets are not judged; locks stay, and a
-  restart ends it (RAT-042, from the predecessor).
+  restart ends it (RAT-042).
 - Downloads of the simulator with the web app built in, for Linux, macOS
   and Windows: started without arguments it takes the next free port
   from 8080 and opens the browser. A tag on `main` releases them with
@@ -39,7 +39,7 @@ All notable changes to this software. The format follows
   nutrients and pH− each need now – recipe and tank volume, flow at the
   last check, readings, canisters on calibrated pumps, locks, the EC gate
   and the rest after a nutrient dose – each ticked or not, with the
-  reason (RAT-037, from the predecessor). The API has it as
+  reason (RAT-037). The API has it as
   `cycle.checks`.
 - "Report a problem" in the settings: the robot packs a diagnostics
   package – settings, recipes, calibrations, readings, states and the
@@ -93,8 +93,12 @@ All notable changes to this software. The format follows
   1.64.1.
 - `README.md` says what the prototype does and how to try it, step by
   step; `docs/CONCEPT.md` lists what is not built yet.
-- Started from growcontroller-software at a3b00d1 without its history
+- Started from the software of a grow controller, without its history
   (`docs/PROVENANCE.md`); grow-only parts left behind.
+- Doseph stands alone (SD-117): no references to the grow controller's
+  issues, decisions, commits or repositories are left in code, tests or
+  docs, and `tools/arch_check.sh` keeps it so. `docs/PROVENANCE.md` and
+  the ID section of `CLAUDE.md` need nothing outside this repository.
 - The repository is public, under AGPL-3.0-or-later with the additional
   permission (SD-116). New: `SUPPORT.md`, `CODE_OF_CONDUCT.md`, issue
   forms for bugs and feedback; `SECURITY.md` reports through GitHub's
