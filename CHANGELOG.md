@@ -85,6 +85,10 @@ All notable changes to this software. The format follows
   The API names them `canisters`, `canister` and `role`
   (`POST /api/v1/canisters`, `DELETE /api/v1/canisters/<id>`). A saved
   configuration of schema 1 is read and brought to schema 2.
+- Every dropped rule in `docs/RATIONALE.md` keeps its substance and names
+  the step of #10 that would bring it back; `docs/LATER.md` holds what
+  later steps rebuild: grow phases and harvest, the setup assistant, the
+  scenario harness and the dry-run latch.
 
 ### Security
 
