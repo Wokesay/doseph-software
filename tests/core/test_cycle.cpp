@@ -237,7 +237,7 @@ TEST_CASE("Cycle: a Stop switches everything off at once, holds across a restart
   CHECK(st(s)["cycle"]["progress"]["first"] == true);
 }
 
-TEST_CASE("Cycle: an empty bottle: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
+TEST_CASE("Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
   sim::Simulation s(demo());
   s.world().pumps[1].empty = true;  // Part A
   s.world().pumps[2].empty = true;  // Part B

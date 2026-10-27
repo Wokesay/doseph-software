@@ -13,7 +13,7 @@ JournalRun run(const std::string& order, int n, const std::string& purpose = "ec
   r.order = order;
   r.run = n;
   r.purpose = purpose;
-  r.bottle = "a";
+  r.canister = "a";
   r.name = "Part A";
   r.pump = 2;
   r.ml = 12.5;
@@ -91,7 +91,7 @@ TEST_CASE("Doser: a run whose journal record cannot be written does not start (S
   Doser doser;
   DoseOrder o;
   o.purpose = "ec";
-  o.step.bottle = "a";
+  o.step.canister = "a";
   o.step.name = "Part A";
   o.step.pump = 2;
   o.step.flowMlPerMin = 50;
@@ -145,4 +145,15 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   c.stopped = true;
   CHECK_FALSE(act.startRun(c, 3, 6000, "calibration", "j8", err));
   CHECK(err.key == "act.stopped");
+}
+
+TEST_CASE("Dosing journal: a run recorded before the terms changed still names its canister (SD-107)") {
+  MemoryStorage store;
+  json old = json::array({{{"order", "ec-1"}, {"run", 1}, {"purpose", "ec"}, {"bottle", "a"}, {"name", "Part A"}, {"pump", 2}, {"ml", 12.5}, {"ms", 15000}, {"at", 0}, {"ended", false}}});
+  store.write("journal.json", old.dump());
+  DoseJournal j(store);
+  j.load();
+  REQUIRE(j.runs().size() == 1);
+  CHECK(j.runs()[0].canister == "a");
+  CHECK(j.closeOpen().size() == 1);
 }

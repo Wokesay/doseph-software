@@ -46,7 +46,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 | Path | What |
 |---|---|
 | `core/` | platform-neutral core: sensor truth, dose planning, the mixing cycle, gateway, watchdog, configuration, API |
-| `sim/` | the simulator: twin of tank, cell, flow, pumps and probes; HTTP server for the web app |
+| `sim/` | the simulator: twin of tank, measuring chamber, flow, pumps and probes; HTTP server for the web app |
 | `web/` | the web app (Preact, TypeScript); end-to-end tests against the simulator |
 | `tests/core/` | the core's tests (doctest) |
 | `tools/` | checks: architecture rules, text keys, test runner |

@@ -56,14 +56,14 @@ Limits Limits::bounded() const {
   return b;
 }
 
-const BottleCfg* Config::bottle(const std::string& id) const {
-  for (const auto& b : bottles)
+const CanisterCfg* Config::canister(const std::string& id) const {
+  for (const auto& b : canisters)
     if (b.id == id) return &b;
   return nullptr;
 }
 
-const BottleCfg* Config::bottleOnPump(int pump) const {
-  for (const auto& b : bottles)
+const CanisterCfg* Config::canisterOnPump(int pump) const {
+  for (const auto& b : canisters)
     if (pump > 0 && b.pump == pump) return &b;
   return nullptr;
 }
@@ -74,9 +74,9 @@ const RecipeCfg* Config::recipe(const std::string& id) const {
   return nullptr;
 }
 
-const BottleCfg* Config::phDown() const {
-  for (const auto& b : bottles)
-    if (b.kind == "ph_down" && b.pump > 0) return &b;
+const CanisterCfg* Config::phDown() const {
+  for (const auto& b : canisters)
+    if (b.role == "ph_down" && b.pump > 0) return &b;
   return nullptr;
 }
 
@@ -121,14 +121,14 @@ void to_json(json& j, const Config& c) {
                   {"phMaxMlPerDose", c.control.phMaxMlPerDose}, {"maxEcRounds", c.control.maxEcRounds},
                   {"maxPhDoses", c.control.maxPhDoses}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
-  json bottles = json::array();
-  for (const auto& b : c.bottles)
-    bottles.push_back({{"id", b.id}, {"name", b.name}, {"kind", b.kind}, {"pump", b.pump}, {"pair", b.pair}, {"color", b.color}});
-  j["bottles"] = bottles;
+  json canisters = json::array();
+  for (const auto& b : c.canisters)
+    canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"pump", b.pump}, {"pair", b.pair}, {"color", b.color}});
+  j["canisters"] = canisters;
   json recipes = json::array();
   for (const auto& r : c.recipes) {
     json steps = json::array();
-    for (const auto& s : r.steps) steps.push_back({{"bottle", s.bottle}, {"mlPerL", numOrNull(s.mlPerL)}, {"fixed", s.fixed}});
+    for (const auto& s : r.steps) steps.push_back({{"canister", s.canister}, {"mlPerL", numOrNull(s.mlPerL)}, {"fixed", s.fixed}});
     recipes.push_back({{"id", r.id},
                        {"name", r.name},
                        {"note", r.note},
@@ -144,11 +144,41 @@ void to_json(json& j, const Config& c) {
   j["probes"] = {{"ph", c.phCal}, {"ec", c.ecCal}};
 }
 
-Config configFromJson(const json& j) {
+json migrateConfig(json j) {
   if (!j.is_object()) throw std::invalid_argument("configuration is not an object");
+  int v = intOr(j, "schemaVersion", kSchemaVersion);
+  if (v < 1 || v > kSchemaVersion) throw std::invalid_argument("unknown schema version");
+  if (v == 1) {
+    // Doseph's terms (SD-107): a bottle is a canister, its kind is its role
+    if (j.contains("bottles")) {
+      json canisters = j["bottles"];
+      if (canisters.is_array())
+        for (auto& b : canisters)
+          if (b.is_object() && b.contains("kind")) {
+            b["role"] = b["kind"];
+            b.erase("kind");
+          }
+      j["canisters"] = canisters;
+      j.erase("bottles");
+    }
+    if (j.contains("recipes") && j["recipes"].is_array())
+      for (auto& r : j["recipes"])
+        if (r.is_object() && r.contains("steps") && r["steps"].is_array())
+          for (auto& st : r["steps"])
+            if (st.is_object() && st.contains("bottle")) {
+              st["canister"] = st["bottle"];
+              st.erase("bottle");
+            }
+    v = 2;
+  }
+  j["schemaVersion"] = v;
+  return j;
+}
+
+Config configFromJson(const json& in) {
+  const json j = migrateConfig(in);
   Config c;
-  c.schemaVersion = intOr(j, "schemaVersion", kSchemaVersion);
-  if (c.schemaVersion != kSchemaVersion) throw std::invalid_argument("unknown schema version");
+  c.schemaVersion = kSchemaVersion;
   c.revision = intOr(j, "revision", 0);
   const json& s = objectAt(j, "system");
   c.system.name = jstr(s, "name", c.system.name);
@@ -176,16 +206,16 @@ Config configFromJson(const json& j) {
   if (l.contains("minRunS")) c.limits.minRunS = numOrNaN(l, "minRunS");
   if (l.contains("maxRunS")) c.limits.maxRunS = numOrNaN(l, "maxRunS");
   c.limits.maxPartialRuns = intOr(l, "maxPartialRuns", c.limits.maxPartialRuns);
-  for (const auto& b : arrayAt(j, "bottles")) {
-    if (!b.is_object()) throw std::invalid_argument("bottle is not an object");
-    BottleCfg x;
+  for (const auto& b : arrayAt(j, "canisters")) {
+    if (!b.is_object()) throw std::invalid_argument("canister is not an object");
+    CanisterCfg x;
     x.id = jstr(b, "id");
     x.name = jstr(b, "name");
-    x.kind = jstr(b, "kind", x.kind);
+    x.role = jstr(b, "role", x.role);
     x.pump = intOr(b, "pump", 0);
     x.pair = jstr(b, "pair");
     x.color = jstr(b, "color", x.color);
-    c.bottles.push_back(x);
+    c.canisters.push_back(x);
   }
   for (const auto& r : arrayAt(j, "recipes")) {
     if (!r.is_object()) throw std::invalid_argument("recipe is not an object");
@@ -204,7 +234,7 @@ Config configFromJson(const json& j) {
     for (const auto& st : arrayAt(r, "steps")) {
       if (!st.is_object()) throw std::invalid_argument("recipe step is not an object");
       RecipeStep y;
-      y.bottle = jstr(st, "bottle");
+      y.canister = jstr(st, "canister");
       y.mlPerL = numOrNaN(st, "mlPerL");
       y.fixed = jbool(st, "fixed", false);
       x.steps.push_back(y);
@@ -268,14 +298,14 @@ std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
   std::set<std::string> ids;
   std::set<int> pumps;
   std::map<std::string, int> pairCount;
-  for (const auto& b : c.bottles) {
-    if (b.id.empty() || b.id.size() > 40 || !ids.insert(b.id).second) err(say("cfg.bottle.id"));
-    if (b.name.empty() || b.name.size() > 40) err(say("cfg.bottle.name"));
-    if (b.kind != "nutrient" && b.kind != "ph_down") err(say("cfg.bottle.kind", {{"name", b.name}}));
-    if (b.pump < 0 || b.pump > std::min(pumpCount, kMaxPumps)) err(say("cfg.bottle.pump", {{"name", b.name}, {"max", pumpCount}}));
-    else if (b.pump > 0 && !pumps.insert(b.pump).second) err(say("cfg.bottle.pump_twice", {{"name", b.name}, {"pump", b.pump}}));
-    if (!b.pair.empty() && b.kind != "nutrient") err(say("cfg.bottle.pair_kind", {{"name", b.name}}));
-    if (b.pair.size() > 8) err(say("cfg.bottle.pair_name", {{"name", b.name}}));
+  for (const auto& b : c.canisters) {
+    if (b.id.empty() || b.id.size() > 40 || !ids.insert(b.id).second) err(say("cfg.canister.id"));
+    if (b.name.empty() || b.name.size() > 40) err(say("cfg.canister.name"));
+    if (b.role != "nutrient" && b.role != "ph_down") err(say("cfg.canister.role", {{"name", b.name}}));
+    if (b.pump < 0 || b.pump > std::min(pumpCount, kMaxPumps)) err(say("cfg.canister.pump", {{"name", b.name}, {"max", pumpCount}}));
+    else if (b.pump > 0 && !pumps.insert(b.pump).second) err(say("cfg.canister.pump_twice", {{"name", b.name}, {"pump", b.pump}}));
+    if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));
+    if (b.pair.size() > 8) err(say("cfg.canister.pair_name", {{"name", b.name}}));
     if (!b.pair.empty()) pairCount[b.pair]++;
   }
 
@@ -287,26 +317,26 @@ std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
     std::set<std::string> pairsIn, seen;
     double scaled = 0;
     for (const auto& s : r.steps) {
-      const BottleCfg* b = c.bottle(s.bottle);
+      const CanisterCfg* b = c.canister(s.canister);
       if (!b) {
-        err(say("cfg.recipe.bottle", {{"name", r.name}}));
+        err(say("cfg.recipe.canister", {{"name", r.name}}));
         continue;
       }
       if (!seen.insert(b->id).second) err(say("cfg.recipe.twice", {{"name", r.name}, {"part", b->name}}));
       // pH correction is never part of a recipe; it always comes last (RAT-004)
-      if (b->kind != "nutrient") err(say("cfg.recipe.ph", {{"name", r.name}, {"part", b->name}}));
+      if (b->role != "nutrient") err(say("cfg.recipe.ph", {{"name", r.name}, {"part", b->name}}));
       if (!inRange(s.mlPerL, 0.001, 50)) err(say("cfg.recipe.amount", {{"name", r.name}, {"part", b->name}}));
       if (!b->pair.empty()) pairsIn.insert(b->pair);
       // A fixed part of a pair would leave its partner scaled alone (RAT-054, RAT-085)
       if (s.fixed && !b->pair.empty()) err(say("cfg.recipe.fixed_pair", {{"name", r.name}, {"part", b->name}}));
       if (!s.fixed && isNum(s.mlPerL) && s.mlPerL > 0) scaled += s.mlPerL;
     }
-    // A pair goes into a recipe with all its parts, and with two at least (RAT-054); bottles are
+    // A pair goes into a recipe with all its parts, and with two at least (RAT-054); canisters are
     // added one at a time, so a pair of one is refused only where it is used
     for (const auto& p : pairsIn) {
       int in = 0;
       for (const auto& s : r.steps)
-        if (const BottleCfg* b = c.bottle(s.bottle); b && b->pair == p) in++;
+        if (const CanisterCfg* b = c.canister(s.canister); b && b->pair == p) in++;
       if (in != pairCount[p]) err(say("cfg.recipe.pair", {{"name", r.name}, {"pair", p}}));
       else if (pairCount[p] < 2) err(say("cfg.pair.single", {{"pair", p}}));
     }
