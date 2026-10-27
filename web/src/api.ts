@@ -102,6 +102,8 @@ export type Info = {
   product: string; version: string; api: number; schemaVersion: number;
   platform: { kind: string; simulated?: boolean; scenario?: string };
   hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; pumpCount: number;
+  // Why neither sign-in nor a first password works: the password file is unreadable or gone
+  passwordProblem?: Msg | null;
 };
 
 export type RobotEvent = { id: number; ts: number; type: string; severity: "info" | "notice" | "warn" | "alarm"; title: Msg; text: Msg; data: Record<string, any> };

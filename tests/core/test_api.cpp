@@ -391,3 +391,36 @@ TEST_CASE("API: a backup is not restored while a pump runs; what the robot learn
   CHECK(robot.importConfig(backup).status == 409);
   CHECK(robot.configJson()["recipes"] == kept);
 }
+
+TEST_CASE("API: a password file the robot cannot read is kept: no new password over it, no advice to reset, an alarm") {
+  sim::Simulation s(demo());
+  s.step(kMinute);
+  REQUIRE(s.robot().auth().hasPassword());
+  const std::string good = *s.storage().read("auth.json");
+  for (const std::string damaged : {std::string("{\"salt\": \"ab"), std::string("{}"), std::string("[]")}) {
+    CAPTURE(damaged);
+    REQUIRE(s.storage().write("auth.json", damaged));
+    s.reboot();
+    Client c{s};
+    CHECK(s.robot().passwordKept());
+    const json info = c.get("info");
+    CHECK(info["hasPassword"] == false);
+    CHECK(info["passwordProblem"]["key"] == "auth.kept");
+    CHECK(s.robot().armSetupCode().empty());  // nobody is offered a first password
+    auto r = c.call("POST", "auth/setup", {{"password", "a-new-password"}});
+    CHECK(r.status == 423);
+    CHECK(json::parse(r.body)["error"]["key"] == "auth.kept");
+    CHECK_FALSE(c.login("demo-password"));
+    CHECK(*s.storage().read("auth.json") == damaged);  // left as it is
+    bool alarm = false;
+    for (const auto& e : s.robot().events(0, s.robot().now() + 1, "", 50)) alarm |= e["title"]["key"] == "ev.auth.kept";
+    CHECK(alarm);
+  }
+  // Read again after a restart: everything as before
+  REQUIRE(s.storage().write("auth.json", good));
+  s.reboot();
+  CHECK_FALSE(s.robot().passwordKept());
+  Client c{s};
+  CHECK(c.get("info")["passwordProblem"].is_null());
+  CHECK(c.login("demo-password"));
+}

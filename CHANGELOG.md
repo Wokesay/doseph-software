@@ -75,3 +75,11 @@ All notable changes to this software. The format follows
   The API names them `canisters`, `canister` and `role`
   (`POST /api/v1/canisters`, `DELETE /api/v1/canisters/<id>`). A saved
   configuration of schema 1 is read and brought to schema 2.
+
+### Security
+
+- A password file the robot cannot read is kept as it is: no first
+  password is offered or set over it, the sign-in page says so instead of
+  showing a form, and an alarm is logged. Nobody is told to reset the
+  robot, since a restart may read the file again (`GET /api/v1/info`
+  has `passwordProblem`).

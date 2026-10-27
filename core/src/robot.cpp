@@ -69,11 +69,14 @@ void Robot::markPasswordSet() {
 
 std::string Robot::armSetupCode(Ms validFor) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (auth_.hasPassword() || credentialsLost()) return "";
+  if (auth_.hasPassword() || credentialsLost() || authKept_) return "";
   return auth_.armSetupCode(clock_.nowMs(), validFor);
 }
 
-bool Robot::saveAuth() { return store_.write(kAuthFile, auth_.toJson().dump()); }
+bool Robot::saveAuth() {
+  if (authKept_) return false;  // never over a password file it could not read
+  return store_.write(kAuthFile, auth_.toJson().dump());
+}
 
 void Robot::logEvent(const std::string& type, const std::string& sev, Msg title, Msg text) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
@@ -111,6 +114,8 @@ void Robot::boot() {
   if (auto s = store_.read(kAuthFile)) {
     const json j = json::parse(*s, nullptr, false);
     if (j.is_object()) auth_.load(j);
+    // The robot writes auth.json only with a password in it: one without is damaged, not new
+    authKept_ = !auth_.hasPassword();
   }
   if (auto s = store_.read(kEventsFile)) {
     const json j = json::parse(*s, nullptr, false);
@@ -153,6 +158,7 @@ void Robot::boot() {
   }
   log_.add(bootEpoch_, "system", rt_.stopped ? "warn" : "info", say("ev.boot"),
            rt_.stopped ? say("ev.boot.stopped") : Msg{});
+  if (authKept_) log_.add(bootEpoch_, "auth", "alarm", say("ev.auth.kept"), say("auth.kept"));
   saveState(true);
   saveEvents();
 }
@@ -275,6 +281,8 @@ json Robot::info() const {
           {"platform", platform_},
           {"hasPassword", auth_.hasPassword()},
           {"setupCode", auth_.setupCodeRequired()},
+          // Why neither sign-in nor a first password works, for the sign-in page
+          {"passwordProblem", authKept_ ? json(say("auth.kept")) : credentialsLost() ? json(say("auth.lost")) : json(nullptr)},
           {"name", cfg_.system.name},
           {"language", cfg_.system.language},
           {"pumpCount", hw_.pumpCount()}};
