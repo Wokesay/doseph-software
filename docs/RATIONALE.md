@@ -109,17 +109,17 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 ### RAT-015 – No substitute values for quantities; invalid data is a problem
 
 - **Rule:** No stand-in values for quantities: an uncalibrated pump doses nothing, a tank volume that is missing stops dosing, a reading that is not usable is a problem in the watchdog, not a neutral state. Guards test for a finite number explicitly.
-- **Why:** When a run time or an amount is computed from a stand-in value, a fault turns into a dose that nobody notices. Missing data must therefore fail a watchdog check, not silence it. Comparisons do not catch NaN, since every comparison with NaN is false (NaN < 1 and NaN ≤ 0 alike), so guards test for a finite number explicitly. A counter quietly restarted at 0 later looks like a real one, so an unknown stock stays unbooked. A bottle assumed full looks like a real count too: its low-stock and below-zero warnings then come late by whatever was missing, or not at all, and a mix check passes that the bottle cannot cover.
+- **Why:** When a run time or an amount is computed from a stand-in value, a fault turns into a dose that nobody notices. Missing data must therefore fail a watchdog check, not silence it. Comparisons do not catch NaN, since every comparison with NaN is false (NaN < 1 and NaN ≤ 0 alike), so guards test for a finite number explicitly. A counter quietly restarted at 0 later looks like a real one, so an unknown stock stays unbooked. A canister assumed full looks like a real count too: its low-stock and below-zero warnings then come late by whatever was missing, or not at all, and a mix check passes that the canister cannot cover.
 - **Evidence:** Observed on the reference installation (2026): default values meant for missing readings did not take effect when a sensor was offline, and many of them were 0 anyway; a check for "volume ≤ 0" let a missing (NaN) volume pass.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/gateway.cpp`, `core/src/watchdog.cpp`
-- **Tests:** `tests/core/test_plan.cpp` "EC round: a bottle on no pump, or an uncalibrated pump, refuses the round (RAT-015)"; `tests/core/test_watchdog.cpp` "Watchdog: a reading that is not delivered is a problem, never neutral; not calibrated only while a recipe needs it (RAT-015, RAT-021)"; `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated pump are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
+- **Tests:** `tests/core/test_plan.cpp` "EC round: a canister on no pump, or an uncalibrated pump, refuses the round (RAT-015)"; `tests/core/test_watchdog.cpp` "Watchdog: a reading that is not delivered is a problem, never neutral; not calibrated only while a recipe needs it (RAT-015, RAT-021)"; `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated pump are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
 
 ### RAT-016 – History leaves gaps empty
 
-- **Rule:** The history stores gaps as gaps (null in the API); a series is never filled with 0 or the last value. pH, EC and temperature are recorded only while water flows through the measuring cell.
+- **Rule:** The history stores gaps as gaps (null in the API); a series is never filled with 0 or the last value. pH, EC and temperature are recorded only while water flows through the measuring chamber.
 - **Why:** The data of a finished run is the basis for comparing runs and costs. If gaps turned into zeros, averages and totals would be silently wrong and could not be told apart from real measurements.
 - **Evidence:** Observed on the reference installation (2026): the detailed history was dropped after a retention period, so an export at the end of each run became the lasting record; over about a month the export had no unexplained gaps.
-- **Changed:** Recording only with flow is new: a standing cell does not measure the tank.
+- **Changed:** Recording only with flow is new: a standing measuring chamber does not measure the tank.
 - **Implemented in:** `core/src/robot.cpp`
 - **Tests:** `tests/core/test_api.cpp` "API: history of ph, ec, temp and flow only; values while flow is proven (RAT-016)"
 
@@ -286,7 +286,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-043 – No pH correction on an old reading
 
-- **Rule:** No pH dose on an old reading: a reading older than its limit is not usable, and the cycle measures afresh after flushing the cell before every decision.
+- **Rule:** No pH dose on an old reading: a reading older than its limit is not usable, and the cycle measures afresh after flushing the measuring chamber before every decision.
 - **Why:** A pH value that stops updating keeps looking plausible while the tank changes. Acid dosed against it can drive the real pH far from target, so the age of the value has to show and has to stop dosing.
 - **Evidence:** Observed on the reference installation (2026): for about five hours the pH reading still showed 7.01 from a buffer test, while the target check and the overall status stayed green. At that time only the pH-raising path checked the age of the reading; the lowering path would have dosed on the old value.
 - **Implemented in:** `core/src/cycle.cpp`
@@ -368,11 +368,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-055 – Dose from the measured effect; large doses in equal partial runs
 
-- **Rule:** Each round doses 0.8 × gap ÷ effect × volume. The effect starts at a fixed value (EC 0.275 mS/cm per ml/L of the recipe's scaled parts, pH 5.0 per ml/L) and is then learned from clean rounds, clamped to a quarter to four times the start. Large doses are split into equal partial runs of at most 60 s with 3 s pauses, at most 6 per bottle. Two rounds in a row without effect latch.
-- **Why:** Aiming at 80 % of the gap leaves room for incomplete mixing at measurement time, and an EC overshoot can only be undone by dilution. Both clamp directions yield the smaller dose. Silently shortened doses falsify the recipe. With pumps far too slow for the tank a single round rises by less than the noise, yet an empty bottle or a pump that delivers nothing must still be caught: small rounds are judged together once they should have raised EC by 0.06.
+- **Rule:** Each round doses 0.8 × gap ÷ effect × volume. The effect starts at a fixed value (EC 0.275 mS/cm per ml/L of the recipe's scaled parts, pH 5.0 per ml/L) and is then learned from clean rounds, clamped to a quarter to four times the start. Large doses are split into equal partial runs of at most 60 s with 3 s pauses, at most 6 per canister. Two rounds in a row without effect latch.
+- **Why:** Aiming at 80 % of the gap leaves room for incomplete mixing at measurement time, and an EC overshoot can only be undone by dilution. Both clamp directions yield the smaller dose. Silently shortened doses falsify the recipe. With pumps far too slow for the tank a single round rises by less than the noise, yet an empty canister or a pump that delivers nothing must still be caught: small rounds are judged together once they should have raised EC by 0.06.
 - **Evidence:** Measured on the reference installation (2026): the nutrient pair raised EC by 0.275 mS/cm per ml/L in reverse-osmosis water (about 20 L). In model runs from EC 0.55 to 3.0 with 30 % of the last dose not yet mixed, aiming at the full gap ended at 3.30 and aiming at 80 % at 3.15. Before splitting, base doses cut to 60 s delivered only 64–80 % of the recipe amount in a 100 L tank.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/include/doseph/plan.hpp`, `core/src/cycle.cpp`, `core/src/gateway.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty bottle: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"; `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"; `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"
 
 ### RAT-056 – A small learned effect never widens the EC cap
 
@@ -421,7 +421,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Latching while the device is already off (e.g. an empty tank between runs) produces permanent red states and acknowledgements that seem to do nothing; a reason rewritten every cycle no longer tells what triggered the shutdown.
 - **Evidence:** Observed on the reference installation (2026): when the tank was emptied with pump and heater already off, both protections latched anyway and stayed red; acknowledging had no effect while the tank was still empty, and the stored reason kept changing as the level fell. With latching limited to real shutdowns, switch-on attempts at 0 L were cut within 84–138 ms and latched, and acknowledging took effect within about 50 ms.
 - **Implemented in:** `core/src/watchdog.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty bottle: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"
 
 ### RAT-063 – Latches survive a restart
 
@@ -573,7 +573,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-089 – EC is compensated to 25 °C; without a water temperature it is no value for control
 
-- **Rule:** The EC reading is compensated linearly to 25 °C at 2 % per °C with the water temperature measured in the same cell. Without a usable water temperature the EC is shown and marked "not temperature compensated", and the cycle doses no nutrients on it. An EC calibration needs the water temperature too, and the reference is taken at its value at 25 °C as printed on the bottle.
+- **Rule:** The EC reading is compensated linearly to 25 °C at 2 % per °C with the water temperature measured in the same measuring chamber. Without a usable water temperature the EC is shown and marked "not temperature compensated", and the cycle doses no nutrients on it. An EC calibration needs the water temperature too, and the reference is taken at its value at 25 °C as printed on the bottle.
 - **Why:** Conductivity rises by about 2 % per °C. A tank at 18 °C reads about 14 % lower than at 25 °C; dosing towards a target on that reading overdoses by the same share, and an overshoot can only be undone by dilution. Reference solutions are printed at 25 °C.
 - **Evidence:** — (the 2 %/°C coefficient is the usual value for nutrient solutions; not measured on the reference installation)
 - **Implemented in:** `core/include/doseph/readmodel.hpp`, `core/include/doseph/truth.hpp`, `core/src/robot.cpp`, `core/src/truth.cpp`

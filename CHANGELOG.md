@@ -20,9 +20,14 @@ All notable changes to this software. The format follows
   turnover time and mixing waits, history of pH, EC, temperature and flow,
   calibration of the dosing pumps and probes, settings, and the Stop on
   every page.
-- Simulator with a twin of tank, measuring cell, flow, pumps and probes.
+- Simulator with a twin of tank, measuring chamber, flow, pumps and probes.
 
 ### Changed
 
 - Started from growcontroller-software at a3b00d1 without its history
   (`docs/PROVENANCE.md`); grow-only parts left behind.
+- Doseph's terms (SD-107): a bottle is now a canister, and what it holds
+  is its role (nutrient or pH−); the flow cell is the measuring chamber.
+  The API names them `canisters`, `canister` and `role`
+  (`POST /api/v1/canisters`, `DELETE /api/v1/canisters/<id>`). A saved
+  configuration of schema 1 is read and brought to schema 2.

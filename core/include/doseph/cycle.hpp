@@ -27,7 +27,7 @@ const char* phaseName(Phase p);
 constexpr double kFlowMinLpm = 0.5;           // the least flow that counts as flow
 constexpr Ms kFlowProveMs = 10 * kSecond;     // … for this long without a break
 constexpr Ms kFlowWaitMs = 2 * kMinute;       // no flow by then: wait and try again
-constexpr Ms kFlushMs = 60 * kSecond;         // flow time until the cell holds tank water
+constexpr Ms kFlushMs = 60 * kSecond;         // flow time until the measuring chamber holds tank water
 constexpr Ms kStableWindowMs = 60 * kSecond;  // readings within the band for this long
 constexpr double kStablePh = 0.05, kStableEc = 0.03;
 constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by then: wait and try again

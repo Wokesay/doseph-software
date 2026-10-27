@@ -99,11 +99,11 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
   CHECK(st["watchdog"].contains("stale"));
   CHECK(st["pumps"].size() == 4);
   json cfg = c.get("config");
-  for (const char* k : {"system", "tank", "control", "bottles", "recipes", "active", "pumps", "probes"}) CHECK(cfg.contains(k));
+  for (const char* k : {"system", "tank", "control", "canisters", "recipes", "active", "pumps", "probes"}) CHECK(cfg.contains(k));
   CHECK(c.get("templates")["recipes"].size() == 3);
 }
 
-TEST_CASE("API: tank, bottles, recipes and the recipe in force; refusals say why") {
+TEST_CASE("API: tank, canisters, recipes and the recipe in force; refusals say why") {
   sim::Simulation s(demo());
   Client c{s, "", "192.168.1.20"};
   REQUIRE(c.login("demo-password"));
@@ -112,18 +112,18 @@ TEST_CASE("API: tank, bottles, recipes and the recipe in force; refusals say why
   CHECK(c.call("PUT", "tank", {{"volumeL", 80}, {"waitPhMin", 20}}).status == 200);
   CHECK(c.get("config")["tank"]["volumeL"] == 80);
   CHECK(c.get("state")["newTank"] == true);  // another volume: checked again
-  auto b = c.call("POST", "bottles", {{"name", "Bloom PK"}, {"kind", "nutrient"}, {"pump", 2}});
+  auto b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"pump", 2}});
   CHECK(b.status == 422);  // pump 2 carries Part A
-  b = c.call("POST", "bottles", {{"name", "Bloom PK"}, {"kind", "nutrient"}, {"pump", 0}});
+  b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"pump", 0}});
   REQUIRE(b.status == 200);
   const std::string pk = json::parse(b.body)["id"];
-  auto r = c.call("POST", "recipes", {{"name", "With pH"}, {"steps", {{{"bottle", "ph_down"}, {"mlPerL", 0.1}}}}});
+  auto r = c.call("POST", "recipes", {{"name", "With pH"}, {"steps", {{{"canister", "ph_down"}, {"mlPerL", 0.1}}}}});
   CHECK(r.status == 422);
   CHECK(json::parse(r.body)["error"]["key"] == "cfg.recipe.ph");
-  r = c.call("POST", "recipes", {{"name", "PK"}, {"ecTarget", 1.0}, {"ph", {5.8, 6.2}}, {"steps", {{{"bottle", pk}, {"mlPerL", 1.0}}}}});
+  r = c.call("POST", "recipes", {{"name", "PK"}, {"ecTarget", 1.0}, {"ph", {5.8, 6.2}}, {"steps", {{{"canister", pk}, {"mlPerL", 1.0}}}}});
   REQUIRE(r.status == 200);
   const std::string rid = json::parse(r.body)["id"];
-  CHECK(c.call("DELETE", "bottles/" + pk).status == 409);  // used by the recipe
+  CHECK(c.call("DELETE", "canisters/" + pk).status == 409);  // used by the recipe
   CHECK(c.call("DELETE", "recipes/two_part").status == 409);  // in force
   CHECK(c.call("PUT", "active", {{"recipe", rid}, {"days", 14}}).status == 200);
   json a = c.get("config")["active"];

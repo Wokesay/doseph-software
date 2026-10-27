@@ -78,17 +78,17 @@ WatchResult evaluate(const WatchInput& in) {
   else add("recipe", say("watch.recipe"), "ok", say("watch.recipe_ok", {{"name", recipe->name}}));
   if (inForce) {
     if (!isNum(in.cfg.tank.volumeL)) add("tank.volume", say("watch.volume"), "problem", say("watch.no_volume"));
-    std::vector<const BottleCfg*> needed;
+    std::vector<const CanisterCfg*> needed;
     for (const auto& s : recipe->steps)
-      if (const BottleCfg* b = in.cfg.bottle(s.bottle)) needed.push_back(b);
+      if (const CanisterCfg* b = in.cfg.canister(s.canister)) needed.push_back(b);
     if (isNum(phTarget(*recipe))) {
-      const BottleCfg* down = in.cfg.phDown();
-      if (!down) add("bottle.ph_down", say("watch.pumps"), "problem", say("watch.no_ph_down"));
+      const CanisterCfg* down = in.cfg.phDown();
+      if (!down) add("canister.ph_down", say("watch.pumps"), "problem", say("watch.no_ph_down"));
       else needed.push_back(down);
     }
-    for (const BottleCfg* b : needed) {
-      if (b->pump <= 0 || b->pump > in.pumpCount) add("bottle." + b->id, say("watch.pumps"), "problem", say("watch.no_pump", {{"name", b->name}}));
-      else if (!isNum(in.cfg.pumpFlow(b->pump))) add("bottle." + b->id, say("watch.pumps"), "problem", say("watch.pump_uncalibrated", {{"name", b->name}, {"pump", b->pump}}));
+    for (const CanisterCfg* b : needed) {
+      if (b->pump <= 0 || b->pump > in.pumpCount) add("canister." + b->id, say("watch.pumps"), "problem", say("watch.no_pump", {{"name", b->name}}));
+      else if (!isNum(in.cfg.pumpFlow(b->pump))) add("canister." + b->id, say("watch.pumps"), "problem", say("watch.pump_uncalibrated", {{"name", b->name}, {"pump", b->pump}}));
     }
   }
   if (in.stopped) add("stop", say("watch.stop"), "neutral", say("watch.stopped"));
