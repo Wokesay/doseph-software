@@ -6,7 +6,7 @@ export { expect };
 // Every test also fails on an uncaught exception in the page and on a part
 // the error boundary had to replace: either could otherwise pass unnoticed
 // where no step looks at that part of the page. The specs read English, the
-// language a new robot and browser start in (SD-014).
+// language a new robot and browser start in.
 export const test = base.extend<{ appErrorGuard: void }>({
   appErrorGuard: [
     async ({ page }, use) => {

@@ -11,7 +11,7 @@ import { Banner, Field, LANGS, Seg, TestingNotice } from "../ui";
 export function Login() {
   const problem = info.value?.passwordProblem;
   const first = !info.value?.hasPassword;
-  const needsCode = first && !!info.value?.setupCode;  // only who can read the robot's console sets the first password (gc#79)
+  const needsCode = first && !!info.value?.setupCode;  // only who can read the robot's console sets the first password
   const [code, setCode] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -62,7 +62,7 @@ export function Login() {
           </Banner>
         ) : first ? (
           <>
-            {/* The language comes first, English chosen until the user picks another (SD-014) */}
+            {/* The language comes first, English chosen until the user picks another */}
             <div class="field" data-testid="first-lang">
               <span id="first-lang-label" class="row" style="gap:6px">
                 <Languages size={16} aria-hidden="true" />

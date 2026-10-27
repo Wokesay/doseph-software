@@ -39,7 +39,7 @@ export const deBase = {
   "common.version": "Version {v}",
   "common.testingOnly": "Nur zum Testen: Diese Version ist ein Entwicklungsstand und nicht für den Dauerbetrieb freigegeben.",
   "common.justNow": "gerade eben",
-  // Number and unit joined by a no-break space (gc#106)
+  // Number and unit joined by a no-break space
   "common.secondsAgo": "vor {n} s",
   "common.minutesAgo": "vor {n} min",
   "common.hoursAgo": "vor {n} h",
@@ -115,5 +115,5 @@ export const deBase = {
   "shell.httpError": "Fehler {status}",
 } as const;
 
-// The base texts plus the texts of each area (gc#18).
+// The base texts plus the texts of each area.
 export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...pumps, ...settings, ...sim };

@@ -21,7 +21,7 @@ export const stale = computed(() => lastUpdate.value > 0 && now.value - lastUpda
 let clockTimer: number | undefined;
 
 export const simulated = computed(() => !!info.value?.platform?.simulated);
-/** A SemVer pre-release (a hyphen after X.Y.Z, before any "+") or a version that cannot be read is for testing only (SD-096). */
+/** A SemVer pre-release (a hyphen after X.Y.Z, before any "+") or a version that cannot be read is for testing only. */
 export function forTestingOnly(version: string | null | undefined): boolean {
   const m = /^\d+\.\d+\.\d+(-[^+]+)?(\+.*)?$/.exec(version ?? "");
   return !m || m[1] !== undefined;
@@ -52,7 +52,7 @@ let pollTimer: number | undefined;
 let renewTimer: number | undefined;
 
 // The browser keeps the session cookie as long as the robot keeps an unused session. A page left
-// open, such as a phone on the wall, asks now and then, so a Stop still has its session (SD-064);
+// open, such as a phone on the wall, asks now and then, so a Stop still has its session;
 // one asleep longer finds out as soon as it is woken.
 const RENEW_MS = 10 * 60_000;
 async function renewSession() {
@@ -136,7 +136,7 @@ export async function boot() {
     stopLive();
   });
   info.value = await get<Info>("/info");
-  // Without a choice in this browser, the sign-in page speaks the robot's language (SD-083)
+  // Without a choice in this browser, the sign-in page speaks the robot's language
   if (!hasOwnLang() && (info.value.language === "de" || info.value.language === "en")) setLang(info.value.language, false);
   const s = await get<{ authenticated: boolean }>("/auth/session");
   authed.value = s.authenticated;

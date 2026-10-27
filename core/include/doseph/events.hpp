@@ -18,7 +18,7 @@ struct Event {
   Epoch ts = 0;
   std::string type;      // dose, mix, calibration, block, unblock, device, config, auth, system, grow, alarm
   std::string severity;  // info | notice | warn | alarm
-  Msg title;             // key, values and English text (SD-032)
+  Msg title;             // key, values and English text
   Msg text;              // empty when there is nothing to add
   json data = json::object();
 };
@@ -34,7 +34,7 @@ class EventLog {
   Epoch newestTs() const;  // 0 without events
   json toJson() const;
   void load(const json& j);
-  // Storage (gc#68): a daily snapshot (toJson) plus a journal, one event per line.
+  // Storage: a daily snapshot (toJson) plus a journal, one event per line.
   std::string journalSince(std::uint64_t afterId) const;  // lines for the events newer than afterId
   // Adds the journal's events newer than what is held; a torn or damaged line is skipped.
   size_t replay(const std::string& journal);

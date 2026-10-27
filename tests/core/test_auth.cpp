@@ -65,7 +65,7 @@ TEST_CASE("Sign-in: a session expires, a password change signs everyone out") {
   CHECK(a.changePassword("falsch", "x-123456789", 0, "").key == "auth.wrong_old");
 }
 
-TEST_CASE("Sign-in: a session in use stays signed in; one unused for 12 hours ends (SD-064)") {
+TEST_CASE("Sign-in: a session in use stays signed in; one unused for 12 hours ends") {
   Auth a(rng);
   a.setInitialPassword("geheim-123");
   Msg e;
@@ -76,7 +76,7 @@ TEST_CASE("Sign-in: a session in use stays signed in; one unused for 12 hours en
   CHECK_FALSE(a.check(*t, 3 * Auth::kSessionIdle));  // then 12 hours without a request
 }
 
-// A lockout per client (SD-051): someone guessing in the network locks only
+// A lockout per client: someone guessing in the network locks only
 // the clients that never signed in, never one that did.
 TEST_CASE("Sign-in: a client that signed in before keeps its own lockout; the others share one") {
   Auth a(rng);
@@ -193,7 +193,7 @@ TEST_CASE("Password change: a wrong old password counts as a failed attempt; a c
   CHECK(e.key == "auth.locked");
 }
 
-TEST_CASE("First password: an armed setup code is needed, used up by the password and never stored (gc#79)") {
+TEST_CASE("First password: an armed setup code is needed, used up by the password and never stored") {
   Auth a(rng);
   const std::string code = a.armSetupCode(0);
   REQUIRE(code.size() == 19);  // 16 characters of 32 (80 bits) in groups of four
@@ -223,7 +223,7 @@ TEST_CASE("First password: an armed setup code is needed, used up by the passwor
   CHECK_FALSE(a.setupCodeRequired());
 }
 
-TEST_CASE("First password: without an armed code it needs none, as before; arming again voids the code before (gc#79)") {
+TEST_CASE("First password: without an armed code it needs none, as before; arming again voids the code before") {
   Auth a(rng);
   CHECK_FALSE(a.setupCodeRequired());
   CHECK(a.setInitialPassword("geheim-123").key.empty());
@@ -235,7 +235,7 @@ TEST_CASE("First password: without an armed code it needs none, as before; armin
   CHECK(b.setInitialPassword("geheim-123", second).key.empty());
 }
 
-TEST_CASE("First password: the code is checked before the password, and a wrong one counts (gc#79)") {
+TEST_CASE("First password: the code is checked before the password, and a wrong one counts") {
   Auth a(rng);
   const std::string code = a.armSetupCode(0);
   CHECK(a.setInitialPassword("kurz", "2222-2222-2222-2222").key == "auth.code");
@@ -244,7 +244,7 @@ TEST_CASE("First password: the code is checked before the password, and a wrong 
   CHECK(a.wrongSetupCodes() == 1);
 }
 
-TEST_CASE("First password: a setup code given a time limit is refused from its end on, as SD-044 needs (gc#79)") {
+TEST_CASE("First password: a setup code given a time limit is refused from its end on") {
   Auth a(rng);
   const std::string code = a.armSetupCode(kMinute, 15 * kMinute);
   CHECK(a.setInitialPassword("geheim-123", code, 16 * kMinute).key == "auth.code");  // exactly at its end
@@ -256,7 +256,7 @@ TEST_CASE("First password: a setup code given a time limit is refused from its e
   CHECK(a.setInitialPassword("geheim-123", next, 30 * kMinute).key.empty());
 }
 
-TEST_CASE("First password: wrong setup codes lock no one out; the log gets the first and then one per 15 min (gc#79)") {
+TEST_CASE("First password: wrong setup codes lock no one out; the log gets the first and then one per 15 min") {
   Auth a(rng);
   const std::string code = a.armSetupCode(0);
   int logged = 0;
@@ -270,7 +270,7 @@ TEST_CASE("First password: wrong setup codes lock no one out; the log gets the f
   CHECK(a.setInitialPassword("mein-passwort", code, 1000 * kSecond).key.empty());  // no lockout in the owner's way
 }
 
-TEST_CASE("Random bytes come from the operating system in any length, never all zeros (gc#79)") {
+TEST_CASE("Random bytes come from the operating system in any length, never all zeros") {
   for (size_t n : {1, 256, 272, 1000}) {
     std::vector<std::uint8_t> x(n, 0), y(n, 0);
     sim::randomBytes(x.data(), n);
@@ -279,7 +279,7 @@ TEST_CASE("Random bytes come from the operating system in any length, never all 
       CHECK(x != y);
       CHECK(std::any_of(x.begin(), x.end(), [](std::uint8_t b) { return b != 0; }));
       if (n > 256) CHECK(std::any_of(x.begin() + 256, x.end(), [](std::uint8_t b) { return b != 0; }));  // at least 16 bytes past the first call
-      CHECK(std::any_of(x.end() - 16, x.end(), [](std::uint8_t b) { return b != 0; }));  // filled to the end (gc#234)
+      CHECK(std::any_of(x.end() - 16, x.end(), [](std::uint8_t b) { return b != 0; }));  // filled to the end
     }
   }
 }

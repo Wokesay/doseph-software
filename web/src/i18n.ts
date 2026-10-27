@@ -3,8 +3,8 @@
 // lang/de.ts and lang/en.ts (base and one file per area); the English table
 // must have every German key (checked by the compiler).
 //
-// Messages of the robot come as {key, text, args} with an English text
-// (SD-032): English shows that text, German fills the template from
+// Messages of the robot come as {key, text, args} with an English text:
+// English shows that text, German fills the template from
 // lang/msg.ts with the arguments and falls back to the robot's text.
 import { signal } from "@preact/signals";
 import { de } from "./lang/de";
@@ -25,7 +25,7 @@ function initial(): Lang {
   } catch {
     // private mode: no saved choice
   }
-  return "en";  // English first until a choice is made here or on the robot (SD-014)
+  return "en";  // English first until a choice is made here or on the robot
 }
 
 export const lang = signal<Lang>(initial());
@@ -95,7 +95,7 @@ function tIn(l: Lang, key: TextKey, vars?: Vars): string {
   return fill(text, vars);
 }
 
-/** A message of the robot ({key, text, args}) in the current language (SD-032). */
+/** A message of the robot ({key, text, args}) in the current language. */
 export function msg(m: Msg | null | undefined): string {
   return msgAt(m, 0);
 }

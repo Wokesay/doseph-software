@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Text keys of the web app (gc#18): web/src/lang/de.ts and en.ts merge the
+// Text keys of the web app: web/src/lang/de.ts and en.ts merge the
 // base texts and one file per area. A key used in two files would silently
 // overwrite the other; every file has the same keys in German and English.
-// The robot's messages (SD-032): core/src/messages.cpp (English) and
+// The robot's messages: core/src/messages.cpp (English) and
 // web/src/lang/msg.ts (German) have the same keys and placeholders, and
 // every say("…") in the core and the simulator names a key of the table.
 //   node --test tools/*.test.mjs
@@ -195,7 +195,7 @@ test("a jump lock's reason fits a notification in both languages (RAT-045)", () 
     }
 });
 
-// Durations keep the number and its unit on one line (gc#106): they are
+// Durations keep the number and its unit on one line: they are
 // joined with a no-break space, in the robot's messages and in the app's texts.
 test("a number and its unit of time are joined with a no-break space", () => {
   const plain = /(\}|\d)[ \t]+(s|min|h|Tage|Tagen|days)\b/;

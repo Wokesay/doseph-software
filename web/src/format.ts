@@ -22,7 +22,7 @@ export function num(v: number | null | undefined, decimals = 1): string {
 }
 
 // A plain number in the language of the page (5,8 / 5.8), with as many
-// decimals as it has (gc PD-035).
+// decimals as it has.
 export function figure(v: number): string {
   // No thousands separator: a field would read "1.000" or "1,000" as 1.
   return v.toLocaleString(locale(), { maximumFractionDigits: 6, useGrouping: false });
@@ -37,7 +37,7 @@ export function ago(seconds: number | null | undefined): string {
   return t("common.daysAgo", { n: Math.round(seconds / 86400) });
 }
 
-// Number and unit are joined by a no-break space, so a line never breaks between them (gc#106)
+// Number and unit are joined by a no-break space, so a line never breaks between them
 export function duration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   const nb = "\u00a0";

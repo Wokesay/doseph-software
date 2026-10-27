@@ -5,22 +5,19 @@ practice has an entry here. The entry says what the rule is, why it
 exists, what evidence backs it, where it is implemented and which tests
 cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
-- **IDs are stable** and the same as in the predecessor
-  growcontroller-software (`docs/PROVENANCE.md`). An ID is never reused. A
-  rule of the grow controller that the mixing robot does not need stays
-  listed as dropped, with the area it belonged to, the rule as the grow
-  controller had it, and under **Later** the step of the order of work
-  (#10) that would bring it back.
+- **IDs are stable**: a rule keeps the ID it had in the grow controller
+  this software started from (`docs/PROVENANCE.md`), and an ID is never
+  reused. A rule of the grow controller that the mixing robot does not
+  need stays listed as dropped, with the area it belonged to, the rule as
+  the grow controller had it, and under **Later** the step of the order
+  of work (#10) that would bring it back.
 - **Reference installation** means the private installation on which the
   rules were first developed and measured. Evidence names the year only.
 - **Evidence** says whether a number was measured, observed, calculated
   or found in a review. "—" means there is no number behind it. The
   evidence was gathered for the grow controller; it applies to the
   mixing robot where the rule does.
-- **Changed** says what changed from the predecessor's rule.
-- References written `gc PD-xxx` or `gc#n` are product decisions and
-  issues of the predecessor; `SD-001` to `SD-104` are its software
-  decisions (`docs/DECISIONS.md`).
+- **Changed** says what changed from the grow controller's rule.
 - New rules get the next free ID (now RAT-090), an entry here and a test.
 - What later steps rebuild that is no rule of its own – grow phases and
   harvest, the setup assistant, the scenario harness, the dry-run latch –
@@ -47,7 +44,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** Only one pump job, a calibration or priming, runs at a time, and none while the cycle doses; a second start is refused with the reason. A calibration result that is missing, zero, negative or above 1000 ml is rejected and the previous value stays.
 - **Why:** A dosing sequence that can start twice overdoses. One that runs on a missing or zero rate either has no exit or underdoses, and either way it looks like success.
 - **Evidence:** Observed on the reference installation (2026): a mixing sequence that started without valid inputs could neither finish nor stop, and a flow rate of zero would have passed as valid. Limits on attempts and run time, a refusal of zero rates and a lock against a second start fixed it.
-- **Changed:** The mix jobs of the predecessor and their confirmation are gone; the cycle (SD-105) is the only thing that doses into the tank.
+- **Changed:** The grow controller's mix jobs and their confirmation are gone; the cycle (SD-105) is the only thing that doses into the tank.
 - **Implemented in:** `core/src/config.cpp`, `core/src/robot.cpp`
 - **Tests:** `tests/core/test_cycle.cpp` "Pumps: a calibration runs into the cup and is worked out from the actual run time; a senseless result is refused (RAT-003, RAT-070)"
 
@@ -443,7 +440,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** After a dose the robot circulates before it measures again, and pH waits longer than EC. The waits are set by the user per tank; the suggestion is 2 turnovers after nutrients and 3 after pH− (SD-105), and the mixing clock runs only while water flows.
 - **Why:** Dosing again before the previous dose is visible stacks doses and overshoots – irreversibly for pH. EC and pH respond very differently, so one shared waiting time does not fit.
 - **Evidence:** Measured on the reference installation (2026; 20.4 L, circulation running): after nutrient doses EC reached tolerance after a median of 32 s (t63 median 26 s). After a pH-lowering dose the reading stayed flat for 99 s, about 80 s of that after the circulation pump had restarted, then fell steeply and reached tolerance after 194 s. Cutting the pH wait to about 45 s, in line with a faster sensor filter, would have let four doses in before the first one showed.
-- **Changed:** The fixed waits of the predecessor became the user's waits with a suggestion from volume and flow (SD-105).
+- **Changed:** The grow controller's fixed waits became the user's waits with a suggestion from volume and flow (SD-105).
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/src/cycle.cpp`, `sim/world.cpp`
 - **Tests:** `tests/core/test_cycle.cpp` "Cycle: pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
@@ -709,7 +706,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 - **Rule:** A recipe gives the ratio and the order of its scaled parts; EC control scales them together to the target. A fixed part goes in per litre of fresh water and is not dosed by EC rounds.
 - **Why:** Manufacturer charts scale the base nutrients to a target EC in a fixed ratio, but give additives such as a cleanser a fixed rate per volume. Scaled with an EC correction, an additive is overdosed in every round; driven by EC, its step can take a tank that is already at EC as done and skip itself.
-- **Evidence:** Found in the review of SD-057 (the fixed addition is one of its review safeguards); the scaling to a target EC in a fixed ratio: SD-057 sources [1][2]. Observed on the reference installation (2026, see RAT-011): a Ca/Mg step controlled to EC took its target as met and skipped itself, so the fresh water got none.
+- **Evidence:** Found in a review of pair dosing (the fixed addition is one of its safeguards); the scaling to a target EC in a fixed ratio follows the manufacturers' charts. Observed on the reference installation (2026, see RAT-011): a Ca/Mg step controlled to EC took its target as met and skipped itself, so the fresh water got none.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/plan.cpp`, `core/src/robot.cpp`, `web/src/api.ts`
 - **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: a fixed addition is neither dosed nor scaled; the round goes to the other parts in their ratio (RAT-085)"; `tests/core/test_plan.cpp` "EC effect after an edit: scaled up by parts no longer scaled, kept only at or above the new start (RAT-085)"; `tests/core/test_api.cpp` "API: a backup is not restored while a pump runs; what the robot learned stays only where the file keeps it (RAT-085)"
 

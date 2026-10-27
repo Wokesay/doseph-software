@@ -6,7 +6,7 @@
 // Values as float; gaps are NaN and appear in the API as null.
 // On the device the same structure lies in a flash partition of its own
 // (append, erase only on wrap-around); in the simulator in RAM with a file dump.
-// Storage (gc#68): a snapshot (dump) plus a journal with one record per
+// Storage: a snapshot (dump) plus a journal with one record per
 // sampling round, so a card is not rewritten for every new value. A sample
 // is replayed only when it is newer than its series in the snapshot, so a
 // journal that survived its snapshot is not counted twice; each record

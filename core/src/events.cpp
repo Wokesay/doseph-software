@@ -11,7 +11,7 @@ namespace {
 
 // A message nested in a saved message's arguments (a reading's reason in a
 // line, the parts of a list) that no longer fits its template loses its key
-// too, down to the depth the web app shows (SD-083)
+// too, down to the depth the web app shows
 void dropUnfitting(json& v, int depth) {
   if (depth > 4) return;
   if (v.is_array()) {
@@ -29,7 +29,7 @@ void dropUnfitting(json& v, int depth) {
     for (auto& [name, x] : v["args"].items()) dropUnfitting(x, depth + 1);
 }
 
-// A saved message; events written before SD-032 hold plain text,
+// A saved message; events written before messages had keys hold plain text,
 // which stays as it is (no key). Anything else of the wrong type loads as an
 // empty message; key and text are capped (args and data are not yet).
 Msg msgFromJson(const json& e, const char* field) {
@@ -41,7 +41,7 @@ Msg msgFromJson(const json& e, const char* field) {
   Msg m{utf8Prefix(jstr(v, "key"), kMaxKey), utf8Prefix(jstr(v, "text"), kMaxText), json::object()};
   if (v.contains("args") && v["args"].is_object()) m.args = v["args"];
   // Saved under an older template: the page shows the text it was saved with
-  // rather than today's template with values missing (SD-083)
+  // rather than today's template with values missing
   if (!m.key.empty() && !fitsTemplate(m.key, m.args)) m.key.clear();
   for (auto& [name, x] : m.args.items()) dropUnfitting(x, 1);
   return m;
@@ -97,7 +97,7 @@ bool eventFromJson(const json& e, Event& ev) {
   double id = jnum(e, "id", 0), ts = jnum(e, "ts", 0);
   ev.id = isNum(id) && id >= 0 && id < 9e15 ? static_cast<std::uint64_t>(id) : 0;
   // A time outside any plausible range (a broken file) is not carried
-  // over: it would anchor the clock after a restart (gc PD-069).
+  // over: it would anchor the clock after a restart.
   ev.ts = isNum(ts) && ts >= 0 && ts <= static_cast<double>(kNotAfter) ? static_cast<Epoch>(ts) : 0;
   ev.type = jstr(e, "type");
   ev.severity = jstr(e, "severity");

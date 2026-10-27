@@ -91,7 +91,7 @@ TEST_CASE("Event log: key and values survive a restart, old plain texts stay rea
   CHECK_FALSE(doseph::fitsTemplate("truth.jump", {{"until", 900}, {"from", 1.2}, {"to", 2.4}}));
 }
 
-TEST_CASE("Event log: a damaged events.json loads as empty messages, never throws (SD-032)") {
+TEST_CASE("Event log: a damaged events.json loads as empty messages, never throws") {
   json events = json::array();
   int id = 1;
   for (const json& v : {json(5), json::array({"a"}), json(nullptr), json(true),
@@ -130,7 +130,7 @@ bool sameSeries(const History& a, const History& b, const std::string& id, Epoch
 }
 }  // namespace
 
-TEST_CASE("History journal: snapshot plus journal gives the same history, never counted twice (gc#68)") {
+TEST_CASE("History journal: snapshot plus journal gives the same history, never counted twice") {
   const Epoch t0 = 1790000000 - 1790000000 % 3600;
   const std::set<std::string> ids = {"tank.ph", "tank.ec"};
   History live;
@@ -184,7 +184,7 @@ TEST_CASE("History journal: snapshot plus journal gives the same history, never 
   }
 }
 
-TEST_CASE("History journal: a torn record followed by a whole one is never read as values (gc#68)") {
+TEST_CASE("History journal: a torn record followed by a whole one is never read as values") {
   const Epoch t0 = 1790000000;
   const std::set<std::string> ids = {"tank.ph", "tank.ec"};
   std::string good;
@@ -201,7 +201,7 @@ TEST_CASE("History journal: a torn record followed by a whole one is never read 
   }
 }
 
-TEST_CASE("History journal: only known series and plausible times, each series by its own newest time (gc#68)") {
+TEST_CASE("History journal: only known series and plausible times, each series by its own newest time") {
   const Epoch t0 = 1790000000;
   History h;
   const std::string journal = History::record(t0, {{"tank.ph", 6.0}, {"junk", 1.0}}) +  // an id no role has
@@ -223,7 +223,7 @@ TEST_CASE("History journal: only known series and plausible times, each series b
   CHECK(later.query("tank.ec", t0, t0 + 60, 0).t.size() > 0);
 }
 
-TEST_CASE("Event journal: events after the snapshot come back by id, a torn line is skipped (gc#68)") {
+TEST_CASE("Event journal: events after the snapshot come back by id, a torn line is skipped") {
   EventLog live;
   live.add(100, "system", "info", Msg{"ev.a", "A", json::object()});
   const json snapshot = live.toJson();

@@ -163,7 +163,7 @@ export function Field(p: { label: ComponentChildren; hint?: ComponentChildren; e
   );
 }
 
-// Decimal comma in German, decimal point in English (gc PD-035); typing accepts both.
+// Decimal comma in German, decimal point in English; typing accepts both.
 const shown = (v: number) => (lang.value === "de" ? String(v).replace(".", ",") : String(v));
 
 export function NumberInput(p: { value: number | null | undefined; onValue: (v: number | null) => void; unit?: string; min?: number; max?: number; step?: number; placeholder?: string; id?: string; name?: string; ariaLabel?: string }) {
@@ -216,7 +216,7 @@ export function Toggle(p: { checked: boolean; onChange: (v: boolean) => unknown;
   );
 }
 
-/** The two languages in their own names, in the same order everywhere (SD-014); each name is read in its language. */
+/** The two languages in their own names, in the same order everywhere; each name is read in its language. */
 export const LANGS: ["en" | "de", ComponentChildren][] = [
   ["en", <span lang="en" class="notranslate">English</span>],
   ["de", <span lang="de" class="notranslate">Deutsch</span>],
@@ -266,7 +266,7 @@ const topmost = () => dialogs.reduce<HTMLElement | undefined>((a, b) => (!a || a
 let lastFocused: HTMLElement | null = null;
 document.addEventListener("focusin", (e) => (lastFocused = e.target as HTMLElement), true);
 
-// A dialog (gc#105): focus moves into it when it opens, Tab and Shift+Tab stay
+// A dialog: focus moves into it when it opens, Tab and Shift+Tab stay
 // inside, focus returns to what opened it when it closes, and its title names it.
 // With a message it is a confirmation (role alertdialog): a screen reader reads
 // the message with the title. returnFocus names where the focus goes when what
@@ -400,7 +400,7 @@ export function Banner(p: { tone?: "info" | "warn" | "bad" | "ok"; children: Com
   );
 }
 
-/** A prototype or beta says it is for testing only (SD-096); a Stable release shows nothing. */
+/** A prototype or beta says it is for testing only; a Stable release shows nothing. */
 export function TestingNotice() {
   if (!testingOnly.value) return null;
   return (
