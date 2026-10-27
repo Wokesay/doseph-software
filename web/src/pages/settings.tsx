@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Settings: language and look, the device's name and time zone, the
-// password, signing out, the version.
+// password, reporting a problem, signing out, the version.
 import { useState } from "preact/hooks";
-import { Info as InfoIcon, KeyRound, LogOut, Monitor } from "lucide-preact";
-import { post, put } from "../api";
+import { Bug, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor } from "lucide-preact";
+import { get, post, put } from "../api";
 import { timeZone } from "../format";
 import { lang, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, toast } from "../store";
@@ -124,6 +124,84 @@ function PasswordCard() {
   );
 }
 
+// Where a report goes: the public bug form, filled in from here
+export const REPO = "https://github.com/Wokesay/doseph-software";
+
+type Diagnostics = { reportId: string; info: { version: string }; events: unknown[] };
+
+// Report a problem: the robot packs its states and recent events, never a
+// secret; the owner looks at it, downloads it and attaches it to the report.
+function ReportCard() {
+  const [what, setWhat] = useState("");
+  const [pkg, setPkg] = useState<{ d: Diagnostics; text: string } | null>(null);
+  const [shown, setShown] = useState(false);
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([pkg!.text], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `doseph-diagnostics-${pkg!.d.reportId}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const issue = () => {
+    const q = new URLSearchParams({ template: "bug.yml", version: info.value?.version ?? "" });
+    if (pkg) q.set("report", pkg.d.reportId);
+    const text = what.trim();
+    if (text) {
+      q.set("title", text.split("\n")[0].slice(0, 80));
+      q.set("what", text.slice(0, 2000));
+    }
+    return `${REPO}/issues/new?${q}`;
+  };
+  return (
+    <Card title={t("settings.report")} icon={<Bug size={18} />}>
+      <div class="stack" data-testid="report">
+        <p class="muted">{t("settings.report.intro")}</p>
+        <Field label={t("settings.report.what")}>
+          <textarea class="input" rows={3} maxLength={2000} value={what} onInput={(e) => setWhat((e.target as HTMLTextAreaElement).value)} name="what" />
+        </Field>
+        <div>
+          <Button
+            onClick={async () => {
+              const d = await get<Diagnostics>("/diagnostics");
+              setPkg({ d, text: JSON.stringify(d, null, 2) });
+            }}
+          >
+            {t(pkg ? "settings.report.again" : "settings.report.create")}
+          </Button>
+        </div>
+        {pkg && (
+          <>
+            <p data-testid="report-id">
+              {t("settings.report.ready", { id: pkg.d.reportId, events: pkg.d.events.length, kb: Math.max(1, Math.round(pkg.text.length / 1024)) })}
+            </p>
+            <p class="muted small">{t("settings.report.holds")}</p>
+            <div class="row wrap">
+              <Button onClick={() => setShown(!shown)} aria-expanded={shown}>
+                {t(shown ? "settings.report.hide" : "settings.report.show")}
+              </Button>
+              <Button onClick={download} data-testid="report-download">
+                <Download size={16} /> {t("settings.report.download")}
+              </Button>
+            </div>
+            {shown && <pre class="code" data-testid="report-contents">{pkg.text}</pre>}
+          </>
+        )}
+        <p class="muted small">{t("settings.report.steps")}</p>
+        <div>
+          <a class="btn primary" href={issue()} target="_blank" rel="noopener noreferrer" data-testid="report-issue">
+            <ExternalLink size={16} /> {t("settings.report.github")}
+          </a>
+        </div>
+        <p class="muted small">
+          {t("settings.report.security")}{" "}
+          <a href={`${REPO}/blob/main/SECURITY.md`} target="_blank" rel="noopener noreferrer">SECURITY.md</a>
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const rev = config.value!.revision;
   return (
@@ -133,6 +211,7 @@ export function SettingsPage() {
         <DeviceCard key={rev} />
       </div>
       <PasswordCard />
+      <ReportCard />
       <Card title={t("settings.about")}>
         <div class="stack">
           <div class="kv">

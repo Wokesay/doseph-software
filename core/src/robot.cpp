@@ -9,6 +9,7 @@
 
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
+#include "doseph/sha256.hpp"
 
 namespace doseph {
 
@@ -277,6 +278,29 @@ json Robot::info() const {
           {"name", cfg_.system.name},
           {"language", cfg_.system.language},
           {"pumpCount", hw_.pumpCount()}};
+}
+
+json Robot::diagnostics() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  std::uint8_t b[4];
+  rng_(b, sizeof b);
+  const json st = state();
+  json evs = json::array();
+  for (const auto& e : log_.query(clock_.epoch() - 72 * 3600, clock_.epoch(), "", 300)) evs.push_back(e);
+  return {{"reportId", "DP-" + toHex(b, sizeof b)},
+          {"createdAt", clock_.epoch()},
+          {"info", info()},
+          {"config", cfg_},
+          {"readings", st["readings"]},
+          {"cycle", st["cycle"]},
+          {"watchdog", st["watchdog"]},
+          {"latches", st["latches"]},
+          {"jumpLocks", st["jumpLocks"]},
+          {"pumps", st["pumps"]},
+          {"maintenanceUntil", st["maintenanceUntil"]},
+          {"events", evs},
+          // what the package leaves out, as keys; the app names them in the page's language
+          {"redacted", {"password_hash", "sessions", "ip_addresses", "wifi_credentials"}}};
 }
 
 json Robot::configJson() const {

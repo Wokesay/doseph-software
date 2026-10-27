@@ -170,3 +170,22 @@ test("history downloads as CSV in the page's format (RAT-016)", async ({ page })
   expect(text.startsWith("time_utc,ph,ec,temp,flow\n")).toBe(true);
   expect(text.split("\n").length).toBeGreaterThan(10);
 });
+
+test("a problem is reported with a diagnostics package that holds no secret", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("report");
+  await card.locator("textarea[name=what]").fill("The cycle stayed at the flow check");
+  await card.getByRole("button", { name: "Create diagnostics package" }).click();
+  await expect(page.getByTestId("report-id")).toContainText(/Package DP-[0-9a-f]{8}: \d+ events/);
+  await card.getByRole("button", { name: "Show contents" }).click();
+  await expect(page.getByTestId("report-contents")).toContainText('"reportId"');
+  await expect(page.getByTestId("report-contents")).not.toContainText('"salt"');
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("report-download").click()]);
+  expect(download.suggestedFilename()).toMatch(/^doseph-diagnostics-DP-[0-9a-f]{8}\.json$/);
+  const href = new URL((await page.getByTestId("report-issue").getAttribute("href"))!);
+  expect(href.pathname).toBe("/Wokesay/doseph-software/issues/new");
+  expect(href.searchParams.get("template")).toBe("bug.yml");
+  expect(href.searchParams.get("report")).toMatch(/^DP-[0-9a-f]{8}$/);
+  expect(href.searchParams.get("what")).toBe("The cycle stayed at the flow check");
+});
