@@ -7,13 +7,13 @@ version = 1
 [[annotations]]
 path = "**"
 precedence = "closest"
-SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+SPDX-FileCopyrightText = "2026 The doseph-software contributors"
 
 # Files without comment syntax
 [[annotations]]
 path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc", "sim/README.txt"]
 precedence = "closest"
-SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+SPDX-FileCopyrightText = "2026 The doseph-software contributors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
 # The license text quoted in the simulator's third-party notices
