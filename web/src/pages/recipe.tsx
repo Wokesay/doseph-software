@@ -6,7 +6,7 @@ import { CalendarClock, FlaskConical, Pencil, Plus, Trash2 } from "lucide-preact
 import { del, get, post, put, type Recipe, type RecipeTemplate } from "../api";
 import { dateTime, num } from "../format";
 import { lang, t } from "../i18n";
-import { LIMITS, bottles, config, phMiddle, recipes, refreshConfig, refreshState, toast } from "../store";
+import { LIMITS, canisters, config, phMiddle, recipes, refreshConfig, refreshState, toast } from "../store";
 import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Seg, Term, Toggle } from "../ui";
 
 type Span = "days" | "until" | "open";
@@ -105,7 +105,7 @@ function ActiveCard() {
   );
 }
 
-type Draft = { id?: string; name: string; note: string; ecTarget: number | null; phLow: number | null; phHigh: number | null; steps: { bottle: string; mlPerL: number | null; fixed: boolean }[] };
+type Draft = { id?: string; name: string; note: string; ecTarget: number | null; phLow: number | null; phHigh: number | null; steps: { canister: string; mlPerL: number | null; fixed: boolean }[] };
 
 const draftOf = (r: Recipe): Draft => ({
   id: r.id,
@@ -119,17 +119,17 @@ const draftOf = (r: Recipe): Draft => ({
 
 function Editor(p: { draft: Draft; onClose: () => void }) {
   const [d, setD] = useState<Draft>(p.draft);
-  const nutrients = bottles.value.filter((b) => b.kind === "nutrient");
+  const nutrients = canisters.value.filter((b) => b.role === "nutrient");
   const set = (patch: Partial<Draft>) => setD({ ...d, ...patch });
   const setStep = (i: number, patch: Partial<Draft["steps"][number]>) => set({ steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const save = async () => {
     const ph = d.phLow != null && d.phHigh != null ? [d.phLow, d.phHigh] : null;
-    await post("/recipes", { id: d.id, name: d.name.trim(), note: d.note, ecTarget: d.ecTarget, ph, steps: d.steps.filter((s) => s.bottle) });
+    await post("/recipes", { id: d.id, name: d.name.trim(), note: d.note, ecTarget: d.ecTarget, ph, steps: d.steps.filter((s) => s.canister) });
     await refreshConfig();
     toast(t("recipe.saved", { name: d.name.trim() }));
     p.onClose();
   };
-  const pairOf = (id: string) => bottles.value.find((b) => b.id === id)?.pair ?? "";
+  const pairOf = (id: string) => canisters.value.find((b) => b.id === id)?.pair ?? "";
   return (
     <Modal
       wide
@@ -165,13 +165,13 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
       </Field>
       <div class="stack-sm">
         <div class="section-title">{t("recipe.parts")}</div>
-        {!nutrients.length && <Banner tone="warn">{t("recipe.noBottles")}</Banner>}
+        {!nutrients.length && <Banner tone="warn">{t("recipe.noCanisters")}</Banner>}
         <div class="steps recipe-steps">
           {d.steps.map((s, i) => (
             <div class="step">
               <span class="n">{i + 1}</span>
               <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-                <select class="select input" aria-label={t("term.bottle")} value={s.bottle} onChange={(e) => setStep(i, { bottle: (e.target as HTMLSelectElement).value })}>
+                <select class="select input" aria-label={t("term.canister")} value={s.canister} onChange={(e) => setStep(i, { canister: (e.target as HTMLSelectElement).value })}>
                   <option value="">–</option>
                   {nutrients.map((b) => (
                     <option value={b.id}>{b.pair ? `${b.name} (${b.pair})` : b.name}</option>
@@ -180,7 +180,7 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
                 <NumberInput value={s.mlPerL} onValue={(v) => setStep(i, { mlPerL: v })} unit="ml/L" ariaLabel={t("recipe.mlPerL")} />
               </div>
               <div class="row">
-                {!pairOf(s.bottle) && (
+                {!pairOf(s.canister) && (
                   <label class="row small" style="gap:6px">
                     <Toggle checked={s.fixed} onChange={(v) => setStep(i, { fixed: v })} label={t("term.fixed")} />
                     <Term topic="fixed" />
@@ -194,7 +194,7 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
           ))}
         </div>
         <div>
-          <button class="btn sm" onClick={() => set({ steps: [...d.steps, { bottle: "", mlPerL: null, fixed: false }] })} disabled={!nutrients.length}>
+          <button class="btn sm" onClick={() => set({ steps: [...d.steps, { canister: "", mlPerL: null, fixed: false }] })} disabled={!nutrients.length}>
             <Plus size={15} /> {t("recipe.addPart")}
           </button>
         </div>
@@ -207,7 +207,7 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
 function RecipeList(p: { onEdit: (d: Draft) => void }) {
   const list = recipes.value;
   const active = config.value!.active.recipe;
-  const name = (id: string) => bottles.value.find((b) => b.id === id)?.name ?? id;
+  const name = (id: string) => canisters.value.find((b) => b.id === id)?.name ?? id;
   const remove = async (r: Recipe) => {
     if (!confirm(t("recipe.deleteAsk", { name: r.name }))) return;
     await del(`/recipes/${encodeURIComponent(r.id)}`);
@@ -235,7 +235,7 @@ function RecipeList(p: { onEdit: (d: Draft) => void }) {
                 <div class="muted small">
                   {t("recipe.summary", { ec: num(r.ecTarget, 2), lo: num(r.ph?.[0] ?? null, 2), hi: num(r.ph?.[1] ?? null, 2) })}
                   {" · "}
-                  {r.steps.map((s) => `${name(s.bottle)} ${num(s.mlPerL, 2)}${s.fixed ? "*" : ""}`).join(", ")}
+                  {r.steps.map((s) => `${name(s.canister)} ${num(s.mlPerL, 2)}${s.fixed ? "*" : ""}`).join(", ")}
                 </div>
               </div>
               <div class="row-actions">
@@ -262,10 +262,10 @@ function Templates(p: { onUse: (d: Draft) => void }) {
     get<{ recipes: RecipeTemplate[] }>("/templates").then((r) => setList(r.recipes)).catch(() => {});
   }, []);
   const de = lang.value === "de";
-  // A part goes to the bottle of the same name, else to the bottle of its pair in the same place
+  // A part goes to the canister of the same name, else to the canister of its pair in the same place
   const match = (step: RecipeTemplate["steps"][number]) => {
     const names = [step.name, step.nameDe].filter(Boolean).map((n) => n!.toLowerCase());
-    return bottles.value.find((b) => b.kind === "nutrient" && names.includes(b.name.toLowerCase()))?.id ?? "";
+    return canisters.value.find((b) => b.role === "nutrient" && names.includes(b.name.toLowerCase()))?.id ?? "";
   };
   const use = (tp: RecipeTemplate) =>
     p.onUse({
@@ -274,7 +274,7 @@ function Templates(p: { onUse: (d: Draft) => void }) {
       ecTarget: tp.ecTarget ?? null,
       phLow: tp.ph?.[0] ?? null,
       phHigh: tp.ph?.[1] ?? null,
-      steps: tp.steps.map((s) => ({ bottle: match(s), mlPerL: s.mlPerL, fixed: false })),
+      steps: tp.steps.map((s) => ({ canister: match(s), mlPerL: s.mlPerL, fixed: false })),
     });
   if (!list.length) return null;
   return (

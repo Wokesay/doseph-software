@@ -1,36 +1,36 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Pumps & probes: which bottle sits on which pump, calibrating and priming
+// Pumps & probes: which canister sits on which pump, calibrating and priming
 // the dosing pumps, calibrating the pH and EC probes.
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, Gauge, Pencil, Plus, Syringe, Trash2 } from "lucide-preact";
-import { del, post, type Bottle } from "../api";
+import { del, post, type Canister } from "../api";
 import { dateTime, num } from "../format";
 import { msg, t } from "../i18n";
-import { bottles, config, info, refreshConfig, refreshState, state, toast } from "../store";
+import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
 import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term } from "../ui";
 
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
 
-function BottleEditor(p: { bottle: Partial<Bottle>; onClose: () => void }) {
-  const [b, setB] = useState<Partial<Bottle>>({ kind: "nutrient", pump: 0, pair: "", color: COLORS[bottles.value.length % COLORS.length], ...p.bottle });
+function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void }) {
+  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", pump: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], ...p.canister });
   const pumps = info.value?.pumpCount ?? 0;
-  const used = (n: number) => bottles.value.find((x) => x.pump === n && x.id !== b.id);
+  const used = (n: number) => canisters.value.find((x) => x.pump === n && x.id !== b.id);
   const save = async () => {
-    await post("/bottles", { ...b, name: (b.name ?? "").trim(), pair: b.kind === "nutrient" ? (b.pair ?? "").trim() : "" });
+    await post("/canisters", { ...b, name: (b.name ?? "").trim(), pair: b.role === "nutrient" ? (b.pair ?? "").trim() : "" });
     await refreshConfig();
-    toast(t("pumps.bottleSaved"));
+    toast(t("pumps.canisterSaved"));
     p.onClose();
   };
   return (
     <Modal
-      title={b.id ? t("pumps.editBottle") : t("pumps.newBottle")}
+      title={b.id ? t("pumps.editCanister") : t("pumps.newCanister")}
       onClose={p.onClose}
       footer={
         <>
           <button class="btn" onClick={p.onClose}>
             {t("common.cancel")}
           </button>
-          <Button variant="primary" onClick={save} disabled={!(b.name ?? "").trim()} data-testid="save-bottle">
+          <Button variant="primary" onClick={save} disabled={!(b.name ?? "").trim()} data-testid="save-canister">
             {t("common.save")}
           </Button>
         </>
@@ -40,12 +40,12 @@ function BottleEditor(p: { bottle: Partial<Bottle>; onClose: () => void }) {
         <Field label={t("pumps.content")}>
           <input class="input" value={b.name ?? ""} maxLength={40} onInput={(e) => setB({ ...b, name: (e.target as HTMLInputElement).value })} name="name" />
         </Field>
-        <Field label={t("pumps.kind")} group>
-          <Seg<Bottle["kind"]>
-            value={b.kind ?? "nutrient"}
-            onChange={(kind) => setB({ ...b, kind })}
+        <Field label={t("pumps.role")} group>
+          <Seg<Canister["role"]>
+            value={b.role ?? "nutrient"}
+            onChange={(role) => setB({ ...b, role })}
             options={[
-              ["nutrient", t("pumps.kind.nutrient")],
+              ["nutrient", t("pumps.role.nutrient")],
               ["ph_down", "pH−"],
             ]}
           />
@@ -60,7 +60,7 @@ function BottleEditor(p: { bottle: Partial<Bottle>; onClose: () => void }) {
             ))}
           </select>
         </Field>
-        {b.kind === "nutrient" && (
+        {b.role === "nutrient" && (
           <Field label={<Term topic="pair" />} hint={t("pumps.pairHint")}>
             <input class="input" value={b.pair ?? ""} maxLength={8} onInput={(e) => setB({ ...b, pair: (e.target as HTMLInputElement).value })} name="pair" />
           </Field>
@@ -85,33 +85,33 @@ function BottleEditor(p: { bottle: Partial<Bottle>; onClose: () => void }) {
   );
 }
 
-function BottlesCard(p: { onEdit: (b: Partial<Bottle>) => void }) {
-  const list = bottles.value;
-  const remove = async (b: Bottle) => {
+function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
+  const list = canisters.value;
+  const remove = async (b: Canister) => {
     if (!confirm(t("pumps.deleteAsk", { name: b.name }))) return;
-    await del(`/bottles/${encodeURIComponent(b.id)}`);
+    await del(`/canisters/${encodeURIComponent(b.id)}`);
     await refreshConfig();
-    toast(t("pumps.bottleDeleted"), "info");
+    toast(t("pumps.canisterDeleted"), "info");
   };
   return (
     <Card
-      title={t("pumps.bottles")}
+      title={t("pumps.canisters")}
       icon={<Beaker size={18} />}
       actions={
-        <button class="btn sm" onClick={() => p.onEdit({})} data-testid="new-bottle">
-          <Plus size={15} /> {t("pumps.newBottle")}
+        <button class="btn sm" onClick={() => p.onEdit({})} data-testid="new-canister">
+          <Plus size={15} /> {t("pumps.newCanister")}
         </button>
       }
     >
       {list.length ? (
         <div class="list">
           {list.map((b) => (
-            <div class="item wrap-row" data-testid={`bottle-${b.id}`}>
+            <div class="item wrap-row" data-testid={`canister-${b.id}`}>
               <span class="swatch" style={`background:${b.color || "var(--faint)"}`} />
               <div class="grow">
                 <div class="title">{b.name}</div>
                 <div class="muted small">
-                  {b.kind === "ph_down" ? "pH−" : t("pumps.kind.nutrient")}
+                  {b.role === "ph_down" ? "pH−" : t("pumps.role.nutrient")}
                   {b.pair && ` · ${t("pumps.pairName", { pair: b.pair })}`}
                   {" · "}
                   {b.pump ? t("pumps.pumpN", { pump: b.pump }) : t("pumps.noPump")}
@@ -129,7 +129,7 @@ function BottlesCard(p: { onEdit: (b: Partial<Bottle>) => void }) {
           ))}
         </div>
       ) : (
-        <Empty title={t("pumps.noBottles")} text={t("pumps.noBottlesText")} />
+        <Empty title={t("pumps.noCanisters")} text={t("pumps.noCanistersText")} />
       )}
     </Card>
   );
@@ -222,7 +222,7 @@ function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose
 function PumpsCard() {
   const st = state.value!;
   const [dialog, setDialog] = useState<{ pump: number; type: "calibration" | "prime" } | null>(null);
-  const name = (id: string | null) => bottles.value.find((b) => b.id === id)?.name;
+  const name = (id: string | null) => canisters.value.find((b) => b.id === id)?.name;
   return (
     <Card title={t("pumps.pumps")} icon={<Syringe size={18} />}>
       <div class="list">
@@ -230,13 +230,13 @@ function PumpsCard() {
           <div class="item wrap-row" data-testid={`pump-${p.pump}`}>
             <div class="grow">
               <div class="title">
-                {t("pumps.pumpN", { pump: p.pump })} · {name(p.bottle) ?? <span class="muted">{t("pumps.empty")}</span>}
+                {t("pumps.pumpN", { pump: p.pump })} · {name(p.canister) ?? <span class="muted">{t("pumps.empty")}</span>}
               </div>
               <div class="small">
                 {p.flowMlPerMin != null ? (
                   <span class="muted">{t("pumps.flow", { flow: num(p.flowMlPerMin, 1), date: p.at ? dateTime(p.at) : "–" })}</span>
                 ) : (
-                  <Pill tone={p.bottle ? "warn" : "neutral"}>{t("pumps.notCalibrated")}</Pill>
+                  <Pill tone={p.canister ? "warn" : "neutral"}>{t("pumps.notCalibrated")}</Pill>
                 )}
               </div>
             </div>
@@ -381,13 +381,13 @@ function ProbesCard() {
 }
 
 export function PumpsPage() {
-  const [edit, setEdit] = useState<Partial<Bottle> | null>(null);
+  const [edit, setEdit] = useState<Partial<Canister> | null>(null);
   return (
     <div class="stack">
-      <BottlesCard onEdit={setEdit} />
+      <CanistersCard onEdit={setEdit} />
       <PumpsCard />
       <ProbesCard />
-      {edit && <BottleEditor bottle={edit} onClose={() => setEdit(null)} />}
+      {edit && <CanisterEditor canister={edit} onClose={() => setEdit(null)} />}
     </div>
   );
 }

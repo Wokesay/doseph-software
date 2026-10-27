@@ -83,7 +83,7 @@ export function Pill(p: { tone?: Tone; dot?: boolean; pulse?: boolean; wrap?: bo
 
 // An explanation of a term: ⓘ opens its text. A <span role="button"> rather
 // than a <button>, so the <label> around it still means the input field.
-export type HelpTopic = "volume" | "turnover" | "waitTime" | "holdTime" | "circulation" | "testDose" | "tolerance" | "bottle" | "pair" | "fixed" | "calibratePump" | "prime" | "calibrateProbe" | "latched" | "jumpLock";
+export type HelpTopic = "volume" | "turnover" | "waitTime" | "holdTime" | "circulation" | "testDose" | "tolerance" | "canister" | "pair" | "fixed" | "calibratePump" | "prime" | "calibrateProbe" | "latched" | "jumpLock";
 
 export function HelpButton(p: { open: boolean; onToggle: () => void; topic: HelpTopic }) {
   const toggle = (e: Event) => {

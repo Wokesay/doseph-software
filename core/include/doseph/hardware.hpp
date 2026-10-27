@@ -14,7 +14,7 @@
 
 namespace doseph {
 
-// The channels the device measures in its flow cell. Raw values: pH on the
+// The channels the device measures in its measuring chamber. Raw values: pH on the
 // raw pH scale (the pH an ideal probe would read, 7 − mV/59.16), EC in mS/cm
 // at the water's own temperature (not compensated), water temperature in °C,
 // flow through the device in L/min.

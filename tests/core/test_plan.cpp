@@ -13,7 +13,7 @@ namespace {
 struct Fix {
   Config cfg;
   Fix() {
-    cfg.bottles = {{"a", "Part A", "nutrient", 1, "AB", "#00c"},
+    cfg.canisters = {{"a", "Part A", "nutrient", 1, "AB", "#00c"},
                    {"b", "Part B", "nutrient", 2, "AB", "#0c0"},
                    {"cm", "CalMag", "nutrient", 3, "", "#cc0"},
                    {"down", "pH−", "ph_down", 4, "", "#c00"}};
@@ -103,7 +103,7 @@ TEST_CASE("EC round: a fixed addition is neither dosed nor scaled; the round goe
   auto d = planEcDose(f.cfg, f.recipe(), 20, 1.0, 0.275, 0.275, 1.0);
   REQUIRE(d.ok);
   REQUIRE(d.steps.size() == 2);
-  for (const auto& s : d.steps) CHECK(s.bottle != "cm");
+  for (const auto& s : d.steps) CHECK(s.canister != "cm");
   CHECK(total(d) == doctest::Approx(58.18).epsilon(0.001));
   f.recipe() = {"r", "Test", "", {{"cm", 0.5, true}}};
   auto n = planEcDose(f.cfg, f.recipe(), 20, 1.0, 0.275, 0.275, 1.0);
@@ -111,9 +111,9 @@ TEST_CASE("EC round: a fixed addition is neither dosed nor scaled; the round goe
   CHECK(n.reason.key == "ec.recipe_no_scaled");
 }
 
-TEST_CASE("EC round: a bottle on no pump, or an uncalibrated pump, refuses the round (RAT-015)") {
+TEST_CASE("EC round: a canister on no pump, or an uncalibrated pump, refuses the round (RAT-015)") {
   Fix f;
-  f.cfg.bottles[1].pump = 0;
+  f.cfg.canisters[1].pump = 0;
   auto d = planEcDose(f.cfg, f.recipe(), 20, 1.0, 0.275, 0.275, 1.0);
   CHECK_FALSE(d.ok);
   CHECK(d.reason.key == "dose.no_pump");

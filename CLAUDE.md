@@ -7,13 +7,15 @@ access to it, not even by attaching it during a session.
 
 ## What the product is
 
-A standalone device at the nutrient tank that only mixes. A circulation
-pump pushes tank water through the device. The robot proves flow,
-measures pH, EC and temperature, doses pH− and nutrients per recipe in
-small doses, and mixes again only after the run-through time the user set
-for the tank – not all the time. Climate, light, watering, tank refill and
-drain are out. Target: home growers, later greenhouses. Operation only
-through the web app on the device: no store app, no server.
+A standalone device next to the nutrient tank, in two lines (Home, Pro)
+with one firmware (#9). Its own pump draws tank water through it; the
+robot proves flow, measures pH, EC and temperature, doses pH− and up to
+three nutrients per recipe in small doses, and mixes again only once the
+tank has mixed. Climate, light, watering and a refill valve come later
+through Shelly or ESP devices; mixing comes first. Target: home growers,
+later greenhouses. Operation through the web app on the device, later an
+app; offline or with an optional account, and control always runs on the
+device. The brief and the order of work are in #10.
 
 ## Conversation mode
 
@@ -37,12 +39,14 @@ through the web app on the device: no store app, no server.
   `product-question`: the question, its software basis (SD, RAT), the
   options and a recommendation. The product session reads this repository
   and writes issues and comments, never code.
-- **Nothing private in this repository**, also not in issues, in case it
-  becomes public: no hardware data (schematic, layout, bill of materials,
-  exact board data), no names, numbers or texts of private sources. Refer to
-  them only as "private sources" or "reference installation". No prices.
-- **License:** not decided yet. Until it is, `LICENSE`,
-  `ADDITIONAL_PERMISSION.md` and the SPDX header lines stay as they are.
+- **Nothing private in this repository**, also not in issues, since the
+  repository is public: no hardware data (schematic, layout, bill of
+  materials, exact board data), no names, numbers or texts of private
+  sources, no business details. Refer to private sources only as "private
+  sources" or "reference installation". No prices.
+- **License:** AGPL-3.0-or-later with `ADDITIONAL_PERMISSION.md`, and the
+  repository is public (SD-116). Code comes only from the project's
+  sessions and its owner; pull requests from outside are not merged.
 
 ## IDs
 

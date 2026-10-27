@@ -182,14 +182,14 @@ void Simulation::configureDemo() {
     r.markPasswordSet();
   }
   r.setSystem({{"name", "Doseph demo"}});
-  // The bottles on the pumps as the twin has them, each pump calibrated near its true flow
+  // The canisters on the pumps as the twin has them, each pump calibrated near its true flow
   const char* names[] = {"pH−", "Part A", "Part B", "CalMag"};
-  const char* kinds[] = {"ph_down", "nutrient", "nutrient", "nutrient"};
+  const char* roles[] = {"ph_down", "nutrient", "nutrient", "nutrient"};
   const char* pairs[] = {"", "AB", "AB", ""};
   const char* colors[] = {"#c0392b", "#2e86c1", "#8e44ad", "#d4ac0d"};
   const char* ids[] = {"ph_down", "part_a", "part_b", "calmag"};
   for (int i = 0; i < 4; ++i)
-    r.putBottle({{"id", ids[i]}, {"name", names[i]}, {"kind", kinds[i]}, {"pump", i + 1}, {"pair", pairs[i]}, {"color", colors[i]}});
+    r.putCanister({{"id", ids[i]}, {"name", names[i]}, {"role", roles[i]}, {"pump", i + 1}, {"pair", pairs[i]}, {"color", colors[i]}});
   for (int i = 0; i < 4; ++i) {
     const double seconds = 30;
     r.startCalibration(i + 1, seconds);
@@ -217,9 +217,9 @@ void Simulation::configureDemo() {
                {"name", "Two-part nutrient"},
                {"ecTarget", 1.6},
                {"ph", {5.8, 6.2}},
-               {"steps", json::array({{{"bottle", "part_b"}, {"mlPerL", 2.0}},
-                                      {{"bottle", "part_a"}, {"mlPerL", 2.0}},
-                                      {{"bottle", "calmag"}, {"mlPerL", 0.5}}})}});
+               {"steps", json::array({{{"canister", "part_b"}, {"mlPerL", 2.0}},
+                                      {{"canister", "part_a"}, {"mlPerL", 2.0}},
+                                      {{"canister", "calmag"}, {"mlPerL", 0.5}}})}});
   r.putTank({{"volumeL", 100}, {"circulation", "cycle"}, {"holdMin", 60}});
   r.setActive({{"recipe", "two_part"}, {"days", 28}});
 }

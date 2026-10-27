@@ -10,7 +10,7 @@
 namespace doseph {
 
 void to_json(json& j, const DoseStep& s) {
-  j = {{"bottle", s.bottle}, {"name", s.name},   {"pump", s.pump},   {"pair", s.pair},
+  j = {{"canister", s.canister}, {"name", s.name},   {"pump", s.pump},   {"pair", s.pair},
        {"color", s.color},   {"mlPerL", numOrNull(s.mlPerL)},       {"ml", numOrNull(s.ml)},
        {"flowMlPerMin", numOrNull(s.flowMlPerMin)}, {"runs", s.runs}};
 }
@@ -81,10 +81,10 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
   const double totalMlPerL = std::min(rawMlPerL, capMlPerL);  // ml/L of the whole recipe
   d.factor = totalMlPerL / rawMlPerL;
   for (const auto& s : recipe.steps) {
-    const BottleCfg* b = cfg.bottle(s.bottle);
+    const CanisterCfg* b = cfg.canister(s.canister);
     if (!b || s.fixed) continue;
     DoseStep ds;
-    ds.bottle = b->id;
+    ds.canister = b->id;
     ds.name = b->name;
     ds.pump = b->pump;
     ds.pair = b->pair;
@@ -165,16 +165,16 @@ double clampEffect(double observed, double start) {
 }
 
 namespace {
-// The parts the robot scales, by bottle (RAT-085)
+// The parts the robot scales, by canister (RAT-085)
 std::map<std::string, double> scaledParts(const RecipeCfg& recipe) {
   std::map<std::string, double> parts;
   for (const auto& s : recipe.steps)
-    if (!s.fixed && isNum(s.mlPerL) && s.mlPerL > 0) parts[s.bottle] += s.mlPerL;
+    if (!s.fixed && isNum(s.mlPerL) && s.mlPerL > 0) parts[s.canister] += s.mlPerL;
   return parts;
 }
 double sumOf(const std::map<std::string, double>& parts) {
   double sum = 0;
-  for (const auto& [bottle, ml] : parts) sum += ml;
+  for (const auto& [canister, ml] : parts) sum += ml;
   return sum;
 }
 }  // namespace
@@ -215,7 +215,7 @@ EffectEdit editEcEffect(const RecipeCfg& before, const RecipeCfg& after, double 
     same = w->first == n->first && std::fabs(w->second / sumWas - n->second / sumNow) < 1e-9;
   if (same || (was.empty() && now.empty())) {
     // A higher target on the same parts may be a stronger product in the same
-    // bottles: what was learned below its new start is forgotten
+    // canisters: what was learned below its new start is forgotten
     const double startNow = recipeEffect(after, kNaN).start;
     if (!(isNum(learned) && learned < startNow && startNow > recipeEffect(before, kNaN).start)) e.learned = learned;
     return e;
@@ -223,8 +223,8 @@ EffectEdit editEcEffect(const RecipeCfg& before, const RecipeCfg& after, double 
   e.changed = true;
   if (!isNum(learned)) return e;
   double gone = 0;  // what was scaled and is no longer: fixed now or removed
-  for (const auto& [bottle, ml] : was)
-    if (!now.count(bottle)) gone += ml;
+  for (const auto& [canister, ml] : was)
+    if (!now.count(canister)) gone += ml;
   if (gone >= sumWas || sumNow <= 0) return e;  // nothing it was learned on is scaled any more
   const double scaled = std::min(learned * sumWas / (sumWas - gone), kRefEffectMax * kEcStartEffect);
   if (scaled >= recipeEffect(after, kNaN).start) e.learned = scaled;

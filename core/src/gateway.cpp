@@ -105,7 +105,7 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
   jr.order = o.id;
   jr.run = run;
   jr.purpose = o.purpose;
-  jr.bottle = o.step.bottle;
+  jr.canister = o.step.canister;
   jr.name = o.step.name;
   jr.pump = o.step.pump;
   jr.ml = isNum(o.step.flowMlPerMin) ? o.step.flowMlPerMin * static_cast<double>(ms) / 60000.0 : kNaN;
@@ -175,7 +175,7 @@ void Doser::logOrder(const Ctx& c) {
   const bool ok = progress_.state == DoseProgress::State::Done;
   c.log.add(c.epoch, "dose", ok ? "info" : "warn", say(ok ? "ev.dose" : "ev.dose_incomplete", {{"name", o.step.name}, {"ml", progress_.mlDone}}),
             purposeLabel(o.purpose),
-            {{"bottle", o.step.bottle},
+            {{"canister", o.step.canister},
              {"pump", o.step.pump},
              {"ml", progress_.mlDone},
              {"mlPlanned", numOrNull(o.step.ml)},

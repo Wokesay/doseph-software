@@ -89,5 +89,7 @@ std::string jstr(const json& j, const char* key, const std::string& fallback = "
 bool jbool(const json& j, const char* key, bool fallback);
 // At most maxBytes bytes, without cutting a UTF-8 character.
 std::string utf8Prefix(const std::string& s, size_t maxBytes);
+// A wall time as "YYYY-MM-DD hh:mm:ss" in UTC, as spreadsheets read it.
+std::string utcText(Epoch e);
 
 }  // namespace doseph
