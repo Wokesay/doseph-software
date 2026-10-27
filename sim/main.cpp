@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -27,6 +28,7 @@
 
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
+#include "folder_lock.hpp"
 #include "simulation.hpp"
 #ifndef DP_EMBEDDED_WEB
 #define DP_EMBEDDED_WEB 0
@@ -133,6 +135,18 @@ int main(int argc, char** argv) {
   if (opts.scenario != "demo" && opts.scenario != "new") {
     usage();
     return 2;
+  }
+
+  // A second start on a data folder in use ends here, before it reads a file
+  std::optional<sim::FolderLock> lock;
+  if (!opts.dataDir.empty()) {
+    lock.emplace(opts.dataDir);
+    if (lock->state() == sim::FolderLock::State::Taken) {
+      std::cerr << "Another simulator is using this data folder: " << opts.dataDir << "\n";
+      return 1;
+    }
+    if (lock->state() == sim::FolderLock::State::None)
+      std::cerr << "The data folder cannot be locked (" << lock->why() << "): a second simulator could use it too.\n";
   }
 
   std::cout << "Starting simulator (scenario " << opts.scenario << ") …" << std::flush;

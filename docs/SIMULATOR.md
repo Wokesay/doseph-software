@@ -19,7 +19,7 @@ Open http://localhost:8080. Options (`--help`):
 | `--port N`, `--host ADDR` | where it listens (8080, 127.0.0.1) |
 | `--scenario demo\|new` | `demo`: set up, 100 L of fresh water, a recipe in force; `new`: nothing set up, the first password asked for |
 | `--password PW` | the password of the demo scenario |
-| `--data DIR` | keep settings and history in this folder; else in memory only |
+| `--data DIR` | keep settings and history in this folder; else in memory only. One simulator per folder: it holds `simulator.lock` there while it runs, and a second start on the folder ends with a message |
 | `--speed X` | time-lapse factor |
 | `--prefill H` | hours the demo computes ahead, so the history has data |
 | `--allow-reset` | change the scenario without signing in (automated tests only) |

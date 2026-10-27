@@ -81,7 +81,7 @@ endif()
 
 if(DP_BUILD_SIM)
   find_package(Threads REQUIRED)
-  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp)
+  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp)
   target_include_directories(doseph_sim PUBLIC sim)
   target_link_libraries(doseph_sim PUBLIC doseph_core)
   target_compile_options(doseph_sim PRIVATE ${DP_WARN})
@@ -114,7 +114,8 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_journal.cpp
     tests/core/test_watchdog.cpp
     tests/core/test_cycle.cpp
-    tests/core/test_api.cpp)
+    tests/core/test_api.cpp
+    tests/core/test_sim.cpp)
   target_link_libraries(doseph_tests PRIVATE doseph_sim)
   if(NOT MSVC)
     target_compile_options(doseph_tests PRIVATE -Wall -Wextra)

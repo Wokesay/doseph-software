@@ -41,6 +41,10 @@ All notable changes to this software. The format follows
   and the rest after a nutrient dose – each ticked or not, with the
   reason (RAT-037, from the predecessor). The API has it as
   `cycle.checks`.
+- One simulator per data folder: with `--data` it holds `simulator.lock`
+  in the folder while it runs, and a second start on the same folder ends
+  with a message before it reads a file. A link under that name is not
+  followed.
 
 ### Changed
 
