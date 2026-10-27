@@ -307,3 +307,28 @@ within the band, the robot raises "top up water" (also as a push, #10
 step 5). It doses no nutrients while EC is above the band anyway
 (RAT-012); pH dosing goes on. The message goes when EC is back within the
 band.
+
+
+## SD-116: Public under AGPL-3.0-or-later; a prototype every week
+
+2026-10-27. Decided by the owner.
+
+- **License and visibility.** The repository is public. The software is
+  licensed under AGPL-3.0-or-later with the additional permission in
+  `ADDITIONAL_PERMISSION.md`, as its files already say.
+- **Contributions.** Bug reports, feedback and ideas come as issues, with
+  the forms in `.github/ISSUE_TEMPLATE/`. Code comes only from the
+  project's sessions and its owner; pull requests from outside are not
+  merged, so the project keeps one copyright holder.
+- **Prototypes.** A prototype is the simulator with the web app, as a
+  download for Linux, macOS and Windows, built from a tag on `main`. It
+  is for trying the software, not for dosing into a real tank. One comes
+  out weekly while something new is merged, numbered `0.1.0-proto.N`
+  from `0.1.0-proto.5` on (the predecessor's prototypes ended at 4).
+  The notes come from `CHANGELOG.md`. Security fixes go into the next
+  prototype only.
+- **Reports.** Until "Report a problem" is in the app (#10, step 2.6),
+  the issue forms are the way to report.
+- **Recipe templates** name no manufacturer until the product side has
+  checked brand rights (#10); the values of a manufacturer's chart stay,
+  with a neutral name.

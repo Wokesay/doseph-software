@@ -523,7 +523,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 - **Rule:** The order of a recipe's parts is the dosing order, as the manufacturer gives it; CalMag counts with its own EC effect.
 - **Why:** Manufacturers specify their own order (here part B before A, CalMag after the base, cleaner last); a fixed order in code cannot follow different products.
-- **Evidence:** The Athena Blended Feed Program, Metric, A01.004 lists the order: Balance → base B → base A → PK → CaMg → Cleanse. Measured on the reference installation (2026): CalMag added 0.217 mS/cm per ml/L; the chart implies about 0.22.
+- **Evidence:** A manufacturer's feed program lists the order: buffer → base B → base A → PK → CalMag → cleanser. Measured on the reference installation (2026): CalMag added 0.217 mS/cm per ml/L; the chart implies about 0.22.
 - **Implemented in:** `core/include/doseph/config.hpp`
 - **Tests:** —
 
