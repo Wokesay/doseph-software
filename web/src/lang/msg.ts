@@ -329,6 +329,8 @@ export const msgDe: Record<string, string> = {
   "history.series_twice": "Die Kurve {id} ist doppelt angefragt",
   "auth.required": "Bitte melde dich an",
   "auth.lost": "Der Roboter kann sein Passwort nicht mehr lesen – setz ihn am Gerät selbst auf Werkseinstellungen zurück",
+  "auth.kept": "Der Roboter kann seine Passwortdatei nicht lesen. Dein Passwort bleibt darin erhalten – setz den Roboter nicht auf Werkseinstellungen zurück. Starte ihn neu, um es noch einmal zu versuchen.",
+  "ev.auth.kept": "Passwort nicht lesbar",
   "auth.code": "Einrichtungscode fehlt oder ist falsch. Nimm den neuesten – jeder Neustart erzeugt einen neuen.",
   "auth.too_short": "Mindestens 8 Zeichen",
   "auth.too_long": "Höchstens 128 Zeichen",

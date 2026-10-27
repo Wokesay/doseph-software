@@ -346,6 +346,8 @@ constexpr Entry kMessages[] = {
     {"history.series_twice", "The curve {id} is asked for twice"},
     {"auth.required", "Please sign in"},
     {"auth.lost", "The robot can't read its password any more – reset it to factory settings on the device itself"},
+    {"auth.kept", "The robot can't read its password file. Your password stays in it – don't reset the robot to factory settings. Restart the robot to try again."},
+    {"ev.auth.kept", "Password can't be read"},
     {"auth.code", "Setup code missing or wrong. Use the newest one – every restart makes a new one."},
     {"auth.too_short", "At least 8 characters"},
     {"auth.too_long", "At most 128 characters"},

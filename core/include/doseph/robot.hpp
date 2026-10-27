@@ -52,6 +52,10 @@ class Robot {
   Auth& auth() { return auth_; }
   // The password was set but auth.json is gone: no setup over the network.
   bool credentialsLost() const { return cfg_.system.passwordSet && !auth_.hasPassword(); }
+  // auth.json is there but holds no password the robot can read: it is kept
+  // as it is, no new password goes over it, and nobody is told to reset the
+  // robot, since a restart may read it again.
+  bool passwordKept() const { return authKept_; }
   void markPasswordSet();
   // The platform shows the code to its owner alone (a label, a display, the
   // simulator's console); "" when a password is set.
@@ -154,6 +158,7 @@ class Robot {
     Ms lastStep = 0;
   };
   std::optional<ProbeSession> probe_;
+  bool authKept_ = false;
 
   Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none
   Epoch maintenanceUntil() const;

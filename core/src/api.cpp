@@ -180,6 +180,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("POST", {"auth", "setup"})) {
     // A mandatory password at the first start; afterwards it changes only signed in.
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
+    if (robot_.passwordKept()) return fail(423, say("auth.kept"));
     if (robot_.credentialsLost()) return fail(423, say("auth.lost"));
     const Auth before = robot_.auth();
     const Ms now = clock_.nowMs();

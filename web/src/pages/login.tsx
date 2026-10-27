@@ -5,10 +5,11 @@ import { useState } from "preact/hooks";
 import { Droplets, KeyRound, Languages } from "lucide-preact";
 import { post } from "../api";
 import { afterLogin, errorText, info, sessionExpired } from "../store";
-import { lang, setLang, t, type Lang } from "../i18n";
+import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { Banner, Field, LANGS, Seg, TestingNotice } from "../ui";
 
 export function Login() {
+  const problem = info.value?.passwordProblem;
   const first = !info.value?.hasPassword;
   const needsCode = first && !!info.value?.setupCode;  // only who can read the robot's console sets the first password (gc#79)
   const [code, setCode] = useState("");
@@ -54,7 +55,12 @@ export function Login() {
           </Banner>
         )}
         <TestingNotice />
-        {first ? (
+        {/* Nothing to type in: the robot cannot check a password */}
+        {problem ? (
+          <Banner tone="bad">
+            <span data-testid="password-problem">{msg(problem)}</span>
+          </Banner>
+        ) : first ? (
           <>
             {/* The language comes first, English chosen until the user picks another (SD-014) */}
             <div class="field" data-testid="first-lang">
@@ -86,9 +92,11 @@ export function Login() {
           </Field>
         )}
         {err && <Banner tone="bad">{err}</Banner>}
-        <button class="btn primary lg block" type="submit" disabled={busy}>
-          <KeyRound size={18} /> {first ? t("login.setPassword") : t("login.signIn")}
-        </button>
+        {!problem && (
+          <button class="btn primary lg block" type="submit" disabled={busy}>
+            <KeyRound size={18} /> {first ? t("login.setPassword") : t("login.signIn")}
+          </button>
+        )}
         <p class="faint small">{t("login.localNote")}</p>
       </form>
     </div>
