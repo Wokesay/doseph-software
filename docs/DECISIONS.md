@@ -89,11 +89,11 @@ journal is cleared when the tank is on target.
 
 ## SD-107: Doseph's terms
 
-2026-10-27. The product brief (#4, #5) names the parts of the device; the
+2026-10-27. The product brief (#9, #10) names the parts of the device; the
 software uses the same words, in code, API, texts and docs. A term from
 the predecessor that names something else is replaced when its module is
-next touched; the import (#5, step 2) renames canister and measuring
-chamber, the twin (#5, step 3) renames channel and suction pump.
+next touched; the import (#10, step 2) renames canister and measuring
+chamber, the twin (#10, step 3) renames channel and suction pump.
 
 | Term | Meaning | Replaces |
 |---|---|---|
@@ -114,13 +114,13 @@ chamber, the twin (#5, step 3) renames channel and suction pump.
 
 ## SD-108: The device reports what it has; logic reads roles and capabilities
 
-2026-10-27. One firmware for Home and Pro (#4, PD-447, PD-450). At start
+2026-10-27. One firmware for Home and Pro (#9, PD-447, PD-450). At start
 the hardware layer reports a profile: line (`home`, `pro`), variant name
 (e.g. "Pro 30"), and capabilities: the channels with pump type
 (`brushed`, `brushless`, `stepper`) and head size, whether a channel has a
 drop sensor, the flow method (`turbine`, `outlet_level`), the return
 (`gravity`, `pump`), the network interfaces. Coupled peers follow with
-#5 step 8.
+#10 step 8.
 
 - **Logic reads roles and capabilities**, never a channel number or a
   line name. Which code path runs follows from a capability ("has a
@@ -142,13 +142,13 @@ drop sensor, the flow method (`turbine`, `outlet_level`), the return
 
 ## SD-109: The water path: suction pump, flow proof by method, calibration with everything stopped
 
-2026-10-27. The water path of #4 (PD-444, PD-456) replaces the circulation
+2026-10-27. The water path of #9 (PD-444, PD-456) replaces the circulation
 pump of SD-105. The steps of the check stay.
 
 - **Suction pump.** The device's own pump runs for a check and is off in
   Hold and Wait. The modes `cycle`, `always` and `external` of SD-105 go
   away; a customer's circulation pump becomes an optional role on a
-  smart plug later (#5 step 9, PD-421).
+  smart plug later (#10 step 9, PD-421).
 - **Flow proof by method.** `turbine`: at least 0.5 L/min for 10 s without
   a break (SD-105). `outlet_level`: the outlet's level sensor reports
   water and the suction pump runs, for 10 s without a break. The hardware
@@ -168,7 +168,7 @@ pump of SD-105. The steps of the check stay.
   60 s without the level falling is off and latched ("return pump dry or
   blocked"). High level in the chamber is the hardware's (SD-110).
 - **Calibration.** A probe or channel calibration stops the check and the
-  suction pump first (#5, 27 Oct). A channel is calibrated with its outlet
+  suction pump first (#10). A channel is calibrated with its outlet
   taken off and held over a measuring cup; a probe is lifted out and put
   in buffer cups. The check starts anew afterwards, and the probes'
   readings are announced as changing (RAT-042).
@@ -177,7 +177,7 @@ pump of SD-105. The steps of the check stay.
 ## SD-110: The hardware release and the lock reasons
 
 2026-10-27. Below the firmware, leak, high level, the stop button and a
-hung controller switch off, and no flow locks dosing (#5, 27 Oct). The
+hung controller switch off, and no flow locks dosing (#10). The
 core reads the release state and never overrides it.
 
 - **The gateway refuses** a run while the release is off, and says which
@@ -196,7 +196,7 @@ core reads the release state and never overrides it.
 - **Release off without a known input**: no dose, shown as "hardware
   release off".
 - **Releases**: a person releases a latch in the app once the cause is
-  fixed (#5, 27 Oct). A latch survives a restart (RAT-063); a restart
+  fixed (#10). A latch survives a restart (RAT-063); a restart
   never releases one.
 
 
@@ -228,7 +228,7 @@ starting points until bench tests give better ones.
   measured by the next check. The first fill of the lines counts as the
   first dose (PD-425). A channel calibration still runs into a cup.
 - **The acceptance target** of the twin and tests: the drop sensor sees
-  every dose on every channel (#5, 27 Oct).
+  every dose on every channel (#10).
 
 
 ## SD-112: The mixing wait: one turnover, then stable; the user may only lengthen it
@@ -265,14 +265,14 @@ the user's two waits per tank.
 ## SD-113: Caps that cannot be switched off; users set values below them
 
 2026-10-27. The firmware's caps are in code and the gateway applies them
-to every run (#5, 27 Oct; R7). Settings only tighten them.
+to every run (#10; R7). Settings only tighten them.
 
 - **One channel at a time** (RAT-018), also across coupled devices later
-  (#5 step 8).
+  (#10 step 8).
 - **Run time per run**: at most 60 s, at most 6 partial runs per canister
-  and round (RAT-055); a run under 1 s is not made (RAT-050). With an S
-  head 1 s is about the smallest dose of 0.05–0.1 ml (#5, 27 Oct); a
-  shorter pulse needs bench data first.
+  and round (RAT-055); a run under 1 s is not made (RAT-050). The
+  smallest dose comes in short pulses with the smallest head (#10); a
+  pulse shorter than 1 s needs bench data first.
 - **Daily amount per channel**: run time in a rolling 24 h, at most the
   profile's value for the head (SD-108), never more than 60 min in code.
   A run that would pass it is refused with the reason; the user may set
@@ -303,7 +303,7 @@ the cycle. A round of a pair can stop with some parts in and others not
 2026-10-27. Refill comes back only with a float switch (PD-460); without
 one, the robot only tells. When EC is above its target band at a check
 and the robot dosed no nutrients since the last check that found it
-within the band, the robot raises "top up water" (also as a push, #5
+within the band, the robot raises "top up water" (also as a push, #10
 step 5). It doses no nutrients while EC is above the band anyway
 (RAT-012); pH dosing goes on. The message goes when EC is back within the
 band.
