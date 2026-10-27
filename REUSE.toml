@@ -8,11 +8,11 @@ version = 1
 [[annotations]]
 path = "**"
 precedence = "closest"
-SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+SPDX-FileCopyrightText = "2026 The doseph-software contributors"
 
 # Files without comment syntax
 [[annotations]]
 path = ["**/*.md", "*.md", "**/*.json", "*.json", "**/*.svg", "VERSION", ".nvmrc"]
 precedence = "closest"
-SPDX-FileCopyrightText = "2026 The doseph-software and growcontroller-software contributors"
+SPDX-FileCopyrightText = "2026 The doseph-software contributors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
