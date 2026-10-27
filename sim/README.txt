@@ -24,6 +24,7 @@ The window shows the address and the demo password; sign in with it.
 The demo runs in memory only: closing it starts it over. To keep the data,
 start it with --data and a folder, for example
   doseph-simulator --data doseph-data
+One simulator per folder: a second start on it says so and ends.
 Stop: close the window or press Ctrl+C.
 
 More options: doseph-simulator --help
@@ -61,6 +62,7 @@ Sprache: in der App unter Settings › Language and look auf Deutsch umstellen.
 Die Demo läuft nur im Speicher: Schließen startet sie von vorn. Mit
 --data und einem Ordner bleiben die Daten erhalten, zum Beispiel
   doseph-simulator --data doseph-daten
+Ein Simulator je Ordner: Ein zweiter Start darauf sagt das und endet.
 Beenden: Fenster schließen oder Strg+C.
 
 Rückmeldungen und Fehler:

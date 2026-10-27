@@ -82,6 +82,10 @@ All notable changes to this software. The format follows
   check again. What the robot learned stays only for the recipes and the
   pH− canister the file keeps (RAT-085); another tank volume makes the
   next dose a test dose.
+- One simulator per data folder: with `--data` it holds `simulator.lock`
+  in the folder while it runs, and a second start on the same folder ends
+  with a message before it reads a file. A link under that name is not
+  followed.
 
 ### Changed
 
@@ -99,6 +103,10 @@ All notable changes to this software. The format follows
   The API names them `canisters`, `canister` and `role`
   (`POST /api/v1/canisters`, `DELETE /api/v1/canisters/<id>`). A saved
   configuration of schema 1 is read and brought to schema 2.
+- Every dropped rule in `docs/RATIONALE.md` keeps its substance and names
+  the step of #10 that would bring it back; `docs/LATER.md` holds what
+  later steps rebuild: grow phases and harvest, the setup assistant, the
+  scenario harness and the dry-run latch.
 
 ### Security
 
