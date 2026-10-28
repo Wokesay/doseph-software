@@ -304,6 +304,8 @@ json Simulation::control(const std::string& action, const json& b) {
       p.outletBlocked = doseph::jbool(b, "outletBlocked", false);
       p.siphon = doseph::jbool(b, "siphon", false);
     }
+  } else if (action == "lineEmpty") {
+    world_.emptyLine(static_cast<int>(num("channel", 0)));
   } else if (action == "channelHead") {
     // A head fitted, removed or changed for another size (SD-108)
     const int n = static_cast<int>(num("channel", 0));

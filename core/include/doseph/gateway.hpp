@@ -56,6 +56,8 @@ class Actuators {
   bool allowed(const Ctx& c, int channel, Ms ms, const std::string& purpose, Msg& err) const;
   bool startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err);
   RunStatus runStatus(int channel) const { return hw_.runStatus(channel); }
+  // What the channel's drop sensor has counted; nullopt without one
+  std::optional<Drops> drops(int channel) const { return hw_.drops(channel); }
   // The channel's pump can run backwards, to pull its line back (SD-111)
   bool canPullBack(int channel) const {
     return channel >= 1 && channel <= hw_.channelCount() && hw_.profile().channels[static_cast<size_t>(channel - 1)].reverse;
@@ -106,7 +108,9 @@ class Actuators {
 // the journal before the pump starts (SD-106).
 struct DoseOrder {
   std::string id;
-  std::string purpose;  // ec | ph | calibration | prime (runs of the gateway also: refill | pullback)
+  // ec | ph | calibration | prime (a line into a cup, by time) | fill (a line into the tank, until it
+  // drips, SD-111); runs of the gateway also: refill | pullback
+  std::string purpose;
   DoseStep step;
 };
 
@@ -153,8 +157,11 @@ class Doser {
   void fail(const Ctx& c, Msg error);
   std::string busJob() const;
   std::optional<DoseOrder> active_;
+  bool dripped(Actuators& act) const;  // a line fill: the first drops fell
   Leg leg_ = Leg::Dose;
   std::string job_;  // the job ID of the run under way
+  std::uint64_t fillFrom_ = 0;  // a line fill: the drops counted when it started
+  bool filled_ = false;        // a line fill: it dripped, and its run was stopped
   DoseProgress progress_;
   std::optional<DoseProgress> finished_;
   Ms pauseUntil_ = 0;

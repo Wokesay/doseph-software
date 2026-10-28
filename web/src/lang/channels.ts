@@ -50,6 +50,10 @@ export const de = {
   "channels.primeN": "Kanal {channel}: Schlauch füllen",
   "channels.calibrateIntro": "Füll den Schlauch zuerst, dann halte sein Ende in einen leeren Messbecher (nicht in den Tank). Die Pumpe läuft die eingestellte Zeit; danach trägst du die ml im Becher ein.",
   "channels.primeIntro": "Halte das Schlauchende in einen Becher, nicht in den Tank. Die Pumpe läuft die eingestellte Zeit.",
+  "channels.fillN": "Kanal {channel}: Schlauch füllen",
+  "channels.fillIntro":
+    "Der Auslass bleibt am Gerät. Die Pumpe läuft, bis die ersten Tropfen fallen, höchstens 5 Minuten. Was tropft, geht in den Tank und zählt wie eine Dosis; die nächste Prüfung mischt es zuerst ein.",
+  "channels.filling": "Die Pumpe läuft, bis die ersten Tropfen fallen …",
   "channels.seconds": "Laufzeit",
   "channels.secondsRange": "Zwischen 1 und {max} s",
   "channels.start": "Starten",
@@ -125,6 +129,10 @@ export const en: Record<keyof typeof de, string> = {
   "channels.primeN": "Channel {channel}: prime tube",
   "channels.calibrateIntro": "Prime the tube first, then hold its end in an empty measuring cup (not in the tank). The pump runs for the time set; then you enter the ml in the cup.",
   "channels.primeIntro": "Hold the tube's end in a cup, not in the tank. The pump runs for the time set.",
+  "channels.fillN": "Channel {channel}: fill the line",
+  "channels.fillIntro":
+    "The outlet stays on the device. The pump runs until the first drops fall, at most 5 minutes. What drips goes into the tank and counts like a dose; the next check mixes it in first.",
+  "channels.filling": "The pump runs until the first drops fall …",
   "channels.seconds": "Run time",
   "channels.secondsRange": "Between 1 and {max} s",
   "channels.start": "Start",

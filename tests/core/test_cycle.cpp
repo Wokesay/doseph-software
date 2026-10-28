@@ -477,14 +477,19 @@ TEST_CASE("Canisters: the level is counted run by run; low and used up are probl
   CHECK(item("stock.ph_down")["status"] == "ok");
   CHECK(st(s)["stock"]["part_b"]["status"] == "low");
   // A line fill takes from the canister too; below zero by the count is reported once (SD-119)
+  // (a line of air fills until it drips, SD-111)
   REQUIRE(r.setStock("part_b", {{"ml", 2}}).status == 200);
-  REQUIRE(r.prime(3, 10).status == 200);
-  s.step(12 * kSecond, 500);
-  const double fill = r.config().channelFlow(3) * 10 / 60;
+  s.control("lineEmpty", {{"channel", 3}});
+  REQUIRE(r.prime(3, 0).status == 200);
+  s.step(15 * kSecond, 500);
+  REQUIRE(st(s)["channelJob"]["state"] == "done");
+  const double fill = r.config().channelFlow(3) * st(s)["channelJob"]["actualS"].get<double>() / 60;
+  CHECK(fill > 2);
   CHECK(r.runtime().stockMl.at("part_b") == doctest::Approx(2 - fill).epsilon(0.05));
   REQUIRE(r.cancelChannelJob().status == 200);
-  REQUIRE(r.prime(3, 2).status == 200);
-  s.step(4 * kSecond, 500);
+  s.control("lineEmpty", {{"channel", 3}});
+  REQUIRE(r.prime(3, 0).status == 200);
+  s.step(15 * kSecond, 500);
   REQUIRE(r.cancelChannelJob().status == 200);
   int below = 0;
   for (const auto& k : eventKeys(s)) below += k == "ev.stock.below_zero";

@@ -148,6 +148,22 @@ test("a canister that siphons locks its channel until it is released (SD-111)", 
   await expect(lock).toHaveCount(0);
 });
 
+test("a line is filled into the tank until it drips (SD-111)", async ({ page }) => {
+  await login(page);
+  // Without a recipe the cycle doses nothing that the fill would have to wait for
+  await page.goto("/#/recipe");
+  await page.getByRole("button", { name: "No recipe" }).click();
+  await expect(page.getByText("No recipe in force any more")).toBeVisible();
+  await sim(page, "lineEmpty", { channel: 4 });
+  await page.goto("/#/channels");
+  await page.getByTestId("prime-4").click();
+  await expect(page.getByText("The outlet stays on the device")).toBeVisible();
+  await expect(page.locator("input[name=seconds]")).toHaveCount(0);
+  await page.getByTestId("job-start").click();
+  await sim(page, "speed", { speed: 10 });
+  await expect(page.getByTestId("job-done")).toContainText("Channel 4: the line is full", { timeout: 30_000 });
+});
+
 test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await login(page);
   await page.goto("/#/channels");

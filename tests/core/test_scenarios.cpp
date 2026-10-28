@@ -255,3 +255,45 @@ TEST_CASE("Scenario pull back: after a dose the line is pulled back about 0.2 ml
     else CHECK(line == 0);  // its pumps cannot run backwards
   }
 }
+
+TEST_CASE("Scenario line fill: a line of air is filled into the tank until its first drops fall; it is booked like a dose, and the check mixes it in first (SD-111)") {
+  Run r(device("home"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  r.act("lineEmpty", {{"channel", 4}});
+  const double before = r.state()["stock"]["calmag"]["ml"].is_number() ? r.state()["stock"]["calmag"]["ml"].get<double>() : doseph::kNaN;
+  r.ok("POST", "channels/4/prime", json::object());
+  CHECK(r.state()["channelJob"]["type"] == "fill");
+  r.waitUntil("the line is full", [&] { return r.state()["channelJob"]["state"] == "done"; }, 60, 250);
+  CHECK(r.state()["channelJob"]["message"]["key"] == "job.filled");
+  const json ch = r.twin()["channels"][3];
+  CHECK(ch["lineMl"] == 0);
+  CHECK(ch["drops"].get<double>() >= 1);
+  CHECK(ch["drops"].get<double>() <= 6);  // it stopped at its first drops, within a tick of 250 ms
+  CHECK(r.events("dose")[0]["title"]["key"] == "ev.fill");
+  CHECK(r.state()["cycle"]["mixPending"] == true);
+  if (std::isfinite(before)) CHECK(r.state()["stock"]["calmag"]["ml"].get<double>() < before - 5);  // the line's 6 ml
+  r.ok("POST", "channels/cancel", json::object());
+}
+
+TEST_CASE("Scenario line fill without drops: a blocked outlet ends the fill after 5 min with the reason (SD-111)") {
+  Run r(device("home"));
+  r.act("channelFault", {{"channel", 4}, {"outletBlocked", true}});
+  r.ok("POST", "channels/4/prime", json::object());
+  r.waitUntil("the fill gives up", [&] { return r.state()["channelJob"]["state"] == "failed"; }, 6 * 60, 2000);
+  CHECK(r.state()["channelJob"]["message"]["key"] == "dose.fill_no_drops");
+  CHECK(r.state()["channelJob"]["actualS"].get<double>() == doctest::Approx(300).epsilon(0.01));
+  CHECK(r.events("dose")[0]["title"]["key"] == "ev.fill_incomplete");
+}
+
+TEST_CASE("Scenario line fill cut by a restart: reported as a cut dose, and the check mixes first (SD-106, SD-111, R6)") {
+  Run r(device("home"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  r.act("lineEmpty", {{"channel", 4}});
+  r.ok("POST", "channels/4/prime", json::object());
+  r.step(3 * kSecond);
+  r.act("reboot", {{"outageS", 10}});
+  REQUIRE(r.login("demo-password"));
+  CHECK(r.events("dose")[0]["title"]["key"] == "ev.boot.cut_dose");
+  CHECK(r.state()["cycle"]["mixPending"] == true);
+  CHECK(r.state()["channelJob"].is_null());  // nothing resumes
+}

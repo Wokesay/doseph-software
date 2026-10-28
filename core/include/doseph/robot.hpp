@@ -28,7 +28,7 @@ struct Result {
 
 // A channel's calibration or priming run, into a cup or the line (RAT-070).
 struct ChannelJob {
-  std::string id, type;  // calibration | prime
+  std::string id, type;  // calibration | prime (into a cup) | fill (into the tank, SD-111)
   int channel = 0;
   std::string head;               // calibration: the pump head it measures (SD-108)
   std::string state = "running";  // running | waiting_result | done | failed
@@ -131,6 +131,7 @@ class Robot {
   void sampleHistory(Epoch epoch);
   void watchRelease(Epoch epoch);
   void checkHeads(Epoch epoch);
+  void mixFirstNow();
   void snapshot(Epoch epoch);
   void channelJobDone(const DoseProgress& p);
   Result startChannelJob(const std::string& type, int channel, double seconds);

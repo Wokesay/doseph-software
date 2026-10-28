@@ -84,4 +84,7 @@ The water path's faults are in the panel and in the API: `flowFault` with
 `{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
 `{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and
 `siphon`. `channelHead` with `{"channel": 2, "head": "M"}` fits another
-head, `"head": ""` takes it off (SD-108).
+head, `"head": ""` takes it off (SD-108). `lineEmpty` with
+`{"channel": 4}` fills a channel's line with air, as after a canister
+change: it holds 6 ml (an **assumption**), which a run fills before the
+outlet drips (SD-111).

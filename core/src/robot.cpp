@@ -26,6 +26,7 @@ constexpr Epoch kSampleS = 10;           // history: one sample per 10 s (finest
 constexpr Epoch kSnapshotS = 6 * 3600;   // history and events written whole, their journals emptied
 constexpr Epoch kStateSaveS = 60;        // the clock in the state, at most this often
 constexpr Ms kProbeIdle = 30 * kMinute;  // a probe calibration explains jumps this long after its last step (RAT-042)
+constexpr Ms kFillMaxMs = 5 * kMinute;  // a line fill runs at most this long in all (SD-111)
 const std::set<std::string> kSeries = {"ph", "ec", "temp", "flow"};
 
 Msg changed(const char* what) { return say("ev.config.changed", {{"what", say(what)}}); }
@@ -201,12 +202,7 @@ void Robot::tick() {
   act_.enforce(c);
   // Drops without a running pump went into the tank: the check mixes first and learns nothing,
   // as after a cut dose (SD-111)
-  if (act_.takeUnplannedDrops()) {
-    const CycleSettings s = cycleSettings(c);
-    const double m = std::max({kWaitMinMin, isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0});
-    cycle_.mixFirst(static_cast<Ms>(m * 60) * kSecond);
-    restartCycle();
-  }
+  if (act_.takeUnplannedDrops()) mixFirstNow();
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
     if (job_ && p->orderId == job_->id) channelJobDone(*p);
@@ -557,6 +553,16 @@ Result Robot::saveConfig(Config next, const std::optional<Msg>& what) {
   return Result::ok({{"revision", cfg_.revision}});
 }
 
+// Something went into the tank outside a round: the check starts anew, mixes it in first and learns
+// nothing from it
+void Robot::mixFirstNow() {
+  Ctx c = ctx();
+  const CycleSettings s = cycleSettings(c);
+  const double m = std::max({kWaitMinMin, isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0});
+  cycle_.mixFirst(static_cast<Ms>(m * 60) * kSecond);
+  restartCycle();
+}
+
 void Robot::restartCycle() {
   Ctx c = ctx();
   cycle_.restart(c, act_, doser_);
@@ -895,10 +901,12 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
   if (channelJobActive()) return Result::fail(409, say("job.busy"));
   if (doser_.busy() || cycle_.dosing()) return Result::fail(409, say("job.cycle_dosing"));
   const Limits lim = cfg_.limits.bounded();
-  if (!isNum(seconds) || seconds < 1 || seconds > lim.maxRunS) return Result::fail(422, say("job.seconds", {{"max", lim.maxRunS}}));
+  // A line fill needs no time: it runs until it drips (SD-111)
+  if (type != "fill" && (!isNum(seconds) || seconds < 1 || seconds > lim.maxRunS))
+    return Result::fail(422, say("job.seconds", {{"max", lim.maxRunS}}));
   const CanisterCfg* b = cfg_.canisterOnChannel(channel);
   ChannelJob job;
-  job.id = (type == "calibration" ? "cal-" : "prime-") + std::to_string(++idSeq_);
+  job.id = (type == "calibration" ? "cal-" : type == "fill" ? "fill-" : "prime-") + std::to_string(++idSeq_);
   job.type = type;
   job.channel = channel;
   job.head = hw_.profile().channels[static_cast<size_t>(channel - 1)].head;
@@ -911,8 +919,14 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
   o.step.canister = b ? b->id : "";
   o.step.name = b ? b->name : say("channel.n", {{"channel", channel}}).text;
   o.step.runs = {job.ms};
+  if (type == "fill") {
+    // Runs of at most 60 s until the first drops fall, at most 5 min in all (SD-111)
+    const Ms run = static_cast<Ms>(std::min(60.0, lim.maxRunS) * 1000);
+    o.step.runs.assign(static_cast<size_t>((kFillMaxMs + run - 1) / run), run);
+    job.ms = kFillMaxMs;
+  }
   // A line fill is booked like a dose, from the pump's flow; a calibration from the cup (SD-119)
-  if (type == "prime") o.step.flowMlPerMin = cfg_.channelFlow(channel);
+  if (type != "calibration") o.step.flowMlPerMin = cfg_.channelFlow(channel);
   Ctx c = ctx();
   Msg err;
   if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
@@ -922,7 +936,9 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
 
 Result Robot::prime(int channel, double seconds) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return startChannelJob("prime", channel, seconds);
+  // Where the outlet has a drop sensor, the line is filled into the tank until it drips; without
+  // one, into a cup for the time given (SD-111)
+  return startChannelJob(hw_.drops(channel) ? "fill" : "prime", channel, seconds);
 }
 
 Result Robot::startCalibration(int channel, double seconds) {
@@ -932,6 +948,8 @@ Result Robot::startCalibration(int channel, double seconds) {
 
 void Robot::channelJobDone(const DoseProgress& p) {
   job_->actualMs = p.msDone;
+  // What a line fill dripped is in the tank: the check mixes it in first and learns nothing (SD-111)
+  if (job_->type == "fill" && p.msDone > 0) mixFirstNow();
   if (p.state != DoseProgress::State::Done) {
     job_->state = "failed";
     job_->message = p.error;
@@ -942,7 +960,7 @@ void Robot::channelJobDone(const DoseProgress& p) {
     job_->message = say("job.measure_cup", {{"s", job_->actualMs / 1000.0}});
   } else {
     job_->state = "done";
-    job_->message = say("job.primed");
+    job_->message = job_->type == "fill" ? say("job.filled", {{"channel", job_->channel}, {"s", job_->actualMs / 1000.0}}) : say("job.primed");
   }
 }
 

@@ -230,8 +230,10 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
   const [seconds, setSeconds] = useState<number | null>(p.type === "calibration" ? 30 : 5);
   const [ml, setMl] = useState<number | null>(null);
   const max = config.value!.limits.maxRunS;
+  // With a drop sensor at the outlet the line is filled into the tank until it drips (SD-111)
+  const fill = p.type === "prime" && st.channels.some((c) => c.channel === p.channel && c.drops !== null);
   const start = async () => {
-    const r = await post<{ id: string }>(`/channels/${p.channel}/${p.type === "calibration" ? "calibrate" : "prime"}`, { seconds });
+    const r = await post<{ id: string }>(`/channels/${p.channel}/${p.type === "calibration" ? "calibrate" : "prime"}`, fill ? {} : { seconds });
     setStarted(r.id);
     await refreshState();
   };
@@ -244,10 +246,10 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
     await post("/channels/result", { ml });
     await Promise.all([refreshState(), refreshConfig()]);
   };
-  const bad = seconds === null || seconds < 1 || seconds > max;
+  const bad = !fill && (seconds === null || seconds < 1 || seconds > max);
   return (
     <Modal
-      title={t(p.type === "calibration" ? "channels.calibrateN" : "channels.primeN", { channel: p.channel })}
+      title={t(p.type === "calibration" ? "channels.calibrateN" : fill ? "channels.fillN" : "channels.primeN", { channel: p.channel })}
       onClose={cancel}
       footer={
         job?.state === "done" ? (
@@ -263,10 +265,12 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
     >
       {!job && (
         <div class="stack">
-          <p>{t(p.type === "calibration" ? "channels.calibrateIntro" : "channels.primeIntro")}</p>
-          <Field label={t("channels.seconds")} error={bad ? t("channels.secondsRange", { max }) : null}>
-            <NumberInput value={seconds} onValue={setSeconds} unit="s" name="seconds" />
-          </Field>
+          <p>{t(p.type === "calibration" ? "channels.calibrateIntro" : fill ? "channels.fillIntro" : "channels.primeIntro")}</p>
+          {!fill && (
+            <Field label={t("channels.seconds")} error={bad ? t("channels.secondsRange", { max }) : null}>
+              <NumberInput value={seconds} onValue={setSeconds} unit="s" name="seconds" />
+            </Field>
+          )}
           <div>
             <Button variant="primary" onClick={start} disabled={bad} data-testid="job-start">
               {t("channels.start")}
@@ -276,7 +280,7 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
       )}
       {job?.state === "running" && (
         <div class="stack-sm" data-testid="job-running">
-          <p>{t("channels.running", { s: num(job.seconds, 0) })}</p>
+          <p>{job.type === "fill" ? t("channels.filling") : t("channels.running", { s: num(job.seconds, 0) })}</p>
           <div class="progress">
             <span style="width:100%;opacity:0.5" />
           </div>
@@ -338,7 +342,7 @@ function ChannelsCard() {
               </div>
             </div>
             <div class="row-actions">
-              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped || !p.head}>
+              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped || !p.head} data-testid={`prime-${p.channel}`}>
                 {t("term.prime")}
               </button>
               <button

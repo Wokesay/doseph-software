@@ -53,7 +53,8 @@ export type Watchdog = {
 };
 
 export type ChannelJob = {
-  id: string; type: "calibration" | "prime"; channel: number;
+  // "prime": a line into a cup, by time; "fill": a line into the tank until it drips (SD-111)
+  id: string; type: "calibration" | "prime" | "fill"; channel: number;
   state: "running" | "waiting_result" | "done" | "failed";
   seconds: number; actualS: number; ml: number | null; message: Msg; at: number;
 };

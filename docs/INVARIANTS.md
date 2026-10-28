@@ -72,6 +72,7 @@ of its own.
 | Drops while the pump stands, past 10 s after its run, lock the channel with an alarm, and the check mixes first and learns nothing | SD-111 | ✓ | `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
 | A locked channel doses nothing into the tank until a person releases it; a calibration or line fill into a cup still runs | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
 | After the last run of a dose the pump runs backwards about 0.2 ml, at most 1 s, where it can; the channel's next run first fills the line the same time forwards, unbooked, so the dose stays the planned amount; a run that would be refused is refused before the refill | SD-111 | ✓ | `config.hpp`, `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
+| Filling a line, where the outlet has a drop sensor, drips into the tank: runs of at most 60 s until the first drops fall, at most 5 min in all; it is journaled and booked like a dose, the check mixes it in first, and a restart reports it cut; without a sensor the line goes into a cup for the time given | SD-111 | ✓ | `journal.hpp`, `gateway.cpp`, `robot.cpp` · test_scenarios.cpp, test_cycle.cpp |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
 
 ## Sensor truth

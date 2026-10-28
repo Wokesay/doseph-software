@@ -7,6 +7,15 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Filling a line drips into the tank (SD-111): where the outlet has a
+  drop sensor, the pump runs in runs of at most 60 s until the first
+  drops fall, at most 5 minutes in all, with the outlet on the device.
+  The fill is written to the dosing journal before it starts, booked
+  from the canister, logged with the doses, and the next check mixes it
+  in first; a restart reports it like a cut dose. Without drops after
+  5 minutes it ends with the reason. A channel without a drop sensor
+  still primes into a cup for the time given. The simulator empties a
+  line (`lineEmpty`; a line holds 6 ml, an assumption).
 - After a dose the line is pulled back (SD-111): where the pump can run
   backwards, it pulls about 0.2 ml back (at most 1 s), so nothing dries
   at the tip. The channel's next run first fills the line the same time

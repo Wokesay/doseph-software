@@ -43,7 +43,7 @@ void DoseJournal::load() {
     r.mlDone = jnum(e, "mlDone");
     r.cut = jbool(e, "cut", false);
     // A record whose purpose cannot be read is taken as a dose into the tank (the safe side)
-    if (r.purpose != "ec" && r.purpose != "ph" && r.purpose != "calibration" && r.purpose != "prime") {
+    if (r.purpose != "ec" && r.purpose != "ph" && r.purpose != "calibration" && r.purpose != "prime" && r.purpose != "fill") {
       r.purpose = "ec";
       damaged_ = true;
     }

@@ -17,7 +17,7 @@ namespace doseph {
 struct JournalRun {
   std::string order;
   int run = 0;            // partial run, from 1
-  std::string purpose;    // ec | ph | calibration | prime
+  std::string purpose;    // ec | ph | calibration | prime | fill
   std::string canister, name;
   int channel = 0;
   double ml = kNaN;       // planned for this run
@@ -27,8 +27,9 @@ struct JournalRun {
   Ms msDone = 0;          // as the driver reported it
   double mlDone = kNaN;   // missing: not known (R5)
   bool cut = false;       // ended by a restart: how much ran is not known
-  // Whether it goes into the tank: calibration and priming go into a cup or the tube (RAT-070)
-  bool intoTank() const { return purpose == "ec" || purpose == "ph"; }
+  // Whether it goes into the tank: calibration and priming go into a cup (RAT-070); a line fill
+  // drips into the tank (SD-111)
+  bool intoTank() const { return purpose == "ec" || purpose == "ph" || purpose == "fill"; }
 };
 
 class DoseJournal {
