@@ -19,7 +19,17 @@ Msg purposeLabel(const std::string& p) {
 
 bool intoTank(const std::string& purpose) { return purpose == "ec" || purpose == "ph"; }
 
+constexpr double kDropMl = 0.05;         // one drop at the outlet (SD-111)
+constexpr Ms kDropWaitMinMs = 5 * kSecond;  // the shortest wait for a drop
+constexpr Ms kAfterRunMs = 10 * kSecond;    // drops this long after a run are still its own
+
 }  // namespace
+
+std::string channelLatch(int channel, const std::string& what) { return "channel." + std::to_string(channel) + "." + what; }
+
+bool channelLocked(const RuntimeState& rt, int channel) {
+  return rt.latches.count(channelLatch(channel, "no_drops")) || rt.latches.count(channelLatch(channel, "siphon"));
+}
 
 // ---------------------------------------------------------------- Actuators
 
@@ -46,6 +56,7 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
     if (ms < static_cast<Ms>(lim.minRunS * 1000)) return fail(say("act.too_short", {{"s", lim.minRunS}}));
     // No dose without flow through the device: it would not reach the tank (SD-105)
     if (!c.flowOk) return fail(say("act.no_flow"));
+    if (channelLocked(c.rt, channel)) return fail(say("act.channel_locked", {{"channel", channel}}));
   } else if (purpose != "calibration" && purpose != "prime") {
     return fail(say("act.purpose"));
   }
@@ -54,6 +65,18 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
   runningChannel_ = channel;
   runningPurpose_ = purpose;
   cutLogged_ = false;
+  // A run into the tank must drip: a drop at the calibrated flow is expected within a quarter of
+  // the wait. A run after one that has not dripped yet waits from where that one left off.
+  if (intoTank(purpose)) {
+    if (const auto d = hw_.drops(channel)) {
+      auto [w, fresh] = watch_.try_emplace(channel);
+      if (fresh) w->second.since = c.now;
+      w->second.window = std::max<Ms>(kDropWaitMinMs, static_cast<Ms>(4 * kDropMl / c.cfg.channelFlow(channel) * 60000.0));
+      w->second.ended = -1;
+      w->second.dripped = false;  // this run has to drip itself
+      seen_[channel] = d->count;
+    }
+  }
   return true;
 }
 
@@ -83,11 +106,60 @@ bool Actuators::setSuctionPump(const Ctx& c, bool on, Msg& err) {
 
 void Actuators::stopAll() {
   hw_.stopAllPumps();
+  watch_.clear();  // what had not dripped by a Stop is not judged (SD-111)
   std::string e;
   hw_.setSuctionPump(false, e);  // also when its state is unknown: the command costs nothing
 }
 
+void Actuators::lockChannel(const Ctx& c, int channel, const std::string& what) {
+  c.rt.latches[channelLatch(channel, what)] = {{"at", c.epoch}, {"key", "channel." + what}, {"channel", channel}};
+  c.log.add(c.epoch, "alarm", "alarm", say("ev.channel." + what, {{"channel", channel}}), say("ev.channel." + what + ".text"),
+            {{"channel", channel}});
+}
+
+void Actuators::watchDrops(const Ctx& c) {
+  if (runningChannel_ != 0) lastRun_[runningChannel_] = c.now;
+  // A Stop or the hardware release cut every run: what had not dripped by then is not judged
+  if (c.stopped || !c.hold.empty()) watch_.clear();  // also stopAll()
+  for (int n = 1; n <= hw_.channelCount(); ++n) {
+    const auto d = hw_.drops(n);
+    if (!d) continue;
+    const auto seen = seen_.find(n);
+    const bool fell = seen != seen_.end() && d->count > seen->second;
+    seen_[n] = d->count;
+    const bool runs = runningChannel_ == n;
+    if (auto it = watch_.find(n); it != watch_.end()) {
+      DropWatch& w = it->second;
+      if (fell) {
+        w.since = c.now;
+        w.dripped = true;
+      }
+      if (!runs && w.ended < 0) w.ended = c.now;
+      if (runs) {
+        if (c.now - w.since <= w.window) continue;
+        hw_.stopAllPumps();  // the doser books what ran and ends the dose
+      } else if (w.dripped) {
+        watch_.erase(it);  // it dripped: done
+        continue;
+      } else if (c.now - w.ended <= w.window) {
+        continue;  // a short run is judged at its end plus the wait
+      }
+      watch_.erase(it);
+      lockChannel(c, n, "no_drops");
+      continue;
+    }
+    // Drops while the pump stands, past the run's own: a canister above the device siphons (PD-455)
+    const auto last = lastRun_.find(n);
+    if (fell && !runs && (last == lastRun_.end() || c.now - last->second > kAfterRunMs) &&
+        !c.rt.latches.count(channelLatch(n, "siphon"))) {
+      lockChannel(c, n, "siphon");
+      unplanned_ = true;
+    }
+  }
+}
+
 void Actuators::enforce(const Ctx& c) {
+  watchDrops(c);
   if (runningChannel_ == 0) return;
   // A Stop or the hardware release ends every run (SD-110); a dose without flow stops: what it
   // pumps would stay in the device (SD-105)

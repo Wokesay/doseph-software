@@ -135,6 +135,19 @@ test("another pump head voids a channel's calibration; without a head the channe
   await expect(page.getByTestId("calibrate-2")).toBeDisabled();
 });
 
+test("a canister that siphons locks its channel until it is released (SD-111)", async ({ page }) => {
+  await login(page);
+  await sim(page, "channelFault", { channel: 4, siphon: true });
+  await page.goto("/#/channels");
+  await expect(page.getByTestId("locked-4")).toBeVisible({ timeout: 30_000 });
+  await sim(page, "channelFault", { channel: 4, siphon: false });
+  await page.goto("/#/");
+  const lock = page.getByTestId("latch-channel.4.siphon");
+  await expect(lock).toContainText("Channel 4 locked: it dripped without its pump");
+  await lock.getByRole("button", { name: "Release" }).click();
+  await expect(lock).toHaveCount(0);
+});
+
 test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await login(page);
   await page.goto("/#/channels");

@@ -71,7 +71,9 @@ WatchResult evaluate(const WatchInput& in) {
   checkTarget("target.ph", "watch.target_ph", in.lastPh, recipe ? phTarget(*recipe) : kNaN, std::max(0.05, in.cfg.control.phTolerance), 2);
 
   // Latches hold until a person releases them (RAT-062, RAT-063)
-  for (const auto& [id, l] : in.rt.latches) add("latch." + id, say("watch.latch"), "problem", say("latch." + id, l.is_object() ? l : json::object()));
+  // A latch's text is its own, or that of its kind where the ID names more (a channel's, SD-111)
+  for (const auto& [id, l] : in.rt.latches)
+    add("latch." + id, say("watch.latch"), "problem", say("latch." + (l.is_object() ? jstr(l, "key", id) : id), l.is_object() ? l : json::object()));
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));
 

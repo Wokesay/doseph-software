@@ -39,7 +39,9 @@ std::string mmss(Ms ms) {
 
 // A dose needs at least its amount in the canister where the level is known; an unknown level is
 // no reason to hold (SD-119)
+// Why a dose cannot start now: its channel is locked (SD-111), or its canister holds too little (SD-119)
 std::optional<Msg> shortOf(const RuntimeState& rt, const DoseStep& d) {
+  if (channelLocked(rt, d.channel)) return say("cycle.wait.channel_locked", {{"name", d.name}, {"channel", d.channel}});
   auto it = rt.stockMl.find(d.canister);
   if (it == rt.stockMl.end() || !isNum(it->second) || !isNum(d.ml) || it->second >= d.ml) return std::nullopt;
   return say(it->second <= kStockBelowZeroMl ? "cycle.wait.stock_empty" : "cycle.wait.stock",
@@ -904,7 +906,7 @@ json MixCycle::checks(const Ctx& c) const {
     return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
   };
   // A canister that can dose: on a channel, with a calibration (RAT-015)
-  auto ready = [&](const CanisterCfg* b) { return b && b->channel > 0 && isNum(c.cfg.channelFlow(b->channel)); };
+  auto ready = [&](const CanisterCfg* b) { return b && b->channel > 0 && isNum(c.cfg.channelFlow(b->channel)) && !channelLocked(c.rt, b->channel); };
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));

@@ -8,6 +8,8 @@
 // The watchdog never includes this header (architecture test, R2).
 #pragma once
 
+#include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -40,6 +42,12 @@ struct Ctx {
   std::string hold{};
 };
 
+// A channel's own lock (SD-111): "channel.<n>.no_drops" (it ran and nothing dripped) or
+// "channel.<n>.siphon" (it dripped while its pump stood). A locked channel doses nothing into the
+// tank until a person releases it; a calibration or a line fill into a cup still runs.
+std::string channelLatch(int channel, const std::string& what);
+bool channelLocked(const RuntimeState& rt, int channel);
+
 class Actuators {
  public:
   explicit Actuators(IHardware& hw) : hw_(hw) {}
@@ -56,14 +64,35 @@ class Actuators {
 
   // Stop and start: every pump and the suction pump's output off, idempotent (RAT-036, R6).
   void stopAll();
-  // Each tick: a dose that loses its flow stops at once; only ever switches off (SD-105).
+  // Each tick: a dose that loses its flow stops at once, and so does a run into the tank whose
+  // outlet does not drip (SD-105, SD-111); only ever switches off.
   void enforce(const Ctx& c);
+  // Drops fell while no pump ran since the last call: the next check mixes first (SD-111)
+  bool takeUnplannedDrops() {
+    const bool u = unplanned_;
+    unplanned_ = false;
+    return u;
+  }
 
  private:
+  // The drop sensor's watch over a run into the tank (SD-111)
+  struct DropWatch {
+    Ms since = 0;   // the run's start, or its last drop
+    Ms window = 0;  // the longest wait for a drop
+    Ms ended = -1;  // when the run ended; -1: it runs
+    bool dripped = false;
+  };
+  void watchDrops(const Ctx& c);
+  void lockChannel(const Ctx& c, int channel, const std::string& what);
+
   IHardware& hw_;
   int runningChannel_ = 0;
   std::string runningPurpose_;
   bool cutLogged_ = false;
+  std::map<int, DropWatch> watch_;
+  std::map<int, std::uint64_t> seen_;  // each channel's drops at the last tick
+  std::map<int, Ms> lastRun_;          // when each channel's pump last ran
+  bool unplanned_ = false;
 };
 
 // A dose order = one canister, split into partial runs. Booked per run from

@@ -173,6 +173,109 @@ TEST_CASE("Gateway: a channel without a pump head runs nothing; a calibration of
   CHECK(hw.started == 1);
 }
 
+TEST_CASE("Gateway: a run into the tank needs drops; none within the wait cuts it and locks the channel (SD-111)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  hw.dropsSeen[2] = {0, -1};
+  Config cfg;
+  cfg.channels[2] = {50, 1, "S"};  // a drop every 0.06 s: the wait is its shortest, 5 s
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Msg err;
+  REQUIRE(act.startRun(c, 2, 20000, "ec", "j1", err));
+  // Drops keep it going; a gap as long as the wait cuts it
+  c.now = 3000;
+  hw.dropsSeen[2].count = 4;
+  act.enforce(c);
+  c.now = 8000;
+  act.enforce(c);
+  CHECK(hw.runs[2].state == RunStatus::State::Running);
+  c.now = 8100;
+  act.enforce(c);
+  CHECK(hw.runs[2].state == RunStatus::State::Failed);
+  CHECK(rt.latches.count("channel.2.no_drops"));
+  CHECK(log.query(0, std::numeric_limits<Epoch>::max(), "alarm", 5).at(0).title.key == "ev.channel.no_drops");
+  act.clearRun(2);
+  // Locked: no dose, but a calibration into a cup still runs
+  CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j2", err));
+  CHECK(err.key == "act.channel_locked");
+  CHECK(act.startRun(c, 2, 6000, "calibration", "j3", err));
+  act.clearRun(2);
+  rt.latches.clear();
+  // A run shorter than the wait is judged at its end plus the wait
+  REQUIRE(act.startRun(c, 2, 2000, "ec", "j4", err));
+  hw.runs[2].state = RunStatus::State::Done;
+  act.clearRun(2);
+  c.now = 10100;
+  act.enforce(c);
+  c.now = 15000;
+  act.enforce(c);
+  CHECK(rt.latches.empty());
+  c.now = 15200;
+  act.enforce(c);
+  CHECK(rt.latches.count("channel.2.no_drops"));
+  // A Stop: what has not dripped by then is not judged
+  rt.latches.clear();
+  REQUIRE(act.startRun(c, 2, 2000, "ec", "j5", err));
+  act.stopAll();
+  act.clearRun(2);
+  c.now = 30000;
+  act.enforce(c);
+  CHECK(rt.latches.empty());
+}
+
+TEST_CASE("Gateway: drops while the pump stands, past its own run, lock the channel; the check mixes first (SD-111, PD-455)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  hw.dropsSeen[3] = {0, -1};
+  Config cfg;
+  cfg.channels[3] = {50, 1, "S"};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Msg err;
+  act.enforce(c);
+  REQUIRE(act.startRun(c, 3, 3000, "ec", "j1", err));
+  c.now = 1000;
+  hw.dropsSeen[3].count = 20;
+  act.enforce(c);
+  c.now = 3000;
+  act.enforce(c);
+  hw.runs[3].state = RunStatus::State::Done;
+  act.clearRun(3);
+  c.now = 3500;
+  act.enforce(c);  // it dripped: its watch is done
+  // What still drips in the 10 s after the run is its own
+  c.now = 9000;
+  hw.dropsSeen[3].count = 21;
+  act.enforce(c);
+  CHECK(rt.latches.empty());
+  CHECK_FALSE(act.takeUnplannedDrops());
+  c.now = 20000;
+  hw.dropsSeen[3].count = 22;
+  act.enforce(c);
+  CHECK(rt.latches.count("channel.3.siphon"));
+  CHECK(log.query(0, std::numeric_limits<Epoch>::max(), "alarm", 5).at(0).title.key == "ev.channel.siphon");
+  CHECK(act.takeUnplannedDrops());
+  CHECK_FALSE(act.takeUnplannedDrops());  // once
+  // Locked, it raises no second alarm while it goes on dripping
+  c.now = 30000;
+  hw.dropsSeen[3].count = 25;
+  act.enforce(c);
+  CHECK(log.query(0, std::numeric_limits<Epoch>::max(), "alarm", 5).size() == 1);
+  CHECK_FALSE(act.startRun(c, 3, 3000, "ph", "j2", err));
+  CHECK(err.key == "act.channel_locked");
+}
+
 TEST_CASE("Dosing journal: a run recorded before the terms changed still names its canister (SD-107)") {
   MemoryStorage store;
   json old = json::array({{{"order", "ec-1"}, {"run", 1}, {"purpose", "ec"}, {"bottle", "a"}, {"name", "Part A"}, {"pump", 2}, {"ml", 12.5}, {"ms", 15000}, {"at", 0}, {"ended", false}}});
