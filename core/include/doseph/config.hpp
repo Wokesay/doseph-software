@@ -6,6 +6,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -176,6 +177,30 @@ struct PlantCfg {
   bool running() const { return completedAt == 0; }
 };
 
+// The commissioning steps of #10 in their order (SD-129). "device": done while the robot sees it;
+// "confirm": done once the user confirms it; "later": not there yet. An optional step may be
+// skipped.
+struct SetupStep {
+  const char* id;
+  const char* how;
+  bool optional;
+};
+inline constexpr SetupStep kSetupSteps[] = {
+    {"password", "device", false}, {"network", "later", false}, {"placement", "confirm", false}, {"flow", "device", false},
+    {"probes", "device", false},   {"channels", "device", false}, {"lines", "device", false},    {"test", "confirm", false},
+    {"tank", "device", false},     {"push", "device", true},      {"account", "later", false}};
+const SetupStep* setupStep(const std::string& id);
+struct Config;
+// The owner confirmed where pump and canisters stand (SD-118): until then no line is filled into
+// the tank and nothing doses
+bool placementConfirmed(const Config& cfg);
+// What the user said of a step: "done" for a step the user confirms, "skipped" for an optional
+// one. The steps the robot sees are not kept: they show what is so now.
+struct SetupMark {
+  std::string state;
+  Epoch at = 0;
+};
+
 struct Config {
   int schemaVersion = kSchemaVersion;
   int revision = 0;
@@ -194,6 +219,8 @@ struct Config {
   // running plant
   std::string lead;
   std::map<int, ChannelCal> channels;
+  // The commissioning steps the user confirmed or skipped (SD-129)
+  std::map<std::string, SetupMark> setup;
   // Probe calibrations: pH {points: [[raw, ref], [raw, ref]], zeroMv, at},
   // EC {factor, at}; null when not calibrated (RAT-025)
   json phCal = nullptr, ecCal = nullptr;
@@ -273,6 +300,9 @@ struct RuntimeState {
   // long; a dry run draws far less (SD-127, RAT-049). Missing until learned (R5).
   double pumpNormalA = kNaN;
   double pumpLearnedS = 0;
+  // The channels a run went through to its end, which filled the line (SD-129): a commissioning
+  // step the robot sees
+  std::set<int> filled;
   std::optional<Stamp> clock;              // time and operating time when saved
   std::uint32_t bootCount = 0;
 };

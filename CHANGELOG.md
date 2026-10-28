@@ -35,6 +35,16 @@ All notable changes to this software. The format follows
 - An OpenAPI file of the API, `docs/openapi.json` (SD-129). It covers
   every route and the roles that may call it, and tests keep both in
   step with the device.
+- Commissioning (SD-129): the steps of #10 on a page of their own, kept
+  by the robot so they resume after a restart.
+  - The robot ticks off what it sees: password, flow, probes, channels,
+    lines filled, and tank and recipe.
+  - The user confirms the placement and the test run, and may skip push.
+  - Until the placement is confirmed, nothing runs towards the tank
+    (SD-118), and the status says so. A backup never brings a
+    confirmation.
+  - Until all are done, every page shows the next step. The demo counts
+    as set up.
 - The device has a random ID of its own (SD-129). It is shown in `/info`,
   in the diagnostics and on the settings page, and never in a backup.
 

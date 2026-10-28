@@ -158,6 +158,14 @@ of its own.
 | A call outside a token's role is refused: an app token never reaches the password or the tokens, an account token never limits, releases, calibration, single pumps or settings, a peer token only reads; a token never goes into a cookie | SD-129 | ✓ | `api.cpp`, `sim/main.cpp` · test_api.cpp, robot.spec.ts |
 | The device ID is random, made once, kept across a restart and never in a backup | SD-129 | ✓ | `robot.cpp` · test_api.cpp, robot.spec.ts |
 
+## Commissioning (SD-129)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| The steps of #10 are kept in order and resume after a restart; a step the robot sees is done while it sees it and is never confirmed by hand; the user confirms the placement and the test run, and skips only an optional step | SD-129 | ✓ | `robot.cpp`, `config.cpp` · test_api.cpp, robot.spec.ts |
+| A run that went through a channel's line to its end counts as that line filled | SD-129 | ✓ | `robot.cpp`, `gateway.cpp` · test_api.cpp |
+| Until the owner confirmed the placement, the cycle is off and nothing runs towards the tank (dose, line fill, refill); into a cup it may; a backup never brings the confirmation | SD-118 | ✓ | `cycle.cpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_api.cpp |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

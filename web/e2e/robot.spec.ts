@@ -16,7 +16,7 @@ test("the first password needs no default and is asked for twice", async ({ page
   await expect(page.getByText("The passwords do not match.")).toBeVisible();
   await page.locator("input[name=password2]").fill("a-long-password");
   await page.getByRole("button", { name: "Set password" }).click();
-  await expect(page.getByTestId("cycle-line")).toHaveText(/No recipe in force/);
+  await expect(page.getByTestId("cycle-line")).toHaveText(/Confirm the placement first/);
 });
 
 test("status shows the cycle, the readings and the monitoring", async ({ page }) => {
@@ -447,4 +447,37 @@ test("an access token is made in the settings, shown once, works within its role
   await page.getByTestId("tokens").getByRole("button", { name: "Revoke" }).click();
   await expect(page.getByText("No access token yet.")).toBeVisible();
   expect((await request.get("/api/v1/state", { headers: bearer })).status()).toBe(401);
+});
+
+test("commissioning: a new robot shows the next step everywhere; placement is confirmed, push skipped, and the state stays after a reload (SD-129)", async ({ page, request }) => {
+  await scenario(request, "new");
+  await page.goto("/");
+  await page.locator("input[name=password]").fill("a-long-password");
+  await page.locator("input[name=password2]").fill("a-long-password");
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByTestId("setup-banner")).toHaveText(/next is "Placement"/);
+  await page.getByTestId("setup-banner").getByRole("link", { name: "Continue" }).click();
+  await expect(page.getByTestId("setup-banner")).toHaveCount(0);
+  await expect(page.getByTestId("setup-password")).toHaveAttribute("data-state", "done");
+  await expect(page.getByTestId("setup-network")).toHaveAttribute("data-state", "later");
+  await expect(page.getByTestId("setup-placement")).toContainText("Lay the feed pump in the tank");
+  await page.getByTestId("confirm-placement").click();
+  await expect(page.getByTestId("setup-placement")).toHaveAttribute("data-state", "done");
+  await page.getByTestId("skip-push").click();
+  await expect(page.getByTestId("setup-push")).toHaveAttribute("data-state", "skipped");
+  // The robot's own steps have no button to tick them off
+  await expect(page.getByTestId("setup-probes").getByRole("button")).toHaveCount(0);
+  await expect(page.getByTestId("setup-probes")).toContainText("The robot ticks it off itself");
+  await page.reload();
+  await expect(page.getByTestId("setup-placement")).toHaveAttribute("data-state", "done");
+  await expect(page.getByTestId("setup-progress")).toHaveText("3 of 9 steps done");
+  await page.goto("/#/tank");
+  await expect(page.getByTestId("setup-banner")).toBeVisible();
+});
+
+test("commissioning: the demo robot is set up, so no step is asked for (SD-129)", async ({ page }) => {
+  await login(page);
+  await expect(page.getByTestId("setup-banner")).toHaveCount(0);
+  await page.goto("/#/setup");
+  await expect(page.getByText("Commissioning is complete.")).toBeVisible();
 });

@@ -104,6 +104,8 @@ export type RobotState = {
   pump: { amps: number | null; normalA: number | null };
   // The water plan: the leading plant's phase, or the recipe chosen by hand (SD-128)
   plan: WaterPlan;
+  // Commissioning (SD-129): whether every step is done or skipped, and the next open one
+  setup: { complete: boolean; next: SetupStepId | null };
   // The hardware release and the water path as the device reports them (SD-109, SD-110)
   hardware: { release: { on: boolean; leak: boolean; highLevel: boolean; stopButton: boolean; noFlow: boolean }; outletWet: boolean | null; returnPump: boolean | null };
   readings: Record<Signal, Reading>;
@@ -168,6 +170,12 @@ export type Profile = {
   channels: { pump: string; head: string | null; dropSensor: boolean; reverse: boolean }[];
   flow: string; pumpIn: "tank" | "device"; return: string; network: string[]; pumpLpmLow: number | null; example: boolean;
 };
+
+// Commissioning (SD-129): the steps of #10 in their order. "device": done while the robot sees it;
+// "confirm": done once the user confirms it; "later": not there yet
+export type SetupStepId = "password" | "network" | "placement" | "flow" | "probes" | "channels" | "lines" | "test" | "tank" | "push" | "account";
+export type SetupStep = { id: SetupStepId; how: "device" | "confirm" | "later"; optional: boolean; state: "open" | "done" | "skipped" | "later"; at: number };
+export type Setup = { steps: SetupStep[]; next: SetupStepId | null; complete: boolean };
 
 // Access tokens (SD-129): the owner sees each with its role and last use since the start, never the token
 export type TokenRole = "app" | "account" | "peer";

@@ -28,6 +28,9 @@
       "name": "device"
     },
     {
+      "name": "setup"
+    },
+    {
       "name": "auth"
     },
     {
@@ -1204,6 +1207,114 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/commissioning": {
+      "get": {
+        "operationId": "getSetup",
+        "summary": "The commissioning steps with their states and the next open one",
+        "tags": [
+          "setup"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The steps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setup"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/commissioning/{id}": {
+      "put": {
+        "operationId": "setSetupStep",
+        "summary": "Confirms a step the user confirms, skips an optional one, or opens either again",
+        "tags": [
+          "setup"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "done",
+                      "skipped",
+                      "open"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The steps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setup"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -3713,6 +3824,73 @@
       "State": {
         "type": "object",
         "description": "The live state: readings, the cycle, alarms, latches, channels, stock and more; the same body the event stream sends"
+      },
+      "SetupStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "password",
+              "network",
+              "placement",
+              "flow",
+              "probes",
+              "channels",
+              "lines",
+              "test",
+              "tank",
+              "push",
+              "account"
+            ]
+          },
+          "how": {
+            "enum": [
+              "device",
+              "confirm",
+              "later"
+            ],
+            "description": "device: done while the robot sees it; confirm: done once the user confirms it; later: not there yet"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "May be skipped"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "done",
+              "skipped",
+              "later"
+            ]
+          },
+          "at": {
+            "type": "integer",
+            "description": "When the user confirmed or skipped it; 0 otherwise"
+          }
+        }
+      },
+      "Setup": {
+        "type": "object",
+        "description": "Commissioning (SD-129): the steps of #10 in their order",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SetupStep"
+            }
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first open step"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Every step is done or skipped, apart from those that come later"
+          }
+        }
       }
     }
   }

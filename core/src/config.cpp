@@ -133,6 +133,17 @@ const CanisterCfg* Config::phDown() const {
   return nullptr;
 }
 
+const SetupStep* setupStep(const std::string& id) {
+  for (const auto& st : kSetupSteps)
+    if (id == st.id) return &st;
+  return nullptr;
+}
+
+bool placementConfirmed(const Config& cfg) {
+  const auto it = cfg.setup.find("placement");
+  return it != cfg.setup.end() && it->second.state == "done";
+}
+
 double Config::channelFlow(int channel) const {
   auto it = channels.find(channel);
   return it == channels.end() ? kNaN : it->second.flowMlPerMin;
@@ -213,6 +224,9 @@ void to_json(json& j, const Config& c) {
   json channels = json::object();
   for (const auto& [n, p] : c.channels) channels[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}, {"head", p.head}};
   j["channels"] = channels;
+  json setup = json::object();
+  for (const auto& [id, m] : c.setup) setup[id] = {{"state", m.state}, {"at", m.at}};
+  j["setup"] = setup;
   j["probes"] = {{"ph", c.phCal}, {"ec", c.ecCal}};
 }
 
@@ -365,6 +379,13 @@ Config configFromJson(const json& in) {
     c.plants.push_back(std::move(x));
   }
   c.lead = jstr(j, "lead");
+  // A mark that does not fit its step is left out: the step is open again, nothing else changes
+  for (const auto& [id, m] : objectAt(j, "setup").items()) {
+    const SetupStep* st = setupStep(id);
+    const std::string state = m.is_object() ? jstr(m, "state") : "";
+    if (st && ((state == "done" && std::string(st->how) == "confirm") || (state == "skipped" && st->optional)))
+      c.setup[id] = SetupMark{state, epochOr(m, "at")};
+  }
   for (const auto& [key, v] : objectAt(j, "channels").items()) {
     int n = 0;
     try {
@@ -558,6 +579,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["flowLpm"] = numOrNull(s.flowLpm);
   j["flowAt"] = s.flowAt;
   j["pumpNormalA"] = numOrNull(s.pumpNormalA);
+  j["filled"] = s.filled;
   j["pumpLearnedS"] = s.pumpLearnedS;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
@@ -636,6 +658,9 @@ RuntimeState runtimeFromJson(const json& j) {
   if (isNum(amps) && amps > 0) s.pumpNormalA = amps;
   const double learned = jnum(j, "pumpLearnedS");
   if (isNum(learned) && learned > 0 && isNum(s.pumpNormalA)) s.pumpLearnedS = learned;
+  if (j.contains("filled") && j["filled"].is_array())
+    for (const auto& n : j["filled"])
+      if (n.is_number_integer()) s.filled.insert(n.get<int>());
   if (j.contains("clock")) s.clock = stampFromJson(j["clock"]);
   if (j.contains("bootCount") && j["bootCount"].is_number_unsigned()) s.bootCount = j["bootCount"].get<std::uint32_t>();
   return s;

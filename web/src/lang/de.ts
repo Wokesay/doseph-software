@@ -9,6 +9,7 @@ import { de as settings } from "./settings";
 import { de as sim } from "./sim";
 import { de as water } from "./water";
 import { de as plants } from "./plants";
+import { de as setup } from "./setup";
 
 // German texts of the app. Keys are stable; the English table (en.ts)
 // must have every key. Placeholders in {braces}.
@@ -120,4 +121,4 @@ export const deBase = {
 } as const;
 
 // The base texts plus the texts of each area.
-export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants };
+export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup };

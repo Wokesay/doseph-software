@@ -111,6 +111,7 @@ p { margin: 0; }
 small, .small { font-size: 0.85rem; }
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
+.ok-text { color: var(--ok); }
 .mono { font-family: var(--mono); font-size: 0.88em; }
 .token { overflow-wrap: anywhere; user-select: all; }
 .nowrap { white-space: nowrap; }

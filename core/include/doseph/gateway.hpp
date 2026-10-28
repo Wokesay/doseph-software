@@ -126,6 +126,7 @@ struct DoseOrder {
 struct DoseProgress {
   enum class State { Idle, Running, Done, Failed, Aborted } state = State::Idle;
   std::string orderId;
+  int channel = 0;
   size_t run = 0;
   double mlDone = 0;
   Ms msDone = 0;

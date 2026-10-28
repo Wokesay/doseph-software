@@ -546,3 +546,91 @@ TEST_CASE("API: the device ID is random, made once and kept across a restart; ne
   s.reboot();
   CHECK(c.get("info")["deviceId"] == fresh);
 }
+
+TEST_CASE("API: commissioning has the steps of #10 in order and resumes after a restart; the robot's own steps are done while it sees them, the user confirms or skips the others (SD-129)") {
+  sim::Simulation s(newRobot());
+  const std::string code = s.robot().armSetupCode();
+  Client c{s};
+  REQUIRE(c.call("POST", "auth/setup", {{"password", "a-long-password"}, {"code", code}}).status == 200);
+  REQUIRE(c.login("a-long-password"));
+  auto stateOf = [](const json& su, const std::string& id) {
+    for (const auto& st : su["steps"])
+      if (st["id"] == id) return st["state"].get<std::string>();
+    return std::string();
+  };
+  json su = c.get("commissioning");
+  std::vector<std::string> ids;
+  for (const auto& st : su["steps"]) ids.push_back(st["id"]);
+  CHECK(ids == std::vector<std::string>{"password", "network", "placement", "flow", "probes", "channels", "lines", "test", "tank", "push", "account"});
+  CHECK(stateOf(su, "password") == "done");
+  CHECK(stateOf(su, "network") == "later");
+  CHECK(stateOf(su, "flow") == "open");
+  CHECK(su["next"] == "placement");
+  CHECK(su["complete"] == false);
+  CHECK(c.get("state")["setup"] == json{{"complete", false}, {"next", "placement"}});
+
+  // A step the robot sees is never confirmed by hand; only an optional one is skipped
+  CHECK(json::parse(c.call("PUT", "commissioning/flow", {{"state", "done"}}).body)["error"]["key"] == "setup.seen");
+  CHECK(json::parse(c.call("PUT", "commissioning/placement", {{"state", "skipped"}}).body)["error"]["key"] == "setup.needed");
+  CHECK(c.status("PUT", "commissioning/nope", {{"state", "done"}}) == 404);
+  CHECK(c.status("PUT", "commissioning/placement", {{"state", "maybe"}}) == 422);
+  REQUIRE(c.status("PUT", "commissioning/placement", {{"state", "done"}}) == 200);
+  REQUIRE(c.status("PUT", "commissioning/push", {{"state", "skipped"}}) == 200);
+  CHECK(c.get("commissioning")["next"] == "flow");
+
+  // A pH− channel calibrated into a cup: the channel is calibrated, and the run filled its line
+  CHECK(stateOf(c.get("commissioning"), "channels") == "open");
+  REQUIRE(s.robot().putCanister({{"id", "ph_down"}, {"name", "pH down"}, {"role", "ph_down"}, {"channel", 1}}).status == 200);
+  REQUIRE(c.status("POST", "channels/1/calibrate", {{"seconds", 10}}) == 200);
+  s.step(12 * kSecond, 500);
+  REQUIRE(c.status("POST", "channels/result", {{"ml", 5}}) == 200);
+
+  // A restart resumes where it stood
+  s.reboot();
+  REQUIRE(c.login("a-long-password"));
+  su = c.get("commissioning");
+  CHECK(stateOf(su, "placement") == "done");
+  CHECK(su["steps"][2]["at"].get<Epoch>() > 0);
+  CHECK(stateOf(su, "push") == "skipped");
+  CHECK(stateOf(su, "channels") == "done");
+  CHECK(stateOf(su, "lines") == "done");
+  CHECK(su["next"] == "flow");
+  // Opened again, it is the next step once more
+  REQUIRE(c.status("PUT", "commissioning/placement", {{"state", "open"}}) == 200);
+  CHECK(c.get("commissioning")["next"] == "placement");
+}
+
+TEST_CASE("API: the demo is set up as a device in use: commissioning is complete once flow is proven (SD-129)") {
+  sim::Simulation s(demo());
+  Client c{s};
+  REQUIRE(c.login("demo-password"));
+  s.step(10 * kMinute);
+  const json su = c.get("commissioning");
+  CHECK(su["complete"] == true);
+  CHECK(su["next"].is_null());
+}
+
+TEST_CASE("API: before the placement is confirmed nothing doses and the check says why; a backup never brings the confirmation (SD-118, SD-129)") {
+  sim::Simulation s(demo());
+  Client c{s};
+  REQUIRE(c.login("demo-password"));
+  const json backup = json::parse(c.call("GET", "config/export").body);
+  CHECK(backup["setup"]["placement"]["state"] == "done");
+  REQUIRE(c.status("PUT", "commissioning/placement", {{"state", "open"}}) == 200);
+  const json stock = c.get("state")["stock"];
+  s.step(30 * kMinute);
+  const json st = c.get("state");
+  CHECK(st["cycle"]["line"]["key"] == "cycle.off.placement");
+  bool listed = false;
+  for (const auto& item : st["cycle"]["checks"]["all"]) listed |= item["key"] == "cycle.off.placement" && item["ok"] == false;
+  CHECK(listed);
+  CHECK(st["stock"] == stock);  // nothing ran towards the tank
+  CHECK(c.status("POST", "channels/2/prime", {{"seconds", 5}}) == 409);  // a line fill into the tank waits too
+  // The file says it was confirmed; the robot keeps its own word
+  REQUIRE(c.status("POST", "config/import", backup) == 200);
+  CHECK(c.get("commissioning")["next"] == "placement");
+  REQUIRE(c.status("PUT", "commissioning/placement", {{"state", "done"}}) == 200);
+  bool logged = false;
+  for (const auto& e : s.robot().events(0, s.robot().now() + 1, "config", 20)) logged |= e["title"]["key"] == "ev.setup.placement";
+  CHECK(logged);
+}
