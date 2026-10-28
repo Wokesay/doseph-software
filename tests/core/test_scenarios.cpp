@@ -350,3 +350,46 @@ TEST_CASE("Scenario daily amount: a canister's ml per day holds its doses back w
   CHECK(day["capS"] == 40 * 60);                     // the example head's value
   CHECK(day["usedS"] == 0);
 }
+
+TEST_CASE("Scenario top up water: EC above its band with no nutrient in since a check found it within raises \"top up water\" once; nutrients wait, and it goes when EC is back (SD-115, RAT-012)") {
+  Run r(device("home"));
+  r.waitUntil("the check holds on target", [&] { return r.phase() == "hold"; }, 8 * 3600, 2000);
+  CHECK(r.state()["topUp"] == false);
+  const auto ecDoses = [&] {
+    int n = 0;
+    const json doses = r.events("dose");
+    for (const auto& e : doses) n += e["data"]["purpose"] == "ec";
+    return n;
+  };
+  // A check finds EC within its band, and nothing is dosed after it
+  r.s.world().tank.ec = 1.6;
+  r.waitUntil("a check finds EC within its band", [&] { return r.s.robot().runtime().ecInBand.is_object(); }, 3 * 3600, 2000);
+  const int before = ecDoses();
+  // Water evaporates: EC rises without a dose
+  r.s.world().tank.ec += 0.4;
+  r.waitUntil("top up water", [&] { return r.state()["topUp"] == true; }, 2 * 3600, 2000);
+  r.step(6 * doseph::kSecond);  // the watchdog looks every 5 s
+  const json st = r.state();
+  bool watched = false, noted = false;
+  for (const auto& i : st["watchdog"]["items"]) watched |= i["id"] == "water" && i["status"] == "problem";
+  for (const auto& n : st["cycle"]["notes"]) noted |= n["key"] == "cycle.note.top_up";
+  CHECK(watched);
+  CHECK(noted);
+  int raised = 0;
+  const json control = r.events("control");
+  for (const auto& e : control) raised += e["title"]["key"] == "ev.water.top_up";
+  CHECK(raised == 1);
+  r.step(3 * 3600 * doseph::kSecond, 2000);  // further checks raise it no second time
+  int again = 0;
+  const json later = r.events("control");
+  for (const auto& e : later) again += e["title"]["key"] == "ev.water.top_up";
+  CHECK(again == 1);
+  CHECK(ecDoses() == before);  // nutrients wait (RAT-012)
+  // Topped up: back within the band, the message goes
+  r.s.world().tank.ec -= 0.4;
+  r.waitUntil("EC back within its band", [&] { return r.state()["topUp"] == false; }, 3 * 3600, 2000);
+  bool ok = false;
+  const json done = r.events("control");
+  for (const auto& e : done) ok |= e["title"]["key"] == "ev.water.ok";
+  CHECK(ok);
+}

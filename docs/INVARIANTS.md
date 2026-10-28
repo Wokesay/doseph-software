@@ -30,6 +30,7 @@ of its own.
 |---|---|---|---|
 | Recipes hold nutrients only; pH is corrected after EC and waits while a nutrient round is open | RAT-004 | ✓ | `plan.hpp`, `config.cpp`, `cycle.cpp` · test_config.cpp, test_cycle.cpp |
 | EC is only raised; an EC above target is left as it is, with the reason | RAT-012 | ✓ | `cycle.cpp` · test_cycle.cpp |
+| EC above its band with no dose since a check found it within raises "top up water" once (event, watchdog, note); it goes when EC is back within the band; a new tank or recipe starts afresh | SD-115 | ✓ | `config.hpp`, `cycle.cpp`, `robot.cpp`, `watchdog.cpp` · test_scenarios.cpp |
 | One line says what the robot does; everything it leaves as it is stands as a note with its reason, and the checklist says why it doses or not | RAT-037 | ✓ | `cycle.hpp`, `cycle.cpp`, `status.tsx` · test_cycle.cpp, robot.spec.ts |
 | pH is only lowered; pH− without effect latches; a pH below target is left as it is, with the reason | RAT-041 | ✓ | `cycle.hpp`, `cycle.cpp`, `truth.cpp` · test_cycle.cpp, test_truth.cpp |
 | No pH dose on an old reading: the cycle measures afresh after flushing before every decision | RAT-043 | ✓ | `cycle.cpp` · test_cycle.cpp |

@@ -413,6 +413,8 @@ void to_json(json& j, const RuntimeState& s) {
     day[std::to_string(n)] = list;
   }
   j["dayRuns"] = day;
+  j["ecInBand"] = s.ecInBand;
+  j["topUp"] = s.topUp;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -470,6 +472,8 @@ RuntimeState runtimeFromJson(const json& j) {
         if (r.is_array() && r.size() == 2 && r[0].is_number_integer() && r[1].is_number_integer() && r[1].get<Ms>() > 0)
           s.dayRuns[n].emplace_back(r[0].get<Epoch>(), r[1].get<Ms>());
     }
+  if (j.contains("ecInBand") && j["ecInBand"].is_object()) s.ecInBand = j["ecInBand"];
+  s.topUp = jbool(j, "topUp", false);
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

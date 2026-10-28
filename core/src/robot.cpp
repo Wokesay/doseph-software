@@ -488,6 +488,7 @@ json Robot::state() {
           {"latches", rt_.latches},
           {"jumpLocks", rt_.jumpLocks},
           {"newTank", rt_.newTank},
+          {"topUp", rt_.topUp},  // "top up water" is raised (SD-115)
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -579,6 +580,7 @@ Result Robot::saveConfig(Config next, const std::optional<Msg>& what) {
 // Something went into the tank outside a round: the check starts anew, mixes it in first and learns
 // nothing from it
 void Robot::mixFirstNow() {
+  rt_.ecInBand = nullptr;  // what went in may raise EC: no sign of missing water (SD-115)
   Ctx c = ctx();
   const CycleSettings s = cycleSettings(c);
   const double m = s.mixMin;
@@ -649,6 +651,8 @@ Result Robot::newTank() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   // A person announces a new fill: its jumps are explained, and the next dose is a test dose (SD-105, RAT-042)
   rt_.newTank = true;
+  rt_.ecInBand = nullptr;  // a new fill (SD-115)
+  rt_.topUp = false;
   rt_.latches.erase("tank.volume");
   rt_.jumpLocks.clear();
   {
