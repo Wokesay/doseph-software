@@ -1585,6 +1585,188 @@
         }
       }
     },
+    "/peer/beat": {
+      "post": {
+        "operationId": "peerBeat",
+        "summary": "The leader's call to the follower every 2 s: whether its feed pump runs. The answer has the follower's readings, flow, pump and the run it asked for",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "peer"
+        ],
+        "description": "Only the coupled leader's token is taken. After 10 s without this call the follower stops a run it asked for and takes no new one (SD-131).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pump": {
+                    "type": "boolean"
+                  },
+                  "at": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The follower's state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readings": {
+                      "type": "object"
+                    },
+                    "flowOk": {
+                      "type": "boolean"
+                    },
+                    "feedPump": {
+                      "type": "boolean"
+                    },
+                    "stopped": {
+                      "type": "boolean"
+                    },
+                    "run": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/peer/run": {
+      "post": {
+        "operationId": "peerRun",
+        "summary": "The leader asks the follower for one run on one of its channels; the follower's own gateway decides",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "peer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "job",
+                  "channel",
+                  "ms",
+                  "purpose"
+                ],
+                "properties": {
+                  "job": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "integer"
+                  },
+                  "ms": {
+                    "type": "integer"
+                  },
+                  "purpose": {
+                    "enum": [
+                      "ec",
+                      "ph"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/peer/abort": {
+      "post": {
+        "operationId": "peerAbort",
+        "summary": "The leader stops the run it asked for",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "Stopped, or nothing ran",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/commissioning": {
       "get": {
         "operationId": "getSetup",
@@ -4378,6 +4560,13 @@
               "null"
             ],
             "description": "The last pairing from here while under way or failed: state, address, error, at"
+          },
+          "link": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "While coupled: whether the other device was heard within 10 s, when, what the follower said last, and the run asked for"
           }
         }
       }

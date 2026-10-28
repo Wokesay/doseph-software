@@ -96,7 +96,7 @@ bool permitted(Role role, const std::string& method, const std::vector<std::stri
   if (role == Role::App) return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password");
   if (method == "GET") return first != "tokens";
   // The coupled device's calls (SD-131); the robot checks that the token is the one made for it
-  if (role == Role::Peer) return method == "POST" && p.size() == 2 && first == "coupling" && p[1] == "leave";
+  if (role == Role::Peer) return method == "POST" && p.size() == 2 && ((first == "coupling" && p[1] == "leave") || first == "peer");
   if (role != Role::Account) return false;
   const size_t n = p.size();
   if (method == "POST" && n == 1 && (first == "stop" || first == "recipes" || first == "plants")) return true;
@@ -399,6 +399,9 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("POST", {"coupling", "pair"})) return fromResult(robot_.pair(body));
   if (is("DELETE", {"coupling"})) return fromResult(robot_.unpair());
   if (is("POST", {"coupling", "leave"})) return fromResult(robot_.left(req.token));
+  if (is("POST", {"peer", "beat"})) return fromResult(robot_.peerBeat(req.token, body));
+  if (is("POST", {"peer", "run"})) return fromResult(robot_.peerRun(req.token, body));
+  if (is("POST", {"peer", "abort"})) return fromResult(robot_.peerAbort(req.token));
   if (is("GET", {"commissioning"})) return jsonResp(200, robot_.setup());
   if (is("PUT", {"commissioning", "*"})) return fromResult(robot_.setSetup(p[1], body));
   if (is("GET", {"plants"})) return jsonResp(200, robot_.plants());

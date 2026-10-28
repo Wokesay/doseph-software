@@ -71,6 +71,9 @@ Ctx Robot::ctx() {
            : r.stopButton                                      ? "stop_button"
            : !r.on                                             ? "release"
                                                                : "";
+  c.follower = peer_ && peer_->role == "follower";
+  c.linkOk = c.follower && peerLinkOk(c.now);
+  c.leaderPump = c.linkOk && leaderPump_;
   return c;
 }
 
@@ -383,8 +386,16 @@ void Robot::tick() {
     // A run that went through its line has filled it: a step of commissioning the robot sees (SD-129)
     if (p->state == DoseProgress::State::Done && p->msDone > 0 && p->channel > 0 && rt_.filled.insert(p->channel).second) saveState(true);
     if (job_ && p->orderId == job_->id) channelJobDone(*p);
-    else cycle_.doseFinished(c, *p);
+    else if (p->orderId.rfind("peer-", 0) == 0) {
+      // A run the leader asked for: its result goes back with the next call (SD-131)
+      static const char* kStates[] = {"idle", "running", "done", "failed", "aborted"};
+      peerRun_ = {{"job", p->orderId.substr(5)}, {"state", kStates[static_cast<int>(p->state)]}, {"channel", p->channel},
+                  {"ms", p->msDone}, {"ml", p->mlDone}, {"error", p->error.key.empty() ? json(nullptr) : json(p->error)}};
+    } else {
+      cycle_.doseFinished(c, *p);
+    }
   }
+  watchPeer(c);
   c.channelJob = channelJobActive();
   cycle_.tick(c, act_, doser_);
   if (auto st = cycle_.takeSettled()) learnSettling(*st, epoch);
@@ -1684,7 +1695,12 @@ json Robot::coupling() const {
   return {{"deviceId", deviceId_},
           {"peer", peer_ ? peerToJson(*peer_, false) : json(nullptr)},
           {"code", armed ? json{{"until", clock_.epoch() + (pairing_->until - clock_.nowMs()) / 1000}} : json(nullptr)},
-          {"pairing", pairStatus_}};
+          {"pairing", pairStatus_},
+          {"link", peer_ ? json{{"ok", peerLinkOk(clock_.nowMs())},
+                                {"heard", peerHeard_ >= 0 ? json(clock_.epoch() - (clock_.nowMs() - peerHeard_) / 1000) : json(nullptr)},
+                                {"peer", peerState_},
+                                {"run", peerRun_}}
+                         : json(nullptr)}};
 }
 
 Result Robot::armPairingCode() {
@@ -1703,7 +1719,8 @@ Result Robot::armPairingCode() {
 Result Robot::pair(const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
-  if (!peerPending_.empty()) return Result::fail(409, say("coupling.pending"));
+  if (std::any_of(peerPending_.begin(), peerPending_.end(), [](const auto& x) { return x.second.kind == "join"; }))
+    return Result::fail(409, say("coupling.pending"));
   const std::string address = jstr(j, "address"), code = jstr(j, "code");
   if (!peerAddress(address)) return Result::fail(422, say("coupling.address"));
   if (code.empty() || code.size() > 16) return Result::fail(422, say("coupling.code"));
@@ -1779,6 +1796,14 @@ void Robot::peerResponse(long long id, int status, const json& body) {
   if (it == peerPending_.end()) return;
   const PeerPending pending = it->second;
   peerPending_.erase(it);
+  if (pending.kind == "beat") {
+    if (status != 200 || !body.is_object() || !peer_) return;
+    if (linkLost_) log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.link_back", {{"name", peer_->name}}));
+    linkLost_ = false;
+    peerHeard_ = clock_.nowMs();
+    peerState_ = body;
+    return;
+  }
   if (pending.kind != "join") return;
   Peer p;
   p.role = "leader";
@@ -1824,6 +1849,9 @@ Result Robot::unpair() {
   }
   auth_.revokeToken(was.tokenId);
   peer_.reset();
+  peerHeard_ = beatSent_ = -1;
+  leaderPump_ = linkLost_ = false;
+  peerState_ = peerRun_ = nullptr;
   if (!saveAuth() || !savePeer()) return Result::fail(500, say("store.failed"));
   log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.ended", {{"name", was.name}}));
   return Result::ok(coupling());
@@ -1835,8 +1863,110 @@ Result Robot::left(const std::string& token) {
   const Peer was = *peer_;
   auth_.revokeToken(was.tokenId);
   peer_.reset();
+  peerHeard_ = beatSent_ = -1;
+  leaderPump_ = linkLost_ = false;
+  peerState_ = peerRun_ = nullptr;
   if (!saveAuth() || !savePeer()) return Result::fail(500, say("store.failed"));
   log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.left", {{"name", was.name}}));
+  return Result::ok();
+}
+
+void Robot::watchPeer(Ctx& c) {
+  if (!peer_) return;
+  if (peer_->role == "follower") {
+    // 10 s without the leader: a run it asked for stops and is booked, and none is taken until it
+    // calls again (SD-131)
+    const bool ok = peerLinkOk(c.now);
+    if (!ok && peerHeard_ >= 0 && !linkLost_) {
+      linkLost_ = true;
+      log_.add(c.epoch, "coupling", "warn", say("ev.coupling.link_lost", {{"name", peer_->name}}), say("ev.coupling.link_lost.text"));
+    }
+    if (!ok && doser_.busy() && doser_.progress().orderId.rfind("peer-", 0) == 0) {
+      doser_.abort(c, act_, say("abort.link"));
+      if (auto p = doser_.takeFinished())
+        peerRun_ = {{"job", p->orderId.substr(5)}, {"state", "aborted"}, {"channel", p->channel}, {"ms", p->msDone}, {"ml", p->mlDone}, {"error", say("abort.link")}};
+    }
+    return;
+  }
+  // The leader calls every 2 s, whether or not the last call came back
+  if (beatSent_ >= 0 && c.now - beatSent_ < kPeerBeatMs) return;
+  beatSent_ = c.now;
+  for (auto it = peerPending_.begin(); it != peerPending_.end();)
+    it = it->second.kind == "beat" ? peerPending_.erase(it) : std::next(it);  // an answer that never came is not waited for
+  PeerRequest req;
+  req.id = ++peerSeq_;
+  req.address = peer_->address;
+  req.method = "POST";
+  req.path = "/api/v1/peer/beat";
+  req.token = peer_->token;
+  req.body = {{"pump", act_.feedPump().value_or(false)}, {"at", c.epoch}};
+  peerOut_.push_back(req);
+  peerPending_[req.id] = {"beat", peer_->address, ""};
+  const bool ok = peerLinkOk(c.now);
+  if (!ok && peerHeard_ >= 0 && !linkLost_) {
+    linkLost_ = true;
+    log_.add(c.epoch, "coupling", "warn", say("ev.coupling.link_lost", {{"name", peer_->name}}));
+  }
+}
+
+Result Robot::peerBeat(const std::string& token, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!isPeerToken(token)) return Result::fail(403, say("coupling.not_peer"));
+  if (peer_->role != "follower") return Result::fail(409, say("coupling.not_follower"));
+  const Ms now = clock_.nowMs();
+  if (linkLost_) log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.link_back", {{"name", peer_->name}}));
+  linkLost_ = false;
+  peerHeard_ = now;
+  leaderPump_ = jbool(j, "pump", false);
+  json readings = json::object();
+  for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) {
+    const Reading& r = truth_.get(ch);
+    readings[signalName(ch)] = r.usable() ? numOrNull(r.value) : json(nullptr);
+  }
+  return Result::ok({{"readings", readings},
+                     {"flowOk", flowOk()},
+                     {"feedPump", act_.feedPump().value_or(false)},
+                     {"stopped", rt_.stopped},
+                     {"run", peerRun_}});
+}
+
+Result Robot::peerRun(const std::string& token, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!isPeerToken(token)) return Result::fail(403, say("coupling.not_peer"));
+  if (peer_->role != "follower") return Result::fail(409, say("coupling.not_follower"));
+  Ctx c = ctx();
+  if (!c.linkOk) return Result::fail(409, say("coupling.no_link"));
+  if (doser_.busy() || channelJobActive()) return Result::fail(409, say("coupling.busy"));
+  const std::string job = jstr(j, "job"), purpose = jstr(j, "purpose");
+  const double ms = jnum(j, "ms");
+  const int channel = j.contains("channel") && j["channel"].is_number_integer() ? j["channel"].get<int>() : 0;
+  if (job.empty() || job.size() > 40 || (purpose != "ec" && purpose != "ph") || !isNum(ms) || ms <= 0 || channel < 1)
+    return Result::fail(422, say("coupling.run"));
+  const CanisterCfg* b = cfg_.canisterOnChannel(channel);
+  DoseOrder o;
+  o.id = "peer-" + job;
+  o.purpose = purpose;
+  o.step.channel = channel;
+  o.step.canister = b ? b->id : "";
+  o.step.name = b ? b->name : say("channel.n", {{"channel", channel}}).text;
+  o.step.flowMlPerMin = cfg_.channelFlow(channel);
+  o.step.runs = {static_cast<Ms>(std::llround(ms))};
+  o.step.ml = isNum(o.step.flowMlPerMin) ? ms / 60000.0 * o.step.flowMlPerMin : kNaN;
+  // The gateway of this device decides, as for its own doses: flow, placement, calibration, locks,
+  // daily amount, drops (SD-105, SD-111, SD-113, SD-118)
+  Msg err;
+  if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
+  peerRun_ = {{"job", job}, {"state", "running"}, {"channel", channel}, {"ms", 0}, {"ml", 0}, {"error", nullptr}};
+  return Result::ok({{"job", job}});
+}
+
+Result Robot::peerAbort(const std::string& token) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!isPeerToken(token)) return Result::fail(403, say("coupling.not_peer"));
+  if (doser_.busy() && doser_.progress().orderId.rfind("peer-", 0) == 0) {
+    Ctx c = ctx();
+    doser_.abort(c, act_, say("abort.peer"));
+  }
   return Result::ok();
 }
 

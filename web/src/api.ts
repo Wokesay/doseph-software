@@ -177,6 +177,8 @@ export type Peer = { role: "leader" | "follower"; id: string; name: string; addr
 export type Coupling = {
   deviceId: string; peer: Peer | null; code: { until: number } | null;
   pairing: { state: "pairing" | "failed"; address: string; error: Msg | null; at: number } | null;
+  // While coupled: whether the other device was heard within 10 s, and when (SD-131)
+  link: { ok: boolean; heard: number | null } | null;
 };
 
 // MQTT with Home Assistant discovery (PD-461, SD-130): the password is written, never read back

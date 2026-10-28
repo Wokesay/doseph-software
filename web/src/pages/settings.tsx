@@ -354,10 +354,10 @@ function CouplingCard() {
   useEffect(() => {
     load();
   }, []);
-  // While a pairing is under way, ask again until it is decided
+  // While a pairing is under way, ask again until it is decided; while coupled, the link now and then
   useEffect(() => {
-    if (c?.pairing?.state !== "pairing") return;
-    const id = window.setTimeout(load, 1000);
+    if (c?.pairing?.state !== "pairing" && !c?.peer) return;
+    const id = window.setTimeout(load, c?.peer ? 5000 : 1000);
     return () => window.clearTimeout(id);
   }, [c]);
   if (!c) return null;
@@ -388,8 +388,16 @@ function CouplingCard() {
               )}
               <span>{t("settings.coupling.since")}</span>
               <span>{dateTime(c.peer.since)}</span>
+              <span>{t("settings.coupling.link")}</span>
+              <span data-testid="link">
+                {c.link?.ok ? (
+                  <Pill tone="ok">{t("settings.coupling.linkOk")}</Pill>
+                ) : (
+                  <Pill tone="warn">{c.link?.heard ? t("settings.coupling.linkLost", { time: dateTime(c.link.heard) }) : t("settings.coupling.linkNone")}</Pill>
+                )}
+              </span>
             </div>
-            <p class="muted small">{t("settings.coupling.later")}</p>
+            <p class="muted small">{t(c.peer.role === "follower" ? "settings.coupling.followHint" : "settings.coupling.later")}</p>
             <div>
               <Button variant="danger-soft" onClick={end} data-testid="end-coupling">
                 {t("settings.coupling.end")}

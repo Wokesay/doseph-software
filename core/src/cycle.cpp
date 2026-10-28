@@ -89,6 +89,8 @@ CycleSettings cycleSettings(const Ctx& c) {
   const WaterPlan w = waterPlan(cfg, c.epoch);
   if (!placementConfirmed(cfg)) {
     s.off = say("cycle.off.placement");  // where pump and canisters stand is confirmed first (SD-118)
+  } else if (c.follower) {
+    // The leader plans (SD-131): no recipe of this device's own
   } else if (!w.recipe) {
     s.off = say("cycle.off.no_recipe");
   } else if (w.ended) {
@@ -890,6 +892,21 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       wait(c, act, say("cycle.wait.cable"), 0);
     }
     return;
+  }
+  // Coupled as the follower (SD-131): the feed pump runs while the leader's does, with every guard
+  // of a check; without the leader, or while its pump stands, it stays off
+  if (c.follower) {
+    const bool follow = c.linkOk && c.leaderPump;
+    if (!follow) {
+      const char* key = c.linkOk ? "cycle.follow.idle" : "cycle.follow.no_link";
+      const bool waiting = phase_ == Phase::Wait && retryAt_ > 0;  // after no flow: its own retry
+      if (!waiting && !(phase_ == Phase::Wait && line_.key == key)) {
+        restart(c, act, doser);
+        wait(c, act, say(key), 0);
+      }
+      return;
+    }
+    if (phase_ == Phase::Wait && (line_.key == "cycle.follow.idle" || line_.key == "cycle.follow.no_link")) enter(c, Phase::PumpOn);
   }
   if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
