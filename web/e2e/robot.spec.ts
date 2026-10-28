@@ -426,7 +426,7 @@ test("an access token is made in the settings, shown once, works within its role
   await page.locator("input[name=tokenName]").fill("Account e2e");
   await page.getByRole("tab", { name: "Account" }).click();
   await expect(page.getByText("Never limits, releases, calibration")).toBeVisible();
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByTestId("create-token").click();
   const token = (await page.getByTestId("new-token").textContent()) ?? "";
   expect(token).toMatch(/^dpt_[0-9a-f]{64}$/);
   const row = page.getByTestId("tokens").getByText("Account e2e");

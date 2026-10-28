@@ -385,7 +385,7 @@ function TokensCard() {
               <div class="item wrap-row" key={tk.id} data-testid={`token-${tk.id}`}>
                 <div class="grow">
                   <div class="title">
-                    {tk.name} <Pill>{msg({ key: `auth.role.${tk.role}` })}</Pill>
+                    {tk.name} <Pill>{t(`settings.tokens.as.${tk.role}`)}</Pill>
                   </div>
                   <div class="muted small">
                     {t("settings.tokens.created", { at: dateTime(tk.created) })}
@@ -418,7 +418,7 @@ function TokensCard() {
               <input class="input" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} name="tokenName" />
             </Field>
             <Field label={t("settings.tokens.role")} group>
-              <Seg value={role} onChange={setRole} options={TOKEN_ROLES.map((r) => [r, msg({ key: `auth.role.${r}` })] as [TokenRole, string])} />
+              <Seg value={role} onChange={setRole} options={TOKEN_ROLES.map((r) => [r, t(`settings.tokens.as.${r}`)] as [TokenRole, string])} />
             </Field>
           </div>
           <p class="muted small">{t(`settings.tokens.role.${role}`)}</p>
@@ -427,6 +427,7 @@ function TokensCard() {
               variant="primary"
               type="submit"
               disabled={!name.trim() || full}
+              data-testid="create-token"
               onClick={async () => {
                 setMade(await post<NewToken>("/tokens", { name: name.trim(), role }));
                 setName("");
