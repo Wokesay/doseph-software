@@ -19,7 +19,7 @@ namespace doseph {
 // raw pH scale (the pH an ideal probe would read, 7 − mV/59.16), EC in mS/cm
 // at the water's own temperature (not compensated), water temperature in °C,
 // flow through the device in L/min: measured (flow method "turbine"), or
-// estimated from the suction pump's delivery while the outlet reports water
+// estimated from the feed pump's delivery while the outlet reports water
 // ("outlet_level", SD-109).
 enum class Signal { Ph, Ec, Temp, Flow };
 inline constexpr Signal kSignals[] = {Signal::Ph, Signal::Ec, Signal::Temp, Signal::Flow};
@@ -57,9 +57,12 @@ struct Profile {
   std::string variant;                // the name the device is sold under
   std::vector<ChannelCaps> channels;  // dosing channel n is channels[n - 1]
   std::string flow;                   // flow method: "turbine", "outlet_level"
+  // Where the feed pump sits (SD-127): "tank", lying in the tank and pushing its water up (no
+  // priming, a short start window); "device", drawing it through the device (SD-109)
+  std::string pumpIn = "tank";
   std::string returnBy;               // "gravity", "pump"
   std::vector<std::string> network;   // "wifi", "lan"
-  double suctionLpmLow = kNaN;        // the low end of the suction pump's delivery, L/min (SD-109)
+  double pumpLpmLow = kNaN;           // the low end of the feed pump's delivery, L/min (SD-109)
   bool example = false;               // an example profile: its numbers are assumptions
 };
 
@@ -71,6 +74,9 @@ struct Release {
   bool leak = false;
   bool highLevel = false;  // the chamber is full up to its high-level sensor
   bool stopButton = false;
+  // No flow within the hardware's window (PD-477): it switched the feed pump and dosing off and
+  // holds them off until the feed pump is switched off again (SD-127)
+  bool noFlow = false;
 };
 
 // The water path as the device's sensors see it (SD-109); nullopt where the
@@ -109,11 +115,12 @@ class IHardware {
   // The channel's drop sensor; nullopt for a channel without one
   virtual std::optional<Drops> drops(int channel) const = 0;
   virtual void stopAllPumps() = 0;
-  // The output that switches the suction pump, where the device switches it.
-  virtual bool setSuctionPump(bool on, std::string& err) = 0;
+  // The output that switches the feed pump. Switching it off also re-arms the hardware after a
+  // cut for no flow (Release::noFlow).
+  virtual bool setFeedPump(bool on, std::string& err) = 0;
   // The return pump runs by the chamber's level on its own; held off, it does not run (SD-109)
   virtual void allowReturnPump(bool allowed) = 0;
-  virtual std::optional<bool> suctionPump() const = 0;  // nullopt: state unknown
+  virtual std::optional<bool> feedPump() const = 0;  // nullopt: state unknown
 };
 
 // Storage for configuration and state (device: flash, host: files). write()

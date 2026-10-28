@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Layer 8: actuator gateway and dose execution.
 //
-// Actuators is the ONLY way to the pumps and the suction pump's output (rule
+// Actuators is the ONLY way to the pumps and the feed pump's output (rule
 // R1). It holds the safety minimum in code that settings can only tighten
 // (R7): a calibration value present, run time limits, one run at a time,
 // the Stop, and no dose without proven flow (SD-105).
@@ -34,6 +34,8 @@ struct Ctx {
   Epoch epoch = 0;
   bool stopped = false;
   bool flowOk = false;  // flow through the device proven now: no dose without it (SD-105)
+  bool pumpInTank = true;  // the feed pump lies in the tank: no priming, a short window (SD-127)
+  bool pumpCut = false;    // the hardware switched the feed pump off for no flow (PD-477, SD-127)
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
@@ -70,13 +72,13 @@ class Actuators {
   void clearRun(int channel);
   void stopPumps() { hw_.stopAllPumps(); }
 
-  // The suction pump, where the device switches it: on is refused while stopped.
-  bool setSuctionPump(const Ctx& c, bool on, Msg& err);
-  std::optional<bool> suctionPump() const { return hw_.suctionPump(); }
+  // The feed pump, where the device switches it: on is refused while stopped.
+  bool setFeedPump(const Ctx& c, bool on, Msg& err);
+  std::optional<bool> feedPump() const { return hw_.feedPump(); }
   // A return pump found dry or blocked is held off until a person releases it (SD-109)
   void allowReturnPump(bool allowed) { hw_.allowReturnPump(allowed); }
 
-  // Stop and start: every pump and the suction pump's output off, idempotent (RAT-036, R6).
+  // Stop and start: every pump and the feed pump's output off, idempotent (RAT-036, R6).
   void stopAll();
   // Each tick: a dose that loses its flow stops at once, and so does a run into the tank whose
   // outlet does not drip (SD-105, SD-111); only ever switches off.

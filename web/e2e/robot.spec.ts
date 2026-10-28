@@ -360,7 +360,7 @@ test("maintenance dates: the next date with its items, cleaning marked done, a c
   await page.goto("/#/tank");
   const card = page.getByTestId("service");
   await expect(card).toContainText("Next date:");
-  await expect(card).toContainText("Clean the measuring chamber and the suction filter");
+  await expect(card).toContainText("Clean the measuring chamber, the feed pump and its inlet screen");
   await page.getByTestId("service-done-chamber.clean").click();
   await expect(page.getByText("Noted")).toBeVisible();
   await expect(page.getByTestId("service-probe.ph.cal").getByRole("link", { name: "Calibrate" })).toHaveAttribute("href", "#/water");

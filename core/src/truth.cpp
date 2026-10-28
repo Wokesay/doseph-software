@@ -28,7 +28,7 @@ constexpr Ms kJumpWindow = 5 * kMinute;    // a jump within 5 min (RAT-039)
 constexpr Ms kFrozenAfter = 15 * kMinute;  // raw value standing still (RAT-023)
 
 // Plausible bands and jump thresholds (RAT-020, RAT-039); flow has no jump
-// check: it jumps whenever the suction pump starts or stops.
+// check: it jumps whenever the feed pump starts or stops.
 constexpr SignalDef kDefs[] = {
     {Signal::Ph, "", 2, 3.0, 9.0, 60 * kSecond, 1.0, true},
     {Signal::Ec, "mS/cm", 2, 0.0, 8.0, 60 * kSecond, 0.5, true},

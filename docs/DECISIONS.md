@@ -582,3 +582,62 @@ several years").
   temperature and flow. Whether the device's flash holds that is the
   product's question (#55); the simulator keeps it in a file.
 
+
+## SD-127: The feed pump lies in the tank (product requirement, from PD-476 and PD-477)
+
+2026-10-28. The product moved the device's own pump into the tank (#10,
+update of 28 Oct). This changes SD-109 where it says so. The owner decided
+the control details in this session.
+
+- **Term.** The device's own pump is the *feed pump*: it moves tank water
+  through the measuring chamber. The profile says where it sits:
+  - `tank`: on the tank's bottom, pushing water up a hose (both example
+    profiles);
+  - `device`: drawing water through the device (SD-109), in case the bench
+    test brings the suction pump back (PD-476).
+
+  Logic reads the position, never the line.
+- **No priming.** In the tank the pump has no priming: water reaches the
+  chamber within seconds. No flow for 6 s switches it off, before the
+  hardware's own cut at about 8–10 s (PD-477). This holds at the start and
+  at any time while it runs, mixing included. A pump in the device keeps its
+  2 min to prime (SD-109).
+- **Two tries.** Each try without flow can spill water if a hose is off.
+  - In the tank the check tries once more after 5 min.
+  - A second try in a row without flow locks the pump ("no flow", a
+    critical alarm, SD-123) until a person releases it in the app.
+  - In the device it takes three tries, as before (SD-109).
+
+  A round cut by no flow learns nothing, and what went in is mixed first on
+  the next try (SD-106).
+- **The hardware's cut.** The hardware may switch the pump and dosing off
+  for no flow. The device then reports it (`release.noFlow`) and holds the
+  pump off until it is switched off again. The check stops and says "No
+  flow: the hardware switched the feed pump off". It counts this as a try,
+  and switching the pump off re-arms the hardware.
+- **Dry run from the current** (decided, built next).
+  - While flow is proven, the device learns the pump's normal current at its
+    speed.
+  - Below 60 % of it for 2 s, the pump goes off at once. That counts as a try
+    without flow, with the reason "dry run".
+  - Until the current is learned, only the 6 s window protects.
+  - The thresholds are assumptions until the bench test.
+- **pH and EC with the pump on and off** (decided, built next).
+  - At the end of each check, the readings of the last 10 s with the pump
+    running are compared with those 10–20 s after it stopped.
+  - A difference beyond 0.1 pH or 0.05 mS/cm (assumptions) repeats the
+    comparison once, at once.
+  - If confirmed, the pump and dosing are locked with a critical alarm
+    ("check the pump and its cable") until a person releases it.
+- **Maintenance.** "Clean the measuring chamber, the feed pump and its inlet
+  screen" replaces the suction filter (SD-125).
+- **Later.** Commissioning (step 7) brings:
+  - the step "Place the pump in the tank" instead of priming;
+  - the confirmation that the tank is an open container;
+  - the cable check at commissioning;
+  - an optional flow calibration with a measuring jug, for a profile
+    without a flow meter.
+
+  Setting the pump's speed waits until a use needs it; the check runs at the
+  profile's speed.
+

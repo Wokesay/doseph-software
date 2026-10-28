@@ -131,7 +131,7 @@ void Actuators::clearRun(int channel) {
   }
 }
 
-bool Actuators::setSuctionPump(const Ctx& c, bool on, Msg& err) {
+bool Actuators::setFeedPump(const Ctx& c, bool on, Msg& err) {
   if (on && c.stopped) {
     err = say("act.stopped");
     return false;
@@ -141,7 +141,7 @@ bool Actuators::setSuctionPump(const Ctx& c, bool on, Msg& err) {
     return false;
   }
   std::string e;
-  if (!hw_.setSuctionPump(on, e)) {
+  if (!hw_.setFeedPump(on, e)) {
     err = say("act.hw", {{"error", e}});
     return false;
   }
@@ -152,7 +152,7 @@ void Actuators::stopAll() {
   hw_.stopAllPumps();
   watch_.clear();  // what had not dripped by a Stop is not judged (SD-111)
   std::string e;
-  hw_.setSuctionPump(false, e);  // also when its state is unknown: the command costs nothing
+  hw_.setFeedPump(false, e);  // also when its state is unknown: the command costs nothing
 }
 
 void Actuators::lockChannel(const Ctx& c, int channel, const std::string& what) {

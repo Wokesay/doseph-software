@@ -91,9 +91,9 @@ void acceptance(const std::string& profile, double volumeL) {
 
 }  // namespace
 
-TEST_CASE("Scenario priming: the check switches the suction pump on; water flows once it has primed, and flow is proven before the chamber is flushed (SD-105, SD-109)") {
+TEST_CASE("Scenario flow at the start: the check switches the feed pump on; water flows once its hose has filled, and flow is proven before the chamber is flushed (SD-105, SD-127)") {
   Run r(device("home"));
-  r.waitUntil("the suction pump is switched on", [&] { return r.twin()["output"] == true; }, 60);
+  r.waitUntil("the feed pump is switched on", [&] { return r.twin()["output"] == true; }, 60);
   CHECK(r.twin()["primed"] == false);
   CHECK(r.twin()["flowing"] == false);
   CHECK(r.state()["flowOk"] == false);
@@ -103,7 +103,7 @@ TEST_CASE("Scenario priming: the check switches the suction pump on; water flows
   CHECK(r.state()["flowOk"] == true);
 }
 
-TEST_CASE("Scenario flow: a suction line out of the water gives no flow; the suction pump goes off and the check waits, then proves flow again (SD-105, SD-109)") {
+TEST_CASE("Scenario flow: a feed pump out of the water gives no flow; it goes off within seconds and the check waits, then proves flow again (SD-105, SD-127)") {
   Run r(device("home"));
   r.act("flowFault", {{"fault", "dry"}});
   r.waitUntil("the check waits for flow", [&] { return r.line() == "cycle.wait.no_flow"; }, 4 * 60);
@@ -346,7 +346,7 @@ TEST_CASE("Scenario line fill cut by a restart: reported as a cut dose, and the 
   CHECK(r.state()["channelJob"].is_null());  // nothing resumes
 }
 
-TEST_CASE("Scenario calibration: a channel calibration stops the check and the suction pump first; the check starts anew once it ends (SD-109)") {
+TEST_CASE("Scenario calibration: a channel calibration stops the check and the feed pump first; the check starts anew once it ends (SD-109)") {
   Run r(device("home"));
   r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
   REQUIRE(r.twin()["output"] == true);

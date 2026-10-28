@@ -42,13 +42,19 @@ function FlowCard() {
       <div class="stack">
         <LockNote id="flow.dry" />
         <p class="muted small" data-testid="flow-method">
-          {method === "turbine" ? t("water.byTurbine") : method === "outlet_level" ? t("water.byOutlet") : t("tank.suctionText")}
+          {method === "turbine" ? t("water.byTurbine") : method === "outlet_level" ? t("water.byOutlet") : t("tank.pumpText")}
         </p>
         <div class="kv" data-testid="flow-info">
-          <span>{t("water.suctionPump")}</span>
-          <YesNo id="suction-pump" value={st.suctionPump} yes="water.running" no="water.standing" />
+          <span>{t("water.feedPump")}</span>
+          {st.hardware.release.noFlow ? (
+            <span data-testid="feed-pump">
+              <Pill tone="bad">{t("water.cutNoFlow")}</Pill>
+            </span>
+          ) : (
+            <YesNo id="feed-pump" value={st.feedPump} yes="water.running" no="water.standing" />
+          )}
           <span>{t("water.flowProven")}</span>
-          <YesNo id="flow-proven" value={st.suctionPump ? st.flowOk : null} yes="water.proven" no="water.notProven" noTone="warn" />
+          <YesNo id="flow-proven" value={st.feedPump ? st.flowOk : null} yes="water.proven" no="water.notProven" noTone="warn" />
           <span>{t("tank.flowNow")}</span>
           <span>{flow.usable ? `${num(flow.value, 1)} L/min` : "–"}</span>
           <span>{t("tank.flowMeasured")}</span>
@@ -58,7 +64,7 @@ function FlowCard() {
           </span>
           <span data-testid="turnover">{s.turnoverMin != null ? t("common.minutes", { n: num(s.turnoverMin, 1) }) : "–"}</span>
         </div>
-        <p class="muted small">{t("tank.suctionText")}</p>
+        <p class="muted small">{t("tank.pumpText")}</p>
         {s.flowLpm == null && <p class="muted small">{t("tank.flowUnknown")}</p>}
       </div>
     </Card>

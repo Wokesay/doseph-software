@@ -76,32 +76,55 @@ TEST_CASE("Simulator: the example profiles Home and Pro are marked as assumption
   }
 }
 
-TEST_CASE("Twin: the suction pump primes before water flows; a blocked filter or a suction line out of the water gives no flow (SD-109)") {
+TEST_CASE("Twin: the feed pump in the tank delivers once its hose has filled; a blocked inlet, a pump out of the water or a hose off gives no flow, and after 9 s the hardware cuts it until it is switched off (SD-127, PD-477)") {
   sim::World w;
   w.reset(4);
   w.fill(100, 0.45, 7.6);
   w.output = true;
-  w.advance(4000);
-  CHECK_FALSE(w.primed());
+  w.advance(1000);
   CHECK_FALSE(w.flowing());
-  CHECK(w.rawFlow() == 0.0);
-  w.advance(10000);
+  w.advance(3000);
   CHECK(w.flowing());
   CHECK(w.outletWet());
   CHECK(w.rawFlow() > 11.0);
-  for (const char* fault : {"blocked", "dry"}) {
+  for (const char* fault : {"blocked", "dry", "hose"}) {
     w.flowFault = fault;
     w.advance(w.now() + 2000);
     CHECK_FALSE(w.flowing());
     CHECK_FALSE(w.outletWet());
     CHECK(w.rawFlow() == 0.0);
+    CHECK(w.output);
+    w.flowFault.clear();
+    w.advance(w.now() + 1000);
   }
-  w.flowFault.clear();
-  w.output = false;  // off, the line runs empty: the next start primes again
+  // Without flow its sensor sees, the hardware switches the pump and the dosing pumps off
+  w.flowFault = "sensor";
+  std::string err;
+  REQUIRE(w.startRun(1, 60000, "j1", err));
+  w.advance(w.now() + 8500);
+  CHECK(w.output);
   w.advance(w.now() + 1000);
+  CHECK_FALSE(w.output);
+  CHECK(w.noFlowCut);
+  CHECK(w.runStatus(1).state == doseph::RunStatus::State::Failed);
+  CHECK(w.runStatus(1).error == "no flow");
+}
+
+TEST_CASE("Twin: a feed pump in the device primes for 8 s before water flows (SD-109)") {
+  sim::World w;
+  w.reset(4);
+  w.pumpInTank = false;
+  w.fill(100, 0.45, 7.6);
   w.output = true;
-  w.advance(w.now() + 2000);
+  w.advance(4000);
+  CHECK_FALSE(w.primed());
   CHECK_FALSE(w.flowing());
+  w.advance(10000);
+  CHECK(w.flowing());
+  w.flowFault = "dry";
+  w.advance(w.now() + 20000);
+  CHECK(w.output);  // no cut of the hardware's for it
+  CHECK_FALSE(w.noFlowCut);
 }
 
 TEST_CASE("Twin: the chamber keeps its water at the weir; a blocked return or a failed return pump fills it to high level, and the hardware release stops every pump (SD-109, SD-110)") {
@@ -120,7 +143,7 @@ TEST_CASE("Twin: the chamber keeps its water at the weir; a blocked return or a 
     w.advance(w.now() + 60 * 1000);
     CHECK(w.chamberL == doctest::Approx(0.15));  // the weir keeps the probes wet
     CHECK_FALSE(w.returnPumpOn);
-    // The return fails while the suction pump runs: the chamber fills up
+    // The return fails while the feed pump runs: the chamber fills up
     w.returnFault = byPump ? "failed" : "blocked";
     w.output = true;
     std::string err;
@@ -128,7 +151,7 @@ TEST_CASE("Twin: the chamber keeps its water at the weir; a blocked return or a 
     w.advance(w.now() + 12 * 1000);
     CHECK(w.highLevel());
     CHECK_FALSE(w.released());
-    CHECK_FALSE(w.output);  // the suction pump is off, below the robot
+    CHECK_FALSE(w.output);  // the feed pump is off, below the robot
     CHECK(w.runStatus(2).state == doseph::RunStatus::State::Failed);
     CHECK(w.runStatus(2).error == "hardware release off");
     CHECK_FALSE(w.startRun(3, 1000, "dose-2", err));

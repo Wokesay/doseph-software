@@ -19,7 +19,7 @@ json profileJson(const Profile& p) {
     channels.push_back({{"pump", c.pump}, {"head", c.head.empty() ? json(nullptr) : json(c.head)}, {"dropSensor", c.dropSensor}, {"reverse", c.reverse},
                         {"dailyMaxMin", numOrNull(c.dailyMaxMin)}});
   return {{"line", p.line}, {"variant", p.variant}, {"channels", channels}, {"flow", p.flow},
-          {"return", p.returnBy}, {"network", p.network}, {"suctionLpmLow", numOrNull(p.suctionLpmLow)}, {"example", p.example}};
+          {"pumpIn", p.pumpIn}, {"return", p.returnBy}, {"network", p.network}, {"pumpLpmLow", numOrNull(p.pumpLpmLow)}, {"example", p.example}};
 }
 
 std::optional<std::string> MemoryStorage::read(const std::string& name) {

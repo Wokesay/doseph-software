@@ -13,9 +13,11 @@ constexpr Ms kHwLimitMs = 90000;       // the pump driver's own time limit (assu
 constexpr double kTwinEcCoeff = 0.019; // the twin's EC temperature term, deliberately not the robot's 0.02 (assumption)
 constexpr double kPlume = 0.2;         // share of a dose not mixed in yet that reaches the intake (assumption)
 constexpr double kPi = 3.14159265358979323846;
-// The water path (assumptions): the suction pump primes for 8 s; the chamber
-// holds 0.15 L up to the weir and 0.35 L up to the high-level sensor
-constexpr Ms kPrimeMs = 8000;
+// The water path (assumptions): the feed pump in the device primes for 8 s;
+// in the tank its hose fills in 2 s, and the hardware cuts it after 9 s
+// without flow ("about 8–10 s", PD-477); the chamber holds 0.15 L up to the
+// weir and 0.35 L up to the high-level sensor
+constexpr Ms kPrimeMs = 8000, kHoseMs = 2000, kHwNoFlowMs = 9000;
 constexpr double kWeirL = 0.15, kReturnOnL = 0.25, kReturnOffL = 0.18, kHighL = 0.35, kChamberMaxL = 0.40;
 // The outlets (assumptions, SD-111): a drop is 0.05 ml; a line pulls back at most 2 ml;
 // a canister above the device siphons 0.6 ml/min
@@ -31,14 +33,15 @@ void World::reset(int n) {
   tank = Tank{};
   chamber = Chamber{};
   output = false;
-  suctionLpm = 12.0;
+  pumpLpm = 12.0;
   flowFault.clear();
   returnByPump = false;
   chamberL = kWeirL;
   returnPumpOn = returnLocked = false;
   returnFault.clear();
   leak = stopButton = false;
-  primedMs_ = 0;
+  primedMs_ = noFlowMs_ = 0;
+  noFlowCut = false;
   probeFault.clear();
   phBuffer.reset();
   ecBuffer.reset();
@@ -97,10 +100,10 @@ void World::outOfTip(Pump& p, double ml) {
   }
 }
 
-bool World::primed() const { return primedMs_ >= kPrimeMs; }
+bool World::primed() const { return primedMs_ >= (pumpInTank ? kHoseMs : kPrimeMs); }
 
 bool World::flowing() const {
-  return suctionRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && tank.volumeL > 1.0;
+  return pumpRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && flowFault != "hose" && tank.volumeL > 1.0;
 }
 
 bool World::highLevel() const { return chamberL >= kHighL; }
@@ -183,17 +186,30 @@ void World::step(Ms dt) {
       }
     running_ = 0;
   }
-  // The suction pump primes before it delivers; off, the line runs empty again
+  // The hardware's cut for no flow (PD-477): the feed pump and every dosing pump off
+  noFlowMs_ = pumpInTank && output && !outletWet() ? noFlowMs_ + dt : 0;
+  if (noFlowMs_ >= kHwNoFlowMs) {
+    noFlowCut = true;
+    output = false;
+    noFlowMs_ = 0;
+    for (auto& p : pumps)
+      if (p.state == 1) {
+        p.state = 3;
+        p.error = "no flow";
+      }
+    running_ = 0;
+  }
+  // The feed pump primes, or fills its hose, before it delivers; off, the line runs empty again
   primedMs_ = output ? primedMs_ + dt : 0;
   // The chamber: water comes in with the flow and returns above the weir
-  const double in = flowing() ? suctionLpm / 60.0 : 0.0;  // L/s
+  const double in = flowing() ? pumpLpm / 60.0 : 0.0;  // L/s
   double out = 0;
   if (returnByPump) {
     if (chamberL >= kReturnOnL) returnPumpOn = !leak;
     if (chamberL <= kReturnOffL || leak || returnLocked) returnPumpOn = false;
-    if (returnPumpOn && returnFault != "failed") out = 1.6 * std::max(suctionLpm, 6.0) / 60.0;
+    if (returnPumpOn && returnFault != "failed") out = 1.6 * std::max(pumpLpm, 6.0) / 60.0;
   } else if (chamberL > kWeirL && returnFault != "blocked") {
-    out = 2.0 * std::max(suctionLpm, 6.0) / 60.0;
+    out = 2.0 * std::max(pumpLpm, 6.0) / 60.0;
   }
   out = std::min(out, std::max(0.0, chamberL - kWeirL) / dts + in);  // never below the weir
   chamberL = std::clamp(chamberL + (in - out) * dts, 0.0, kChamberMaxL);
@@ -236,7 +252,7 @@ void World::step(Ms dt) {
   tank.temp = 20.5 + 1.5 * std::sin(2 * kPi * static_cast<double>(now_ % 86400000) / 86400000.0);
   // Mixing: with circulation one turnover is about t63 (assumption; RAT-052 measured t63 26 s at 20.4 L);
   // without it slow
-  const double tau = flowing() ? std::max(20.0, tank.volumeL / suctionLpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
+  const double tau = flowing() ? std::max(20.0, tank.volumeL / pumpLpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
   const double k = 1.0 - std::exp(-dts / tau);
   tank.ec += tank.pendingEc * k;
   tank.pendingEc *= (1.0 - k);
@@ -293,7 +309,7 @@ double World::rawTemp() const { return std::round((chamber.temp + noise(0.02)) *
 
 double World::rawFlow() const {
   if (flowFault == "sensor" || !flowing()) return 0.0;
-  return std::round(suctionLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
+  return std::round(pumpLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
 }
 
 // A larger head moves more (assumption: S 1, M 2.5, L 6, docs/SIMULATOR.md)
@@ -319,7 +335,9 @@ json World::toJson() const {
           {"chamber", {{"ec", chamber.ec}, {"ph", chamber.ph}, {"temp", chamber.temp}}},
           {"channels", ps},
           {"output", output},
-          {"suctionLpm", suctionLpm},
+          {"pumpInTank", pumpInTank},
+          {"noFlowCut", noFlowCut},
+          {"pumpLpm", pumpLpm},
           {"primed", primed()},
           {"flowing", flowing()},
           {"flowFault", flowFault},

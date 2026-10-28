@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Layer 7: the control cycle of the mixing robot as a state machine (SD-105).
 //
-//   suction pump on → prove flow → flush → measure until stable → EC before pH →
+//   feed pump on → prove flow → flush → measure until stable → EC before pH →
 //   dose in partial doses → wait for mixing (the clock runs only with flow)
 //   → measure again and learn the effect → hold, and after the hold anew.
 //
@@ -21,21 +21,22 @@
 
 namespace doseph {
 
-enum class Phase { Off, Stopped, SuctionOn, ProveFlow, Flush, Measure, Dose, Mix, Remeasure, Hold, Wait };
+enum class Phase { Off, Stopped, PumpOn, ProveFlow, Flush, Measure, Dose, Mix, Remeasure, Hold, Wait };
 const char* phaseName(Phase p);
 
 // Timing of the cycle: starting points, assumptions until measured (SD-105)
 constexpr double kFlowMinLpm = 0.5;           // the least flow that counts as flow
 constexpr Ms kFlowProveMs = 10 * kSecond;     // … for this long without a break
-constexpr Ms kFlowWaitMs = 2 * kMinute;       // no flow by then: wait and try again
+constexpr Ms kFlowWaitMs = 2 * kMinute;       // pump in the device: no flow by then, it waits and tries again (SD-109)
+constexpr Ms kFlowStartMs = 6 * kSecond;      // pump in the tank: no flow this long, at its start or later, it goes off (SD-127)
 constexpr Ms kFlushMs = 60 * kSecond;         // flow time until the measuring chamber holds tank water
 constexpr Ms kStableWindowMs = 60 * kSecond;  // readings within the band at least this long (SD-112)
 constexpr Ms kStableWindowMaxMs = 10 * kMinute;
 constexpr double kStablePh = 0.05, kStableEc = 0.03;
 constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by the window and this: wait and try again
 constexpr Ms kRetryMs = 5 * kMinute;          // a wait tries again after this
-constexpr int kDryTries = 3;                   // tries without flow in a row: the suction pump may run dry (SD-109)
-constexpr Ms kNoFlowMixMaxMs = 30 * kMinute;  // the mixing clock stood this long: wait
+constexpr int kDryTries = 3;                   // pump in the device: tries without flow in a row, then a lock (SD-109)
+constexpr int kDryTriesTank = 2;               // pump in the tank: each try may spill water (SD-127)
 constexpr Epoch kEcRestS = 240;               // pH waits this long after an EC dose (RAT-046)
 constexpr double kTestRiseEc = 0.1;           // a test dose's aim (SD-105)
 constexpr double kTestDropPh = 0.1;
@@ -122,7 +123,10 @@ class MixCycle {
   enum class Kind { None, Ec, Ph };
   void enter(const Ctx& c, Phase p);
   void wait(Ctx& c, Actuators& act, Msg why, Ms retry = kRetryMs);
-  void suctionPump(Ctx& c, Actuators& act, bool on);
+  void feedPump(Ctx& c, Actuators& act, bool on);
+  // No flow within the window: the feed pump goes off, the check tries again later, and after
+  // the last try in a row it is locked until a person releases it (SD-109, SD-127)
+  void noFlow(Ctx& c, Actuators& act, Msg why);
   bool measuring(Ctx& c, Actuators& act);  // true once the window is stable; fills `measured_`
   void evaluate(Ctx& c, Actuators& act);
   void watchWater(Ctx& c, const RecipeCfg& r, double ec, const CycleSettings& s);
@@ -146,14 +150,14 @@ class MixCycle {
 
   // Flow
   Ms flowSince_ = 0;     // flow proven since (0: none)
-  Ms noFlowSince_ = 0;
+  Ms flowSeen_ = 0;      // flow was last seen then, or the feed pump started
   Ms flushedMs_ = 0;
   double flowSum_ = 0;
   int flowN_ = 0;
   bool noFlowLogged_ = false;
   Epoch doseEndAt_ = 0;  // the round's last dose ended then: its settling is counted from there (SD-112)
   std::optional<Settled> settled_;
-  int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109)
+  int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109, SD-127)
 
   // Measuring
   struct Sample3 {

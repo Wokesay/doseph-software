@@ -53,11 +53,11 @@ bool dosing(sim::Simulation& s) { return !st(s)["dosing"].is_null(); }
 
 }  // namespace
 
-TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)") {
+TEST_CASE("Cycle: feed pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)") {
   sim::Simulation s(demo());
   // A fresh fill below the recipe: EC 0.45, pH 7.6
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 10));
-  CHECK(s.world().output);  // the robot switched the suction pump on
+  CHECK(s.world().output);  // the robot switched the feed pump on
   REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 30));
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 90));
   REQUIRE(runUntil(s, [&] { return phase(s) == "dose"; }, 15 * 60));
@@ -92,39 +92,85 @@ TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose f
   CHECK(lastEc < held);
   CHECK(firstPh < held);
   CHECK(hasEvent(s, "ev.cycle.held"));
-  // Holding: the suction pump off (SD-109), the journal empty again (SD-106)
+  // Holding: the feed pump off (SD-109), the journal empty again (SD-106)
   CHECK_FALSE(s.world().output);
   CHECK(s.storage().read("journal.json").value_or("") == "[]");
   // After the hold it checks again from the start
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 61 * 60));
 }
 
-TEST_CASE("Cycle: no flow, no dose; the suction pump that runs without flow goes off, and after three tries in a row it is locked as a dry run until a person releases it (SD-105, SD-109)") {
+TEST_CASE("Cycle: no flow, no dose; the feed pump in the tank that finds no flow goes off after 6 s, before the hardware's own cut, and after two tries in a row it is locked until a person releases it (SD-105, SD-127, PD-477)") {
   sim::Simulation s(demo());
-  s.world().flowFault = "blocked";
+  s.world().flowFault = "hose";  // the hose came off: each try could spill water
   const double ec = s.world().tank.ec;
-  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 5 * 60));
+  REQUIRE(runUntil(s, [&] { return s.world().output; }, 60));
+  const Ms on = s.world().now();
+  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 60));
+  CHECK(s.world().now() - on <= 8 * kSecond);
+  CHECK_FALSE(s.world().noFlowCut);  // the robot was first
   json c = st(s)["cycle"];
   CHECK(c["line"]["key"] == "cycle.wait.no_flow");
   CHECK_FALSE(s.world().output);
   CHECK(hasEvent(s, "ev.cycle.no_flow"));
-  // It tries again later, never dosing meanwhile
-  s.step(30 * kMinute, 1000);
+  CHECK_FALSE(st(s)["latches"].contains("flow.dry"));
+  // It tries once more after 5 min, never dosing meanwhile; the second try without flow locks it
+  REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("flow.dry"); }, 6 * 60));
+  CHECK(st(s)["latches"]["flow.dry"]["tries"] == 2);
   CHECK(s.world().tank.ec == doctest::Approx(ec).epsilon(0.01));
   CHECK(s.world().tank.pendingEc == doctest::Approx(0));
-  // Three tries in a row without flow: the suction pump may run dry; it stays off until released
-  REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("flow.dry"); }, 30 * 60));
   CHECK(hasEvent(s, "ev.flow.dry"));
   CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.dry");
   s.step(30 * kMinute, 1000);
   CHECK_FALSE(s.world().output);
+  CHECK_FALSE(s.world().noFlowCut);
   CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.dry");
   s.world().flowFault.clear();
   REQUIRE(s.robot().ackLatch("flow.dry", json::object()).status == 200);
-  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 3 * 60));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 60));
 }
 
-TEST_CASE("Cycle: a dose that loses its flow stops at once; what went in mixes with flow before it is measured, and nothing is learned (SD-105, RAT-057)") {
+TEST_CASE("Cycle: a feed pump in the device primes for up to 2 min, and three tries in a row without flow lock it (SD-109, SD-127)") {
+  sim::Options o = demo();
+  o.pumpIn = "device";
+  sim::Simulation s(o);
+  CHECK_FALSE(s.world().pumpInTank);
+  // It primes for 8 s before water flows, well inside its window
+  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 60));
+  CHECK(s.world().primed());
+  // The suction line out of the water: 2 min without flow before it goes off
+  s.world().flowFault = "dry";
+  const Ms lost = s.world().now();
+  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 3 * 60));
+  CHECK(s.world().now() - lost >= 2 * kMinute);
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.no_flow");
+  CHECK_FALSE(s.world().noFlowCut);  // the hardware's cut is the tank pump's
+  REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("flow.dry"); }, 20 * 60));
+  CHECK(st(s)["latches"]["flow.dry"]["tries"] == 3);
+}
+
+TEST_CASE("Cycle: when the hardware cuts the feed pump for no flow, the check stops, says so and counts a try; switching the pump off re-arms the hardware (SD-127, PD-477)") {
+  sim::Simulation s(demo());
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 5 * 60));
+  // The hardware switches the pump off below the robot, as after 9 s without flow
+  s.world().noFlowCut = true;
+  s.world().output = false;
+  CHECK(st(s)["hardware"]["release"]["noFlow"] == true);
+  s.step(kSecond);
+  CHECK(phase(s) == "wait");
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.pump_cut");
+  CHECK_FALSE(s.world().noFlowCut);  // re-armed
+  CHECK(hasEvent(s, "ev.cycle.no_flow"));
+  CHECK_FALSE(st(s)["latches"].contains("flow.dry"));  // one try of two
+  // The next try finds flow: the count starts anew
+  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 6 * 60));
+  s.world().noFlowCut = true;
+  s.world().output = false;
+  s.step(kSecond);
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.pump_cut");
+  CHECK_FALSE(st(s)["latches"].contains("flow.dry"));
+}
+
+TEST_CASE("Cycle: a dose that loses its flow stops at once; without flow for 6 s the pump goes off, and what went in mixes with flow before it is measured, learning nothing (SD-105, SD-127, RAT-057)") {
   sim::Simulation s(demo());
   REQUIRE(runUntil(s, [&] { return dosing(s); }, 20 * 60));
   s.step(2 * kSecond);
@@ -134,14 +180,14 @@ TEST_CASE("Cycle: a dose that loses its flow stops at once; what went in mixes w
   CHECK(hasEvent(s, "ev.flow_cut"));
   REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 60));
   CHECK(st(s)["cycle"]["line"]["key"] == "cycle.mix_paused");
-  const int done = st(s)["cycle"]["progress"]["doneS"];
-  s.step(3 * kMinute);
-  CHECK(st(s)["cycle"]["progress"]["doneS"] == done);  // the clock stood without flow
+  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 10));
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.no_flow");
+  CHECK_FALSE(s.world().output);
+  CHECK_FALSE(s.world().noFlowCut);
   s.world().flowFault.clear();
-  s.step(2 * kMinute);
-  CHECK(st(s)["cycle"]["progress"]["doneS"].get<int>() > done);
-  REQUIRE(runUntil(s, [&] { return phase(s) == "remeasure"; }, 30 * 60));
-  REQUIRE(runUntil(s, [&] { return phase(s) != "remeasure"; }, 20 * 60));
+  // The next try mixes first, with flow, then measures
+  REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.mix_first"; }, 7 * 60));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 30 * 60));
   // The cut test dose taught nothing: the next dose is a test dose again
   CHECK(st(s)["newTank"] == true);
   CHECK(st(s)["effects"]["ecByRecipe"].empty());
@@ -152,7 +198,7 @@ TEST_CASE("Cycle: the mixing clock runs only with flow; the wait is one turnover
   CHECK(st(s)["cycle"]["settings"]["mixOwnMin"].is_null());  // no flow measured yet: no turnover (R5)
   CHECK(st(s)["cycle"]["settings"]["mixWhy"] == "minimum");
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 5 * 60));
-  // Without a flow meter the flow is the low end of the suction pump's delivery, so a turnover errs long (SD-109)
+  // Without a flow meter the flow is the low end of the feed pump's delivery, so a turnover errs long (SD-109)
   json set = st(s)["cycle"]["settings"];
   CHECK(set["flowLpm"].get<double>() == doctest::Approx(10).epsilon(0.001));
   CHECK(set["turnoverMin"].get<double>() == doctest::Approx(10).epsilon(0.001));
@@ -171,9 +217,10 @@ TEST_CASE("Cycle: the mixing clock runs only with flow; the wait is one turnover
   CHECK(st(s)["cycle"]["progress"]["totalS"] == 15 * 60);
   s.step(kMinute);
   s.world().flowFault = "sensor";  // water flows, but no flow is proven
-  s.step(2 * kSecond);
+  s.step(kSecond);
   const int done = st(s)["cycle"]["progress"]["doneS"];
-  s.step(2 * kMinute);
+  s.step(4 * kSecond);  // inside the pump's window (SD-127)
+  CHECK(phase(s) == "mix");
   CHECK(st(s)["cycle"]["progress"]["doneS"] == done);
   s.world().flowFault.clear();
   REQUIRE(runUntil(s, [&] { return phase(s) == "remeasure"; }, 16 * 60));
@@ -399,7 +446,7 @@ TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the
   CHECK(item("all", "check.not_stopped")["ok"] == true);
 }
 
-TEST_CASE("Maintenance: the cycle holds and the suction pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)") {
+TEST_CASE("Maintenance: the cycle holds and the feed pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)") {
   sim::Simulation s(demo());
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 3 * 60));
   CHECK(s.robot().maintenance(-1).status == 422);
@@ -746,13 +793,13 @@ TEST_CASE("Cycle: pH waits below the EC floor and after a nutrient dose, and is 
   }
 }
 
-TEST_CASE("Flow by the device's method: an outlet level sensor proves it while it reports water and the suction pump runs; a flow meter at 0.5 L/min (SD-109)") {
+TEST_CASE("Flow by the device's method: an outlet level sensor proves it while it reports water and the feed pump runs; a flow meter at 0.5 L/min (SD-109)") {
   fake::Hardware hw;
   fake::Clock clock;
   MemoryStorage store;
   Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
   r.boot();
-  // The suction pump as the hardware reports it after the tick (without a recipe the check switches it off)
+  // The feed pump as the hardware reports it after the tick (without a recipe the check switches it off)
   auto flowOk = [&](bool suction) {
     clock.ms += 1000;
     r.tick();
@@ -761,7 +808,7 @@ TEST_CASE("Flow by the device's method: an outlet level sensor proves it while i
   };
   hw.prof.flow = "outlet_level";
   hw.water.outletWet = true;
-  CHECK_FALSE(flowOk(false));  // water at the outlet, but not drawn by the suction pump
+  CHECK_FALSE(flowOk(false));  // water at the outlet, but not drawn by the feed pump
   CHECK(flowOk(true));
   hw.water.outletWet = false;
   CHECK_FALSE(flowOk(true));

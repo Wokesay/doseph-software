@@ -26,7 +26,7 @@ class Hardware : public doseph::IHardware {
  public:
   bool isOnline = true;
   std::map<Signal, doseph::Sample> samples;
-  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true, true}), "turbine", "gravity", {"wifi"}, doseph::kNaN, false};
+  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true, true}), "turbine", "tank", "gravity", {"wifi"}, doseph::kNaN, false};
   std::map<int, doseph::RunStatus> runs;
   int started = 0;
   bool out = false;
@@ -65,11 +65,11 @@ class Hardware : public doseph::IHardware {
     for (auto& [n, r] : runs)
       if (r.state == doseph::RunStatus::State::Running) r.state = doseph::RunStatus::State::Failed;
   }
-  bool setSuctionPump(bool on, std::string&) override {
+  bool setFeedPump(bool on, std::string&) override {
     out = on;
     return true;
   }
-  std::optional<bool> suctionPump() const override { return out; }
+  std::optional<bool> feedPump() const override { return out; }
   bool returnAllowed = true;
   void allowReturnPump(bool allowed) override { returnAllowed = allowed; }
 };

@@ -3,8 +3,8 @@
 export const de = {
   "water.releaseOnStatus": "Freigeben unter Status",
   "water.byTurbine": "Ein Durchflussmesser misst, wie viel Wasser durch das Gerät läuft.",
-  "water.byOutlet": "Der Füllstandssensor am Auslass meldet Wasser, solange die Ansaugpumpe läuft; das gilt als Durchfluss.",
-  "water.suctionPump": "Ansaugpumpe",
+  "water.byOutlet": "Der Füllstandssensor am Auslass meldet Wasser, solange die Förderpumpe läuft; das gilt als Durchfluss.",
+  "water.feedPump": "Förderpumpe",
   "water.running": "läuft",
   "water.standing": "steht",
   "water.flowProven": "Durchfluss nachgewiesen",
@@ -27,6 +27,7 @@ export const de = {
   "water.releaseOff": "entzogen",
   "water.releaseOffWhy": "entzogen: {why}",
   "water.leak": "Leck",
+  "water.cutNoFlow": "aus: kein Durchfluss",
   "water.stopButton": "Stopptaste",
   "water.releaseNote":
     "Ein Leck, der Hochstand in der Kammer und die Stopptaste schalten jede Pumpe ab, unterhalb der Software. Nach einem Leck oder Hochstand bleibt der Roboter gesperrt, bis du ihn unter Status freigibst.",
@@ -35,8 +36,8 @@ export const de = {
 export const en: Record<keyof typeof de, string> = {
   "water.releaseOnStatus": "Release it under Status",
   "water.byTurbine": "A flow meter measures how much water runs through the device.",
-  "water.byOutlet": "The outlet's level sensor reports water while the suction pump runs; that counts as flow.",
-  "water.suctionPump": "Suction pump",
+  "water.byOutlet": "The outlet's level sensor reports water while the feed pump runs; that counts as flow.",
+  "water.feedPump": "Feed pump",
   "water.running": "running",
   "water.standing": "stopped",
   "water.flowProven": "Flow proven",
@@ -59,6 +60,7 @@ export const en: Record<keyof typeof de, string> = {
   "water.releaseOff": "withdrawn",
   "water.releaseOffWhy": "withdrawn: {why}",
   "water.leak": "leak",
+  "water.cutNoFlow": "off: no flow",
   "water.stopButton": "stop button",
   "water.releaseNote":
     "A leak, a high level in the chamber and the stop button switch every pump off, below the software. After a leak or a high level the robot stays locked until you release it under Status.",

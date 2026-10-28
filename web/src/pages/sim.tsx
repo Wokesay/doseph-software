@@ -12,7 +12,7 @@ import { Button, Field, NumberInput, Seg } from "../ui";
 type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
   channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
-  output: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
+  output: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
   returnFault: string; leak: boolean; stopButton: boolean; released: boolean;
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
@@ -82,8 +82,8 @@ export function SimPanel() {
             <span>{num(w.tank.temp, 1)} °C</span>
           </div>
           <div class="small muted">
-            {t("sim.suctionPump", { state: w.output ? t("common.on") : t("common.off") })}
-            {w.output && !w.primed ? ` (${t("sim.priming")})` : ""} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
+            {t("sim.feedPump", { state: w.output ? t("common.on") : t("common.off") })}
+            {w.output && !w.primed ? ` (${t("sim.priming")})` : ""} · {w.flowing ? t("sim.flowing", { lpm: num(w.pumpLpm, 1) }) : t("sim.notFlowing")}
           </div>
           <div class="small muted" data-testid="sim-water-path">
             {t("sim.chamber", { l: num(w.chamberL, 2) })} · {w.outletWet ? t("sim.outletWet") : t("sim.outletDry")} ·{" "}
@@ -117,8 +117,8 @@ export function SimPanel() {
       <div class="stack-sm">
         <div class="section-title">{t("sim.flow")}</div>
         <div class="row">
-          <NumberInput value={lpm} onValue={setLpm} unit="L/min" ariaLabel={t("sim.suctionLpm")} />
-          <Button size="sm" onClick={() => act("suctionLpm", { lpm })}>
+          <NumberInput value={lpm} onValue={setLpm} unit="L/min" ariaLabel={t("sim.pumpLpm")} />
+          <Button size="sm" onClick={() => act("pumpLpm", { lpm })}>
             {t("sim.set")}
           </Button>
         </div>
@@ -130,6 +130,7 @@ export function SimPanel() {
             ["none", t("sim.fault.none")],
             ["blocked", t("sim.fault.blocked")],
             ["dry", t("sim.fault.dry")],
+            ["hose", t("sim.fault.hose")],
             ["sensor", t("sim.fault.sensor")],
           ]}
         />
