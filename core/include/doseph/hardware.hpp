@@ -110,6 +110,8 @@ class IHardware {
   virtual void stopAllPumps() = 0;
   // The output that switches the suction pump, where the device switches it.
   virtual bool setSuctionPump(bool on, std::string& err) = 0;
+  // The return pump runs by the chamber's level on its own; held off, it does not run (SD-109)
+  virtual void allowReturnPump(bool allowed) = 0;
   virtual std::optional<bool> suctionPump() const = 0;  // nullopt: state unknown
 };
 

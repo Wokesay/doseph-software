@@ -248,8 +248,10 @@ void Simulation::fastForward(double hours, Ms tick) {
 
 void Simulation::reboot(Ms outageMs) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  // Power gone: the output and the pump driver lose it; nothing is saved on the way out
+  // Power gone: the output and the pump driver lose it, and the device forgets a return pump held
+  // off; nothing is saved on the way out
   world_.output = false;
+  world_.returnLocked = false;
   world_.stopAllPumps();
   robot_.reset();
   api_.reset();

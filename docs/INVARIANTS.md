@@ -42,6 +42,7 @@ of its own.
 | Flow by the device's method: an outlet level sensor proves it while it reports water and the suction pump runs, a flow meter at 0.5 L/min, each for 10 s | SD-109 | ✓ | `robot.cpp`, `cycle.cpp` · test_cycle.cpp |
 | No flow within 2 min: the pump off, a new try in 5 min; after the third try in a row a dry-run latch holds the pump until a person releases it | SD-109 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | A probe or channel calibration, or a line fill, stops the check and the suction pump first; the check starts anew once it ends | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
+| A return pump that runs a minute without a pause is dry or blocked: it is held off and latched, everything holds, and a restart holds it off again until a person releases it | SD-109 | ✓ | `hardware.hpp`, `gateway.hpp`, `robot.cpp` · test_scenarios.cpp |
 
 ## Dose planning and learning
 

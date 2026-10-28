@@ -93,6 +93,7 @@ class World {
   bool returnByPump = false;  // the profile's return
   double chamberL = 0.15;     // water in the chamber, L
   bool returnPumpOn = false;
+  bool returnLocked = false;  // the robot holds the return pump off (SD-109)
   std::string returnFault;
   bool highLevel() const;
   // The hardware release (SD-110): a leak, high level or the stop button
