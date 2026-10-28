@@ -71,6 +71,9 @@
     },
     {
       "name": "alarms"
+    },
+    {
+      "name": "coupling"
     }
   ],
   "paths": {
@@ -1282,6 +1285,298 @@
             "$ref": "#/components/responses/Error"
           },
           "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/coupling": {
+      "get": {
+        "operationId": "getCoupling",
+        "summary": "The coupled device, a pairing code shown here and the last pairing from here",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The coupling",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coupling"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unpair",
+        "summary": "Ends the coupling here; the leader also tells the follower",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "The coupling, now none",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coupling"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/coupling/code": {
+      "post": {
+        "operationId": "showPairingCode",
+        "summary": "Shows a pairing code to be coupled as the second device: 10 minutes, voided by the fifth wrong try",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "The code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "pattern": "^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$"
+                    },
+                    "until": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/coupling/pair": {
+      "post": {
+        "operationId": "pair",
+        "summary": "Pairs with the device at an address that shows a code; this device leads. The answer comes later: see GET /coupling",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "address",
+                  "code"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Not used: the pairing is under way"
+          },
+          "202": {
+            "description": "Under way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pending": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/coupling/join": {
+      "post": {
+        "operationId": "joinCoupling",
+        "summary": "Called by the leading device: the pairing code is the credential. Answers with this device's ID, name and the token the leader uses to call it",
+        "tags": [
+          "coupling"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "id",
+                  "name",
+                  "token"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Coupled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/coupling/leave": {
+      "post": {
+        "operationId": "leaveCoupling",
+        "summary": "Called by the coupled device with the token made for it: the coupling ends here too",
+        "tags": [
+          "coupling"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "peer"
+        ],
+        "description": "Only the coupled device's own token is taken; any other credential is refused with 403.",
+        "responses": {
+          "200": {
+            "description": "Ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
             "$ref": "#/components/responses/Error"
           },
           "500": {
@@ -4020,6 +4315,69 @@
             "type": "object",
             "readOnly": true,
             "description": "The platform's report: connected, its error, when"
+          }
+        }
+      },
+      "Peer": {
+        "type": "object",
+        "description": "The coupled device (SD-131), never with a token",
+        "properties": {
+          "role": {
+            "enum": [
+              "leader",
+              "follower"
+            ],
+            "description": "What this device is in the group"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "description": "Where the leader reaches the follower; empty on the follower"
+          },
+          "since": {
+            "type": "integer"
+          }
+        }
+      },
+      "Coupling": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "peer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Peer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "code": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "A pairing code shown here, with its end; the code itself only in the answer that made it",
+            "properties": {
+              "until": {
+                "type": "integer"
+              }
+            }
+          },
+          "pairing": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The last pairing from here while under way or failed: state, address, error, at"
           }
         }
       }

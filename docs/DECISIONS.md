@@ -835,3 +835,50 @@ without TLS, and commands only over TLS with a user.
     silent for 90 s as gone.
   - A lost connection is tried again after 10 s. The settings show
     whether it is connected, or why not.
+
+
+## SD-131: Two devices on one tank pair with a code
+
+2026-10-28. Step 8 of #10 (coupling two devices, PD-457). The owner
+decided the three questions of this step in this session.
+
+- **The group.**
+  - Two devices on one tank form a group. The one where the owner starts
+    the pairing leads: it measures, controls and plans. The other doses
+    on request and measures as a check (PD-457).
+  - The link is direct, in the home network, without a cloud.
+- **Pairing with a code.**
+  - The second device shows a pairing code: 8 characters (40 bits) in two
+    groups of four. It is valid for 10 minutes and kept in memory only.
+    The fifth wrong try voids it, and each wrong try is an event.
+  - The owner enters the code and the second device's address on the
+    leading one.
+  - The leader calls the second device's `POST /coupling/join`, where the
+    code is the credential. Each device then makes a peer token (SD-129)
+    for the other, so each holds the token it uses to call the other.
+  - A failed pairing says why (wrong code, unreachable, refused), and the
+    leader revokes the token it made.
+  - A device is never coupled with itself. It has one peer at most.
+- **The record.**
+  - The peer, with the token this device uses to call it, lives in a file
+    of its own, apart from the configuration (as SD-124). A backup never
+    carries it, and the API never shows the token.
+  - A record that cannot be read leaves the device alone, with an event.
+- **Ending.** Either device ends the coupling, and revokes the token it
+  made for the other at once.
+  - The leader also tells the follower, which ends it too.
+  - Only the coupled device's own token may end it there. An account
+    token, or a peer token made by hand, may not.
+- **The link and dosing** come with the next pull requests of this
+  step:
+  - The leader calls the follower every 2 s.
+  - After 10 s without that call, the follower cuts a running run, books
+    what ran, and takes no new run until the link is back.
+  - A run lasts at most 60 s, and never more than one channel runs
+    across both devices. Each device keeps its own hardware lock.
+- **The check.** The follower measures as well. While both pumps run,
+  readings that differ by more than 0.3 pH or 0.2 mS/cm for 10 minutes
+  raise a warning. The leader keeps dosing by its own readings.
+- **The platform** carries the requests between the devices (R8). The
+  simulator uses plain HTTP in the home network; the device will use
+  HTTPS with the device security items (#10).

@@ -95,7 +95,9 @@ bool permitted(Role role, const std::string& method, const std::vector<std::stri
   const std::string first = p.empty() ? "" : p[0];
   if (role == Role::App) return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password");
   if (method == "GET") return first != "tokens";
-  if (role != Role::Account) return false;  // the peer's calls come with the coupling (#10 step 8)
+  // The coupled device's calls (SD-131); the robot checks that the token is the one made for it
+  if (role == Role::Peer) return method == "POST" && p.size() == 2 && first == "coupling" && p[1] == "leave";
+  if (role != Role::Account) return false;
   const size_t n = p.size();
   if (method == "POST" && n == 1 && (first == "stop" || first == "recipes" || first == "plants")) return true;
   if (first == "alarms") return method == "POST" && p.back() == "ack" && (n == 2 || n == 3);
@@ -307,6 +309,8 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
     r.headers.emplace_back("Set-Cookie", sessionCookie(*tok, kCookieMaxAgeS));
     return r;
   }
+  // The leader asks to couple; the pairing code is the credential (SD-131)
+  if (is("POST", {"coupling", "join"})) return fromResult(robot_.join(body));
   if (is("POST", {"auth", "logout"})) {
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
     robot_.auth().logout(req.token);
@@ -390,6 +394,11 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("PUT", {"mqtt"})) return fromResult(robot_.putMqtt(body));
   if (is("GET", {"push"})) return jsonResp(200, robot_.pushSettings());
   if (is("PUT", {"push"})) return fromResult(robot_.putPush(body));
+  if (is("GET", {"coupling"})) return jsonResp(200, robot_.coupling());
+  if (is("POST", {"coupling", "code"})) return fromResult(robot_.armPairingCode());
+  if (is("POST", {"coupling", "pair"})) return fromResult(robot_.pair(body));
+  if (is("DELETE", {"coupling"})) return fromResult(robot_.unpair());
+  if (is("POST", {"coupling", "leave"})) return fromResult(robot_.left(req.token));
   if (is("GET", {"commissioning"})) return jsonResp(200, robot_.setup());
   if (is("PUT", {"commissioning", "*"})) return fromResult(robot_.setSetup(p[1], body));
   if (is("GET", {"plants"})) return jsonResp(200, robot_.plants());

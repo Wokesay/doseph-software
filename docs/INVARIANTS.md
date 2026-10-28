@@ -175,6 +175,13 @@ of its own.
 | A value the robot cannot use goes to the broker as null, never 0 (R5) | SD-130 | ✓ | `mqtt.cpp` · test_mqtt.cpp |
 | The simulator's connection has no TLS, so it takes no commands; it says it is online with "offline" as its last will, and a refusal or missing TLS shows in the settings | SD-130 | ✓ | `sim/mqtt_link.cpp` · test_mqtt_link.cpp |
 
+## Coupling (SD-131)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| Two devices pair only with the code the second one shows: 10 minutes, voided by the fifth wrong try; each then holds a peer token for the other; never with itself, at most one peer | SD-131 | ✓ | `robot.cpp`, `api.cpp` · test_coupling.cpp, robot.spec.ts |
+| The peer and its token live apart from the configuration and never in a backup or an answer of the API; ending the coupling revokes the tokens on both sides, and only the peer's own token may end it there | SD-131 | ✓ | `robot.cpp`, `coupling.cpp` · test_coupling.cpp |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

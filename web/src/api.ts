@@ -171,6 +171,14 @@ export type Profile = {
   flow: string; pumpIn: "tank" | "device"; return: string; network: string[]; pumpLpmLow: number | null; example: boolean;
 };
 
+// Coupling two devices (PD-457, SD-131): the peer without its token, a pairing code shown here,
+// and how the last pairing from here went
+export type Peer = { role: "leader" | "follower"; id: string; name: string; address: string; since: number };
+export type Coupling = {
+  deviceId: string; peer: Peer | null; code: { until: number } | null;
+  pairing: { state: "pairing" | "failed"; address: string; error: Msg | null; at: number } | null;
+};
+
 // MQTT with Home Assistant discovery (PD-461, SD-130): the password is written, never read back
 export type MqttSettings = {
   enabled: boolean; host: string; port: number; tls: boolean; user: string; passwordSet: boolean;

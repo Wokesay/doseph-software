@@ -67,6 +67,8 @@ class Auth {
   // Never a token for the owner's role.
   std::optional<std::string> createToken(const std::string& name, Role role, Epoch created, Msg& err);
   bool revokeToken(const std::string& id);
+  // The id of the access token a credential is; nothing for a session or an unknown one
+  std::optional<std::string> tokenIdOf(const std::string& credential) const;
   const std::vector<AccessToken>& tokens() const { return tokens_; }
   // A known client using its session counts as seen now: the one seen
   // longest ago is the first to lose its own count.

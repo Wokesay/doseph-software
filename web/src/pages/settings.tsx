@@ -3,8 +3,8 @@
 // and what was notified, the password, access tokens, backup and restore,
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, Copy, DatabaseBackup, House, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
-import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
+import { Bell, Bug, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
@@ -339,6 +339,123 @@ function PasswordCard() {
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+// Coupling two devices on one tank (PD-457, SD-131): the second device shows a code, the leading
+// one pairs with it; each then holds a token for the other. Either side ends it.
+function CouplingCard() {
+  const [c, setC] = useState<Coupling | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [address, setAddress] = useState("");
+  const [typed, setTyped] = useState("");
+  const load = () => get<Coupling>("/coupling").then(setC).catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
+  // While a pairing is under way, ask again until it is decided
+  useEffect(() => {
+    if (c?.pairing?.state !== "pairing") return;
+    const id = window.setTimeout(load, 1000);
+    return () => window.clearTimeout(id);
+  }, [c]);
+  if (!c) return null;
+  const end = async () => {
+    if (!confirm(t("settings.coupling.endAsk", { name: c.peer!.name }))) return;
+    setC(await del<Coupling>("/coupling"));
+    toast(t("settings.coupling.ended"));
+  };
+  return (
+    <Card title={t("settings.coupling")} icon={<Link2 size={18} />}>
+      <div class="stack" data-testid="coupling">
+        <p class="muted small">{t("settings.coupling.intro")}</p>
+        {c.peer ? (
+          <>
+            <Banner tone="ok">
+              <span data-testid="coupled">
+                {c.peer.role === "leader" ? t("settings.coupling.leads", { name: c.peer.name }) : t("settings.coupling.follows", { name: c.peer.name })}
+              </span>
+            </Banner>
+            <div class="kv">
+              <span>{t("settings.deviceId")}</span>
+              <span class="mono">{c.peer.id}</span>
+              {c.peer.address && (
+                <>
+                  <span>{t("settings.coupling.address")}</span>
+                  <span class="mono">{c.peer.address}</span>
+                </>
+              )}
+              <span>{t("settings.coupling.since")}</span>
+              <span>{dateTime(c.peer.since)}</span>
+            </div>
+            <p class="muted small">{t("settings.coupling.later")}</p>
+            <div>
+              <Button variant="danger-soft" onClick={end} data-testid="end-coupling">
+                {t("settings.coupling.end")}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div class="stack-sm">
+              <div class="section-title">{t("settings.coupling.asSecond")}</div>
+              <p class="muted small">{t("settings.coupling.asSecondHint")}</p>
+              {code && c.code ? (
+                <p>
+                  <code class="mono token" data-testid="pairing-code">{code}</code>{" "}
+                  <span class="muted small">{t("settings.coupling.codeUntil", { time: dateTime(c.code.until) })}</span>
+                </p>
+              ) : (
+                <div>
+                  <Button
+                    onClick={async () => {
+                      const r = await post<{ code: string; until: number }>("/coupling/code");
+                      setCode(r.code);
+                      await load();
+                    }}
+                    data-testid="show-code"
+                  >
+                    {t("settings.coupling.showCode")}
+                  </Button>
+                </div>
+              )}
+            </div>
+            <form class="stack-sm" onSubmit={(e) => e.preventDefault()}>
+              <div class="section-title">{t("settings.coupling.asLeader")}</div>
+              <div class="form-grid">
+                <Field label={t("settings.coupling.address")} hint={t("settings.coupling.addressHint")}>
+                  <input class="input" name="peer-address" value={address} placeholder="192.168.1.20" autoCapitalize="off" spellcheck={false} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
+                </Field>
+                <Field label={t("settings.coupling.code")}>
+                  <input class="input mono" name="peer-code" value={typed} placeholder="XXXX-XXXX" autoCapitalize="characters" spellcheck={false} onInput={(e) => setTyped((e.target as HTMLInputElement).value)} />
+                </Field>
+              </div>
+              {c.pairing?.state === "pairing" && <p class="muted small" data-testid="pairing-state">{t("settings.coupling.pairing", { address: c.pairing.address })}</p>}
+              {c.pairing?.state === "failed" && c.pairing.error && (
+                <Banner tone="bad">
+                  <span data-testid="pairing-state">{msg(c.pairing.error)}</span>
+                </Banner>
+              )}
+              <div>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={!address.trim() || !typed.trim() || c.pairing?.state === "pairing"}
+                  data-testid="pair"
+                  onClick={async () => {
+                    await post("/coupling/pair", { address: address.trim(), code: typed.trim() });
+                    setTyped("");
+                    await load();
+                  }}
+                >
+                  {t("settings.coupling.pair")}
+                </Button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
     </Card>
   );
 }
@@ -686,6 +803,7 @@ export function SettingsPage() {
       <NotifyCard key={`n${rev}`} />
       <PushCard />
       <MqttCard />
+      <CouplingCard />
       <PasswordCard />
       <TokensCard />
       <BackupCard />
