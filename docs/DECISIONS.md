@@ -480,3 +480,35 @@ under 1 s (RAT-050), and the check waited for it without end.
   as a pH− dose that is too small already does (RAT-050).
 - Whether a device can dose a small tank at all is a question of its
   pumps (#48).
+
+
+## SD-123: Alarms with three levels, quiet hours and a morning report
+
+2026-10-28. Decided by the owner for #10, step 5. RAT-022 is in force
+again.
+
+- **From the watchdog.** Every watchdog item that is a problem becomes an
+  alarm: a latch at once, anything else once it has stood 5 min. A target
+  out of range counts only while the check holds or waits, not while it
+  doses and mixes towards it. An alarm ends with its problem.
+- **Levels.** Critical: a leak, high level, a canister that drips without
+  its pump, the dry-run lock, the return pump held off, pH out of its
+  range. Info: what can wait for a maintenance date (step 5). Everything
+  else is a warning: EC out of range, a canister low or empty, top up
+  water, an outlet that does not drip, a probe without a valid reading.
+- **Pushes.** Critical: at once, also at night, and again 5, 15 and 60 min
+  later. Warning: once, by day; at night it waits for the morning report.
+  Info: only in the morning report and the app.
+- **Quiet hours** are 22:00 to 07:00 in the device's local time, set in the
+  app; equal times mean none. The morning report comes when they end and
+  lists what waited through the night and the notes.
+- **Acknowledging** a raised alarm pauses its reminders for 12 h at most;
+  the alarm stays raised and the status red. The pause ends at once when
+  another alarm is raised, and a pause that ends starts a new round of
+  reminders.
+- **Across a restart** the alarms' state is kept in the run-time state, so
+  nothing already known is pushed again.
+- **Delivery.** The core queues the notifications in an outbox and sends
+  nothing itself; the platform delivers them. Until a channel is set up,
+  the app lists what would have been sent.
+

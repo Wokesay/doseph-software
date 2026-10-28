@@ -242,6 +242,9 @@ void Robot::tick() {
     in.channelCount = hw_.channelCount();
     in.hold = c.hold;
     watch_ = evaluate(in);
+    // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
+    const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
+    alarms_.update(watch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
   }
   saveState();
   saveEvents();
@@ -497,6 +500,7 @@ json Robot::state() {
           {"readings", readings},
           {"cycle", cycle_.status(c)},
           {"watchdog", watch},
+          {"alarms", alarms_.list(watch_, rt_)},  // raised, with level and pause (SD-123)
           {"latches", rt_.latches},
           {"jumpLocks", rt_.jumpLocks},
           {"newTank", rt_.newTank},
@@ -612,6 +616,20 @@ Result Robot::setSystem(const json& j) {
   next.system.language = jstr(j, "language", next.system.language);
   next.system.timezone = jstr(j, "timezone", next.system.timezone);
   return saveConfig(next, changed("cfg.what.system"));
+}
+
+Result Robot::putNotify(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  auto minute = [&](const char* key, int& into) {
+    if (!j.contains(key)) return true;
+    if (!j[key].is_number_integer()) return false;
+    into = j[key].get<int>();
+    return true;
+  };
+  if (!minute("quietFromMin", next.notify.quietFromMin) || !minute("quietToMin", next.notify.quietToMin))
+    return Result::fail(422, say("api.bad_input"));
+  return saveConfig(next, changed("cfg.what.notify"));
 }
 
 Result Robot::putTank(const json& j) {
@@ -1117,6 +1135,25 @@ Result Robot::probe(const json& j) {
 }
 
 // ---------------------------------------------------------------- operation
+
+Result Robot::ackAlarm(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!alarms_.ack(id, clock_.epoch(), rt_)) return Result::fail(404, say("alarm.none"));
+  saveState(true);
+  return Result::ok({{"alarms", alarms_.list(watch_, rt_)}});
+}
+
+json Robot::notifications() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  json out = json::array();
+  for (const auto& n : alarms_.recent()) out.push_back(n);
+  return {{"notifications", out}};
+}
+
+std::vector<Notification> Robot::takeNotifications() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return alarms_.takeOutbox();
+}
 
 Result Robot::ackLatch(const std::string& id, const json& body) {
   std::lock_guard<std::recursive_mutex> l(mtx_);

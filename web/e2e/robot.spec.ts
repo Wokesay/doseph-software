@@ -300,15 +300,36 @@ test("the simulator panel switches the water path's faults: a leak turns the har
   await expect(release).toHaveText("Hardware release on");
 });
 
-test("a leak locks every pump; the lock is released only once the leak is fixed (SD-110)", async ({ page }) => {
+test("a leak locks every pump and is a critical alarm; acknowledging pauses its reminders; the lock is released only once the leak is fixed (SD-110, SD-123)", async ({ page }) => {
   await login(page);
   // The leak through the simulator's API: the panel would cover the status page
   await sim(page, "leak", { on: true });
   const lock = page.getByTestId("latch-hw.leak");
   await expect(lock).toContainText("Leak: every pump stays off");
+  const alarm = page.getByTestId("alarm-latch.hw.leak");
+  await expect(alarm).toContainText("critical");
+  await page.getByTestId("ack-latch.hw.leak").click();
+  await expect(alarm).toContainText("reminders paused until");
+  await expect(page.getByTestId("ack-latch.hw.leak")).toHaveCount(0);
   await lock.getByRole("button", { name: "Release" }).click();
   await expect(page.getByText("Not released: the device still reports it")).toBeVisible();
   await sim(page, "leak", { on: false });
   await lock.getByRole("button", { name: "Release" }).click();
   await expect(lock).toHaveCount(0);
+  await expect(alarm).toHaveCount(0);
+});
+
+test("quiet hours are set in the settings; what the robot notified is listed there (SD-123)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  await page.locator("input[name=quietFrom]").fill("21:30");
+  await page.locator("input[name=quietTo]").fill("06:45");
+  await expect(page.getByText("in the morning report at 06:45")).toBeVisible();
+  await page.getByTestId("save-quiet").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.reload();
+  await expect(page.locator("input[name=quietTo]")).toHaveValue("06:45");
+  await page.locator("input[name=quietFrom]").fill("22:00");
+  await page.locator("input[name=quietTo]").fill("07:00");
+  await page.getByTestId("save-quiet").click();
 });

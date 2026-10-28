@@ -195,11 +195,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-022 – Acknowledging an alarm only pauses its repetition
 
-- **Dropped:** the grow controller only (alarm notifications (not built yet)); not part of the mixing robot (SD-105).
 - **Rule:** Acknowledging an alarm only pauses the reminders about it; the status stays red. At night (22:00–07:00) only critical alarms are pushed, repeated after 5, 15 and 60 min; lesser findings wait for a morning report or stay in the app.
 - **Why:** An acknowledgement that cleared the red status would quietly switch monitoring off. The pause is therefore bounded: it ends after a set time (12 h on the reference installation), when all checks are fine again, and at once when another problem appears. Lesser findings are not repeated, since hourly reminders about them would drown the alarms that need someone.
 - **Evidence:** —
-- **Later:** step 5 (push notifications).
+- **Implemented in:** `core/include/doseph/alarms.hpp`, `core/src/alarms.cpp`
+- **Tests:** `tests/core/test_alarms.cpp` "Alarms: a critical alarm is pushed at night too and repeated 5, 15 and 60 min after, then no more; a warning by day once (RAT-022)"; `tests/core/test_alarms.cpp` "Alarms: at night a warning waits for the morning report when the quiet hours end; a note goes only there; the report comes once a day (RAT-022)"; `tests/core/test_alarms.cpp` "Alarms: acknowledging pauses the repetition, never the alarm; the pause ends after 12 h with a new round, at once when another problem appears, and with the problem (RAT-022)"; `tests/core/test_scenarios.cpp` "Scenario alarms: a leak is a critical alarm, pushed at once and repeated; acknowledging pauses the reminders and keeps the alarm; quiet hours are set and checked (SD-123, RAT-022)"
 
 ### RAT-023 – Sensor truth always runs; freshness and frozen raw values are checked separately
 

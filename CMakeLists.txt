@@ -67,6 +67,7 @@ add_library(doseph_core
   core/src/gateway.cpp
   core/src/cycle.cpp
   core/src/watchdog.cpp
+  core/src/alarms.cpp
   core/src/robot.cpp
   core/src/api.cpp
   core/src/messages.cpp
@@ -115,6 +116,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_plan.cpp
     tests/core/test_journal.cpp
     tests/core/test_watchdog.cpp
+    tests/core/test_alarms.cpp
     tests/core/test_cycle.cpp
     tests/core/test_api.cpp
     tests/core/test_sim.cpp

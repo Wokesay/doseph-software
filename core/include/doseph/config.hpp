@@ -119,10 +119,18 @@ struct SystemCfg {
   bool passwordSet = false;  // the first password was set once: no setup over the network after that
 };
 
+// Notifications (SD-123): quiet hours in local minutes of the day; from == to: none. The
+// morning report comes when they end.
+struct NotifyCfg {
+  int quietFromMin = 22 * 60;
+  int quietToMin = 7 * 60;
+};
+
 struct Config {
   int schemaVersion = kSchemaVersion;
   int revision = 0;
   SystemCfg system;
+  NotifyCfg notify;
   TankCfg tank;
   ControlCfg control;
   Limits limits;
@@ -189,6 +197,10 @@ struct RuntimeState {
   bool topUp = false;
   // The settling times of the last three clean doses, min (SD-112): a large tank waits 1.5 × the longest
   std::vector<double> settleMin;
+  // Alarms (SD-123): watchdog item → {since, raised, level, sent, round, ackUntil, reported};
+  // the time of the last morning report
+  std::map<std::string, json> alarms;
+  Epoch lastReport = 0;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

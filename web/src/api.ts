@@ -47,6 +47,11 @@ export type Cycle = {
   settings: CycleSettings;
 };
 
+/** An alarm raised from a watchdog problem (SD-123); `ackUntil`: its reminders are paused until then (0: not). */
+export type Alarm = { id: string; level: "critical" | "warning" | "info"; since: number; sent: number; ackUntil: number; label: Msg; text: Msg };
+/** What the robot pushes, or would push without a channel: an alarm, a reminder, the morning report (SD-123). */
+export type Notice = { id: number; at: number; kind: "alarm" | "repeat" | "report"; level: "critical" | "warning" | "info"; title: Msg; lines: Msg[]; items: string[] };
+
 export type Assessment = { id: string; label: Msg; status: "ok" | "problem" | "neutral"; text: Msg };
 export type Watchdog = {
   evaluatedAt: number; overall: "ok" | "problem" | "neutral"; ok: number; problems: number; neutral: number;
@@ -70,6 +75,7 @@ export type RobotState = {
   readings: Record<Signal, Reading>;
   cycle: Cycle;
   watchdog: Watchdog;
+  alarms: Alarm[];
   latches: Record<string, Record<string, unknown>>;
   jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
   newTank: boolean; topUp: boolean;
@@ -98,6 +104,8 @@ export type Recipe = { id: string; name: string; note: string; steps: { canister
 export type Config = {
   schemaVersion: number; revision: number;
   system: { name: string; language: string; timezone: string; passwordSet: boolean };
+  // Quiet hours in local minutes of the day; equal: none (SD-123)
+  notify: { quietFromMin: number; quietToMin: number };
   tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };

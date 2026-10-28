@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Settings: language and look, the device's name and time zone, the
-// password, backup and restore, reporting a problem, signing out, the version.
-import { useState } from "preact/hooks";
-import { Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Upload } from "lucide-preact";
-import { ApiError, get, post, put, type Msg } from "../api";
-import { timeZone } from "../format";
+// Settings: language and look, the device's name and time zone, quiet hours
+// and what was notified, the password, backup and restore, reporting a
+// problem, signing out, the version.
+import { useEffect, useState } from "preact/hooks";
+import { Bell, Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Upload } from "lucide-preact";
+import { ApiError, get, post, put, type Msg, type Notice } from "../api";
+import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang } from "../i18n";
-import { config, info, logoutLocal, refreshConfig, toast } from "../store";
+import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
 import { currentTheme, setTheme, type Theme } from "../theme";
-import { Banner, Button, Card, Field, LANGS, Seg } from "../ui";
+import { Banner, Button, Card, Field, LANGS, Pill, Seg } from "../ui";
 
 function LookCard() {
   const [theme, setThemeState] = useState<Theme>(currentTheme());
@@ -77,6 +78,79 @@ function DeviceCard() {
             {t("common.save")}
           </Button>
         </div>
+      </div>
+    </Card>
+  );
+}
+
+const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+const minutes = (v: string) => {
+  const m = /^(\d{2}):(\d{2})$/.exec(v);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+// Quiet hours and what the robot notified of late (SD-123): at night only critical alarms; the rest
+// comes in the morning report when the quiet hours end
+function NotifyCard() {
+  const n = config.value!.notify;
+  const [from, setFrom] = useState(hhmm(n.quietFromMin));
+  const [to, setTo] = useState(hhmm(n.quietToMin));
+  const [recent, setRecent] = useState<Notice[]>([]);
+  const eventId = state.value?.eventId;
+  useEffect(() => {
+    get<{ notifications: Notice[] }>("/notifications")
+      .then((r) => setRecent(r.notifications))
+      .catch(() => {});
+  }, [eventId]);
+  const f = minutes(from), u = minutes(to);
+  const save = async () => {
+    try {
+      await put("/notify", { quietFromMin: f, quietToMin: u });
+      await refreshConfig();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const tone = (l: Notice["level"]) => (l === "critical" ? "bad" : l === "warning" ? "warn" : "info");
+  return (
+    <Card title={t("settings.notify")} icon={<Bell size={18} />}>
+      <div class="stack">
+        <div class="form-grid">
+          <Field label={t("settings.quietFrom")}>
+            <input class="input" type="time" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} name="quietFrom" />
+          </Field>
+          <Field label={t("settings.quietTo")}>
+            <input class="input" type="time" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} name="quietTo" />
+          </Field>
+        </div>
+        <p class="muted small">{f === u ? t("settings.quietNone") : t("settings.quietHint", { to })}</p>
+        <div>
+          <Button variant="primary" onClick={save} disabled={f === null || u === null} data-testid="save-quiet">
+            {t("common.save")}
+          </Button>
+        </div>
+        <div class="section-title">{t("settings.recent")}</div>
+        {recent.length ? (
+          <div class="list" data-testid="notifications">
+            {recent.map((x) => (
+              <div class="item wrap-row">
+                <div class="grow">
+                  <div class="title">
+                    <Pill tone={tone(x.level)}>{t(`status.level.${x.level}`)}</Pill> {msg(x.title)}
+                  </div>
+                  {x.lines.map((l) => (
+                    <div class="small">{msg(l)}</div>
+                  ))}
+                  <div class="muted small">{dateTime(x.at)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="muted small">{t("settings.recentNone")}</p>
+        )}
+        <p class="muted small">{t("settings.recentNote")}</p>
       </div>
     </Card>
   );
@@ -293,6 +367,7 @@ export function SettingsPage() {
         <LookCard />
         <DeviceCard key={rev} />
       </div>
+      <NotifyCard key={`n${rev}`} />
       <PasswordCard />
       <BackupCard />
       <ReportCard />
