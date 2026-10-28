@@ -204,7 +204,7 @@ void World::step(Ms dt) {
       continue;
     }
     const Ms eff = std::min(dt, p.requested - (p.elapsed - dt));
-    const double ml = p.trueFlow * static_cast<double>(std::max<Ms>(0, eff)) / 60000.0;
+    const double ml = flowOf(p) * static_cast<double>(std::max<Ms>(0, eff)) / 60000.0;
     const bool intoCup = p.jobId.rfind("cal-", 0) == 0 || p.jobId.rfind("prime-", 0) == 0;
     if (p.backwards) {
       p.lineMl = std::min(kLineMaxMl, p.lineMl + ml);  // pulled back towards the canister
@@ -288,11 +288,18 @@ double World::rawFlow() const {
   return std::round(suctionLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
 }
 
+// A larger head moves more (assumption: S 1, M 2.5, L 6, docs/SIMULATOR.md)
+double World::flowOf(const Pump& p) {
+  const auto size = [](const std::string& h) { return h == "S" ? 1.0 : h == "M" ? 2.5 : h == "L" ? 6.0 : 0.0; };
+  const double base = size(p.flowHead);
+  return base > 0 ? p.trueFlow * size(p.head) / base : 0.0;
+}
+
 json World::toJson() const {
   json ps = json::array();
   for (size_t i = 0; i < pumps.size(); ++i) {
     const Pump& p = pumps[i];
-    ps.push_back({{"channel", i + 1}, {"liquid", p.liquid}, {"trueFlow", p.trueFlow}, {"blocked", p.blocked}, {"empty", p.empty},
+    ps.push_back({{"channel", i + 1}, {"liquid", p.liquid}, {"head", p.head}, {"trueFlow", flowOf(p)}, {"blocked", p.blocked}, {"empty", p.empty},
                   {"outletBlocked", p.outletBlocked}, {"siphon", p.siphon}, {"drops", p.drops},
                   {"lineMl", std::round(p.lineMl * 100.0) / 100.0},
                   {"state", p.state}, {"cupMl", std::round(p.cupMl * 100.0) / 100.0}});

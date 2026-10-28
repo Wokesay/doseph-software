@@ -44,7 +44,10 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Suction pump, low end | 10 L/min | – |
 | Pull back | the pumps run backwards | they cannot |
 
-The twin has one pump per channel. Without a flow meter (`outlet_level`)
+The twin has one pump per channel. A pump head can be changed for another
+size or taken off (`channelHead`): a larger head moves more (S 1, M 2.5,
+L 6 times, an **assumption**), none moves nothing, and the device reports
+the head it has now. Without a flow meter (`outlet_level`)
 the device reports the flow as the low end of the suction pump's delivery
 while the outlet's level sensor reports water, and 0 otherwise, so a
 turnover errs long (SD-109).
@@ -66,7 +69,7 @@ http://localhost:5173 (the API is passed through).
 | Suction pump | delivers 12 L/min after priming for 8 s, and primes again after each stop; faults: filter blocked, suction line out of the water (dry), flow or outlet sensor broken; a pump of your own |
 | Water path | the measuring chamber holds 0.15 L up to its weir, which keeps the probes wet; above it the water returns by gravity or by a return pump that runs from 0.25 L to 0.18 L; faults: return blocked, return pump failed. At 0.35 L the high-level sensor trips |
 | Hardware release | a leak, high level or the stop button switch the suction pump and every dosing pump off below the robot, and no run starts; the state shows it as `hardware` |
-| Dosing channels | four, each pump with its own true flow (42–53 ml/min), may be blocked or empty; calibration and priming go into a cup |
+| Dosing channels | four or six, each pump with its own true flow (42–53 ml/min with the head of its profile), may be blocked or empty; a head can be changed or taken off; calibration and priming go into a cup |
 | Outlets | a drop sensor at each outlet counts drops of 0.05 ml; a line pulled back (at most 2 ml) fills first on the next run; faults: outlet blocked (the pump runs, nothing drips), a canister above the device that siphons 0.6 ml/min while its pump stands |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |
 | Probes | pH and EC with their own errors, measured noise (RAT-082); faults: offline, frozen, jump, dry EC; calibration solutions |
@@ -80,4 +83,5 @@ The water path's faults are in the panel and in the API: `flowFault` with
 `{"fault": "dry"}`, `returnFault` with `{"fault": "blocked"}` or
 `{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
 `{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and
-`siphon`.
+`siphon`. `channelHead` with `{"channel": 2, "head": "M"}` fits another
+head, `"head": ""` takes it off (SD-108).

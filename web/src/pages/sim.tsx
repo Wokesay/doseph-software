@@ -11,7 +11,7 @@ import { Button, Field, NumberInput, Seg } from "../ui";
 
 type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
-  channels: { channel: number; liquid: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
+  channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
   output: boolean; external: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
   returnFault: string; leak: boolean; stopButton: boolean; released: boolean;
@@ -199,6 +199,19 @@ export function SimPanel() {
                   {p.cupMl > 0 && <span class="faint"> · {t("sim.cup", { ml: num(p.cupMl, 1) })}</span>}
                   <span class="faint"> · {t("sim.drops", { n: p.drops })}</span>
                 </span>
+                <select
+                  class="select input"
+                  style="width:auto"
+                  aria-label={t("sim.head", { n: p.channel })}
+                  value={p.head}
+                  onChange={(e) => act("channelHead", { channel: p.channel, head: (e.target as HTMLSelectElement).value })}
+                  data-testid={`sim-head-${p.channel}`}
+                >
+                  {["S", "M", "L"].map((h) => (
+                    <option value={h}>{t("sim.headSize", { head: h })}</option>
+                  ))}
+                  <option value="">{t("sim.noHead")}</option>
+                </select>
                 <Button size="sm" onClick={() => act("channelFault", { ...faults(p), blocked: !p.blocked })}>
                   {p.blocked ? t("sim.unblock") : t("sim.block")}
                 </Button>

@@ -32,12 +32,17 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
   if (!c.hold.empty()) return fail(say("act.hold." + c.hold));  // the hardware release holds every pump (SD-110)
   if (runningChannel_ != 0) return fail(say("act.busy"));  // one run at a time (RAT-018)
   if (channel < 1 || channel > hw_.channelCount()) return fail(say("act.no_channel", {{"channel", channel}}));
+  // A channel without a pump head moves nothing (SD-108)
+  const std::string& head = hw_.profile().channels[static_cast<size_t>(channel - 1)].head;
+  if (head.empty()) return fail(say("act.no_head", {{"channel", channel}}));
   const Limits lim = c.cfg.limits.bounded();  // fixed limits; settings only tighten (R7)
   if (ms <= 0 || ms > static_cast<Ms>(lim.maxRunS * 1000)) return fail(say("act.too_long", {{"s", lim.maxRunS}}));
   if (intoTank(purpose)) {
     // No dose without a measured calibration (RAT-015), no run under the minimum (RAT-050)
     const double flow = c.cfg.channelFlow(channel);
     if (!(isNum(flow) && flow > 0)) return fail(say("act.uncalibrated"));
+    // A calibration of another head is void (SD-108); the robot drops it, this holds meanwhile
+    if (c.cfg.channels.at(channel).head != head) return fail(say("act.head_changed"));
     if (ms < static_cast<Ms>(lim.minRunS * 1000)) return fail(say("act.too_short", {{"s", lim.minRunS}}));
     // No dose without flow through the device: it would not reach the tank (SD-105)
     if (!c.flowOk) return fail(say("act.no_flow"));

@@ -122,6 +122,19 @@ test("a channel is calibrated: run into a cup, enter the ml", async ({ page }) =
   await expect(page.getByTestId("job-done")).toContainText("Channel 4: 48.0 ml/min saved");
 });
 
+test("another pump head voids a channel's calibration; without a head the channel runs nothing (SD-108)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/channels");
+  await expect(page.getByTestId("head-2")).toContainText("pump head S");
+  await sim(page, "channelHead", { channel: 2, head: "M" });
+  await expect(page.getByTestId("head-2")).toContainText("pump head M");
+  await expect(page.getByTestId("head-2")).toContainText("not calibrated");
+  await expect(page.getByTestId("calibrate-2")).toBeEnabled();
+  await sim(page, "channelHead", { channel: 2, head: "" });
+  await expect(page.getByTestId("head-2")).toContainText("no pump head");
+  await expect(page.getByTestId("calibrate-2")).toBeDisabled();
+});
+
 test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await login(page);
   await page.goto("/#/channels");

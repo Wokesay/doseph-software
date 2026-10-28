@@ -30,6 +30,7 @@ struct Result {
 struct ChannelJob {
   std::string id, type;  // calibration | prime
   int channel = 0;
+  std::string head;               // calibration: the pump head it measures (SD-108)
   std::string state = "running";  // running | waiting_result | done | failed
   Ms ms = 0, actualMs = 0;
   double ml = kNaN;  // calibration: what the user measured in the cup
@@ -129,6 +130,7 @@ class Robot {
   void saveEvents();
   void sampleHistory(Epoch epoch);
   void watchRelease(Epoch epoch);
+  void checkHeads(Epoch epoch);
   void snapshot(Epoch epoch);
   void channelJobDone(const DoseProgress& p);
   Result startChannelJob(const std::string& type, int channel, double seconds);

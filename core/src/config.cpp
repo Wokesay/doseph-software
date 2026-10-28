@@ -140,7 +140,7 @@ void to_json(json& j, const Config& c) {
   j["recipes"] = recipes;
   j["active"] = {{"recipe", c.active.recipe}, {"from", c.active.from}, {"until", c.active.until}};
   json channels = json::object();
-  for (const auto& [n, p] : c.channels) channels[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}};
+  for (const auto& [n, p] : c.channels) channels[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}, {"head", p.head}};
   j["channels"] = channels;
   j["probes"] = {{"ph", c.phCal}, {"ec", c.ecCal}};
 }
@@ -270,7 +270,7 @@ Config configFromJson(const json& in) {
     }
     if (std::to_string(n) != key) throw std::invalid_argument("channel number");
     if (!v.is_object()) throw std::invalid_argument("channel calibration is not an object");
-    c.channels[n] = ChannelCal{numOrNaN(v, "flowMlPerMin"), epochOr(v, "at")};
+    c.channels[n] = ChannelCal{numOrNaN(v, "flowMlPerMin"), epochOr(v, "at"), jstr(v, "head")};
   }
   const json& p = objectAt(j, "probes");
   if (p.contains("ph")) c.phCal = p["ph"];
@@ -314,10 +314,13 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   std::set<std::string> ids;
   std::set<int> channels;
   std::map<std::string, int> pairCount;
+  int phDowns = 0;
   for (const auto& b : c.canisters) {
     if (b.id.empty() || b.id.size() > 40 || !ids.insert(b.id).second) err(say("cfg.canister.id"));
     if (b.name.empty() || b.name.size() > 40) err(say("cfg.canister.name"));
     if (b.role != "nutrient" && b.role != "ph_down") err(say("cfg.canister.role", {{"name", b.name}}));
+    // One pH− canister at most (SD-108)
+    if (b.role == "ph_down" && ++phDowns == 2) err(say("cfg.canister.ph_down_twice", {{"name", b.name}}));
     if (b.channel < 0 || b.channel > std::min(channelCount, kMaxChannels)) err(say("cfg.canister.channel", {{"name", b.name}, {"max", channelCount}}));
     else if (b.channel > 0 && !channels.insert(b.channel).second) err(say("cfg.canister.channel_twice", {{"name", b.name}, {"channel", b.channel}}));
     if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));

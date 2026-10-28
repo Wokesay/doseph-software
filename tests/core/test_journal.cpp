@@ -80,7 +80,7 @@ TEST_CASE("Doser: a run whose journal record cannot be written does not start (S
   fake::FailingStorage store;
   fake::Hardware hw;
   Config cfg;
-  cfg.channels[2] = {50, 1};
+  cfg.channels[2] = {50, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
   EventLog log;
@@ -112,7 +112,7 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   MemoryStorage store;
   fake::Hardware hw;
   Config cfg;
-  cfg.channels[2] = {50, 1};
+  cfg.channels[2] = {50, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
   EventLog log;
@@ -145,6 +145,32 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   c.stopped = true;
   CHECK_FALSE(act.startRun(c, 3, 6000, "calibration", "j8", err));
   CHECK(err.key == "act.stopped");
+}
+
+TEST_CASE("Gateway: a channel without a pump head runs nothing; a calibration of another head doses nothing (SD-108)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  Config cfg;
+  cfg.channels[2] = {50, 1, "M"};  // the head fitted is "S"
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Msg err;
+  CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j1", err));
+  CHECK(err.key == "act.head_changed");
+  // Calibrating it again is the way back
+  CHECK(act.startRun(c, 2, 6000, "calibration", "j2", err));
+  act.clearRun(2);
+  hw.prof.channels[1].head = "";
+  for (const char* purpose : {"calibration", "prime"}) {
+    CHECK_FALSE(act.startRun(c, 2, 6000, purpose, std::string("j3") + purpose, err));
+    CHECK(err.key == "act.no_head");
+  }
+  CHECK(hw.started == 1);
 }
 
 TEST_CASE("Dosing journal: a run recorded before the terms changed still names its canister (SD-107)") {

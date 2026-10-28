@@ -30,7 +30,9 @@ struct Liquid {
 
 struct Pump {
   std::string liquid;   // key in World::liquids; "" = nothing connected
-  double trueFlow = 50; // ml/min, the real one
+  double trueFlow = 50; // ml/min, the real one with the head it came with
+  // The pump head fitted ("S", "M", "L"; "" none) and the one trueFlow belongs to (SD-108)
+  std::string head = "S", flowHead = "S";
   bool blocked = false; // the motor stalls: the run fails
   bool empty = false;   // the canister is empty: it runs, nothing comes
   bool outletBlocked = false;  // the outlet or line is blocked: it runs, nothing drips
@@ -114,6 +116,8 @@ class World {
 
   // Pumps 1..n
   std::vector<Pump> pumps;
+  // What a pump moves with the head fitted now, ml/min: nothing without one
+  static double flowOf(const Pump& p);
   bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards = false);
   doseph::RunStatus runStatus(int pump) const;
   void stopAllPumps();
