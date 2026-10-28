@@ -1,0 +1,3719 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Doseph API",
+    "version": "1",
+    "summary": "The REST API of Doseph, the mixing robot for nutrient solution",
+    "description": "The web app on the device and other apps use only this API. Every text is a message with a key (`Msg`). Sign in with the password for a session cookie, or send an access token as `Authorization: Bearer`. `x-roles` names who may call an operation (SD-129): `owner` is a session signed in with the password; `app`, `account` and `peer` are the roles of access tokens. A call outside its role is refused with 403. Writing calls from a browser must come from the same origin. The simulator adds `/sim` calls of its own; the device has none.",
+    "license": {
+      "name": "AGPL-3.0-or-later",
+      "identifier": "AGPL-3.0-or-later"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    },
+    {
+      "token": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "device"
+    },
+    {
+      "name": "auth"
+    },
+    {
+      "name": "state"
+    },
+    {
+      "name": "config"
+    },
+    {
+      "name": "settings"
+    },
+    {
+      "name": "history"
+    },
+    {
+      "name": "recipes"
+    },
+    {
+      "name": "plants"
+    },
+    {
+      "name": "maintenance"
+    },
+    {
+      "name": "tank"
+    },
+    {
+      "name": "control"
+    },
+    {
+      "name": "canisters"
+    },
+    {
+      "name": "channels"
+    },
+    {
+      "name": "probes"
+    },
+    {
+      "name": "alarms"
+    }
+  ],
+  "paths": {
+    "/info": {
+      "get": {
+        "operationId": "getInfo",
+        "summary": "The device: product, version, identity, what it has, whether a password is set",
+        "tags": [
+          "device"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Info"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "getSession",
+        "summary": "Whether the request is signed in, and with which role",
+        "tags": [
+          "auth"
+        ],
+        "description": "A session's cookie is renewed; an access token never goes into a cookie (SD-129).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/setup": {
+      "post": {
+        "operationId": "setFirstPassword",
+        "summary": "Sets the first password; with the setup code where the platform shows one",
+        "tags": [
+          "auth"
+        ],
+        "description": "Signs in on success: the response sets the session cookie.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "423": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Signs in with the password; a lockout after failed attempts",
+        "tags": [
+          "auth"
+        ],
+        "description": "The response sets the session cookie `dp_session`.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Ends the session",
+        "tags": [
+          "auth"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password": {
+      "put": {
+        "operationId": "changePassword",
+        "summary": "Changes the password; every session ends, access tokens stay",
+        "tags": [
+          "auth"
+        ],
+        "x-roles": [
+          "owner"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "old": {
+                    "type": "string"
+                  },
+                  "new": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "old",
+                  "new"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/tokens": {
+      "get": {
+        "operationId": "listTokens",
+        "summary": "The access tokens, never a token itself",
+        "tags": [
+          "auth"
+        ],
+        "x-roles": [
+          "owner"
+        ],
+        "responses": {
+          "200": {
+            "description": "The tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokens"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createToken",
+        "summary": "Creates an access token with a name and a role; the token is shown only in this response",
+        "tags": [
+          "auth"
+        ],
+        "x-roles": [
+          "owner"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "role": {
+                    "$ref": "#/components/schemas/Role"
+                  }
+                },
+                "required": [
+                  "name",
+                  "role"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/tokens/{id}": {
+      "delete": {
+        "operationId": "revokeToken",
+        "summary": "Revokes an access token at once",
+        "tags": [
+          "auth"
+        ],
+        "x-roles": [
+          "owner"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/state": {
+      "get": {
+        "operationId": "getState",
+        "summary": "The live state",
+        "tags": [
+          "state"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/events/stream": {
+      "get": {
+        "operationId": "streamState",
+        "summary": "The live state as Server-Sent Events, once a second",
+        "tags": [
+          "state"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "Events named `state`, each with the state as data",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "operationId": "getConfig",
+        "summary": "The configuration",
+        "tags": [
+          "config"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config/export": {
+      "get": {
+        "operationId": "exportConfig",
+        "summary": "The configuration as a backup file",
+        "tags": [
+          "config"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The backup, as an attachment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config/import": {
+      "post": {
+        "operationId": "importConfig",
+        "summary": "Restores a backup, checked like a change; never while a channel runs",
+        "tags": [
+          "config"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/templates": {
+      "get": {
+        "operationId": "getTemplates",
+        "summary": "Recipe templates",
+        "tags": [
+          "recipes"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/diagnostics": {
+      "get": {
+        "operationId": "getDiagnostics",
+        "summary": "The diagnostics package for a report: states and events, never a secret",
+        "tags": [
+          "device"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/history": {
+      "get": {
+        "operationId": "getHistory",
+        "summary": "The history of pH, EC, temperature and flow; gaps stay gaps (RAT-016)",
+        "tags": [
+          "history"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "parameters": [
+          {
+            "name": "series",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Series ids separated by commas: ph, ec, temp, flow"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Start, seconds since 1970; a day ago by default"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "End, seconds since 1970; now by default"
+          },
+          {
+            "name": "points",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "At most this many points per series, 10 to 4000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "integer",
+                      "description": "Seconds since 1970 (UTC)"
+                    },
+                    "to": {
+                      "type": "integer",
+                      "description": "Seconds since 1970 (UTC)"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/export.csv": {
+      "get": {
+        "operationId": "exportCsv",
+        "summary": "The history as CSV in the page's format (RAT-016)",
+        "tags": [
+          "history"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "parameters": [
+          {
+            "name": "series",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Series ids separated by commas; all four by default"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Start; a week ago by default"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "End; now by default"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "de",
+                "en"
+              ]
+            },
+            "description": "The number and date format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The CSV file",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "getEvents",
+        "summary": "The event log",
+        "tags": [
+          "history"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Start"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "End"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this type"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "At most this many, 1 to 1000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The events, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Event"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/system": {
+      "put": {
+        "operationId": "putSystem",
+        "summary": "The device's name, time zone and language",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "enum": [
+                      "de",
+                      "en"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/notify": {
+      "put": {
+        "operationId": "putNotify",
+        "summary": "Quiet hours (SD-123)",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Notify"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "getNotifications",
+        "summary": "What the robot notified of late",
+        "tags": [
+          "alarms"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/push": {
+      "get": {
+        "operationId": "getPush",
+        "summary": "The push channels, without their secrets",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The channels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putPush",
+        "summary": "Changes the push channels; a secret left out stays",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The channels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/push/test": {
+      "post": {
+        "operationId": "testPush",
+        "summary": "Sends a test message",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants": {
+      "get": {
+        "operationId": "getPlants",
+        "summary": "Plant recipes, plants and where each stands; the water plan's source",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The plants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "startPlant",
+        "summary": "Starts a plant from a plant recipe",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "plantRecipe": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "integer",
+                    "description": "Seconds since 1970 (UTC)"
+                  },
+                  "phases": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Phase"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants/{id}": {
+      "put": {
+        "operationId": "putPlant",
+        "summary": "Changes a plant's name or phases",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "phases": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Phase"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePlant",
+        "summary": "Removes a plant",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants/{id}/next": {
+      "post": {
+        "operationId": "plantNext",
+        "summary": "Starts the plant's next phase today",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants/{id}/harvest": {
+      "post": {
+        "operationId": "plantHarvest",
+        "summary": "Records the harvest (RAT-002)",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "integer",
+                    "description": "Seconds since 1970 (UTC)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants/{id}/complete": {
+      "post": {
+        "operationId": "plantComplete",
+        "summary": "Completes the plant (RAT-077)",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plants/{id}/lead": {
+      "post": {
+        "operationId": "plantLead",
+        "summary": "Makes the plant lead the water plan",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plant-recipes": {
+      "put": {
+        "operationId": "putPlantRecipe",
+        "summary": "Creates or changes a plant recipe",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlantRecipe"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plant-recipes/{id}": {
+      "delete": {
+        "operationId": "deletePlantRecipe",
+        "summary": "Removes a plant recipe",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/calendar": {
+      "get": {
+        "operationId": "getCalendar",
+        "summary": "The next 8 weeks: phases, harvests and maintenance dates by local day",
+        "tags": [
+          "plants"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/service": {
+      "get": {
+        "operationId": "getService",
+        "summary": "Maintenance items and their dates (SD-125)",
+        "tags": [
+          "maintenance"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putService",
+        "summary": "Maintenance intervals in days; null gives a kind its own back",
+        "tags": [
+          "maintenance"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "days"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/service/{id}/done": {
+      "post": {
+        "operationId": "serviceDone",
+        "summary": "Marks a maintenance item done",
+        "tags": [
+          "maintenance"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/tank": {
+      "put": {
+        "operationId": "putTank",
+        "summary": "The tank: volume, hold and mixing times, cultivation system",
+        "tags": [
+          "tank"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Tank"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/tank/new": {
+      "post": {
+        "operationId": "newTank",
+        "summary": "Announces a new fill: the next dose is a test dose",
+        "tags": [
+          "tank"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/control": {
+      "put": {
+        "operationId": "putControl",
+        "summary": "Control limits within the hard limits (R7)",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Control"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/canisters": {
+      "post": {
+        "operationId": "putCanister",
+        "summary": "Creates or changes a canister",
+        "tags": [
+          "canisters"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Canister"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/canisters/{id}": {
+      "delete": {
+        "operationId": "deleteCanister",
+        "summary": "Removes a canister",
+        "tags": [
+          "canisters"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/canisters/{id}/stock": {
+      "post": {
+        "operationId": "setStock",
+        "summary": "Sets a canister's level, or full when refilled",
+        "tags": [
+          "canisters"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ml": {
+                    "type": "number"
+                  },
+                  "full": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/catchup": {
+      "delete": {
+        "operationId": "endCatchUp",
+        "summary": "Ends a catch-up of a missing part (SD-114)",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/recipes": {
+      "post": {
+        "operationId": "putRecipe",
+        "summary": "Creates or changes a recipe",
+        "tags": [
+          "recipes"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Recipe"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/recipes/{id}": {
+      "delete": {
+        "operationId": "deleteRecipe",
+        "summary": "Removes a recipe",
+        "tags": [
+          "recipes"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/active": {
+      "put": {
+        "operationId": "setActive",
+        "summary": "Puts a recipe in force by hand, for a number of days",
+        "tags": [
+          "recipes"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Active"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/channels/{channel}/prime": {
+      "post": {
+        "operationId": "primeChannel",
+        "summary": "Runs a channel into a cup",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "The channel's number"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "seconds": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/channels/{channel}/calibrate": {
+      "post": {
+        "operationId": "calibrateChannel",
+        "summary": "Runs a channel into a cup to calibrate it",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "The channel's number"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "seconds": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/channels/result": {
+      "post": {
+        "operationId": "calibrationResult",
+        "summary": "The ml measured in the cup",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ml": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "ml"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/channels/cancel": {
+      "post": {
+        "operationId": "cancelChannelJob",
+        "summary": "Stops a channel's run",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/probe": {
+      "post": {
+        "operationId": "probe",
+        "summary": "Calibrates a probe step by step: start, point, save or cancel",
+        "tags": [
+          "probes"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "start",
+                      "point",
+                      "save",
+                      "cancel"
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "ph",
+                      "ec"
+                    ]
+                  },
+                  "reference": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/latches/{id}/ack": {
+      "post": {
+        "operationId": "releaseLatch",
+        "summary": "Releases a lock once its cause is fixed",
+        "tags": [
+          "alarms"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/alarms/ack": {
+      "post": {
+        "operationId": "ackAlarms",
+        "summary": "Acknowledges every alarm",
+        "tags": [
+          "alarms"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "The alarms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alarms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/alarms/{id}/ack": {
+      "post": {
+        "operationId": "ackAlarm",
+        "summary": "Acknowledges an alarm: its reminders pause",
+        "tags": [
+          "alarms"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The alarms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alarms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/stop": {
+      "post": {
+        "operationId": "stop",
+        "summary": "Stops: everything off until resumed; survives a restart",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/maintenance": {
+      "post": {
+        "operationId": "maintenance",
+        "summary": "Holds the robot for maintenance for some minutes; 0 ends it",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "minutes": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "minutes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/resume": {
+      "post": {
+        "operationId": "resume",
+        "summary": "Resumes after a Stop",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "dp_session",
+        "description": "Set by signing in with the password; the owner's role"
+      },
+      "token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An access token (`dpt_…`) with its role (SD-129)"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Refused, with the reason",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Msg": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "The English text; the app shows the key's text in its own language"
+          },
+          "args": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "text"
+        ],
+        "description": "A message by key, with its values (every text the robot sends is one)"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Msg"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "api": {
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "platform": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "simulated": {
+                "type": "boolean"
+              },
+              "scenario": {
+                "type": "string"
+              }
+            }
+          },
+          "deviceId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$",
+            "description": "The device's own identity (SD-129): random, made at the first start, never in a backup"
+          },
+          "hasPassword": {
+            "type": "boolean"
+          },
+          "setupCode": {
+            "type": "boolean"
+          },
+          "passwordProblem": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Msg"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "language": {
+            "enum": [
+              "de",
+              "en"
+            ]
+          },
+          "channelCount": {
+            "type": "integer"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          }
+        }
+      },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pump": {
+                  "type": "string"
+                },
+                "head": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "dropSensor": {
+                  "type": "boolean"
+                },
+                "reverse": {
+                  "type": "boolean"
+                },
+                "dailyMaxMin": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "flow": {
+            "type": "string"
+          },
+          "pumpIn": {
+            "enum": [
+              "tank",
+              "device"
+            ]
+          },
+          "return": {
+            "type": "string"
+          },
+          "network": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pumpLpmLow": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "example": {
+            "type": "boolean"
+          }
+        },
+        "description": "What the device has (SD-108)"
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "app",
+              "account",
+              "peer",
+              null
+            ]
+          },
+          "hasPassword": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Role": {
+        "enum": [
+          "app",
+          "account",
+          "peer"
+        ],
+        "description": "An access token's role (SD-129)"
+      },
+      "AccessToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "used": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The last use since the start"
+          }
+        }
+      },
+      "AccessTokens": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessToken"
+            }
+          },
+          "max": {
+            "type": "integer"
+          }
+        }
+      },
+      "NewToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^dpt_[0-9a-f]{64}$",
+            "description": "Shown only now; the robot keeps its hash"
+          }
+        }
+      },
+      "RecipeStep": {
+        "type": "object",
+        "properties": {
+          "canister": {
+            "type": "string"
+          },
+          "mlPerL": {
+            "type": "number"
+          },
+          "fixed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Recipe": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "ecTarget": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ph": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeStep"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Canister": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "nutrient",
+              "ph_down"
+            ]
+          },
+          "channel": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "color": {
+            "type": "string"
+          },
+          "pair": {
+            "type": "string"
+          },
+          "capacityMl": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "maxMlPerDay": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "stockMl": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Tank": {
+        "type": "object",
+        "properties": {
+          "volumeL": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "holdMin": {
+            "type": "number"
+          },
+          "mixMinMin": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "system": {
+            "enum": [
+              "",
+              "hydro",
+              "coco",
+              "rockwool",
+              "soil"
+            ]
+          }
+        }
+      },
+      "Control": {
+        "type": "object",
+        "properties": {
+          "ecTolerance": {
+            "type": "number"
+          },
+          "phTolerance": {
+            "type": "number"
+          },
+          "maxEcStep": {
+            "type": "number"
+          },
+          "ecFloor": {
+            "type": "number"
+          },
+          "phMaxMlPerDose": {
+            "type": "number"
+          },
+          "maxEcRounds": {
+            "type": "integer"
+          },
+          "maxPhDoses": {
+            "type": "integer"
+          }
+        }
+      },
+      "Active": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "type": "string"
+          },
+          "days": {
+            "type": "number"
+          },
+          "until": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          }
+        }
+      },
+      "Phase": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "type": "string"
+          },
+          "ecTarget": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "phLow": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "phHigh": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "PlantRecipe": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Phase"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Plant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Phase"
+            }
+          },
+          "start": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "phase": {
+            "type": "integer"
+          },
+          "phaseStart": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "harvestAt": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "completedAt": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          }
+        }
+      },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "system": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "language": {
+                "enum": [
+                  "de",
+                  "en"
+                ]
+              }
+            }
+          },
+          "tank": {
+            "$ref": "#/components/schemas/Tank"
+          },
+          "control": {
+            "$ref": "#/components/schemas/Control"
+          },
+          "canisters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Canister"
+            }
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipe"
+            }
+          },
+          "active": {
+            "$ref": "#/components/schemas/Active"
+          },
+          "plantRecipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantRecipe"
+            }
+          },
+          "plants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Plant"
+            }
+          },
+          "lead": {
+            "type": "string"
+          },
+          "notify": {
+            "$ref": "#/components/schemas/Notify"
+          }
+        },
+        "description": "The configuration: everything a backup holds"
+      },
+      "Notify": {
+        "type": "object",
+        "properties": {
+          "quietFromMin": {
+            "type": "integer"
+          },
+          "quietToMin": {
+            "type": "integer"
+          }
+        },
+        "description": "Quiet hours in minutes after local midnight (SD-123)"
+      },
+      "PushSettings": {
+        "type": "object",
+        "properties": {
+          "ntfy": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "server": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "tokenSet": {
+                "type": "boolean"
+              }
+            }
+          },
+          "telegram": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "chatId": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "tokenSet": {
+                "type": "boolean"
+              }
+            }
+          },
+          "email": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "server": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "passwordSet": {
+                "type": "boolean"
+              }
+            }
+          },
+          "status": {
+            "type": "object"
+          }
+        },
+        "description": "Push channels without an account (SD-124). A secret is written, never read back: reads say only whether it is set"
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ts": {
+            "type": "integer",
+            "description": "Seconds since 1970 (UTC)"
+          },
+          "type": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "notice",
+              "warn",
+              "alarm"
+            ]
+          },
+          "title": {
+            "$ref": "#/components/schemas/Msg"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Msg"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "State": {
+        "type": "object",
+        "description": "The live state: readings, the cycle, alarms, latches, channels, stock and more; the same body the event stream sends"
+      }
+    }
+  }
+}

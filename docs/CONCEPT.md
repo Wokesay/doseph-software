@@ -15,6 +15,11 @@ sensors, raw readings), `IStorage` (files), `IClock` (time) and
 the HTTP binding. The profile says what the device has (SD-108); logic
 reads its capabilities, never a line name.
 
+The API is described in [`openapi.json`](openapi.json) (OpenAPI 3.1), with
+the roles that may call each operation (SD-129). Tests keep it complete:
+every route of `api.cpp` is in it, nothing else, and its roles are the
+device's own.
+
 ## Layers of the core
 
 ```

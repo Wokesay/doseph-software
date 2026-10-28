@@ -125,9 +125,12 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp
     tests/core/test_api.cpp
+    tests/core/test_openapi.cpp
     tests/core/test_sim.cpp
     tests/core/test_scenarios.cpp)
   target_link_libraries(doseph_tests PRIVATE doseph_sim)
+  # The OpenAPI file is read where it is kept (test_openapi.cpp)
+  target_compile_definitions(doseph_tests PRIVATE DP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   if(NOT MSVC)
     target_compile_options(doseph_tests PRIVATE -Wall -Wextra)
   endif()
