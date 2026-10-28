@@ -18,6 +18,10 @@ type World = {
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
 };
 
+type Channel = World["channels"][number];
+// A channel's faults as they are, so a button changes only its own
+const faults = (p: Channel) => ({ channel: p.channel, blocked: p.blocked, empty: p.empty, outletBlocked: p.outletBlocked, siphon: p.siphon });
+
 export function SimPanel() {
   const [open, setOpen] = useState(false);
   const [world, setWorld] = useState<World | null>(null);
@@ -78,7 +82,19 @@ export function SimPanel() {
             <span>{num(w.tank.temp, 1)} °C</span>
           </div>
           <div class="small muted">
-            {t("sim.suctionPump", { state: w.output || w.external ? t("common.on") : t("common.off") })} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
+            {t("sim.suctionPump", { state: w.output || w.external ? t("common.on") : t("common.off") })}
+            {(w.output || w.external) && !w.primed ? ` (${t("sim.priming")})` : ""} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
+          </div>
+          <div class="small muted" data-testid="sim-water-path">
+            {t("sim.chamber", { l: num(w.chamberL, 2) })} · {w.outletWet ? t("sim.outletWet") : t("sim.outletDry")} ·{" "}
+            {w.returnByPump ? t("sim.returnPump", { state: w.returnPump ? t("common.on") : t("common.off") }) : t("sim.returnGravity")}
+          </div>
+          <div class={`small ${w.released ? "muted" : "warn-text"}`} data-testid="sim-release">
+            {w.released
+              ? t("sim.releaseOn")
+              : t("sim.releaseOff", {
+                  why: [w.leak && t("sim.why.leak"), w.highLevel && t("sim.why.highLevel"), w.stopButton && t("sim.why.stopButton")].filter(Boolean).join(", "),
+                })}
           </div>
         </div>
       )}
@@ -113,11 +129,30 @@ export function SimPanel() {
           options={[
             ["none", t("sim.fault.none")],
             ["blocked", t("sim.fault.blocked")],
+            ["dry", t("sim.fault.dry")],
             ["sensor", t("sim.fault.sensor")],
           ]}
         />
         <label class="row small">
           <input type="checkbox" checked={!!w?.external} onChange={(e) => act("external", { on: (e.target as HTMLInputElement).checked })} /> {t("sim.external")}
+        </label>
+      </div>
+      <div class="stack-sm">
+        <div class="section-title">{t("sim.return")}</div>
+        <Seg
+          value={w?.returnFault || "none"}
+          onChange={(f) => act("returnFault", { fault: f === "none" ? "" : f })}
+          label={t("sim.returnFault")}
+          options={[
+            ["none", t("sim.fault.none")],
+            w?.returnByPump ? ["failed", t("sim.fault.returnFailed")] : ["blocked", t("sim.fault.returnBlocked")],
+          ]}
+        />
+        <label class="row small">
+          <input type="checkbox" checked={!!w?.leak} onChange={(e) => act("leak", { on: (e.target as HTMLInputElement).checked })} data-testid="sim-leak" /> {t("sim.leak")}
+        </label>
+        <label class="row small">
+          <input type="checkbox" checked={!!w?.stopButton} onChange={(e) => act("stopButton", { pressed: (e.target as HTMLInputElement).checked })} /> {t("sim.stopButton")}
         </label>
       </div>
       <div class="stack-sm">
@@ -162,12 +197,19 @@ export function SimPanel() {
                 <span class="grow">
                   {t("sim.channelLiquid", { n: p.channel, liquid: w.liquids[p.liquid] ?? p.liquid ?? "–" })} <span class="faint">{t("sim.trueFlow", { flow: num(p.trueFlow, 1) })}</span>
                   {p.cupMl > 0 && <span class="faint"> · {t("sim.cup", { ml: num(p.cupMl, 1) })}</span>}
+                  <span class="faint"> · {t("sim.drops", { n: p.drops })}</span>
                 </span>
-                <Button size="sm" onClick={() => act("channelFault", { channel: p.channel, blocked: !p.blocked, empty: p.empty })}>
+                <Button size="sm" onClick={() => act("channelFault", { ...faults(p), blocked: !p.blocked })}>
                   {p.blocked ? t("sim.unblock") : t("sim.block")}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => act("channelFault", { channel: p.channel, blocked: p.blocked, empty: !p.empty })}>
+                <Button size="sm" variant="ghost" onClick={() => act("channelFault", { ...faults(p), empty: !p.empty })}>
                   {p.empty ? t("sim.refill") : t("sim.empty")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => act("channelFault", { ...faults(p), outletBlocked: !p.outletBlocked })}>
+                  {p.outletBlocked ? t("sim.outletClear") : t("sim.outletBlock")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => act("channelFault", { ...faults(p), siphon: !p.siphon })}>
+                  {p.siphon ? t("sim.siphonOff") : t("sim.siphonOn")}
                 </Button>
               </div>
             ))}

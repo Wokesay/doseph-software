@@ -7,6 +7,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The simulator panel switches the water path's faults (#10, step 3.5):
+  a dry suction line, a blocked return or a failed return pump, a leak,
+  the stop button, and per channel a blocked outlet or a siphoning
+  canister. It shows whether the suction pump primes, the chamber's
+  water, the outlet, the return, the hardware release with its reason,
+  and each channel's drops.
 - Scenario tests of the new water path (#10, step 3.4): the core against
   the twin through the API, for priming, no flow, doses and their drops,
   a blocked outlet, high level and the return pump
