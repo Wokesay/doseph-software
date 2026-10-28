@@ -29,6 +29,7 @@
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
 #include "folder_lock.hpp"
+#include "mqtt_link.hpp"
 #include "push.hpp"
 #include "simulation.hpp"
 #ifndef DP_EMBEDDED_WEB
@@ -314,6 +315,9 @@ int main(int argc, char** argv) {
   // Pushes go out through the system's curl, on a thread of their own (SD-124); DP_CURL names another program
   const char* curlEnv = std::getenv("DP_CURL");
   sim::PushSender pushes(curlEnv ? curlEnv : "");
+
+  // MQTT to a broker in the home network, without TLS, on a thread of its own (SD-130)
+  sim::MqttLink mqtt(simulation);
 
   // The tick: every 100 ms of real time, simulated time × time-lapse
   std::thread loop([&] {

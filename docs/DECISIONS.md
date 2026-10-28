@@ -823,6 +823,15 @@ without TLS, and commands only over TLS with a user.
   Each known command is logged with its result. While commands are off,
   their entities are removed from Home Assistant.
 - **Transport.** The core builds the topics, the payloads and the packets
-  of MQTT 3.1.1, at QoS 0. The platform holds the connection (R8): on
-  the device, the firmware's MQTT client with TLS. The simulator's
-  connection follows in a pull request of its own.
+  of MQTT 3.1.1, at QoS 0. The platform holds the connection (R8).
+  - On the device, the firmware's MQTT client carries them, with TLS.
+  - The simulator connects on a thread of its own, over plain TCP
+    without TLS. It sends its values and takes no commands. With TLS on,
+    it says that it has none.
+  - The connection says it is online, with "offline" as its last will.
+    It sends the state every 2 s when it changed and at least once a
+    minute, and the discovery again when the configuration changed.
+  - It pings when nothing went out for 30 s, and it counts a broker
+    silent for 90 s as gone.
+  - A lost connection is tried again after 10 s. The settings show
+    whether it is connected, or why not.
