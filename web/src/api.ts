@@ -82,6 +82,7 @@ export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawP
 export type RobotState = {
   now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
   feedPump: boolean | null; flowOk: boolean;
+  pump: { amps: number | null; normalA: number | null };
   // The hardware release and the water path as the device reports them (SD-109, SD-110)
   hardware: { release: { on: boolean; leak: boolean; highLevel: boolean; stopButton: boolean; noFlow: boolean }; outletWet: boolean | null; returnPump: boolean | null };
   readings: Record<Signal, Reading>;

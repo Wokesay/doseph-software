@@ -615,7 +615,7 @@ the control details in this session.
   pump off until it is switched off again. The check stops and says "No
   flow: the hardware switched the feed pump off". It counts this as a try,
   and switching the pump off re-arms the hardware.
-- **Dry run from the current** (decided, built next).
+- **Dry run from the current** (RAT-049).
   - While flow is proven, the device learns the pump's normal current at its
     speed.
   - Below 60 % of it for 2 s, the pump goes off at once. That counts as a try

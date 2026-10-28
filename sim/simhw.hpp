@@ -51,6 +51,7 @@ class SimHardware : public doseph::IHardware {
   void stopAllPumps() override { w_.stopAllPumps(); }
   bool setFeedPump(bool on, std::string& err) override;
   std::optional<bool> feedPump() const override { return w_.output; }
+  std::optional<double> feedPumpA() const override { return w_.pumpA(); }
   void allowReturnPump(bool allowed) override { w_.returnLocked = !allowed; }
   // A head fitted, removed or changed: the device reports it, the twin pumps with it (SD-108)
   void setHead(int channel, const std::string& head) {

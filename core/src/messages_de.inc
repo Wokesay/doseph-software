@@ -197,6 +197,7 @@ static const struct {
     {"cycle.wait.channel_locked", "Wartet: Kanal {channel} von {name} ist gesperrt – gib ihn unter Status frei, sobald die Ursache behoben ist"},
     {"cycle.wait.daily", "Wartet: {name} würde seine Tagesmenge überschreiten – {reason}"},
     {"cycle.wait.dry", "Wartet: Die Förderpumpe ist nach Versuchen ohne Durchfluss gesperrt – gib die Sperre unter Status frei, sobald behoben"},
+    {"cycle.wait.dry_run", "Trockenlauf: Die Förderpumpe nahm {amps:2} A statt etwa {normal:2} A auf und ist aus – prüf, ob sie im Wasser liegt, und ihren Einlass"},
     {"cycle.wait.ec", "Wartet: EC – {reason}"},
     {"cycle.wait.ec_plan", "Wartet: {reason}"},
     {"cycle.wait.hold.high_level", "Wartet: hoher Pegel in der Messkammer (Rücklauf verstopft oder Rücklaufpumpe defekt) – beheb es, dann gib die Sperre frei"},

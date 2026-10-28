@@ -90,6 +90,9 @@ class World {
   // flow its sensor sees is switched off with every dosing pump, and held off
   // until the robot switches its output off
   bool noFlowCut = false;
+  // The feed pump's current, A (assumptions): 0.80 moving water, 0.32 running
+  // dry or against a blocked inlet, 0.86 with the hose off; 0 when it stands
+  double pumpA() const;
 
   // The measuring chamber holds water up to its weir, which keeps the probes
   // wet; above it the water returns to the tank, by gravity or by a return

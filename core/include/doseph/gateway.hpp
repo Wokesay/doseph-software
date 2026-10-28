@@ -36,6 +36,7 @@ struct Ctx {
   bool flowOk = false;  // flow through the device proven now: no dose without it (SD-105)
   bool pumpInTank = true;  // the feed pump lies in the tank: no priming, a short window (SD-127)
   bool pumpCut = false;    // the hardware switched the feed pump off for no flow (PD-477, SD-127)
+  std::optional<double> pumpA{};  // the feed pump's current, where measured (SD-127)
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile

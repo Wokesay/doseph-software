@@ -439,6 +439,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
   j["flowAt"] = s.flowAt;
+  j["pumpNormalA"] = numOrNull(s.pumpNormalA);
+  j["pumpLearnedS"] = s.pumpLearnedS;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
 }
@@ -512,6 +514,10 @@ RuntimeState runtimeFromJson(const json& j) {
   const double flow = jnum(j, "flowLpm");
   if (isNum(flow) && flow > 0) s.flowLpm = flow;
   s.flowAt = j.contains("flowAt") && j["flowAt"].is_number_integer() ? j["flowAt"].get<Epoch>() : 0;
+  const double amps = jnum(j, "pumpNormalA");
+  if (isNum(amps) && amps > 0) s.pumpNormalA = amps;
+  const double learned = jnum(j, "pumpLearnedS");
+  if (isNum(learned) && learned > 0 && isNum(s.pumpNormalA)) s.pumpLearnedS = learned;
   if (j.contains("clock")) s.clock = stampFromJson(j["clock"]);
   if (j.contains("bootCount") && j["bootCount"].is_number_unsigned()) s.bootCount = j["bootCount"].get<std::uint32_t>();
   return s;

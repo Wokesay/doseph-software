@@ -37,6 +37,11 @@ constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by the window and th
 constexpr Ms kRetryMs = 5 * kMinute;          // a wait tries again after this
 constexpr int kDryTries = 3;                   // pump in the device: tries without flow in a row, then a lock (SD-109)
 constexpr int kDryTriesTank = 2;               // pump in the tank: each try may spill water (SD-127)
+// A dry run from the feed pump's current (SD-127, RAT-049): once it has moved water in a run, less
+// than this share of its learned current for this long; learned over this much flow first
+constexpr double kDryShare = 0.6;
+constexpr Ms kDryShareMs = 2 * kSecond;
+constexpr double kPumpLearnS = 60;
 constexpr Epoch kEcRestS = 240;               // pH waits this long after an EC dose (RAT-046)
 constexpr double kTestRiseEc = 0.1;           // a test dose's aim (SD-105)
 constexpr double kTestDropPh = 0.1;
@@ -151,6 +156,8 @@ class MixCycle {
   // Flow
   Ms flowSince_ = 0;     // flow proven since (0: none)
   Ms flowSeen_ = 0;      // flow was last seen then, or the feed pump started
+  bool flowedThisRun_ = false;  // the feed pump has moved water since it started
+  Ms lowAmpsSince_ = 0;  // its current below the dry share since (0: not)
   Ms flushedMs_ = 0;
   double flowSum_ = 0;
   int flowN_ = 0;
