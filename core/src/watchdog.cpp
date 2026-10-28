@@ -76,6 +76,7 @@ WatchResult evaluate(const WatchInput& in) {
     add("latch." + id, say("watch.latch"), "problem", say("latch." + (l.is_object() ? jstr(l, "key", id) : id), l.is_object() ? l : json::object()));
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));
+  if (in.rt.topUp) add("water", say("watch.water"), "problem", say("watch.top_up"));  // SD-115
 
   // The recipe in force, the volume and the channels it needs (RAT-015)
   if (!recipe) add("recipe", say("watch.recipe"), "neutral", say("watch.no_recipe"));

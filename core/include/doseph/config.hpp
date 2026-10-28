@@ -183,6 +183,10 @@ struct RuntimeState {
   // Channel → its runs into the tank of the last 24 h, [epoch, ms], for the daily cap (SD-113)
   std::map<int, std::vector<std::pair<Epoch, Ms>>> dayRuns;
   Ms dayRunMs(int channel, Epoch since) const;
+  // Water missing (SD-115): {recipe, target} of the last check that found EC within its band, while
+  // no dose went in since; null otherwise. `topUp`: "top up water" is raised.
+  json ecInBand = nullptr;
+  bool topUp = false;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

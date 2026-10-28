@@ -72,7 +72,7 @@ export type RobotState = {
   watchdog: Watchdog;
   latches: Record<string, Record<string, unknown>>;
   jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
-  newTank: boolean;
+  newTank: boolean; topUp: boolean;
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   // `head`: the pump head fitted, null without one (SD-108)

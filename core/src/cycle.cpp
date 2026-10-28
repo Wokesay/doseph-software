@@ -197,6 +197,8 @@ void MixCycle::doseFinished(Ctx& c, const DoseProgress& p) {
   if (kind_ == Kind::None) return;  // a round ended meanwhile: its journal makes the next cycle mix first
   mlRound_ += p.mlDone;
   if (kind_ == Kind::Ec && p.msDone > 0) lastEcDoseAt_ = c.epoch;
+  // Nutrients went in, or pH−, which adds a little EC too (RAT-053): a rise is theirs (SD-115)
+  if (p.msDone > 0) c.rt.ecInBand = nullptr;
   if (p.state != DoseProgress::State::Done) {
     clean_ = false;  // a cut dose says nothing about the effect (RAT-057)
     doseFailed_ = true;
@@ -269,6 +271,26 @@ bool MixCycle::measuring(Ctx& c, Actuators& act) {
   return true;
 }
 
+// EC that rose above its band with no dose in since a check found it within means water went missing
+// (SD-115): "top up water" is raised once, and goes when EC is back within the band. pH− counts as a
+// dose too: it adds a little EC (RAT-053).
+void MixCycle::watchWater(Ctx& c, const RecipeCfg& r, double ec, const CycleSettings& s) {
+  if (ec >= s.ecTarget - s.ecTol && ec <= s.ecTarget + s.ecTol) {
+    c.rt.ecInBand = {{"recipe", r.id}, {"target", s.ecTarget}};
+    if (c.rt.topUp) {
+      c.rt.topUp = false;
+      c.log.add(c.epoch, "control", "info", say("ev.water.ok"), say("ev.water.ok.text", {{"ec", ec}}));
+    }
+    return;
+  }
+  const json& b = c.rt.ecInBand;
+  const bool held = b.is_object() && jstr(b, "recipe") == r.id && jnum(b, "target") == s.ecTarget;
+  if (ec > s.ecTarget + s.ecTol && held && !c.rt.topUp) {
+    c.rt.topUp = true;
+    c.log.add(c.epoch, "control", "warn", say("ev.water.top_up"), say("ev.water.top_up.text", {{"ec", ec}, {"target", s.ecTarget}}));
+  }
+}
+
 void MixCycle::evaluate(Ctx& c, Actuators& act) {
   const CycleSettings s = cycleSettings(c);
   if (!s.recipe) return;
@@ -280,6 +302,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
     return;
   }
   const double ec = measured_.ec, ph = measured_.ph;
+  if (isNum(s.ecTarget) && isNum(ec)) watchWater(c, r, ec, s);
   const CanisterCfg* down = c.cfg.phDown();
   const bool phLatched = c.rt.latches.count("ph.no_effect") > 0;
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
@@ -305,6 +328,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   } else if (ec > s.ecTarget + s.ecTol) {
     // The robot cannot dilute: fresh water lowers EC (RAT-012)
     notes_.push_back(say("cycle.note.ec_above", {{"ec", ec}, {"target", s.ecTarget}}));
+    if (c.rt.topUp) notes_.push_back(say("cycle.note.top_up"));
   }
 
   // pH: lowering only, never a counter-correction (RAT-041); only above the EC floor (RAT-046)

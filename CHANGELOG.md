@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- "Top up water" (SD-115): when EC is above its band at a check and
+  nothing was dosed since a check found it within, water is missing. The
+  robot raises "top up water" once, as an event, a watchdog item and a
+  note of the check; nutrients wait anyway (RAT-012), pH is still
+  corrected. It goes when EC is back within the band. pH− counts as a
+  dose here, since it adds a little EC; a new tank or another recipe or
+  target starts afresh. A refill valve comes back only with a float
+  switch.
 - A daily amount per channel that cannot be switched off (SD-113): a
   channel's run time into the tank, doses and line fills, per rolling
   24 hours stays within its head's value from the device's profile and

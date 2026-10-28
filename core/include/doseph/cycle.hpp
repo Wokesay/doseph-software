@@ -112,6 +112,7 @@ class MixCycle {
   void suctionPump(Ctx& c, Actuators& act, bool on);
   bool measuring(Ctx& c, Actuators& act);  // true once the window is stable; fills `measured_`
   void evaluate(Ctx& c, Actuators& act);
+  void watchWater(Ctx& c, const RecipeCfg& r, double ec, const CycleSettings& s);
   void startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim);
   void startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph);
   void learn(Ctx& c, Actuators& act);
