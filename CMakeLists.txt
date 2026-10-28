@@ -68,6 +68,7 @@ add_library(doseph_core
   core/src/cycle.cpp
   core/src/watchdog.cpp
   core/src/alarms.cpp
+  core/src/push.cpp
   core/src/robot.cpp
   core/src/api.cpp
   core/src/messages.cpp
@@ -83,9 +84,9 @@ endif()
 
 if(DP_BUILD_SIM)
   find_package(Threads REQUIRED)
-  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp)
+  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp sim/push.cpp)
   target_include_directories(doseph_sim PUBLIC sim)
-  target_link_libraries(doseph_sim PUBLIC doseph_core)
+  target_link_libraries(doseph_sim PUBLIC doseph_core Threads::Threads)
   target_compile_options(doseph_sim PRIVATE ${DP_WARN})
 
   add_executable(doseph_sim_server sim/main.cpp)
@@ -117,6 +118,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_journal.cpp
     tests/core/test_watchdog.cpp
     tests/core/test_alarms.cpp
+    tests/core/test_push.cpp
     tests/core/test_cycle.cpp
     tests/core/test_api.cpp
     tests/core/test_sim.cpp

@@ -333,3 +333,24 @@ test("quiet hours are set in the settings; what the robot notified is listed the
   await page.locator("input[name=quietTo]").fill("07:00");
   await page.getByTestId("save-quiet").click();
 });
+
+test("push channels: a token is never shown again; a test message to a server that does not answer says why (SD-124)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const ntfy = page.getByTestId("push-ntfy");
+  await ntfy.locator("input[name=ntfy-server]").fill("http://127.0.0.1:9");
+  await ntfy.locator("input[name=ntfy-topic]").fill("doseph-e2e");
+  await ntfy.locator("input[name=ntfy-token]").fill("tk_e2e_secret");
+  await ntfy.locator("label.toggle").click();
+  await page.getByTestId("save-push").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.reload();
+  await expect(page.locator("input[name=ntfy-topic]")).toHaveValue("doseph-e2e");
+  await expect(page.locator("input[name=ntfy-token]")).toHaveValue("");
+  await expect(page.getByTestId("push-ntfy")).toContainText("Set. Leave empty to keep it.");
+  await page.getByTestId("test-push").click();
+  await expect(page.getByTestId("push-status-ntfy")).toContainText("not delivered", { timeout: 30_000 });
+  await page.getByTestId("push-ntfy").locator("label.toggle").click();
+  await page.getByTestId("save-push").click();
+  await expect(page.getByTestId("test-push")).toBeDisabled();
+});

@@ -54,3 +54,14 @@ TEST_CASE("Messages: an unknown key shows the key, never an empty text") {
   CHECK_FALSE(knownMessage("no.such.key"));
   CHECK(say("no.such.key").text == "no.such.key");
 }
+
+TEST_CASE("Messages in German: the web app's templates, a decimal comma, nested messages in German too; English and unknown keys keep their text (#10, step 5)") {
+  const Msg flow = say("watch.flow_ok", {{"flow", 12.5}});
+  CHECK(textIn(flow, "de") == "12,5 L/min");
+  CHECK(textIn(flow, "en") == "12.5 L/min");
+  const Msg still = say("notify.still", {{"label", say("watch.latch")}});
+  CHECK(textIn(still, "de") == "Weiterhin offen: Sperre");
+  CHECK(textIn(still, "en") == "Still open: Lock");
+  CHECK(textIn(say("no.such.key"), "de") == "no.such.key");
+  CHECK(textIn(say("watch.flow_ok", {{"flow", nullptr}}), "de") == "– L/min");
+}

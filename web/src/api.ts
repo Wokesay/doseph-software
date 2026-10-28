@@ -52,6 +52,14 @@ export type Alarm = { id: string; level: "critical" | "warning" | "info"; since:
 /** What the robot pushes, or would push without a channel: an alarm, a reminder, the morning report (SD-123). */
 export type Notice = { id: number; at: number; kind: "alarm" | "repeat" | "report"; level: "critical" | "warning" | "info"; title: Msg; lines: Msg[]; items: string[] };
 
+/** The push channels without their secrets (SD-124): of a token or password only whether it is set; how each fared last. */
+export type PushSettings = {
+  ntfy: { enabled: boolean; server: string; topic: string; tokenSet: boolean };
+  telegram: { enabled: boolean; chatId: string; tokenSet: boolean };
+  email: { enabled: boolean; server: string; from: string; to: string; user: string; passwordSet: boolean };
+  status: Record<string, { at: number; ok: boolean; error: string }>;
+};
+
 export type Assessment = { id: string; label: Msg; status: "ok" | "problem" | "neutral"; text: Msg };
 export type Watchdog = {
   evaluatedAt: number; overall: "ok" | "problem" | "neutral"; ok: number; problems: number; neutral: number;

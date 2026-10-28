@@ -29,6 +29,7 @@
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
 #include "folder_lock.hpp"
+#include "push.hpp"
 #include "simulation.hpp"
 #ifndef DP_EMBEDDED_WEB
 #define DP_EMBEDDED_WEB 0
@@ -303,12 +304,18 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, onSignal);
   std::signal(SIGTERM, onSignal);
 
+  // Pushes go out through the system's curl, on a thread of their own (SD-124); DP_CURL names another program
+  const char* curlEnv = std::getenv("DP_CURL");
+  sim::PushSender pushes(curlEnv ? curlEnv : "");
+
   // The tick: every 100 ms of real time, simulated time × time-lapse
   std::thread loop([&] {
     while (g_running) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       std::lock_guard<std::recursive_mutex> l(simulation.mutex());
       simulation.step(static_cast<doseph::Ms>(100 * simulation.speed));
+      for (auto& d : simulation.robot().takeDeliveries()) pushes.send(std::move(d));
+      for (const auto& r : pushes.poll()) simulation.robot().deliveryResult(r.channel, r.ok, r.error);
     }
     svr.stop();
   });

@@ -4,6 +4,7 @@
 // compares keys and placeholders with the German one in web/src/lang/msg.ts.
 #include "doseph/messages.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <unordered_map>
@@ -237,6 +238,19 @@ constexpr Entry kMessages[] = {
     {"ev.config.imported", "Settings restored from a backup"},
     {"cfg.what.system", "device"},
     {"cfg.what.notify", "quiet hours"},
+    {"cfg.what.push", "push channels"},
+    {"cfg.push.text", "{field}: no line breaks or control characters, at most 256 characters"},
+    {"cfg.push.ntfy_server", "The ntfy server is an address that starts with https:// or http://"},
+    {"cfg.push.ntfy_topic", "The ntfy topic has 1 to 64 letters, digits, _ or -"},
+    {"cfg.push.token", "That token does not have the form of one"},
+    {"cfg.push.chat_id", "The Telegram chat ID is a number, or @ and the channel's name"},
+    {"cfg.push.email_server", "The mail server is an address that starts with smtps:// or smtp://"},
+    {"cfg.push.email_address", "{field}: that is not an e-mail address"},
+    {"push.none", "No push channel is set up"},
+    {"notify.test", "Test message"},
+    {"notify.test.text", "Messages from Doseph reach you this way."},
+    {"ev.push.failed", "Push via {channel} did not get through"},
+    {"ev.push.failed.text", "{error}"},
     {"alarm.none", "No such alarm is raised"},
     {"notify.still", "Still open: {label}"},
     {"notify.report", "Morning report: {n} open"},
@@ -456,6 +470,8 @@ constexpr Entry kMessages[] = {
 };
 // clang-format on
 
+#include "messages_de.inc"
+
 const std::unordered_map<std::string_view, std::string_view>& table() {
   static const std::unordered_map<std::string_view, std::string_view> t = [] {
     std::unordered_map<std::string_view, std::string_view> m;
@@ -464,6 +480,18 @@ const std::unordered_map<std::string_view, std::string_view>& table() {
   }();
   return t;
 }
+
+// The German templates, the web app's own (tools/gen_msg_de.mjs)
+const std::unordered_map<std::string_view, std::string_view>& tableDe() {
+  static const std::unordered_map<std::string_view, std::string_view> t = [] {
+    std::unordered_map<std::string_view, std::string_view> m;
+    for (const auto& e : kMessagesDe) m.emplace(e.key, e.text);
+    return m;
+  }();
+  return t;
+}
+
+std::string renderIn(std::string_view tmpl, const json& args, bool de, int depth);
 
 // Rounds the exact value half away from zero, like toFixed in the web app,
 // so both languages show the same digits (20.25 → 20.3, 20.65 → 20.6).
@@ -493,21 +521,34 @@ std::string number(double v, int decimals) {
   return s == "-0" ? "0" : s;
 }
 
-std::string value(const json& args, const std::string& name, int decimals) {
+// A nested message in the language: its German template filled, else its own text
+std::string nestedText(const json& m, bool de, int depth) {
+  if (de && depth < 4) {
+    auto it = tableDe().find(jstr(m, "key"));
+    if (it != tableDe().end()) return renderIn(it->second, m.contains("args") ? m["args"] : json::object(), true, depth + 1);
+  }
+  return jstr(m, "text");
+}
+
+std::string value(const json& args, const std::string& name, int decimals, bool de, int depth) {
   if (!args.is_object()) return "–";
   auto it = args.find(name);
   if (it == args.end() || it->is_null()) return "–";
-  if (it->is_number()) return number(it->get<double>(), decimals);
+  if (it->is_number()) {
+    std::string s = number(it->get<double>(), decimals);
+    if (de) std::replace(s.begin(), s.end(), '.', ',');  // German writes a decimal comma, as the web app
+    return s;
+  }
   if (it->is_string()) return it->get<std::string>();
   if (it->is_object()) {  // a nested message; an empty one is missing, as in the web app
-    const std::string text = jstr(*it, "text");
+    const std::string text = nestedText(*it, de, depth);
     return text.empty() ? "–" : text;
   }
   if (it->is_array()) {  // a list, e.g. amounts: "Part A 12.0 ml, Part B 8.0 ml"
     std::string out;
     for (size_t i = 0; i < it->size(); ++i) {
       if (i) out += ", ";
-      out += value(json{{"v", (*it)[i]}}, "v", decimals);
+      out += value(json{{"v", (*it)[i]}}, "v", decimals, de, depth);
     }
     return out.empty() ? "–" : out;
   }
@@ -516,9 +557,7 @@ std::string value(const json& args, const std::string& name, int decimals) {
 
 bool nameChar(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'; }
 
-}  // namespace
-
-std::string render(std::string_view tmpl, const json& args) {
+std::string renderIn(std::string_view tmpl, const json& args, bool de, int depth) {
   std::string out;
   size_t i = 0;
   while (i < tmpl.size()) {
@@ -532,7 +571,7 @@ std::string render(std::string_view tmpl, const json& args) {
         end += 2;
       }
       if (j > i + 1 && end < tmpl.size() && tmpl[end] == '}') {
-        out += value(args, std::string(tmpl.substr(i + 1, j - i - 1)), decimals);
+        out += value(args, std::string(tmpl.substr(i + 1, j - i - 1)), decimals, de, depth);
         i = end + 1;
         continue;
       }
@@ -540,6 +579,18 @@ std::string render(std::string_view tmpl, const json& args) {
     out += tmpl[i++];
   }
   return out;
+}
+
+}  // namespace
+
+std::string render(std::string_view tmpl, const json& args) { return renderIn(tmpl, args, false, 0); }
+
+std::string textIn(const Msg& m, std::string_view lang) {
+  if (lang == "de") {
+    auto it = tableDe().find(m.key);
+    if (it != tableDe().end()) return renderIn(it->second, m.args, true, 0);
+  }
+  return m.text;
 }
 
 bool knownMessage(std::string_view key) { return table().count(key) > 0; }
