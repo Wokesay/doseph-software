@@ -5,6 +5,21 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The device's pump lies in the tank (SD-127, from PD-476 and PD-477). It
+  is now called the feed pump, and the device profile says where it sits.
+  - In the tank it has no priming.
+  - No flow for 6 s, at its start or later, switches it off before the
+    hardware's own cut.
+  - The second try in a row without flow locks it, since each try can
+    spill water.
+  - When the hardware cuts it for no flow, the check says so and counts a
+    try.
+  - Maintenance cleans the pump and its inlet screen instead of a suction
+    filter.
+  - The simulator's flow faults add "hose off".
+
 ### Added
 
 - The history keeps five years at one hour (SD-126, #10 step 5): a
@@ -17,7 +32,7 @@ All notable changes to this software. The format follows
   device has, with an interval that can be set from 7 to 730 days:
   - calibrate the pH probe (30 days) and the EC probe (90);
   - calibrate each channel (90);
-  - clean the measuring chamber and suction filter (30);
+  - clean the measuring chamber, the feed pump and its inlet screen (30);
   - check the pump heads (180);
   - replace the pH probe (365).
 

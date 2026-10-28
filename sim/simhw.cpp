@@ -7,20 +7,24 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
   doseph::Profile p;
   p.example = true;
   if (name == "home") {
-    // Small tanks: four channels, flow estimated from the outlet level, return by gravity (assumptions)
+    // Small tanks: four channels, the feed pump in the tank, flow estimated from the outlet level,
+    // return by gravity (assumptions)
     p.line = "home";
     p.variant = "Home (example)";
     p.channels.assign(4, {"brushed", "S", true, true, 40});
     p.flow = "outlet_level";
+    p.pumpIn = "tank";
     p.returnBy = "gravity";
     p.network = {"wifi"};
-    p.suctionLpmLow = 10.0;
+    p.pumpLpmLow = 10.0;
   } else if (name == "pro") {
-    // Larger tanks: six channels, a flow meter, a return pump, LAN as well (assumptions)
+    // Larger tanks: six channels, the feed pump in the tank, a flow meter, a return pump, LAN as
+    // well (assumptions)
     p.line = "pro";
     p.variant = "Pro (example)";
     p.channels.assign(6, {"brushless", "M", true, false, 20});
     p.flow = "turbine";
+    p.pumpIn = "tank";
     p.returnBy = "pump";
     p.network = {"wifi", "lan"};
   } else {
@@ -38,9 +42,9 @@ std::optional<doseph::Sample> SimHardware::sample(doseph::Signal c) const {
     case doseph::Signal::Temp: return doseph::Sample(w_.rawTemp(), ts);
     case doseph::Signal::Flow:
       // Without a flow meter the device estimates the flow from the low end of the
-      // suction pump's delivery while the outlet reports water (SD-109)
+      // feed pump's delivery while the outlet reports water (SD-109)
       if (profile_.flow == "outlet_level")
-        return doseph::isNum(profile_.suctionLpmLow) ? std::optional<doseph::Sample>(doseph::Sample(w_.outletWet() ? profile_.suctionLpmLow : 0.0, ts))
+        return doseph::isNum(profile_.pumpLpmLow) ? std::optional<doseph::Sample>(doseph::Sample(w_.outletWet() ? profile_.pumpLpmLow : 0.0, ts))
                                                      : std::nullopt;
       return doseph::Sample(w_.rawFlow(), ts);
   }
@@ -60,11 +64,16 @@ doseph::WaterPath SimHardware::waterPath() const {
   return p;
 }
 
-bool SimHardware::setSuctionPump(bool on, std::string& err) {
+bool SimHardware::setFeedPump(bool on, std::string& err) {
   if (on && !w_.released()) {
     err = "hardware release off";
     return false;
   }
+  if (on && w_.noFlowCut) {
+    err = "switched off for no flow";
+    return false;
+  }
+  if (!on) w_.noFlowCut = false;  // switching it off re-arms the hardware (PD-477)
   w_.output = on;
   return true;
 }

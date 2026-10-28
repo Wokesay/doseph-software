@@ -10,7 +10,7 @@ The domain core is platform-neutral C++17 (`core/`). The same code runs in
 the simulator (`sim/`), against a digital twin of tank, measuring chamber,
 flow, pumps and probes, and later on the device, where only the platform
 interfaces are replaced: `IHardware` (the device's profile, the dosing
-channels, the suction pump, the hardware release and the water path's
+channels, the feed pump, the hardware release and the water path's
 sensors, raw readings), `IStorage` (files), `IClock` (time) and
 the HTTP binding. The profile says what the device has (SD-108); logic
 reads its capabilities, never a line name.

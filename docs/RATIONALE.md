@@ -54,7 +54,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Nutrients shift pH, and the base pair adds most of the EC and pulls pH down by itself, so a pH step taken before it aims at a solution that does not exist yet. The tank then reaches irrigation at an unknown, usually too low pH, and without a pH-up channel nothing can bring it back.
 - **Evidence:** Observed on the reference installation (2026): with acid added before the base pair and no measurement afterwards, the final pH was unknown. With acid last, it adds only a few hundredths of a mS/cm (about 20 ml per 100 L), less than the 0.05 EC tolerance. Precipitation, the usual argument against a late pH step, did not apply: the water was reverse-osmosis water with almost no carbonate hardness, and a buffer went in before any nutrient.
 - **Implemented in:** `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/cycle.cpp`
-- **Tests:** `tests/core/test_config.cpp` "Configuration: pH correction is never part of a recipe (RAT-004)"; `tests/core/test_cycle.cpp` "Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
+- **Tests:** `tests/core/test_config.cpp` "Configuration: pH correction is never part of a recipe (RAT-004)"; `tests/core/test_cycle.cpp` "Cycle: feed pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
 ### RAT-005 – The start-up grace period applies to the watchdog only
 
@@ -74,7 +74,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-007 – After a restart everything is off; timed actuators have an independent cut-off
 
-- **Rule:** After a crash or restart every dosing channel is off and the suction pump is off; nothing resumes on its own (R6). A dosing run is limited to 60 s and the device driver cuts a pump off on its own after 90 s.
+- **Rule:** After a crash or restart every dosing channel is off and the feed pump is off; nothing resumes on its own (R6). A dosing run is limited to 60 s and the device driver cuts a pump off on its own after 90 s.
 - **Why:** Timers held in volatile memory are lost on a restart or update, and the "off" they were waiting for never comes. Each timed actuator therefore also has a cut-off that works on its own, set above its longest valid run so it never ends a valid one.
 - **Evidence:** Observed on the reference installation (2026): many timed sequences kept their off command only in volatile memory, so a restart could leave a pump, valve, heater or dimmer in its last state. Independent cut-offs, such as 90 s for dosing pumps, closed that gap.
 - **Implemented in:** `core/include/doseph/journal.hpp`, `core/src/robot.cpp`, `sim/world.cpp`
@@ -307,7 +307,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-036 – Stop is an active, idempotent shutdown
 
-- **Rule:** Stop is active and idempotent: it switches every dosing channel and the suction pump off, books what ran and holds until Resume. While stopped nothing runs, not even a calibration into a cup.
+- **Rule:** Stop is active and idempotent: it switches every dosing channel and the feed pump off, books what ran and holds until Resume. While stopped nothing runs, not even a calibration into a cup.
 - **Why:** If control loops merely stop issuing new commands, a stop freezes the last state and devices keep running unnoticed.
 - **Evidence:** Observed on the reference installation (2026): a stop that only halted new commands left light, fans and the circulation pump running for hours.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/include/doseph/gateway.hpp`, `core/src/robot.cpp`
@@ -360,7 +360,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** The jump lock exists to catch a misbehaving sensor. A step that follows a known action is not a fault; treating it as one blocks dosing and trains users to ignore alarms.
 - **Evidence:** Observed on the reference installation (2026): taking the probes out for a buffer test made EC fall from 1.19 to 0.0 mS/cm and come back at 1.21 about 2.5 min later. The jump lock did what it should, but its alarm only reported a planned intervention.
 - **Implemented in:** `core/include/doseph/robot.hpp`, `core/include/doseph/truth.hpp`, `core/src/cycle.cpp`, `core/src/robot.cpp`, `core/src/truth.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"; `tests/core/test_cycle.cpp` "Maintenance: the cycle holds and the suction pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)"; `web/e2e/robot.spec.ts` "maintenance holds the robot until it is ended (RAT-042)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"; `tests/core/test_cycle.cpp` "Maintenance: the cycle holds and the feed pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)"; `web/e2e/robot.spec.ts` "maintenance holds the robot until it is ended (RAT-042)"
 
 ### RAT-043 – No pH correction on an old reading
 
@@ -401,7 +401,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** The circulation pump's dry-run protection acts whoever switched the pump on, and it only ever switches the pump off. It cuts the pump below the tank's minimum level and allows it again only 0.5 L above, the same levels the pump's own control uses; it latches only when the pump was actually running (RAT-062). Dosing runs only while the circulation pump runs.
 - **Why:** What the level probe can measure and when the pump may run are two separate properties; deriving one from the other either stops a pump that still draws water or claims a blind zone that measurement has ruled out. With the same off and release levels as the pump's control, protection and control never work against each other. A dose can only be judged in a mixed tank, so dosing needs circulation.
 - **Evidence:** Measured on the reference installation (2026): the probe read correctly below 4 L, and the pump primed without trouble at 3 L. Raising the shared blind-zone setting to suit the pump would have slowed other checks: a failed inlet valve, for one, would have been noticed about 2.6 min later.
-- **Later:** step 4 (the suction pump's dry-run latch, `docs/LATER.md`). SD-109 puts the flow proof in place of the level: three failed tries in a row latch "no flow". Off and release levels come back only with a level sensor (step 9).
+- **Later:** step 4 (the feed pump's dry-run latch, `docs/LATER.md`). SD-109 puts the flow proof in place of the level: three failed tries in a row latch "no flow", two with the feed pump in the tank (SD-127). Off and release levels come back only with a level sensor (step 9).
 
 ### RAT-048 – Water temperature is "not applicable" in an empty tank
 
@@ -417,7 +417,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** A circulation pump that runs without pumping is detected from its power draw: pump on, start-up grace over, below 2.5 W for more than 20 s. It needs power measurement on the pump's output. Such a dry run switches the pump off in the gateway and latches until a person releases it; the watchdog only reports.
 - **Why:** A level says whether there is water in the tank, not whether the pump moves it. Air in the pump head, a blocked intake or a valve in the wrong position leave the level unchanged.
 - **Evidence:** Measured on the reference installation (2026; a pump of about 3.4 W, three weeks of power readings): about 3.3–3.4 W pumping water and about 1.7 W running dry. 2.5 W told the two apart without false trips, also over past data, where it found a dry run nobody had noticed. Clearing air from the pump head took up to about 2 min, so the start-up grace has to be generous. Thresholds for other pumps are open.
-- **Later:** step 4 (the suction pump's dry-run latch), as a second sign beside the flow proof (SD-109) if the pump's power can be measured – a hardware question for the product session.
+- **Later:** step 4 (the feed pump's dry-run latch), as a second sign beside the flow proof (SD-109) if the pump's power can be measured – a hardware question for the product session.
 
 ### RAT-050 – Effect-based cap and minimum run time for pH-lowering doses
 
@@ -433,7 +433,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** A dry-run latch is enforced in one place, the gateway: a pump found running while its latch stands – whoever switched it on, by hand at the device included – is switched off again. Every other function reads the same lock and does not ask for the pump. Dosing runs only with the pump running, and a running dose stops when the pump is cut.
 - **Why:** If only the protection knows the lock, every other path keeps starting the pump and the protection keeps cutting it, an endless on and off. Dosing without mixing doses against a reading that cannot see the dose.
 - **Evidence:** Observed on the reference installation (2026): when the dry-run protection first went live, the circulation control and a routine running every minute kept restarting the pump, and the protection cut it within 10 s each time, because the lock was invisible to them. A lock caused only by a low level released itself there once the tank was refilled (`docs/LATER.md`).
-- **Later:** step 4 (the suction pump's dry-run latch, SD-109).
+- **Later:** step 4 (the feed pump's dry-run latch, SD-109).
 
 ### RAT-052 – Mixing and settling: pH needs much longer than EC
 
@@ -442,7 +442,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Evidence:** Measured on the reference installation (2026; 20.4 L, circulation running): after nutrient doses EC reached tolerance after a median of 32 s (t63 median 26 s). After a pH-lowering dose the reading stayed flat for 99 s, about 80 s of that after the circulation pump had restarted, then fell steeply and reached tolerance after 194 s. Cutting the pH wait to about 45 s, in line with a faster sensor filter, would have let four doses in before the first one showed.
 - **Changed:** The grow controller's fixed waits became the user's waits with a suggestion from volume and flow (SD-105); then one turnover as the robot's own wait, which the user may only lengthen, and pH waiting like EC (SD-112).
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/src/cycle.cpp`, `sim/world.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: feed pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
 ### RAT-053 – EC keeps a reserve for the pH-lowering dose that follows
 
@@ -482,7 +482,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** A second dose, a restart or a new fill falsifies the before/after comparison, and a wrong learned effect mis-sizes every later dose.
 - **Evidence:** —
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/include/doseph/plan.hpp`, `core/src/cycle.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a dose that loses its flow stops at once; what went in mixes with flow before it is measured, and nothing is learned (SD-105, RAT-057)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a dose that loses its flow stops at once; without flow for 6 s the pump goes off, and what went in mixes with flow before it is measured, learning nothing (SD-105, SD-127, RAT-057)"
 
 ### RAT-058 – Waiting times cover the time to tolerance
 
@@ -563,7 +563,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** Watering has a minimum level in the tank and does not run below it. A watering cycle that would take the tank below it is dropped as a whole and a refill asked for, with at most one notice a day.
 - **Why:** Watering the tank down past the point where pumps, probes and intake are covered means dry running and false readings.
 - **Evidence:** Observed on the reference installation (2026): the limit equalled the circulation pump's dry-run threshold, 5 L in the first tank and 2.5 L in a 60 L drum in which every submerged part is covered from 2.5 L.
-- **Later:** step 9 (watering and a level sensor); for the robot the minimum also has to keep its suction line in the water.
+- **Later:** step 9 (watering and a level sensor); for the robot the minimum also has to keep its feed pump in the water.
 
 ### RAT-068 – Irrigation pump only with a valid level above the minimum
 

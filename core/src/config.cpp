@@ -212,7 +212,7 @@ Config configFromJson(const json& in) {
       if (v.is_number_integer()) c.service.days[k] = v.get<int>();
   const json& t = objectAt(j, "tank");
   c.tank.volumeL = numOrNaN(t, "volumeL");
-  // "circulation" from before SD-109 is read over: the device's own suction pump runs for a check
+  // "circulation" from before SD-109 is read over: the device's own feed pump runs for a check
   if (t.contains("mixMinMin")) {
     c.tank.mixMinMin = numOrNaN(t, "mixMinMin");
   } else {

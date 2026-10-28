@@ -135,7 +135,7 @@ class Robot {
   Result stop(const Msg& who);
   Result resume();
   // Maintenance mode for `minutes` (at most kMaxMaintenanceMin; 0 ends it): the
-  // cycle holds, the suction pump is off, jumps of the probes are taken as the work
+  // cycle holds, the feed pump is off, jumps of the probes are taken as the work
   // and the watchdog does not judge the targets. Locks stay. In memory only:
   // a restart ends it.
   Result maintenance(double minutes);

@@ -12,7 +12,7 @@ const char* phaseName(Phase p) {
   switch (p) {
     case Phase::Off: return "off";
     case Phase::Stopped: return "stopped";
-    case Phase::SuctionOn: return "suction_on";
+    case Phase::PumpOn: return "pump_on";
     case Phase::ProveFlow: return "prove_flow";
     case Phase::Flush: return "flush";
     case Phase::Measure: return "measure";
@@ -104,7 +104,7 @@ void MixCycle::enter(const Ctx& c, Phase p) {
   since_ = c.now;
   sinceEpoch_ = c.epoch;
   switch (p) {
-    case Phase::SuctionOn:
+    case Phase::PumpOn:
       notes_.clear();
       ecRounds_ = phDoses_ = 0;
       evaluateAt_ = 0;
@@ -121,32 +121,47 @@ void MixCycle::enter(const Ctx& c, Phase p) {
     case Phase::Remeasure:
       window_.clear();
       break;
-    case Phase::Mix:
-      noFlowSince_ = 0;
-      break;
     default:
       break;
   }
 }
 
-// The device's own suction pump runs for a check and is off in Hold, Wait and Off (SD-109)
-void MixCycle::suctionPump(Ctx& c, Actuators& act, bool on) {
-  auto st = act.suctionPump();
-  if (st && *st == on) return;
+// The device's own feed pump runs for a check and is off in Hold, Wait and Off (SD-109)
+void MixCycle::feedPump(Ctx& c, Actuators& act, bool on) {
+  auto st = act.feedPump();
+  // After a cut for no flow the hardware holds the pump off until it is switched off once more
+  if (st && *st == on && !(c.pumpCut && !on)) return;
+  if (on) flowSeen_ = c.now;  // the window without flow starts with the pump
   Msg err;
-  if (!act.setSuctionPump(c, on, err) && on) line_ = say("cycle.suction_failed", {{"reason", err}});
+  if (!act.setFeedPump(c, on, err) && on) line_ = say("cycle.pump_failed", {{"reason", err}});
+}
+
+void MixCycle::noFlow(Ctx& c, Actuators& act, Msg why) {
+  if (!noFlowLogged_) {
+    c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
+    noFlowLogged_ = true;
+  }
+  const int tries = c.pumpInTank ? kDryTriesTank : kDryTries;
+  if (++noFlowTries_ >= tries) {
+    noFlowTries_ = 0;
+    c.rt.latches["flow.dry"] = {{"at", c.epoch}, {"tries", tries}};
+    c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", tries}}));
+    wait(c, act, say("cycle.wait.dry"), 0);
+  } else {
+    wait(c, act, std::move(why));  // the pump off: without flow it may run dry, or spill
+  }
 }
 
 void MixCycle::wait(Ctx& c, Actuators& act, Msg why, Ms retry) {
   enter(c, Phase::Wait);
   line_ = std::move(why);
   retryAt_ = retry > 0 ? c.now + retry : 0;
-  suctionPump(c, act, false);
+  feedPump(c, act, false);
 }
 
 void MixCycle::holdNow(Ctx& c, Actuators& act) {
   enter(c, Phase::Hold);
-  suctionPump(c, act, false);
+  feedPump(c, act, false);
   const CycleSettings s = cycleSettings(c);
   retryAt_ = c.now + s.holdMs;
   line_ = say("cycle.hold", {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}});
@@ -189,8 +204,8 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
     enter(c, Phase::Off);
     line_ = s.off;
   } else {
-    enter(c, Phase::SuctionOn);
-    line_ = say("cycle.suction_on");
+    enter(c, Phase::PumpOn);
+    line_ = say("cycle.pump_on");
   }
 }
 
@@ -735,11 +750,11 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       restart(c, act, doser);
       wait(c, act, say(key), 0);
     }
-    suctionPump(c, act, false);
+    feedPump(c, act, false);
     return;
   }
   const CycleSettings s = cycleSettings(c);
-  // A probe in a buffer, or a channel calibrated or its line filled: the check and the suction pump
+  // A probe in a buffer, or a channel calibrated or its line filled: the check and the feed pump
   // stop first and start anew once it ends (SD-109)
   if (c.probeCalibrating || c.channelJob) {
     const char* key = c.probeCalibrating ? "cycle.wait.calibrating" : "cycle.wait.channel_job";
@@ -749,13 +764,13 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
-  // Maintenance: someone works at tank or device. The cycle holds and the suction pump is off until it ends.
+  // Maintenance: someone works at tank or device. The cycle holds and the feed pump is off until it ends.
   if (c.maintenanceUntil > 0) {
     if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.maintenance")) {
       restart(c, act, doser);
       wait(c, act, say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}}), 0);
     }
-    suctionPump(c, act, false);
+    feedPump(c, act, false);
     return;
   }
   if (!s.off.key.empty()) {
@@ -765,10 +780,10 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         c.log.add(c.epoch, "control", "notice", say("ev.cycle.recipe_ended"), s.off);
     }
     line_ = s.off;
-    suctionPump(c, act, false);
+    feedPump(c, act, false);
     return;
   }
-  // Tries without flow in a row: the suction pump may run dry; a person releases it (SD-109)
+  // Tries without flow in a row: the feed pump may run dry; a person releases it (SD-109)
   if (c.rt.latches.count("flow.dry")) {
     if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.dry")) {
       restart(c, act, doser);
@@ -776,7 +791,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
-  if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::SuctionOn);
+  if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
   const Reading& flow = c.truth.get(Signal::Flow);
   auto noteFlow = [&] {
@@ -788,16 +803,27 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) c.truth.expectChange(ch, c.now + kAnnounceMs);
   };
 
+  // The hardware switched the feed pump off: no flow within its window (PD-477). It counts as a try
+  // without flow; switching the pump off re-arms the hardware (SD-127)
+  if (c.pumpCut && phase_ != Phase::Hold && phase_ != Phase::Wait) {
+    restart(c, act, doser);  // a round going on is cut: what went in is mixed first later
+    noFlow(c, act, say("cycle.wait.pump_cut"));
+    return;
+  }
+
+  // The window without flow counts from the pump's start or the last flow seen, in every phase
+  if (c.flowOk) flowSeen_ = c.now;
+
   switch (phase_) {
-    case Phase::SuctionOn:
+    case Phase::PumpOn:
       announceChamber();
-      suctionPump(c, act, true);
+      feedPump(c, act, true);
       enter(c, Phase::ProveFlow);
-      line_ = say("cycle.suction_on");
+      line_ = say("cycle.pump_on");
       break;
     case Phase::ProveFlow:
       announceChamber();
-      suctionPump(c, act, true);
+      feedPump(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
         noFlowTries_ = 0;
@@ -807,23 +833,10 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       } else {
         flowSince_ = 0;
         line_ = say("cycle.wait_flow");
-        if (c.now - since_ > kFlowWaitMs) {
-          // No flow within 2 min: the pump goes off, the check tries again in 5 min; after the
-          // third try in a row the pump may run dry, and a person releases it (SD-109)
-          const Msg why = say("cycle.wait.no_flow");
-          if (!noFlowLogged_) {
-            c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
-            noFlowLogged_ = true;
-          }
-          if (++noFlowTries_ >= kDryTries) {
-            noFlowTries_ = 0;
-            c.rt.latches["flow.dry"] = {{"at", c.epoch}, {"tries", kDryTries}};
-            c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", kDryTries}}));
-            wait(c, act, say("cycle.wait.dry"), 0);
-          } else {
-            wait(c, act, why);  // the pump off: without flow it may run dry
-          }
-        }
+        // No flow within the window, at the start or after it was lost: the pump goes off and the
+        // check tries again in 5 min. In the tank 6 s, before the hardware's own cut; a pump in the
+        // device primes for up to 2 min (SD-109, SD-127)
+        if (c.now - flowSeen_ > (c.pumpInTank ? kFlowStartMs : kFlowWaitMs)) noFlow(c, act, say("cycle.wait.no_flow"));
       }
       break;
     case Phase::Flush:
@@ -912,21 +925,18 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         c.truth.expectChange(Signal::Ec, c.now + kAnnounceMs);
         c.truth.expectChange(Signal::Ph, c.now + kAnnounceMs);
       }
-      // The mixing clock runs only with flow (SD-105)
+      // The mixing clock runs only with flow (SD-105); without it for the window, the pump goes off
+      // as when proving flow (SD-127)
       if (c.flowOk) {
         mixedMs_ += dt;
-        noFlowSince_ = 0;
       } else {
-        if (noFlowSince_ == 0) noFlowSince_ = c.now;
-        suctionPump(c, act, true);
-        if (c.now - noFlowSince_ > kNoFlowMixMaxMs) {
+        feedPump(c, act, true);
+        if (c.now - flowSeen_ > (c.pumpInTank ? kFlowStartMs : kFlowWaitMs)) {
           // What went in still needs mixing: the next cycle mixes first, the round learns nothing
           mixPendingMs_ = std::max(mixPendingMs_, mixTargetMs_);
           kind_ = Kind::None;
           mixingFirst_ = false;
-          const Msg why = say("cycle.wait.no_flow");
-          c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
-          wait(c, act, why);
+          noFlow(c, act, say("cycle.wait.no_flow"));
           break;
         }
       }
@@ -943,12 +953,12 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       break;
     }
     case Phase::Hold:
-      suctionPump(c, act, false);
-      if (c.now >= retryAt_) enter(c, Phase::SuctionOn);
+      feedPump(c, act, false);
+      if (c.now >= retryAt_) enter(c, Phase::PumpOn);
       break;
     case Phase::Wait:
-      suctionPump(c, act, false);
-      if (retryAt_ > 0 && c.now >= retryAt_) enter(c, Phase::SuctionOn);
+      feedPump(c, act, false);
+      if (retryAt_ > 0 && c.now >= retryAt_) enter(c, Phase::PumpOn);
       break;
     case Phase::Off:
     case Phase::Stopped:

@@ -12,7 +12,7 @@ import { EventList, MetricTile } from "../widgets";
 
 // The steps of one check, in order (SD-105)
 const STEPS: [Phase, TextKey][] = [
-  ["suction_on", "status.step.suctionOn"],
+  ["pump_on", "status.step.pumpOn"],
   ["prove_flow", "status.step.proveFlow"],
   ["flush", "status.step.flush"],
   ["measure", "status.step.measure"],
@@ -25,7 +25,7 @@ const STEPS: [Phase, TextKey][] = [
 const PHASE: Record<Phase, [TextKey, Tone]> = {
   off: ["status.phase.off", "neutral"],
   stopped: ["status.phase.stopped", "bad"],
-  suction_on: ["status.phase.checking", "info"],
+  pump_on: ["status.phase.checking", "info"],
   prove_flow: ["status.phase.checking", "info"],
   flush: ["status.phase.checking", "info"],
   measure: ["status.phase.checking", "info"],
@@ -172,7 +172,7 @@ function Readings() {
   };
   const r = st.readings;
   const flowNote =
-    s.flowLpm != null && s.turnoverMin != null ? t("status.turnover", { min: num(s.turnoverMin, 1) }) : st.suctionPump === false ? t("status.suctionOff") : undefined;
+    s.flowLpm != null && s.turnoverMin != null ? t("status.turnover", { min: num(s.turnoverMin, 1) }) : st.feedPump === false ? t("status.pumpOff") : undefined;
   return (
     <div class="grid-3" style="grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))">
       <MetricTile id="ph" label="pH" reading={r.ph} color="--ph" band={band(s.phTarget, s.phTolerance)} spark={spark.ph} note={lock("ph")} />

@@ -48,7 +48,8 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Flow | `outlet_level` (estimated) | `turbine` (a flow meter) |
 | Return | `gravity` | `pump` |
 | Network | Wi-Fi | Wi-Fi, LAN |
-| Suction pump, low end | 10 L/min | – |
+| Feed pump | in the tank | in the tank |
+| Feed pump, low end | 10 L/min | – |
 | Pull back | the pumps run backwards | they cannot |
 | Run time per 24 h (SD-113) | 40 min per head | 20 min per head |
 
@@ -56,7 +57,7 @@ The twin has one pump per channel. A pump head can be changed for another
 size or taken off (`channelHead`): a larger head moves more (S 1, M 2.5,
 L 6 times, an **assumption**), none moves nothing, and the device reports
 the head it has now. Without a flow meter (`outlet_level`)
-the device reports the flow as the low end of the suction pump's delivery
+the device reports the flow as the low end of the feed pump's delivery
 while the outlet's level sensor reports water, and 0 otherwise, so a
 turnover errs long (SD-109).
 
@@ -74,9 +75,9 @@ http://localhost:5173 (the API is passed through).
 |---|---|
 | Tank | volume, EC, pH, temperature; a dose spreads with the flow (time constant about one turnover, at least 20 s), pH with a dead time of 60 s |
 | Measuring chamber | holds what flows through it; without flow it keeps its water |
-| Suction pump | delivers 12 L/min after priming for 8 s, and primes again after each stop; faults: filter blocked, suction line out of the water (dry), flow or outlet sensor broken |
+| Feed pump | in the tank it delivers 12 L/min once its hose has filled (2 s), and the hardware switches it and every dosing pump off after 9 s without flow its sensor sees, until the robot switches it off (PD-477); in the device (`pumpIn` of the options) it primes for 8 s and has no such cut; it primes or fills again after each stop; faults: inlet blocked, out of the water (dry), hose off, flow or outlet sensor broken |
 | Water path | the measuring chamber holds 0.15 L up to its weir, which keeps the probes wet; above it the water returns by gravity or by a return pump that runs from 0.25 L to 0.18 L, unless the robot holds it off; faults: return blocked, return pump failed (it runs and moves nothing). At 0.35 L the high-level sensor trips. A power cut forgets a return pump held off |
-| Hardware release | a leak, high level or the stop button switch the suction pump and every dosing pump off below the robot, and no run starts; the state shows it as `hardware` |
+| Hardware release | a leak, high level or the stop button switch the feed pump and every dosing pump off below the robot, and no run starts; the state shows it as `hardware` |
 | Dosing channels | four or six, each pump with its own true flow (42–53 ml/min with the head of its profile), may be blocked or empty; a head can be changed or taken off; calibration and priming go into a cup |
 | Outlets | a drop sensor at each outlet counts drops of 0.05 ml; a line pulled back (at most 2 ml) fills first on the next run; faults: outlet blocked (the pump runs, nothing drips), a canister above the device that siphons 0.6 ml/min while its pump stands |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |

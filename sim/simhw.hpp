@@ -37,7 +37,7 @@ class SimHardware : public doseph::IHardware {
   bool online() const override { return w_.probeFault != "offline"; }
   std::optional<doseph::Sample> sample(doseph::Signal c) const override;
   const doseph::Profile& profile() const override { return profile_; }
-  doseph::Release release() const override { return {w_.released(), w_.leak, w_.highLevel(), w_.stopButton}; }
+  doseph::Release release() const override { return {w_.released(), w_.leak, w_.highLevel(), w_.stopButton, w_.noFlowCut}; }
   doseph::WaterPath waterPath() const override;
   bool startRun(int channel, doseph::Ms ms, const std::string& jobId, std::string& err, bool backwards) override {
     if (backwards && (channel < 1 || channel > channelCount() || !profile_.channels[static_cast<size_t>(channel - 1)].reverse)) {
@@ -49,8 +49,8 @@ class SimHardware : public doseph::IHardware {
   std::optional<doseph::Drops> drops(int channel) const override;
   doseph::RunStatus runStatus(int channel) const override { return w_.runStatus(channel); }
   void stopAllPumps() override { w_.stopAllPumps(); }
-  bool setSuctionPump(bool on, std::string& err) override;
-  std::optional<bool> suctionPump() const override { return w_.output; }
+  bool setFeedPump(bool on, std::string& err) override;
+  std::optional<bool> feedPump() const override { return w_.output; }
   void allowReturnPump(bool allowed) override { w_.returnLocked = !allowed; }
   // A head fitted, removed or changed: the device reports it, the twin pumps with it (SD-108)
   void setHead(int channel, const std::string& head) {

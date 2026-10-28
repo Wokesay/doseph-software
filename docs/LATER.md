@@ -125,7 +125,7 @@ detects what is there; the user does not pick it from a list.
   asks for its confirmation; until then no line is filled and nothing
   doses, and a backup never brings the confirmation (SD-118). Filling the
   lines drips into the tank and is the first dose (SD-111). A calibration
-  stops the check and the suction pump first (SD-109). Channels, heads and
+  stops the check and the feed pump first (SD-109). Channels, heads and
   the flow method come from the device's profile, and at most one canister
   holds pH− (SD-108).
 
@@ -196,7 +196,7 @@ end to end; unit tests test the parts.
 
 How the grow controller kept its circulation pump from running dry
 (RAT-047, RAT-051, RAT-062, RAT-063), next to what SD-109 decides for the
-suction pump.
+feed pump.
 
 **What latched it.**
 
@@ -243,7 +243,7 @@ suction pump.
   so. Accepted risk: a level sensor that wrongly reads a refilled tank can
   restart a pump that then runs dry until the level reads low again.
 
-**Next to SD-109.** The suction pump has no level sensor: the flow proof
+**Next to SD-109.** The feed pump has no level sensor: the flow proof
 takes its place, and after three failed tries in a row the robot latches
 "no flow" for a person to release in the app. What carries over: a latch
 only after the robot's own attempt failed, its reason frozen; the gateway

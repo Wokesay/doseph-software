@@ -52,11 +52,13 @@ Ctx Robot::ctx() {
   c.epoch = clock_.epoch();
   c.stopped = rt_.stopped;
   c.flowOk = flowOk();
+  c.pumpInTank = hw_.profile().pumpIn != "device";
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();
   c.channelJob = channelJobActive();
   // The hardware release (SD-110): a leak and high level hold until a person releases their latch
   const Release r = hw_.release();
+  c.pumpCut = r.noFlow;
   c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
            : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
            : rt_.latches.count("hw.return")                    ? "return"
@@ -67,9 +69,9 @@ Ctx Robot::ctx() {
 }
 
 // Flow by the device's method (SD-109): with an outlet level sensor, it reports water while the
-// suction pump runs; with a flow meter, at least 0.5 L/min. The check proves it for 10 s.
+// feed pump runs; with a flow meter, at least 0.5 L/min. The check proves it for 10 s.
 bool Robot::flowOk() const {
-  if (hw_.profile().flow == "outlet_level") return hw_.waterPath().outletWet == true && hw_.suctionPump() == true;
+  if (hw_.profile().flow == "outlet_level") return hw_.waterPath().outletWet == true && hw_.feedPump() == true;
   const Reading& f = truth_.get(Signal::Flow);
   return f.usable() && *f.value >= kFlowMinLpm;
 }
@@ -499,8 +501,8 @@ json Robot::state() {
           {"clock", clock_.source()},
           {"stopped", rt_.stopped},
           {"online", hw_.online()},
-          {"suctionPump", [&] {
-             auto st = act_.suctionPump();
+          {"feedPump", [&] {
+             auto st = act_.feedPump();
              return st ? json(*st) : json(nullptr);
            }()},
           {"flowOk", c.flowOk},
@@ -509,7 +511,7 @@ json Robot::state() {
              const Release r = hw_.release();
              const WaterPath w = hw_.waterPath();
              auto opt = [](const std::optional<bool>& v) { return v ? json(*v) : json(nullptr); };
-             return json{{"release", {{"on", r.on}, {"leak", r.leak}, {"highLevel", r.highLevel}, {"stopButton", r.stopButton}}},
+             return json{{"release", {{"on", r.on}, {"leak", r.leak}, {"highLevel", r.highLevel}, {"stopButton", r.stopButton}, {"noFlow", r.noFlow}}},
                          {"outletWet", opt(w.outletWet)},
                          {"returnPump", opt(w.returnPump)}};
            }()},
