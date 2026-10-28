@@ -510,7 +510,19 @@ constexpr Entry kMessages[] = {
     {"ev.auth.failed", "Sign-in failed"},
     {"ev.auth.signed_in", "Signed in"},
     {"ev.auth.password_changed", "Password changed"},
-    {"ev.auth.password_changed.text", "Signed out on all devices"},
+    {"ev.auth.password_changed.text", "Signed out on all devices. Access tokens stay: revoke any you don't know in the settings."},
+    {"auth.role", "An access token with the role {role} may not do that"},
+    {"auth.role.owner", "Owner"},
+    {"auth.role.app", "App"},
+    {"auth.role.account", "Account"},
+    {"auth.role.peer", "Coupled device"},
+    {"auth.token.role", "Choose a role: app, account or coupled device"},
+    {"auth.token.name", "The name has 1 to 40 characters"},
+    {"auth.token.full", "At most {max} access tokens – revoke one first"},
+    {"auth.token.unknown", "No such access token – it may be revoked already"},
+    {"ev.auth.token_created", "Access token created"},
+    {"ev.auth.token_revoked", "Access token revoked"},
+    {"ev.auth.token.text", "{name} ({role})"},
 };
 // clang-format on
 

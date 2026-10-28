@@ -5,6 +5,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,7 +18,7 @@ struct ApiRequest {
   std::string method, path;
   std::map<std::string, std::string> query;
   std::string body;
-  std::string token;   // the session token, from sessionToken()
+  std::string token;   // the session or access token, from sessionToken()
   std::string client;  // the peer's address as clientKey() gives it, never from a header; "" when unknown
 };
 
@@ -33,6 +34,11 @@ bool writeAllowed(const std::string& method, const std::string& secFetchSite, co
 // wins; else the cookie named exactly dp_session, "" when there is none or
 // more than one.
 std::string sessionToken(const std::string& authorization, const std::string& cookie);
+// What a role may call (SD-129). The owner may call everything. An app token may call
+// everything but the password and the access tokens. An account token may read, stop, acknowledge
+// alarms, and change recipes, the recipe in force and plants; never limits, releases, calibration,
+// single pumps or settings. A peer token may read.
+bool permitted(Role role, const std::string& method, const std::vector<std::string>& path);
 
 struct ApiResponse {
   int status = 200;
@@ -47,7 +53,9 @@ class Api {
   // Catches every exception: wrong input → 400, anything else → 500. The
   // server never crashes on a request.
   ApiResponse handle(const ApiRequest& req);
-  bool authorized(const ApiRequest& req);
+  // Who the request comes from (SD-129): the owner with a session, else an access token's role
+  std::optional<Role> access(const ApiRequest& req);
+  bool authorized(const ApiRequest& req) { return access(req).has_value(); }
 
  private:
   ApiResponse route(const ApiRequest& req);

@@ -2,6 +2,7 @@
 #include "doseph/robot.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -19,6 +20,7 @@ namespace {
 constexpr const char* kConfigFile = "config.json";
 constexpr const char* kStateFile = "state.json";
 constexpr const char* kAuthFile = "auth.json";
+constexpr const char* kDeviceFile = "device.json";  // the device's identity, never in a backup (SD-129)
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
@@ -96,6 +98,56 @@ bool Robot::saveAuth() {
   return store_.write(kAuthFile, auth_.toJson().dump());
 }
 
+json Robot::tokens() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Ms nowMs = clock_.nowMs();
+  json out = json::array();
+  for (const auto& t : auth_.tokens())
+    out.push_back({{"id", t.id},
+                   {"name", t.name},
+                   {"role", roleName(t.role)},
+                   {"created", t.created},
+                   {"used", t.used ? json(clock_.epoch() - (nowMs - *t.used) / 1000) : json(nullptr)}});
+  return {{"tokens", out}, {"max", Auth::kMaxTokens}};
+}
+
+Result Robot::createToken(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const auto role = tokenRole(jstr(j, "role"));
+  if (!role) return Result::fail(422, say("auth.token.role"));
+  std::string name = jstr(j, "name");
+  while (!name.empty() && std::isspace(static_cast<unsigned char>(name.front()))) name.erase(name.begin());
+  while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) name.pop_back();
+  const Auth before = auth_;
+  Msg err;
+  const auto token = auth_.createToken(name, *role, clock_.epoch(), err);
+  if (!token) return Result::fail(422, err);
+  if (!saveAuth()) {  // a token the robot would forget at its next start is not handed out
+    auth_ = before;
+    return Result::fail(500, say("store.failed"));
+  }
+  const AccessToken& t = auth_.tokens().back();
+  logEvent("auth", "notice", say("ev.auth.token_created"), say("ev.auth.token.text", {{"name", t.name}, {"role", say(std::string("auth.role.") + roleName(t.role))}}));
+  return Result::ok({{"id", t.id}, {"name", t.name}, {"role", roleName(t.role)}, {"created", t.created}, {"token", *token}});
+}
+
+Result Robot::revokeToken(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Auth before = auth_;
+  const auto& all = auth_.tokens();
+  auto it = std::find_if(all.begin(), all.end(), [&](const AccessToken& t) { return t.id == id; });
+  if (it == all.end()) return Result::fail(404, say("auth.token.unknown"));
+  const std::string name = it->name;
+  const Role role = it->role;
+  auth_.revokeToken(id);
+  if (!saveAuth()) {  // revoked only once it is off the disk as well
+    auth_ = before;
+    return Result::fail(500, say("store.failed"));
+  }
+  logEvent("auth", "notice", say("ev.auth.token_revoked"), say("ev.auth.token.text", {{"name", name}, {"role", say(std::string("auth.role.") + roleName(role))}}));
+  return Result::ok();
+}
+
 void Robot::logEvent(const std::string& type, const std::string& sev, Msg title, Msg text) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   log_.add(clock_.epoch(), type, sev, std::move(title), std::move(text));
@@ -142,6 +194,17 @@ void Robot::boot() {
     if (j.is_object()) auth_.load(j);
     // The robot writes auth.json only with a password in it: one without is damaged, not new
     authKept_ = !auth_.hasPassword();
+  }
+  if (auto s = store_.read(kDeviceFile)) {
+    const json j = json::parse(*s, nullptr, false);
+    if (j.is_object()) deviceId_ = jstr(j, "id");
+  }
+  const bool idOk = deviceId_.size() == 16 && std::all_of(deviceId_.begin(), deviceId_.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)) && !std::isupper(static_cast<unsigned char>(c)); });
+  if (!idOk) {
+    std::uint8_t b[8];
+    rng_(b, sizeof b);
+    deviceId_ = toHex(b, sizeof b);
+    store_.write(kDeviceFile, json{{"id", deviceId_}}.dump());
   }
   if (auto s = store_.read(kEventsFile)) {
     const json j = json::parse(*s, nullptr, false);
@@ -398,6 +461,7 @@ json Robot::info() const {
           {"api", 1},
           {"schemaVersion", kSchemaVersion},
           {"platform", platform_},
+          {"deviceId", deviceId_},
           {"hasPassword", auth_.hasPassword()},
           {"setupCode", auth_.setupCodeRequired()},
           // Why neither sign-in nor a first password works, for the sign-in page

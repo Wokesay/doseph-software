@@ -112,6 +112,7 @@ small, .small { font-size: 0.85rem; }
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
 .mono { font-family: var(--mono); font-size: 0.88em; }
+.token { overflow-wrap: anywhere; user-select: all; }
 .nowrap { white-space: nowrap; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }

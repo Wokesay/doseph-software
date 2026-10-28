@@ -22,6 +22,19 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Access tokens with three roles (SD-129), for the app, the account and a
+  coupled device. They are made in the settings with a name and a role,
+  shown once, kept as a hash and revoked one by one.
+  - An app token may do everything the owner may, except change the
+    password and manage tokens.
+  - An account token may read, stop, acknowledge alarms, and change
+    recipes, the recipe in force and plants.
+  - A peer token may read.
+  - A call outside the role is refused with 403. Creating and revoking a
+    token are events. Tokens survive a password change.
+- The device has a random ID of its own (SD-129). It is shown in `/info`,
+  in the diagnostics and on the settings page, and never in a backup.
+
 - The cultivation system per tank: hydro, coco, rock wool or soil
   (SD-128). It sets the pH range a new phase is offered when its recipe has
   none, and which templates come first; control never reads it.

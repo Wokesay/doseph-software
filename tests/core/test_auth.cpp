@@ -298,3 +298,62 @@ TEST_CASE("Client key: IPv4 as it is, IPv6 in full without its zone, an IPv4-map
   for (const char* bad : {"", "localhost", "256.1.1.1", "1.2.3", "1.2.3.4.5", "01.2.3.4x", "1:2:3:4:5:6:7:8:9", "1::2::3", "12345::1", ":1:2:3:4:5:6:7", "g::1", "1.2.3.4::", "::1.2.3.4:5"})
     CHECK_MESSAGE(clientKey(bad).empty(), bad);
 }
+
+TEST_CASE("Access tokens: shown once and kept as a hash, with a role; revoked at once; never the owner's role (SD-129)") {
+  Auth a(rng);
+  a.setInitialPassword("geheim-123");
+  Msg e;
+  CHECK_FALSE(a.createToken("x", Role::Owner, 0, e));
+  CHECK(e.key == "auth.token.role");
+  CHECK_FALSE(a.createToken("", Role::App, 0, e));
+  CHECK(e.key == "auth.token.name");
+  CHECK_FALSE(a.createToken(std::string(41, 'x'), Role::App, 0, e));
+  auto app = a.createToken("Phone", Role::App, 1767225600, e);
+  auto peer = a.createToken("Second device", Role::Peer, 1767225600, e);
+  REQUIRE(app);
+  REQUIRE(peer);
+  CHECK(app->rfind(Auth::kTokenPrefix, 0) == 0);
+  CHECK(app->size() == 4 + 64);  // 256 random bits
+  CHECK(a.access(*app, 5) == Role::App);
+  CHECK(a.access(*peer, 5) == Role::Peer);
+  CHECK(a.tokens()[0].used == Ms{5});
+  CHECK_FALSE(a.access(*app + "0", 5));
+  CHECK_FALSE(a.access(Auth::kTokenPrefix, 5));
+  CHECK_FALSE(a.check(*app, 5));  // a token is never a session
+  // Kept as a hash: the file holds neither token, and a fresh start knows both
+  const std::string file = a.toJson().dump();
+  CHECK(file.find(app->substr(4)) == std::string::npos);
+  CHECK(file.find(peer->substr(4)) == std::string::npos);
+  Auth b(rng);
+  b.load(a.toJson());
+  CHECK_FALSE(b.tokens()[0].used);  // the last use is kept in memory only
+  CHECK(b.access(*app, 0) == Role::App);
+  // A session is the owner; a password change ends the sessions, the tokens stay
+  auto s = b.login("geheim-123", 0, e, "");
+  REQUIRE(s);
+  CHECK(b.access(*s, 1) == Role::Owner);
+  CHECK(b.changePassword("geheim-123", "neu-geheim-456", 2, "").key.empty());
+  CHECK_FALSE(b.access(*s, 3));
+  CHECK(b.access(*app, 3) == Role::App);
+  CHECK(b.revokeToken(b.tokens()[0].id));
+  CHECK_FALSE(b.access(*app, 4));
+  CHECK(b.access(*peer, 4) == Role::Peer);
+  CHECK_FALSE(b.revokeToken("nope"));
+}
+
+TEST_CASE("Access tokens: at most 16; one the file holds damaged is left out, the others stay (SD-129)") {
+  Auth a(rng);
+  a.setInitialPassword("geheim-123");
+  Msg e;
+  for (size_t i = 0; i < Auth::kMaxTokens; ++i) REQUIRE(a.createToken("t" + std::to_string(i), Role::Account, 0, e));
+  CHECK_FALSE(a.createToken("one more", Role::Account, 0, e));
+  CHECK(e.key == "auth.token.full");
+  json j = a.toJson();
+  j["tokens"][0]["role"] = "owner";
+  j["tokens"][1]["hash"] = "zz";
+  j["tokens"][2] = "nonsense";
+  Auth b(rng);
+  b.load(j);
+  CHECK(b.hasPassword());
+  CHECK(b.tokens().size() == Auth::kMaxTokens - 3);
+}

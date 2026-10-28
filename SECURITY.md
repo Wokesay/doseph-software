@@ -36,6 +36,9 @@ keeping the details confidential until disclosure.
 - A mandatory password at the first start, with a setup code the device
   shows; no default password. Passwords are stored as salted PBKDF2
   hashes; a lockout per client after failed attempts.
+- Access tokens for an app, the account or a coupled device, each with
+  a fixed role that limits what it may call. A token is shown once and
+  kept as a hash; the owner revokes it in the settings (SD-129).
 - Host and origin checks against DNS rebinding and cross-site requests;
   the session in an `HttpOnly`, `SameSite=Strict` cookie.
 - Only the gateway switches pumps; no dose without proven flow; a crash

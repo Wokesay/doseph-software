@@ -700,3 +700,56 @@ this session.
 - **Later:** the end-of-run summary (RAT-064), and phase parameters for
   light, climate and watering (step 9).
 
+
+
+## SD-129: Access tokens with three roles, a device ID, commissioning in the device
+
+2026-10-28. Step 7 of #10 (API for the app, and the commissioning flow).
+The owner chose three fixed roles and commissioning steps kept in the
+device in this session. Where updates come from is a product question
+(#62).
+
+- **Access tokens.**
+  - Only the owner creates them: signed in with the password, in the web
+    app's settings. Each token gets a name (1–40 characters) and a role.
+    There are at most 16.
+  - A token is 256 random bits with the prefix `dpt_`. It is shown once.
+    The device keeps only its SHA-256 hash, so a plain hash is enough and
+    no slow password hash is needed. It is sent as
+    `Authorization: Bearer`, and it never goes into a cookie.
+  - The owner revokes each token on its own, and the revocation takes
+    effect at once. Creating and revoking a token are events, with the
+    token's name and role, never the token itself.
+  - The list shows each token's last use since the start. That time is
+    kept in memory only, so a call does not write to flash.
+  - A password change ends every session; the tokens stay, and the event
+    says so. A reset of access with the device security items will clear
+    them (#10).
+- **Roles.** A call that a role may not make is refused with 403. The
+  message names the role.
+
+  | Role | May |
+  |---|---|
+  | Owner (session) | everything |
+  | `app` | everything but the password and the access tokens |
+  | `account` | read; Stop; acknowledge alarms; recipes, the recipe in force, plants and plant recipes |
+  | `peer` | read; its coupling calls come with step 8 |
+
+  The account role never reaches limits, releases (latches, resume),
+  calibration, single pumps, settings, the backup or maintenance. This is
+  the same set that MQTT commands will get (PD-461). The simulator's
+  controls count as changes: owner and app only.
+- **Device ID.** It is 64 random bits as 16 hex digits, made at the first
+  start and kept in its own file. It is in `/info` and in the diagnostics.
+  It is never in a backup, so restoring a backup on another device does
+  not copy the identity. A damaged file gives a new ID.
+- **Commissioning** (built next):
+  - The steps of #10 are kept in the device, each as open, done or
+    skipped, so they resume after a restart.
+  - A step is done when the device sees it: flow proven, probes and
+    channels calibrated, lines filled, a tank volume and a recipe or
+    plant. Otherwise it is done when the user confirms it: the pump lies
+    in the tank, the container is open, the canisters stand below the
+    device (PD-476).
+  - The web app shows the next open step.
+  - Network and account stay "later" until they exist.

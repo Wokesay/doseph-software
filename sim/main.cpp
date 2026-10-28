@@ -218,9 +218,16 @@ int main(int argc, char** argv) {
     std::string action = req.matches[1];
     // A scenario change without signing in only with --allow-reset (Playwright)
     const bool open = action == "scenario" && allowReset;
-    if (!open && !simulation.api().authorized(toApi(req))) {
+    const auto role = simulation.api().access(toApi(req));
+    if (!open && !role) {
       res.status = 401;
       res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
+      return;
+    }
+    if (!open && !doseph::permitted(*role, "POST", {"sim", action})) {  // as any other change (SD-129)
+      res.status = 403;
+      res.set_content(doseph::json{{"error", doseph::say("auth.role", {{"role", doseph::say(std::string("auth.role.") + doseph::roleName(*role))}})}}.dump(),
+                      "application/json");
       return;
     }
     auto body = doseph::json::parse(req.body.empty() ? "{}" : req.body, nullptr, false);

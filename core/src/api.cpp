@@ -78,12 +78,29 @@ int channelOf(const std::string& s) {
 
 }  // namespace
 
-bool Api::authorized(const ApiRequest& req) {
+std::optional<Role> Api::access(const ApiRequest& req) {
   std::lock_guard<std::recursive_mutex> l(robot_.mutex());
   const Ms now = clock_.nowMs();
-  if (req.token.empty() || !robot_.auth().check(req.token, now)) return false;
-  robot_.auth().seen(req.client, now);  // a phone that stays signed in keeps its own count
-  return true;
+  if (req.token.empty()) return std::nullopt;
+  const auto role = robot_.auth().access(req.token, now);
+  if (role) robot_.auth().seen(req.client, now);  // a phone that stays signed in keeps its own count
+  return role;
+}
+
+bool permitted(Role role, const std::string& method, const std::vector<std::string>& p) {
+  if (role == Role::Owner) return true;
+  const std::string first = p.empty() ? "" : p[0];
+  if (role == Role::App) return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password");
+  if (method == "GET") return first != "tokens";
+  if (role != Role::Account) return false;  // the peer's calls come with the coupling (#10 step 8)
+  const size_t n = p.size();
+  if (method == "POST" && n == 1 && (first == "stop" || first == "recipes" || first == "plants")) return true;
+  if (first == "alarms") return method == "POST" && p.back() == "ack" && (n == 2 || n == 3);
+  if (first == "recipes") return method == "DELETE" && n == 2;
+  if (first == "active") return method == "PUT" && n == 1;
+  if (first == "plant-recipes") return (method == "PUT" && n == 1) || (method == "DELETE" && n == 2);
+  if (first == "plants") return (n == 2 && (method == "PUT" || method == "DELETE")) || (n == 3 && method == "POST");
+  return false;
 }
 
 std::string sessionToken(const std::string& authorization, const std::string& cookie) {
@@ -170,11 +187,14 @@ ApiResponse Api::route(const ApiRequest& req) {
   // ---- public
   if (is("GET", {"info"})) return jsonResp(200, robot_.info());
   if (is("GET", {"auth", "session"})) {
-    bool ok = authorized(req);
+    const auto role = access(req);
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
-    ApiResponse r = jsonResp(200, {{"authenticated", ok}, {"hasPassword", robot_.auth().hasPassword()}});
-    // A page left open asks now and then: its cookie lasts as long as the session is in use
-    if (ok) r.headers.emplace_back("Set-Cookie", sessionCookie(req.token, kCookieMaxAgeS));
+    ApiResponse r = jsonResp(200, {{"authenticated", role.has_value()},
+                                   {"role", role ? json(roleName(*role)) : json(nullptr)},
+                                   {"hasPassword", robot_.auth().hasPassword()}});
+    // A page left open asks now and then: its cookie lasts as long as the session is in use.
+    // Never an access token in a cookie.
+    if (role == Role::Owner) r.headers.emplace_back("Set-Cookie", sessionCookie(req.token, kCookieMaxAgeS));
     return r;
   }
   if (is("POST", {"auth", "setup"})) {
@@ -224,8 +244,10 @@ ApiResponse Api::route(const ApiRequest& req) {
     return r;
   }
 
-  // ---- signed in only
-  if (!authorized(req)) return fail(401, say("auth.required"));
+  // ---- signed in only, within the role (SD-129)
+  const auto role = access(req);
+  if (!role) return fail(401, say("auth.required"));
+  if (!permitted(*role, m, p)) return fail(403, say("auth.role", {{"role", say(std::string("auth.role.") + roleName(*role))}}));
 
   if (is("PUT", {"auth", "password"})) {
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
@@ -242,6 +264,9 @@ ApiResponse Api::route(const ApiRequest& req) {
     robot_.logEvent("auth", "notice", say("ev.auth.password_changed"), say("ev.auth.password_changed.text"));
     return jsonResp(200, {{"ok", true}});
   }
+  if (is("GET", {"tokens"})) return jsonResp(200, robot_.tokens());
+  if (is("POST", {"tokens"})) return fromResult(robot_.createToken(body));
+  if (is("DELETE", {"tokens", "*"})) return fromResult(robot_.revokeToken(p[1]));
   if (is("GET", {"state"})) return jsonResp(200, robot_.state());
   if (is("GET", {"config"})) return jsonResp(200, robot_.configJson());
   if (is("GET", {"config", "export"})) {
