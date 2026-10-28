@@ -138,6 +138,16 @@ of its own.
 | Maintenance items by what the device has, each due its interval after it was done, calibrated or first had; items due within a week of the earliest join its date | SD-125 | ✓ | `service.hpp`, `service.cpp`, `config.cpp` · test_service.cpp |
 | A maintenance item on its date is a note in the morning report and the app until it is done; the watchdog stays as it is | SD-125 | ✓ | `robot.cpp` · test_service.cpp |
 
+## Plants and phases (SD-128)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| The leading running plant's phase sets the water plan: its recipe, and its own EC target and pH range where it has them; without a running plant the recipe chosen by hand; once the last plant is completed the robot holds | SD-128 | ✓ | `plants.cpp`, `cycle.cpp`, `watchdog.cpp`, `robot.cpp` · test_plants.cpp |
+| A plant copies its plant recipe's phases when it starts; day 1 is the day it started; a phase moves on by itself at the local midnight after its days, also after the device was off | SD-128 | ✓ | `plants.cpp`, `robot.cpp` · test_plants.cpp |
+| A phase that waits for its confirmation stays after its days and reminds daily, as the last phase does until the harvest is recorded; only the user records the harvest | RAT-002 | ✓ | `plants.cpp`, `robot.cpp` · test_plants.cpp |
+| Logic reads a phase's parameters, never its name; CI refuses phase names in the core | RAT-076 | ✓ | `plants.cpp`, `arch_check.sh` · test_plants.cpp |
+| The harvest is an event of a running plant; completing it is a step of its own | RAT-077 | ✓ | `config.hpp`, `robot.cpp` · test_plants.cpp |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

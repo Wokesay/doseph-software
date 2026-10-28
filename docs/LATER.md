@@ -9,6 +9,13 @@ decides its own as an SD (`docs/DECISIONS.md`).
 
 ## Grow phases and harvest (step 6)
 
+**Built since (SD-128):** plant recipes and plants with phases, the water
+plan from the leading plant, phases moving on at local midnight or once
+confirmed, the reminders, the harvest and completing. What is still open
+from below: the end-of-run summary (RAT-064), the start dialog's proposals
+and phase defaults from templates, and the cultivation system and calendar
+(their own changes).
+
 **The grow run.** One run at a time: a name (at most 40 characters), its
 start, a list of at least one phase, the current phase and when it began,
 and the time of the harvest. Its states are none, running and completed;

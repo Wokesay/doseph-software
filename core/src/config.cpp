@@ -48,6 +48,11 @@ const json& arrayAt(const json& j, const char* key) {
 
 bool inRange(double v, double lo, double hi) { return isNum(v) && v >= lo && v <= hi; }
 
+// Characters, not bytes, of a UTF-8 text
+size_t chars(const std::string& s) {
+  return static_cast<size_t>(std::count_if(s.begin(), s.end(), [](char ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; }));
+}
+
 }  // namespace
 
 Limits Limits::bounded() const {
@@ -73,6 +78,52 @@ const CanisterCfg* Config::canisterOnChannel(int channel) const {
 const RecipeCfg* Config::recipe(const std::string& id) const {
   for (const auto& r : recipes)
     if (r.id == id) return &r;
+  return nullptr;
+}
+
+json phasesJson(const std::vector<PhaseCfg>& phases) {
+  json out = json::array();
+  for (const auto& ph : phases)
+    out.push_back({{"name", ph.name},
+                   {"days", ph.days},
+                   {"confirm", ph.confirm},
+                   {"recipe", ph.recipe},
+                   {"ecTarget", numOrNull(ph.ecTarget)},
+                   {"ph", isNum(ph.phLow) && isNum(ph.phHigh) ? json::array({ph.phLow, ph.phHigh}) : json(nullptr)}});
+  return out;
+}
+
+std::vector<PhaseCfg> phasesFromJson(const json& j) {
+  std::vector<PhaseCfg> out;
+  for (const auto& p : arrayAt(j, "phases")) {
+    if (!p.is_object()) throw std::invalid_argument("phase is not an object");
+    PhaseCfg x;
+    x.name = jstr(p, "name");
+    x.days = intOr(p, "days", 14);
+    x.confirm = jbool(p, "confirm", false);
+    x.recipe = jstr(p, "recipe");
+    x.ecTarget = numOrNaN(p, "ecTarget");
+    if (p.contains("ph") && !p["ph"].is_null()) {
+      const json& ph = p["ph"];
+      if (!ph.is_array() || ph.size() != 2 || !ph[0].is_number() || !ph[1].is_number())
+        throw std::invalid_argument("pH range is not two numbers");
+      x.phLow = ph[0].get<double>();
+      x.phHigh = ph[1].get<double>();
+    }
+    out.push_back(std::move(x));
+  }
+  return out;
+}
+
+const PlantRecipeCfg* Config::plantRecipe(const std::string& id) const {
+  for (const auto& r : plantRecipes)
+    if (r.id == id) return &r;
+  return nullptr;
+}
+
+const PlantCfg* Config::plant(const std::string& id) const {
+  for (const auto& p : plants)
+    if (p.id == id) return &p;
   return nullptr;
 }
 
@@ -142,6 +193,22 @@ void to_json(json& j, const Config& c) {
   }
   j["recipes"] = recipes;
   j["active"] = {{"recipe", c.active.recipe}, {"from", c.active.from}, {"until", c.active.until}};
+  json plantRecipes = json::array();
+  for (const auto& r : c.plantRecipes) plantRecipes.push_back({{"id", r.id}, {"name", r.name}, {"note", r.note}, {"phases", phasesJson(r.phases)}});
+  j["plantRecipes"] = plantRecipes;
+  json plants = json::array();
+  for (const auto& p : c.plants)
+    plants.push_back({{"id", p.id},
+                      {"name", p.name},
+                      {"from", p.from},
+                      {"phases", phasesJson(p.phases)},
+                      {"start", p.start},
+                      {"phase", p.phase},
+                      {"phaseStart", p.phaseStart},
+                      {"harvestAt", p.harvestAt},
+                      {"completedAt", p.completedAt}});
+  j["plants"] = plants;
+  j["lead"] = c.lead;
   json channels = json::object();
   for (const auto& [n, p] : c.channels) channels[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}, {"head", p.head}};
   j["channels"] = channels;
@@ -277,6 +344,25 @@ Config configFromJson(const json& in) {
   c.active.recipe = jstr(a, "recipe");
   c.active.from = epochOr(a, "from");
   c.active.until = epochOr(a, "until");
+  for (const auto& r : arrayAt(j, "plantRecipes")) {
+    if (!r.is_object()) throw std::invalid_argument("plant recipe is not an object");
+    c.plantRecipes.push_back({jstr(r, "id"), jstr(r, "name"), jstr(r, "note"), phasesFromJson(r)});
+  }
+  for (const auto& p : arrayAt(j, "plants")) {
+    if (!p.is_object()) throw std::invalid_argument("plant is not an object");
+    PlantCfg x;
+    x.id = jstr(p, "id");
+    x.name = jstr(p, "name");
+    x.from = jstr(p, "from");
+    x.phases = phasesFromJson(p);
+    x.start = epochOr(p, "start");
+    x.phase = intOr(p, "phase", 0);
+    x.phaseStart = epochOr(p, "phaseStart");
+    x.harvestAt = epochOr(p, "harvestAt");
+    x.completedAt = epochOr(p, "completedAt");
+    c.plants.push_back(std::move(x));
+  }
+  c.lead = jstr(j, "lead");
   for (const auto& [key, v] : objectAt(j, "channels").items()) {
     int n = 0;
     try {
@@ -397,6 +483,33 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (std::isnan(r.phLow) != std::isnan(r.phHigh) || (isNum(r.phLow) && (!inRange(r.phLow, 4.5, 7.5) || !inRange(r.phHigh, 4.5, 7.5) || r.phLow >= r.phHigh)))
       err(say("cfg.recipe.ph_range", {{"name", r.name}, {"min", 4.5}, {"max", 7.5}}));
   }
+  // Plant recipes and plants (SD-128): phases with a name, days, a recipe there is and targets in bounds
+  auto checkPhases = [&](const std::string& name, const std::vector<PhaseCfg>& phases) {
+    if (phases.empty() || phases.size() > kMaxPhases) err(say("cfg.plant.phases", {{"name", name}, {"max", kMaxPhases}}));
+    for (const auto& ph : phases) {
+      if (ph.name.empty() || chars(ph.name) > 40) err(say("cfg.phase.name", {{"name", name}}));
+      if (ph.days < 1 || ph.days > 999) err(say("cfg.phase.days", {{"name", name}, {"phase", ph.name}, {"min", 1}, {"max", 999}}));
+      if (!c.recipe(ph.recipe)) err(say("cfg.phase.recipe", {{"name", name}, {"phase", ph.name}}));
+      if (isNum(ph.ecTarget) && !inRange(ph.ecTarget, 0.2, 4.0))
+        err(say("cfg.recipe.ec_range", {{"name", ph.name}, {"min", 0.2}, {"max", 4.0}}));
+      if (std::isnan(ph.phLow) != std::isnan(ph.phHigh) ||
+          (isNum(ph.phLow) && (!inRange(ph.phLow, 4.5, 7.5) || !inRange(ph.phHigh, 4.5, 7.5) || ph.phLow >= ph.phHigh)))
+        err(say("cfg.recipe.ph_range", {{"name", ph.name}, {"min", 4.5}, {"max", 7.5}}));
+    }
+  };
+  std::set<std::string> plantIds;
+  for (const auto& r : c.plantRecipes) {
+    if (r.id.empty() || !plantIds.insert("r:" + r.id).second) err(say("cfg.plant.id"));
+    if (r.name.empty() || chars(r.name) > 40) err(say("cfg.plant.name"));
+    checkPhases(r.name, r.phases);
+  }
+  for (const auto& p : c.plants) {
+    if (p.id.empty() || !plantIds.insert("p:" + p.id).second) err(say("cfg.plant.id"));
+    if (p.name.empty() || chars(p.name) > 40) err(say("cfg.plant.name"));
+    checkPhases(p.name, p.phases);
+    if (p.phase < 0 || p.phase >= static_cast<int>(p.phases.size())) err(say("cfg.plant.phase", {{"name", p.name}}));
+  }
+  if (!c.lead.empty() && !c.plant(c.lead)) err(say("cfg.plant.lead"));
   if (!c.active.recipe.empty()) {
     if (!c.recipe(c.active.recipe)) err(say("cfg.active.recipe"));
     if (c.active.until != 0 && c.active.until <= c.active.from) err(say("cfg.active.until"));

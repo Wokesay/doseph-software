@@ -90,6 +90,17 @@ class Robot {
   // Quiet hours, as local minutes of the day {"quietFromMin", "quietToMin"} (SD-123)
   Result putNotify(const json& j);
   // Maintenance dates (SD-125): the plan, an item done by hand, the intervals {"days": {kind: n | null}}
+  // Plants and plant recipes (SD-128)
+  json plants() const;
+  Result putPlantRecipe(const json& j);
+  Result deletePlantRecipe(const std::string& id);
+  Result startPlant(const json& j);
+  Result putPlant(const std::string& id, const json& j);
+  Result plantNext(const std::string& id);
+  Result plantHarvest(const std::string& id, const json& j);
+  Result plantComplete(const std::string& id);
+  Result plantLead(const std::string& id);
+  Result deletePlant(const std::string& id);
   json service() const;
   Result serviceDone(const std::string& id);
   Result putService(const json& j);
@@ -160,6 +171,10 @@ class Robot {
   Result startChannelJob(const std::string& type, int channel, double seconds);
   bool channelJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
   void restartCycle();
+  // Plants (SD-128): saves `next`, says what changed and starts the check anew when the water plan
+  // changed; plants whose phase ended move on first
+  Result savePlants(Config next, const Msg& what);
+  void movePlants(Epoch epoch);
 
   mutable std::recursive_mutex mtx_;
   IHardware& hw_;

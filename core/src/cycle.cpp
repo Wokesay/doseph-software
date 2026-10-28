@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "doseph/messages.hpp"
+#include "doseph/plants.hpp"
 
 namespace doseph {
 
@@ -84,17 +85,18 @@ CycleSettings cycleSettings(const Ctx& c) {
     s.stableMs = std::clamp<Ms>(minutes(s.turnoverMin / 5), kStableWindowMs, kStableWindowMaxMs);
   s.ecTol = std::max(0.05, isNum(cfg.control.ecTolerance) ? cfg.control.ecTolerance : 0.1);  // never 0 (RAT-008)
   s.phTol = std::max(0.05, isNum(cfg.control.phTolerance) ? cfg.control.phTolerance : 0.15);
-  const RecipeCfg* r = cfg.active.recipe.empty() ? nullptr : cfg.recipe(cfg.active.recipe);
-  if (!r) {
+  // The water plan: the leading plant's phase, else the recipe chosen by hand (SD-128)
+  const WaterPlan w = waterPlan(cfg, c.epoch);
+  if (!w.recipe) {
     s.off = say("cycle.off.no_recipe");
-  } else if (cfg.active.until != 0 && c.epoch >= cfg.active.until) {
-    s.off = say("cycle.off.ended", {{"name", r->name}, {"until", cfg.active.until}});
+  } else if (w.ended) {
+    s.off = say("cycle.off.ended", {{"name", w.recipe->name}, {"until", w.until}});
   } else if (!isNum(s.volumeL) || s.volumeL <= 0) {
     s.off = say("cycle.off.no_volume");
   } else {
-    s.recipe = r;
-    s.ecTarget = r->ecTarget;
-    s.phTarget = phTarget(*r);
+    s.recipe = w.recipe;
+    s.ecTarget = w.ecTarget;
+    s.phTarget = w.phTarget;
   }
   return s;
 }
@@ -1091,7 +1093,8 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
 
 json MixCycle::checks(const Ctx& c) const {
   const CycleSettings s = cycleSettings(c);
-  const RecipeCfg* r = c.cfg.active.recipe.empty() ? nullptr : c.cfg.recipe(c.cfg.active.recipe);
+  const WaterPlan w = waterPlan(c.cfg, c.epoch);
+  const RecipeCfg* r = w.recipe;
   auto item = [](bool ok, const Msg& m) {
     json j = m;
     j["ok"] = ok;
@@ -1119,7 +1122,7 @@ json MixCycle::checks(const Ctx& c) const {
 
   json ec = json::array();
   if (r) {
-    ec.push_back(item(isNum(r->ecTarget), isNum(r->ecTarget) ? say("check.ec_target", {{"target", r->ecTarget}})
+    ec.push_back(item(isNum(w.ecTarget), isNum(w.ecTarget) ? say("check.ec_target", {{"target", w.ecTarget}})
                                                                : say("cycle.note.no_ec_target", {{"name", r->name}})));
     std::string missing;
     for (const auto& st : r->steps)
@@ -1143,7 +1146,7 @@ json MixCycle::checks(const Ctx& c) const {
 
   json ph = json::array();
   if (r) {
-    const double target = phTarget(*r);
+    const double target = w.phTarget;
     ph.push_back(item(isNum(target), isNum(target) ? say("check.ph_target", {{"target", target}})
                                                    : say("cycle.note.no_ph_range", {{"name", r->name}})));
   }

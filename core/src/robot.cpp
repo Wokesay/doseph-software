@@ -9,6 +9,7 @@
 
 #include "doseph/embedded.hpp"
 #include "doseph/messages.hpp"
+#include "doseph/plants.hpp"
 #include "doseph/sha256.hpp"
 
 namespace doseph {
@@ -256,11 +257,15 @@ void Robot::tick() {
     watch_ = evaluate(in);
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
+    // Plants move on at the local midnight after a phase's days, and what they ask of the user joins
+    // as notes (SD-128)
+    movePlants(epoch);
     // Maintenance items on their date join as notes; the watchdog's own verdict stays as it is (SD-125)
     noteService(cfg_, rt_, epoch);
     alarmWatch_ = watch_;
     for (const auto& i : planService(cfg_, rt_, epoch, cfg_.system.timezone).items)
       if (i.dueNow) alarmWatch_.items.push_back({"maint." + i.id, i.label, "problem", say("service.due")});
+    for (const auto& n : plantNotes(cfg_, epoch, cfg_.system.timezone)) alarmWatch_.items.push_back({n.id, n.label, "problem", n.text});
     alarms_.update(alarmWatch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
@@ -654,6 +659,233 @@ Result Robot::putNotify(const json& j) {
   return saveConfig(next, changed("cfg.what.notify"));
 }
 
+// ---------------------------------------------------------------- plants (SD-128)
+
+json Robot::plants() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return plantsJson(cfg_, clock_.epoch(), cfg_.system.timezone);
+}
+
+namespace {
+
+// The water a plan gives, to tell whether a change of plants changes it
+std::string planKey(const WaterPlan& w) {
+  if (!w.recipe) return "";
+  return w.recipe->id + "|" + std::to_string(w.ecTarget) + "|" + std::to_string(w.phTarget) + "|" + (w.ended ? "ended" : "");
+}
+
+}  // namespace
+
+Result Robot::savePlants(Config next, const Msg& what) {
+  const Epoch now = clock_.epoch();
+  advancePlants(next, now, next.system.timezone);
+  // Once no plant runs any more, the robot holds: no recipe chosen by hand long ago comes back
+  const bool ran = std::any_of(cfg_.plants.begin(), cfg_.plants.end(), [](const PlantCfg& p) { return p.running(); });
+  const bool runs = std::any_of(next.plants.begin(), next.plants.end(), [](const PlantCfg& p) { return p.running(); });
+  if (ran && !runs) next.active = ActiveCfg{};
+  if (!next.lead.empty() && (!next.plant(next.lead) || !next.plant(next.lead)->running())) next.lead.clear();
+  const WaterPlan before = waterPlan(cfg_, now);
+  const std::string oldRecipe = before.recipe ? before.recipe->id : "";
+  const std::string beforeKey = planKey(before);
+  Result r = saveConfig(next, std::nullopt);
+  if (r.status != 200) return r;
+  log_.add(now, "plant", "info", what);
+  if (planKey(waterPlan(cfg_, now)) != beforeKey) {
+    const WaterPlan after = waterPlan(cfg_, now);
+    if (!oldRecipe.empty() && (!after.recipe || after.recipe->id != oldRecipe)) cycle_.recipeChanged(oldRecipe);
+    restartCycle();
+  }
+  r.body = plantsJson(cfg_, now, cfg_.system.timezone);
+  return r;
+}
+
+void Robot::movePlants(Epoch epoch) {
+  // Most ticks nothing ends: no copy of the configuration then
+  const bool due = std::any_of(cfg_.plants.begin(), cfg_.plants.end(), [&](const PlantCfg& p) {
+    return p.running() && p.phase >= 0 && p.phase + 1 < static_cast<int>(p.phases.size()) &&
+           !p.phases[static_cast<size_t>(p.phase)].confirm && epoch >= phaseEnd(p, cfg_.system.timezone);
+  });
+  if (!due) return;
+  Config next = cfg_;
+  const auto moved = advancePlants(next, epoch, cfg_.system.timezone);
+  if (moved.empty()) return;
+  const WaterPlan before = waterPlan(cfg_, epoch);
+  const std::string oldRecipe = before.recipe ? before.recipe->id : "";
+  const std::string beforeKey = planKey(before);
+  if (saveConfig(next, std::nullopt).status != 200) return;  // a plant that no longer checks out stays
+  for (const auto& id : moved)
+    if (const PlantCfg* p = cfg_.plant(id))
+      log_.add(epoch, "plant", "info", say("ev.plant.phase", {{"name", p->name}, {"phase", p->phases[static_cast<size_t>(p->phase)].name}}),
+               Msg{}, {{"plant", id}, {"phase", p->phase}});
+  const WaterPlan after = waterPlan(cfg_, epoch);
+  if (planKey(after) != beforeKey) {
+    if (!oldRecipe.empty() && (!after.recipe || after.recipe->id != oldRecipe)) cycle_.recipeChanged(oldRecipe);
+    restartCycle();
+  }
+}
+
+Result Robot::putPlantRecipe(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  PlantRecipeCfg r;
+  r.id = jstr(j, "id");
+  if (r.id.empty()) {
+    do r.id = "pr" + std::to_string(++idSeq_);
+    while (next.plantRecipe(r.id));
+  } else if (!next.plantRecipe(r.id)) {
+    return Result::fail(404, say("api.not_found"));
+  }
+  r.name = utf8Prefix(jstr(j, "name"), 80);
+  r.note = utf8Prefix(jstr(j, "note"), 500);
+  try {
+    r.phases = phasesFromJson(j);
+  } catch (const std::exception&) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  bool replaced = false;
+  for (auto& x : next.plantRecipes)
+    if (x.id == r.id) {
+      x = r;
+      replaced = true;
+    }
+  if (!replaced) next.plantRecipes.push_back(r);
+  Result res = saveConfig(next, changed("cfg.what.plants"));
+  if (res.status != 200) return res;
+  res.body["id"] = r.id;
+  return res;
+}
+
+Result Robot::deletePlantRecipe(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.plantRecipe(id)) return Result::fail(404, say("api.not_found"));
+  Config next = cfg_;
+  next.plantRecipes.erase(std::remove_if(next.plantRecipes.begin(), next.plantRecipes.end(), [&](const PlantRecipeCfg& r) { return r.id == id; }),
+                          next.plantRecipes.end());
+  return saveConfig(next, changed("cfg.what.plants"));  // a plant started from it keeps its own copy
+}
+
+Result Robot::startPlant(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  const Epoch now = clock_.epoch();
+  const std::string& tz = cfg_.system.timezone;
+  Config next = cfg_;
+  PlantCfg p;
+  do p.id = "p" + std::to_string(++idSeq_);
+  while (next.plant(p.id));
+  p.name = utf8Prefix(jstr(j, "name"), 80);
+  p.from = jstr(j, "plantRecipe");
+  const PlantRecipeCfg* from = p.from.empty() ? nullptr : cfg_.plantRecipe(p.from);
+  if (!p.from.empty() && !from) return Result::fail(422, say("api.not_found"));
+  // Its phases: given with the start (adjusted in the dialog), else the plant recipe's, copied
+  try {
+    p.phases = j.contains("phases") ? phasesFromJson(j) : from ? from->phases : std::vector<PhaseCfg>{};
+  } catch (const std::exception&) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  // Day 1 is the day it started: today, or a day of the past year
+  const double start = jnum(j, "start");
+  const Epoch at = isNum(start) ? static_cast<Epoch>(start) : now;
+  if (at > now || at < now - 365 * 86400) return Result::fail(422, say("plant.start"));
+  p.start = p.phaseStart = localMidnight(at, tz);
+  const bool anyRunning = std::any_of(cfg_.plants.begin(), cfg_.plants.end(), [](const PlantCfg& x) { return x.running(); });
+  next.plants.push_back(p);
+  // The first running plant leads, and the recipe chosen by hand ends with it
+  if (!anyRunning) {
+    next.lead = p.id;
+    next.active = ActiveCfg{};
+  }
+  Result r = savePlants(next, say("ev.plant.started", {{"name", p.name}}));
+  if (r.status == 200) r.body["id"] = p.id;
+  return r;
+}
+
+namespace {
+
+PlantCfg* plantIn(Config& c, const std::string& id) {
+  for (auto& p : c.plants)
+    if (p.id == id) return &p;
+  return nullptr;
+}
+
+}  // namespace
+
+Result Robot::putPlant(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  PlantCfg* p = plantIn(next, id);
+  if (!p) return Result::fail(404, say("api.not_found"));
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  if (j.contains("name")) p->name = utf8Prefix(jstr(j, "name"), 80);
+  if (j.contains("phases")) {
+    try {
+      p->phases = phasesFromJson(j);
+    } catch (const std::exception&) {
+      return Result::fail(422, say("api.bad_input"));
+    }
+  }
+  return savePlants(next, say("ev.plant.changed", {{"name", p->name}}));
+}
+
+Result Robot::plantNext(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  PlantCfg* p = plantIn(next, id);
+  if (!p) return Result::fail(404, say("api.not_found"));
+  if (!p->running()) return Result::fail(409, say("plant.not_running"));
+  if (p->phase + 1 >= static_cast<int>(p->phases.size())) return Result::fail(409, say("plant.last_phase"));
+  // Confirmed today: the next phase's day 1 is today
+  p->phase++;
+  p->phaseStart = localMidnight(clock_.epoch(), cfg_.system.timezone);
+  return savePlants(next, say("ev.plant.phase", {{"name", p->name}, {"phase", p->phases[static_cast<size_t>(p->phase)].name}}));
+}
+
+Result Robot::plantHarvest(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  PlantCfg* p = plantIn(next, id);
+  if (!p) return Result::fail(404, say("api.not_found"));
+  if (!p->running()) return Result::fail(409, say("plant.not_running"));
+  // Only the user records the harvest, with the time it happened (RAT-002, RAT-077)
+  const Epoch now = clock_.epoch();
+  const double at = jnum(j, "at");
+  const Epoch when = isNum(at) ? static_cast<Epoch>(at) : now;
+  if (when > now || when < p->start) return Result::fail(422, say("plant.harvest_at"));
+  p->harvestAt = when;
+  return savePlants(next, say("ev.plant.harvest", {{"name", p->name}}));
+}
+
+Result Robot::plantComplete(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  PlantCfg* p = plantIn(next, id);
+  if (!p) return Result::fail(404, say("api.not_found"));
+  if (!p->running()) return Result::fail(409, say("plant.not_running"));
+  p->completedAt = clock_.epoch();
+  return savePlants(next, say("ev.plant.completed", {{"name", p->name}}));
+}
+
+Result Robot::plantLead(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  PlantCfg* p = plantIn(next, id);
+  if (!p) return Result::fail(404, say("api.not_found"));
+  if (!p->running()) return Result::fail(409, say("plant.not_running"));
+  next.lead = id;
+  return savePlants(next, say("ev.plant.lead", {{"name", p->name}}));
+}
+
+Result Robot::deletePlant(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const PlantCfg* was = cfg_.plant(id);
+  if (!was) return Result::fail(404, say("api.not_found"));
+  const std::string name = was->name;
+  Config next = cfg_;
+  next.plants.erase(std::remove_if(next.plants.begin(), next.plants.end(), [&](const PlantCfg& p) { return p.id == id; }), next.plants.end());
+  return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
+}
+
 json Robot::service() const {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   return serviceJson(planService(cfg_, rt_, clock_.epoch(), cfg_.system.timezone));
@@ -896,6 +1128,14 @@ Result Robot::deleteRecipe(const std::string& id) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!cfg_.recipe(id)) return Result::fail(404, say("api.not_found"));
   if (cfg_.active.recipe == id) return Result::fail(409, say("recipe.in_force"));
+  // A plant or a plant recipe that names it keeps it (SD-128)
+  auto uses = [&](const std::vector<PhaseCfg>& phases) {
+    return std::any_of(phases.begin(), phases.end(), [&](const PhaseCfg& ph) { return ph.recipe == id; });
+  };
+  for (const auto& pr : cfg_.plantRecipes)
+    if (uses(pr.phases)) return Result::fail(409, say("recipe.in_plant", {{"name", pr.name}}));
+  for (const auto& p : cfg_.plants)
+    if (uses(p.phases)) return Result::fail(409, say("recipe.in_plant", {{"name", p.name}}));
   Config next = cfg_;
   next.recipes.erase(std::remove_if(next.recipes.begin(), next.recipes.end(), [&](const RecipeCfg& r) { return r.id == id; }),
                      next.recipes.end());
@@ -912,6 +1152,8 @@ Result Robot::setActive(const json& j) {
   Config next = cfg_;
   const Epoch now = clock_.epoch();
   const std::string recipe = jstr(j, "recipe");
+  // While a plant runs, its phase sets the water (SD-128)
+  if (const PlantCfg* p = leadingPlant(cfg_)) return Result::fail(409, say("plant.leads", {{"name", p->name}}));
   next.active = ActiveCfg{};
   if (!recipe.empty()) {
     const RecipeCfg* r = cfg_.recipe(recipe);

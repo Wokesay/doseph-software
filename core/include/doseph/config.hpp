@@ -17,6 +17,7 @@ namespace doseph {
 // 2: bottles became canisters, their kind a role (SD-107)
 constexpr int kSchemaVersion = 3;
 constexpr int kMaxChannels = 8;
+constexpr size_t kMaxPhases = 20;  // phases of a plant recipe or a plant (SD-128)
 
 // A liquid on a dosing channel.
 struct CanisterCfg {
@@ -131,6 +132,39 @@ struct ServiceCfg {
   std::map<std::string, int> days;
 };
 
+// A phase of a plant (SD-128, RAT-076): a free name, a label only; its days; whether it moves on by
+// itself at the local midnight after them or only once the user confirms (RAT-002); and the water
+// it asks for: a recipe, with an EC target and a pH range of its own where they differ (missing:
+// the recipe's)
+struct PhaseCfg {
+  std::string name;
+  int days = 14;
+  bool confirm = false;
+  std::string recipe;
+  double ecTarget = kNaN;
+  double phLow = kNaN, phHigh = kNaN;
+};
+
+// A plant recipe: the phases a plant goes through (SD-128)
+struct PlantRecipeCfg {
+  std::string id, name, note;
+  std::vector<PhaseCfg> phases;
+};
+
+// A plant on the tank (SD-128): started from a plant recipe, whose phases it copied, so a later
+// change of the recipe does not move it. Its progress belongs to it, and a backup carries it.
+struct PlantCfg {
+  std::string id, name;
+  std::string from;        // the plant recipe it was started from (it may be gone)
+  std::vector<PhaseCfg> phases;
+  Epoch start = 0;         // the local midnight of its first day: day 1 is the day it started
+  int phase = 0;           // its current phase
+  Epoch phaseStart = 0;    // the local midnight its current phase began
+  Epoch harvestAt = 0;     // recorded by the user, never by the robot (RAT-002); 0: not yet
+  Epoch completedAt = 0;   // completed, a step of its own (RAT-077); 0: running
+  bool running() const { return completedAt == 0; }
+};
+
 struct Config {
   int schemaVersion = kSchemaVersion;
   int revision = 0;
@@ -143,6 +177,11 @@ struct Config {
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
   ActiveCfg active;
+  std::vector<PlantRecipeCfg> plantRecipes;
+  std::vector<PlantCfg> plants;
+  // The plant that leads the water plan (SD-128); empty or not running: the earliest started
+  // running plant
+  std::string lead;
   std::map<int, ChannelCal> channels;
   // Probe calibrations: pH {points: [[raw, ref], [raw, ref]], zeroMv, at},
   // EC {factor, at}; null when not calibrated (RAT-025)
@@ -151,12 +190,18 @@ struct Config {
   const CanisterCfg* canister(const std::string& id) const;
   const CanisterCfg* canisterOnChannel(int channel) const;
   const RecipeCfg* recipe(const std::string& id) const;
+  const PlantRecipeCfg* plantRecipe(const std::string& id) const;
+  const PlantCfg* plant(const std::string& id) const;
   // The pH− canister on a channel; there is one at most (SD-108)
   const CanisterCfg* phDown() const;
   double channelFlow(int channel) const;  // NaN when not calibrated
 };
 
 void to_json(json& j, const Config& c);
+// A list of phases in its JSON form ({phases: [{name, days, confirm, recipe, ecTarget, ph}]});
+// reading throws on a structure error
+json phasesJson(const std::vector<PhaseCfg>& phases);
+std::vector<PhaseCfg> phasesFromJson(const json& j);
 // Brings a configuration of an older schema to the current one, one step
 // at a time; a newer one than this software knows, or one without a whole
 // version number, throws. Pure: the stored file changes only when it is
