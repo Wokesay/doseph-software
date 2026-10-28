@@ -25,6 +25,12 @@ As of 2026-10-24.
 | nlohmann/json | 3.11.3 | MIT; contains Hedley (CC0-1.0) and parts of Google Abseil (Apache-2.0) | https://github.com/nlohmann/json |
 | cpp-httplib | 0.54.1 | MIT (simulator only) | https://github.com/yhirose/cpp-httplib |
 
+### Data
+
+| Data | Version | License | Source |
+|---|---|---|---|
+| IANA time zone database: the POSIX TZ rule of each zone, in `core/src/tzdb.inc` (`tools/gen_tzdb.mjs`) | 2026e | public domain | https://www.iana.org/time-zones |
+
 ## Used for building and testing only, not shipped
 
 | Tool | License |
