@@ -319,6 +319,31 @@ int main(int argc, char** argv) {
   // MQTT to a broker in the home network, without TLS, on a thread of its own (SD-130)
   sim::MqttLink mqtt(simulation);
 
+  // Requests to the coupled device (SD-131) on a thread of their own: plain HTTP in the home
+  // network, so the robot's loop never waits on the other device
+  std::thread peers([&] {
+    while (g_running) {
+      std::vector<doseph::PeerRequest> reqs;
+      {
+        std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+        reqs = simulation.robot().takePeerRequests();
+      }
+      for (const auto& r : reqs) {
+        httplib::Client cli("http://" + r.address);
+        cli.set_connection_timeout(5);
+        cli.set_read_timeout(5);
+        httplib::Headers headers;
+        if (!r.token.empty()) headers.emplace("Authorization", "Bearer " + r.token);
+        auto res = r.method == "DELETE" ? cli.Delete(r.path, headers) : cli.Post(r.path, headers, r.body.dump(), "application/json");
+        const int status = res ? res->status : 0;
+        const doseph::json body = res ? doseph::json::parse(res->body, nullptr, false) : doseph::json(nullptr);
+        std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+        simulation.robot().peerResponse(r.id, status, body);
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  });
+
   // The tick: every 100 ms of real time, simulated time × time-lapse
   std::thread loop([&] {
     while (g_running) {
@@ -348,5 +373,6 @@ int main(int argc, char** argv) {
   svr.listen_after_bind();
   g_running = false;
   loop.join();
+  peers.join();
   return 0;
 }

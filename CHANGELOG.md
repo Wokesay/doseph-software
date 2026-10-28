@@ -22,6 +22,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Two devices on one tank can be coupled (SD-131, PD-457).
+  - The second device shows a pairing code, valid for 10 minutes. The
+    owner enters it with that device's address on the leading device.
+  - Each device then holds a token for the other. Either side ends the
+    coupling.
+  - The peer and its token are never in a backup.
+  - Dosing together follows.
 - Access tokens with three roles (SD-129), for the app, the account and a
   coupled device. They are made in the settings with a name and a role,
   shown once, kept as a hash and revoked one by one.

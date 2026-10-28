@@ -5,6 +5,7 @@
 // methods under the robot's mutex.
 #pragma once
 
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -12,6 +13,7 @@
 
 #include "doseph/alarms.hpp"
 #include "doseph/auth.hpp"
+#include "doseph/coupling.hpp"
 #include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
 #include "doseph/service.hpp"
@@ -69,6 +71,24 @@ class Robot {
   // The device's own identity (SD-129): random, made at the first start, kept apart from the
   // configuration so a restored backup does not copy it
   const std::string& deviceId() const { return deviceId_; }
+
+  // ---- Coupling (PD-457, SD-131): the peer, pairing with a code, leaving
+  json coupling() const;
+  // On the device to be coupled as the follower: a code to show, 10 minutes valid
+  Result armPairingCode();
+  // On the leader: pairs with the device at `address` that shows `code`; the answer comes later
+  Result pair(const json& j);
+  // On the follower, called by the leader without sign-in: the code is the credential
+  Result join(const json& j);
+  // Ends the coupling here and tells the other device where this one can reach it
+  Result unpair();
+  // The other device ended the coupling; `token` is the credential it called with
+  Result left(const std::string& token);
+  // Whether a credential is the token this device made for its peer
+  bool isPeerToken(const std::string& token) const;
+  // What the platform sends to the other device, and the answers it gets
+  std::vector<PeerRequest> takePeerRequests();
+  void peerResponse(long long id, int status, const json& body);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -225,6 +245,16 @@ class Robot {
   WatchResult alarmWatch_;  // the watchdog's items and the maintenance items due, for the alarms
   Alarms alarms_;
   PushChannels push_;
+  std::optional<Peer> peer_;
+  std::optional<PairingCode> pairing_;
+  std::vector<PeerRequest> peerOut_;
+  struct PeerPending {
+    std::string kind, address, tokenId;
+  };
+  std::map<long long, PeerPending> peerPending_;
+  long long peerSeq_ = 0;
+  json pairStatus_ = nullptr;  // the last pairing from here: {state, address, error, at}
+  bool savePeer();
   MqttSettings mqtt_;
   int mqttRevision_ = 0;
   json mqttStatus_ = {{"connected", false}, {"error", nullptr}, {"at", 0}};

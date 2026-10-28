@@ -506,3 +506,23 @@ test("MQTT is off until switched on; without TLS it only sends values; the passw
   await expect(page.getByTestId("mqtt").getByLabel("Take commands")).toBeChecked();
   await expect(page.getByTestId("mqtt-status")).toContainText("Topics under doseph/");
 });
+
+test("coupling: this device shows a code for the leader; a pairing that cannot reach the other device, or reaches this one, says why (SD-131)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("coupling");
+  await card.getByTestId("show-code").click();
+  const code = (await card.getByTestId("pairing-code").textContent()) ?? "";
+  expect(code).toMatch(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
+  // Nothing answers there
+  await card.locator("input[name=peer-address]").fill("127.0.0.1:9");
+  await card.locator("input[name=peer-code]").fill("ABCD-EFGH");
+  await card.getByTestId("pair").click();
+  await expect(card.getByTestId("pairing-state")).toHaveText("The other device can't be reached", { timeout: 15_000 });
+  // This device itself, with its own code: refused
+  await card.locator("input[name=peer-address]").fill(new URL(page.url()).host);
+  await card.locator("input[name=peer-code]").fill(code.toLowerCase());
+  await card.getByTestId("pair").click();
+  await expect(card.getByTestId("pairing-state")).toHaveText("A device can't be coupled with itself", { timeout: 15_000 });
+  await expect(card.getByTestId("coupled")).toHaveCount(0);
+});

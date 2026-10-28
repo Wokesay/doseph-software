@@ -41,6 +41,9 @@ keeping the details confidential until disclosure.
   kept as a hash; the owner revokes it in the settings (SD-129).
 - MQTT is off by default. Commands over MQTT need TLS and a user, and
   only reach what an account token may do (SD-130).
+- Two devices couple only with a 10-minute code shown on one of them;
+  each then holds a peer token for the other, revoked when either ends
+  the coupling (SD-131).
 - Host and origin checks against DNS rebinding and cross-site requests;
   the session in an `HttpOnly`, `SameSite=Strict` cookie.
 - Only the gateway switches pumps; no dose without proven flow; a crash

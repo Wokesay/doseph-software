@@ -233,6 +233,14 @@ std::optional<std::string> Auth::createToken(const std::string& name, Role role,
   return token;
 }
 
+std::optional<std::string> Auth::tokenIdOf(const std::string& credential) const {
+  if (credential.rfind(kTokenPrefix, 0) != 0) return std::nullopt;
+  const std::string h = tokenHash(credential);
+  for (const auto& t : tokens_)
+    if (sameHash(h, t.hash)) return t.id;
+  return std::nullopt;
+}
+
 bool Auth::revokeToken(const std::string& id) {
   auto it = std::find_if(tokens_.begin(), tokens_.end(), [&](const AccessToken& t) { return t.id == id; });
   if (it == tokens_.end()) return false;

@@ -21,6 +21,7 @@ constexpr const char* kConfigFile = "config.json";
 constexpr const char* kStateFile = "state.json";
 constexpr const char* kAuthFile = "auth.json";
 constexpr const char* kDeviceFile = "device.json";  // the device's identity, never in a backup (SD-129)
+constexpr const char* kPeerFile = "peer.json";  // the coupled device with its token, never in a backup (SD-131)
 constexpr const char* kMqttFile = "mqtt.json";  // MQTT with its password, apart from the configuration (SD-130)
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
@@ -257,6 +258,12 @@ void Robot::boot() {
     } catch (...) {
       push_ = PushChannels{};
     }
+  }
+  // A peer that cannot be read is none: the device stands alone and says so (SD-131)
+  if (auto s = store_.read(kPeerFile)) {
+    const json j = json::parse(*s, nullptr, false);
+    peer_ = peerFromJson(j);
+    if (!peer_ && j.is_object() && !j.empty()) log_.add(clock_.epoch(), "coupling", "warn", say("ev.coupling.unreadable"));
   }
   // MQTT settings that cannot be read are off: nothing goes to a broker no one checked (SD-130)
   if (auto s = store_.read(kMqttFile)) {
@@ -1665,6 +1672,185 @@ Result Robot::putPush(const json& j) {
   push_ = next;
   log_.add(clock_.epoch(), "config", "info", changed("cfg.what.push"));
   return Result::ok(pushSettings());
+}
+
+// ---------------------------------------------------------------- coupling (SD-131)
+
+bool Robot::savePeer() { return store_.write(kPeerFile, peer_ ? peerToJson(*peer_, true).dump() : std::string("{}")); }
+
+json Robot::coupling() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const bool armed = pairing_ && clock_.nowMs() < pairing_->until;
+  return {{"deviceId", deviceId_},
+          {"peer", peer_ ? peerToJson(*peer_, false) : json(nullptr)},
+          {"code", armed ? json{{"until", clock_.epoch() + (pairing_->until - clock_.nowMs()) / 1000}} : json(nullptr)},
+          {"pairing", pairStatus_}};
+}
+
+Result Robot::armPairingCode() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
+  static constexpr char kAlphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  std::uint8_t r[8];
+  rng_(r, sizeof r);
+  PairingCode c;
+  for (std::uint8_t b : r) c.code += kAlphabet[b & 31];  // 256 is a multiple of 32: no bias
+  c.until = clock_.nowMs() + PairingCode::kValid;
+  pairing_ = c;
+  return Result::ok({{"code", c.code.substr(0, 4) + "-" + c.code.substr(4)}, {"until", clock_.epoch() + PairingCode::kValid / 1000}});
+}
+
+Result Robot::pair(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
+  if (!peerPending_.empty()) return Result::fail(409, say("coupling.pending"));
+  const std::string address = jstr(j, "address"), code = jstr(j, "code");
+  if (!peerAddress(address)) return Result::fail(422, say("coupling.address"));
+  if (code.empty() || code.size() > 16) return Result::fail(422, say("coupling.code"));
+  // The token the follower will use to call this device; revoked again if the pairing fails
+  const Auth before = auth_;
+  Msg err;
+  const auto token = auth_.createToken(say("coupling.token_name").text, Role::Peer, clock_.epoch(), err);
+  if (!token) return Result::fail(422, err);
+  if (!saveAuth()) {
+    auth_ = before;
+    return Result::fail(500, say("store.failed"));
+  }
+  PeerRequest req;
+  req.id = ++peerSeq_;
+  req.address = address;
+  req.method = "POST";
+  req.path = "/api/v1/coupling/join";
+  req.body = {{"code", code}, {"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}};
+  peerOut_.push_back(req);
+  peerPending_[req.id] = {"join", address, auth_.tokens().back().id};
+  pairStatus_ = {{"state", "pairing"}, {"address", address}, {"error", nullptr}, {"at", clock_.epoch()}};
+  return Result{202, {{"pending", true}}};
+}
+
+Result Robot::join(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
+  const Ms now = clock_.nowMs();
+  if (!pairing_ || now >= pairing_->until) return Result::fail(403, say("coupling.code"));
+  std::string typed;  // as the owner typed it: any case, a dash or spaces between the groups
+  for (char ch : jstr(j, "code"))
+    if (ch != '-' && !std::isspace(static_cast<unsigned char>(ch))) typed += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  unsigned diff = typed.size() == pairing_->code.size() ? 0 : 1;
+  for (size_t i = 0; i < typed.size() && i < pairing_->code.size(); ++i) diff |= static_cast<unsigned>(typed[i] ^ pairing_->code[i]);
+  if (diff != 0) {
+    // The fifth wrong try voids the code: 40 bits leave nothing to guess in five
+    if (++pairing_->wrong >= PairingCode::kMaxWrong) pairing_.reset();
+    log_.add(clock_.epoch(), "coupling", "warn", say("ev.coupling.code_wrong"));
+    return Result::fail(403, say("coupling.code"));
+  }
+  Peer p;
+  p.role = "follower";
+  p.id = jstr(j, "id");
+  p.name = jstr(j, "name");
+  p.token = jstr(j, "token");
+  p.since = clock_.epoch();
+  if (p.id == deviceId_) return Result::fail(422, say("coupling.self"));
+  const Auth before = auth_;
+  Msg err;
+  const auto token = auth_.createToken(say("coupling.token_name").text, Role::Peer, clock_.epoch(), err);
+  if (!token) return Result::fail(422, err);
+  p.tokenId = auth_.tokens().back().id;
+  if (!peerFromJson(peerToJson(p, true))) {
+    auth_ = before;
+    return Result::fail(422, say("api.bad_input"));
+  }
+  peer_ = p;
+  if (!saveAuth() || !savePeer()) {
+    auth_ = before;
+    peer_.reset();
+    saveAuth();
+    savePeer();
+    return Result::fail(500, say("store.failed"));
+  }
+  pairing_.reset();
+  log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.joined", {{"name", p.name}}));
+  return Result::ok({{"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}});
+}
+
+void Robot::peerResponse(long long id, int status, const json& body) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const auto it = peerPending_.find(id);
+  if (it == peerPending_.end()) return;
+  const PeerPending pending = it->second;
+  peerPending_.erase(it);
+  if (pending.kind != "join") return;
+  Peer p;
+  p.role = "leader";
+  p.id = jstr(body, "id");
+  p.name = jstr(body, "name");
+  p.address = pending.address;
+  p.token = jstr(body, "token");
+  p.tokenId = pending.tokenId;
+  p.since = clock_.epoch();
+  const bool ok = status == 200 && body.is_object() && peerFromJson(peerToJson(p, true)) && p.id != deviceId_;
+  if (ok) {
+    peer_ = p;
+    if (savePeer()) {
+      pairStatus_ = nullptr;
+      log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.paired", {{"name", p.name}}));
+      return;
+    }
+    peer_.reset();
+  }
+  // Failed: the token made for the other device goes again, and the reason stays to be shown
+  auth_.revokeToken(pending.tokenId);
+  saveAuth();
+  json error = body.is_object() && body.contains("error") ? body["error"] : json(say(status == 0 ? "coupling.unreachable" : "coupling.refused"));
+  if (ok) error = say("store.failed");
+  pairStatus_ = {{"state", "failed"}, {"address", pending.address}, {"error", error}, {"at", clock_.epoch()}};
+}
+
+Result Robot::unpair() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!peer_) return Result::fail(404, say("coupling.none"));
+  const Peer was = *peer_;
+  // The leader knows where the follower is and tells it; a follower's leader learns it from its
+  // next call, which the revoked token no longer opens
+  if (!was.address.empty()) {
+    PeerRequest req;
+    req.id = ++peerSeq_;
+    req.address = was.address;
+    req.method = "POST";
+    req.path = "/api/v1/coupling/leave";
+    req.token = was.token;
+    peerOut_.push_back(req);
+    peerPending_[req.id] = {"leave", was.address, ""};
+  }
+  auth_.revokeToken(was.tokenId);
+  peer_.reset();
+  if (!saveAuth() || !savePeer()) return Result::fail(500, say("store.failed"));
+  log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.ended", {{"name", was.name}}));
+  return Result::ok(coupling());
+}
+
+Result Robot::left(const std::string& token) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!peer_ || !isPeerToken(token)) return Result::fail(403, say("coupling.not_peer"));
+  const Peer was = *peer_;
+  auth_.revokeToken(was.tokenId);
+  peer_.reset();
+  if (!saveAuth() || !savePeer()) return Result::fail(500, say("store.failed"));
+  log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.left", {{"name", was.name}}));
+  return Result::ok();
+}
+
+bool Robot::isPeerToken(const std::string& token) const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const auto id = auth_.tokenIdOf(token);
+  return peer_ && id && *id == peer_->tokenId;
+}
+
+std::vector<PeerRequest> Robot::takePeerRequests() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  std::vector<PeerRequest> out;
+  out.swap(peerOut_);
+  return out;
 }
 
 json Robot::mqttSettings() const {
