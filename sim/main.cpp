@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
     res.set_content(out.dump(), "application/json");
   });
 
-  // Live channel: Server-Sent Events, the state once a second
+  // Live updates: Server-Sent Events, the state once a second
   svr.Get("/api/v1/events/stream", [&](const httplib::Request& req, httplib::Response& res) {
     {
       std::lock_guard<std::recursive_mutex> l(simulation.mutex());

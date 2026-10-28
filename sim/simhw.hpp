@@ -28,7 +28,7 @@ class SimHardware : public doseph::IHardware {
   explicit SimHardware(World& w) : w_(w) {}
   void poll(doseph::Ms now) override { w_.advance(now); }
   bool online() const override { return w_.probeFault != "offline"; }
-  std::optional<doseph::Sample> sample(doseph::Channel c) const override;
+  std::optional<doseph::Sample> sample(doseph::Signal c) const override;
   int pumpCount() const override { return static_cast<int>(w_.pumps.size()); }
   bool startRun(int pump, doseph::Ms ms, const std::string& jobId, std::string& err) override {
     return w_.startRun(pump, ms, jobId, err);

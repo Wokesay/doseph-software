@@ -5,7 +5,7 @@ import { msg, t } from "./i18n";
 export type Msg = { key: string; text: string; args?: Record<string, unknown> };
 
 export type Quality = "offline" | "no_data" | "stale" | "frozen" | "implausible" | "jump" | "uncalibrated" | "ok";
-export type Channel = "ph" | "ec" | "temp" | "flow";
+export type Signal = "ph" | "ec" | "temp" | "flow";
 
 export type Reading = {
   value: number | null;
@@ -63,7 +63,7 @@ export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawP
 export type RobotState = {
   now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
   circulation: boolean | null; flowOk: boolean;
-  readings: Record<Channel, Reading>;
+  readings: Record<Signal, Reading>;
   cycle: Cycle;
   watchdog: Watchdog;
   latches: Record<string, Record<string, unknown>>;

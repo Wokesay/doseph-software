@@ -23,7 +23,7 @@ enum class Quality {
 const char* qualityName(Quality q);
 
 struct Reading {
-  std::string channel, unit;
+  std::string signal, unit;
   int decimals = 2;
   std::optional<double> value;  // the value shown (Uncalibrated: the raw value, or EC not compensated)
   Quality quality = Quality::NoData;

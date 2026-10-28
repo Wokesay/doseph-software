@@ -3,12 +3,12 @@
 
 namespace doseph {
 
-const char* channelName(Channel c) {
+const char* signalName(Signal c) {
   switch (c) {
-    case Channel::Ph: return "ph";
-    case Channel::Ec: return "ec";
-    case Channel::Temp: return "temp";
-    case Channel::Flow: return "flow";
+    case Signal::Ph: return "ph";
+    case Signal::Ec: return "ec";
+    case Signal::Temp: return "temp";
+    case Signal::Flow: return "flow";
   }
   return "unknown";
 }

@@ -87,7 +87,7 @@ TEST_CASE("Event log: key and values survive a restart, old plain texts stay rea
   const auto je = jl.query(0, 1000, "", 1).at(0);
   CHECK(je.text.key.empty());
   CHECK(je.text.text == "pH jumped from 6.01 to 7.23.");
-  CHECK(doseph::fitsTemplate("truth.jump", {{"channel", "ec"}, {"until", 900}, {"from", nullptr}, {"to", 2.4}, {"unit", "\u00a0mS/cm"}}));
+  CHECK(doseph::fitsTemplate("truth.jump", {{"signal", "ec"}, {"until", 900}, {"from", nullptr}, {"to", 2.4}, {"unit", "\u00a0mS/cm"}}));
   CHECK_FALSE(doseph::fitsTemplate("truth.jump", {{"until", 900}, {"from", 1.2}, {"to", 2.4}}));
 }
 

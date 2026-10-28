@@ -16,9 +16,9 @@ void to_json(json& j, const WatchResult& w) {
 
 namespace {
 
-const Reading* find(const WatchInput& in, const char* channel) {
+const Reading* find(const WatchInput& in, const char* signal) {
   for (const auto& r : in.readings)
-    if (r.channel == channel) return &r;
+    if (r.signal == signal) return &r;
   return nullptr;
 }
 

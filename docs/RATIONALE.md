@@ -235,9 +235,9 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-027 – A sensor counts as failed only after several missed readings, judged by its last measurement
 
-- **Rule:** A channel is stale only after it missed its updates for longer than its limit (pH and EC 60 s, temperature 120 s, flow 15 s), judged by its last measurement, never by a change of value.
-- **Why:** A single missed reading is usually a short communication glitch; alarming on it produces false alarms. Requiring several misses still detects a real defect quickly. Judging by a change of value instead hides a channel that falls silent while its device keeps running, and makes a calm, healthy sensor look old.
-- **Evidence:** Observed on the reference installation (2026): first, with freshness judged only per device and sensors reporting every 30 s, a limit of 5 min separated real defects from wireless dropouts, and six missed reports were too close to ordinary dropouts. Later the installation sent a sign of life per channel every 15 s: in a 14-day replay with real data, a water temperature read every 30 s was never stale at 60 s, and the other channels stayed between 0 and 20 s old.
+- **Rule:** A signal is stale only after it missed its updates for longer than its limit (pH and EC 60 s, temperature 120 s, flow 15 s), judged by its last measurement, never by a change of value.
+- **Why:** A single missed reading is usually a short communication glitch; alarming on it produces false alarms. Requiring several misses still detects a real defect quickly. Judging by a change of value instead hides a signal that falls silent while its device keeps running, and makes a calm, healthy sensor look old.
+- **Evidence:** Observed on the reference installation (2026): first, with freshness judged only per device and sensors reporting every 30 s, a limit of 5 min separated real defects from wireless dropouts, and six missed reports were too close to ordinary dropouts. Later the installation sent a sign of life per signal every 15 s: in a 14-day replay with real data, a water temperature read every 30 s was never stale at 60 s, and the other channels stayed between 0 and 20 s old.
 - **Implemented in:** `core/src/truth.cpp`
 - **Tests:** `tests/core/test_truth.cpp` "Sensor truth: stale and implausible; standstill of the raw value apart from freshness (RAT-020, RAT-023, RAT-027, RAT-059)"
 
@@ -495,7 +495,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-059 – Freshness and standstill are separate checks
 
-- **Rule:** A raw value that stands still is a fault only for a channel that should be noisy (pH, EC); a rounded or quiet signal such as the water temperature is checked for freshness only.
+- **Rule:** A raw value that stands still is a fault only for a signal that should be noisy (pH, EC); a rounded or quiet signal such as the water temperature is checked for freshness only.
 - **Why:** A rounded or very quiet signal that does not change is not a fault; flagging it produces false alarms that teach users to ignore warnings. A sensor that stops reporting is still caught by the freshness check.
 - **Evidence:** Observed on the reference installation (2026): a water temperature reported in 0.1 °C steps stayed on one value for more than 60 min twenty times in 14 days (up to 211 min) with a full tank and a working sensor; an air temperature sensor with 0.1 °C resolution stood still for up to 182 min. None of them had a gap in delivery.
 - **Implemented in:** `core/include/doseph/readmodel.hpp`, `core/include/doseph/truth.hpp`, `core/src/truth.cpp`
