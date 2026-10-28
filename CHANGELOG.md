@@ -7,6 +7,15 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The suction pump is the device's own (SD-109): it runs for a check and
+  is off while the robot holds or waits. Flow is proven by the device's
+  method: an outlet level sensor while it reports water and the pump
+  runs, or a flow meter at 0.5 L/min, each for 10 s. Without flow within
+  2 minutes the pump goes off and the check tries again in 5 minutes;
+  after the third try in a row a dry-run lock holds it until it is
+  released under Status. A probe or channel calibration, or a line fill,
+  stops the check and the suction pump first, and the check starts anew
+  once it ends.
 - Filling a line drips into the tank (SD-111): where the outlet has a
   drop sensor, the pump runs in runs of at most 60 s until the first
   drops fall, at most 5 minutes in all, with the outlet on the device.
@@ -161,6 +170,11 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- The circulation modes of the tank (`cycle`, `always`, `external`) are
+  gone (SD-109): the device's own suction pump runs for every check. A
+  setting `circulation` in a saved or imported configuration is read
+  over; a circulation pump of your own comes later as a role on a smart
+  plug. The tank page shows the flow and the turnover instead.
 - Doseph's terms reach the API, the configuration and the app (SD-107):
   a dosing pump is a **channel** ("Channels & probes", `channel` on a
   canister, `channels` in the configuration and the state,

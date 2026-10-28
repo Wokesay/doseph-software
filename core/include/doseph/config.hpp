@@ -64,7 +64,6 @@ struct ActiveCfg {
 // The tank as the user describes it, and the timing of the cycle (SD-105).
 struct TankCfg {
   double volumeL = kNaN;              // as entered; the test dose checks it (SD-105)
-  std::string circulation = "cycle";  // cycle | always | external
   // The user's mixing wait after a dose; NaN: the suggestion from volume and
   // flow (about 2 turnovers for EC, 3 for pH, SD-105)
   double waitEcMin = kNaN, waitPhMin = kNaN;

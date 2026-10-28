@@ -101,7 +101,7 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
     for (const auto& i : st["cycle"]["checks"][g]) CHECK((i["ok"].is_boolean() && i["key"].is_string() && i["text"].is_string()));
   }
   for (const char* k : {"recipe", "ecTarget", "phTarget", "volumeL", "flowLpm", "turnoverMin", "waitEcMin", "waitPhMin",
-                        "suggestEcMin", "suggestPhMin", "holdMin", "circulation"})
+                        "suggestEcMin", "suggestPhMin", "holdMin"})
     CHECK_MESSAGE(st["cycle"]["settings"].contains(k), k);
   CHECK(st["watchdog"].contains("stale"));
   CHECK(st["channels"].size() == 4);

@@ -32,6 +32,7 @@ constexpr Ms kStableWindowMs = 60 * kSecond;  // readings within the band for th
 constexpr double kStablePh = 0.05, kStableEc = 0.03;
 constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by then: wait and try again
 constexpr Ms kRetryMs = 5 * kMinute;          // a wait tries again after this
+constexpr int kDryTries = 3;                   // tries without flow in a row: the suction pump may run dry (SD-109)
 constexpr Ms kNoFlowMixMaxMs = 30 * kMinute;  // the mixing clock stood this long: wait
 constexpr Epoch kEcRestS = 240;               // pH waits this long after an EC dose (RAT-046)
 constexpr double kTestRiseEc = 0.1;           // a test dose's aim (SD-105)
@@ -62,7 +63,6 @@ struct CycleSettings {
   double waitEcMin = kNaN, waitPhMin = kNaN;  // in force: the user's, else the suggestion
   double suggestEcMin = kNaN, suggestPhMin = kNaN;
   Ms holdMs = 60 * kMinute;
-  std::string circulation = "cycle";
 };
 CycleSettings cycleSettings(const Ctx& c);
 
@@ -132,6 +132,7 @@ class MixCycle {
   double flowSum_ = 0;
   int flowN_ = 0;
   bool noFlowLogged_ = false;
+  int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109)
 
   // Measuring
   struct Sample3 {

@@ -113,7 +113,6 @@ void to_json(json& j, const Config& c) {
                  {"timezone", c.system.timezone},
                  {"passwordSet", c.system.passwordSet}};
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
-               {"circulation", c.tank.circulation},
                {"waitEcMin", numOrNull(c.tank.waitEcMin)},
                {"waitPhMin", numOrNull(c.tank.waitPhMin)},
                {"holdMin", numOrNull(c.tank.holdMin)}};
@@ -203,7 +202,7 @@ Config configFromJson(const json& in) {
   c.system.passwordSet = jbool(s, "passwordSet", false);
   const json& t = objectAt(j, "tank");
   c.tank.volumeL = numOrNaN(t, "volumeL");
-  c.tank.circulation = jstr(t, "circulation", c.tank.circulation);
+  // "circulation" from before SD-109 is read over: the device's own suction pump runs for a check
   c.tank.waitEcMin = numOrNaN(t, "waitEcMin");
   c.tank.waitPhMin = numOrNaN(t, "waitPhMin");
   if (t.contains("holdMin")) c.tank.holdMin = numOrNaN(t, "holdMin");
@@ -305,7 +304,6 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
 
   const auto& t = c.tank;
   if (isNum(t.volumeL) && !inRange(t.volumeL, 1, 100000)) err(say("cfg.tank.volume", {{"min", 1}, {"max", 100000}}));
-  if (t.circulation != "cycle" && t.circulation != "always" && t.circulation != "external") err(say("cfg.tank.circulation"));
   if (isNum(t.waitEcMin) && !inRange(t.waitEcMin, kWaitMinMin, kWaitMaxMin))
     err(say("cfg.tank.wait", {{"min", kWaitMinMin}, {"max", kWaitMaxMin}}));
   if (isNum(t.waitPhMin) && !inRange(t.waitPhMin, kWaitMinMin, kWaitMaxMin))

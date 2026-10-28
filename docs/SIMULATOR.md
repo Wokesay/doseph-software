@@ -66,7 +66,7 @@ http://localhost:5173 (the API is passed through).
 |---|---|
 | Tank | volume, EC, pH, temperature; a dose spreads with the flow (time constant about one turnover, at least 20 s), pH with a dead time of 60 s |
 | Measuring chamber | holds what flows through it; without flow it keeps its water |
-| Suction pump | delivers 12 L/min after priming for 8 s, and primes again after each stop; faults: filter blocked, suction line out of the water (dry), flow or outlet sensor broken; a pump of your own |
+| Suction pump | delivers 12 L/min after priming for 8 s, and primes again after each stop; faults: filter blocked, suction line out of the water (dry), flow or outlet sensor broken |
 | Water path | the measuring chamber holds 0.15 L up to its weir, which keeps the probes wet; above it the water returns by gravity or by a return pump that runs from 0.25 L to 0.18 L; faults: return blocked, return pump failed. At 0.35 L the high-level sensor trips |
 | Hardware release | a leak, high level or the stop button switch the suction pump and every dosing pump off below the robot, and no run starts; the state shows it as `hardware` |
 | Dosing channels | four or six, each pump with its own true flow (42–53 ml/min with the head of its profile), may be blocked or empty; a head can be changed or taken off; calibration and priming go into a cup |

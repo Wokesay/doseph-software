@@ -53,6 +53,9 @@ TEST_CASE("Configuration: there and back through JSON; a missing number stays mi
   j["channels"]["2"].erase("head");
   CHECK(configFromJson(j).channels.at(2).head.empty());
   CHECK_THROWS(configFromJson(json{{"tank", {{"volumeL", "a hundred"}}}}));
+  // A circulation mode from before SD-109 is read over
+  CHECK(validateConfig(configFromJson(json{{"tank", {{"volumeL", 100}, {"circulation", "external"}}}}), 4).empty());
+  CHECK_FALSE(json(back)["tank"].contains("circulation"));
   CHECK_THROWS(configFromJson(json{{"schemaVersion", 99}}));
 }
 

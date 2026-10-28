@@ -174,6 +174,7 @@ class Robot {
   bool stopButtonSeen_ = false;  // the stop button was pressed; a new press stops again (SD-110)
 
   std::string lastHold_;         // the hold of the last tick: when it ends, the cycle starts anew
+  bool lastChannelJob_ = false;  // a channel job ran in the last tick: when it ends, the check starts anew
   Epoch maintenanceUntil() const;
 
   Epoch bootEpoch_ = 0;

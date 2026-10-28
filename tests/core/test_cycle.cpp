@@ -3,11 +3,13 @@
 // (SD-105, SD-106).
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <vector>
 
 #include "doseph/messages.hpp"
+#include "fakes.hpp"
 #include "simulation.hpp"
 
 using namespace doseph;
@@ -55,7 +57,7 @@ TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose f
   sim::Simulation s(demo());
   // A fresh fill below the recipe: EC 0.45, pH 7.6
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 10));
-  CHECK(s.world().output);  // the robot switched the circulation pump on
+  CHECK(s.world().output);  // the robot switched the suction pump on
   REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 30));
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 90));
   REQUIRE(runUntil(s, [&] { return phase(s) == "dose"; }, 15 * 60));
@@ -85,14 +87,14 @@ TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose f
   CHECK(firstPh < keys.size());
   CHECK(lastEc < firstPh);
   CHECK(hasEvent(s, "ev.cycle.held"));
-  // Holding: the circulation pump off (circulation "cycle"), the journal empty again (SD-106)
+  // Holding: the suction pump off (SD-109), the journal empty again (SD-106)
   CHECK_FALSE(s.world().output);
   CHECK(s.storage().read("journal.json").value_or("") == "[]");
   // After the hold it checks again from the start
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 61 * 60));
 }
 
-TEST_CASE("Cycle: no flow, no dose; the suction pump that runs without flow goes off (SD-105)") {
+TEST_CASE("Cycle: no flow, no dose; the suction pump that runs without flow goes off, and after three tries in a row it is locked as a dry run until a person releases it (SD-105, SD-109)") {
   sim::Simulation s(demo());
   s.world().flowFault = "blocked";
   const double ec = s.world().tank.ec;
@@ -105,13 +107,16 @@ TEST_CASE("Cycle: no flow, no dose; the suction pump that runs without flow goes
   s.step(30 * kMinute, 1000);
   CHECK(s.world().tank.ec == doctest::Approx(ec).epsilon(0.01));
   CHECK(s.world().tank.pendingEc == doctest::Approx(0));
-  // A circulation pump switched outside the robot: it waits for flow and says to switch it on
-  s.robot().putTank({{"circulation", "external"}});
+  // Three tries in a row without flow: the suction pump may run dry; it stays off until released
+  REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("flow.dry"); }, 30 * 60));
+  CHECK(hasEvent(s, "ev.flow.dry"));
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.dry");
+  s.step(30 * kMinute, 1000);
+  CHECK_FALSE(s.world().output);
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.dry");
   s.world().flowFault.clear();
-  REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 6 * 60));
-  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait_flow_external");
-  s.world().external = true;
-  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 60));
+  REQUIRE(s.robot().ackLatch("flow.dry", json::object()).status == 200);
+  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 3 * 60));
 }
 
 TEST_CASE("Cycle: a dose that loses its flow stops at once; what went in mixes with flow before it is measured, and nothing is learned (SD-105, RAT-057)") {
@@ -696,4 +701,32 @@ TEST_CASE("Cycle: pH waits below the EC floor and after a nutrient dose, and is 
     }
     CHECK(ph > 0);
   }
+}
+
+TEST_CASE("Flow by the device's method: an outlet level sensor proves it while it reports water and the suction pump runs; a flow meter at 0.5 L/min (SD-109)") {
+  fake::Hardware hw;
+  fake::Clock clock;
+  MemoryStorage store;
+  Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
+  r.boot();
+  // The suction pump as the hardware reports it after the tick (without a recipe the check switches it off)
+  auto flowOk = [&](bool suction) {
+    clock.ms += 1000;
+    r.tick();
+    hw.out = suction;
+    return r.state()["flowOk"].get<bool>();
+  };
+  hw.prof.flow = "outlet_level";
+  hw.water.outletWet = true;
+  CHECK_FALSE(flowOk(false));  // water at the outlet, but not drawn by the suction pump
+  CHECK(flowOk(true));
+  hw.water.outletWet = false;
+  CHECK_FALSE(flowOk(true));
+  hw.water.outletWet.reset();  // no reading from the sensor: no flow (R5)
+  CHECK_FALSE(flowOk(true));
+  hw.prof.flow = "turbine";
+  hw.set(Signal::Flow, 0.4, clock.ms + 1000);
+  CHECK_FALSE(flowOk(true));
+  hw.set(Signal::Flow, 6.0, clock.ms + 1000);
+  CHECK(flowOk(true));
 }

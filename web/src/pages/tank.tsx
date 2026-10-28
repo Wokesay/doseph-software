@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Tank: its volume and a new fill, the circulation with its flow and
+// Tank: its volume and a new fill, the flow through the device and the
 // turnover, how long a dose is mixed in, the pause between checks and the
 // control's settings.
 import { useState } from "preact/hooks";
 import { Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
-import { post, put, type Circulation } from "../api";
+import { post, put } from "../api";
 import { num, time } from "../format";
 import { t } from "../i18n";
 import { LIMITS, config, refreshConfig, refreshState, state, toast } from "../store";
-import { Banner, Button, Card, Field, Modal, NumberInput, Seg, Term } from "../ui";
+import { Banner, Button, Card, Field, Modal, NumberInput, Term } from "../ui";
 
 async function saveTank(body: Record<string, unknown>) {
   await put("/tank", body);
@@ -74,25 +74,14 @@ function VolumeCard() {
   );
 }
 
-function CirculationCard() {
-  const cfg = config.value!;
+function FlowCard() {
   const st = state.value!;
   const s = st.cycle.settings;
   const flow = st.readings.flow;
   return (
     <Card title={<Term topic="circulation" />} icon={<RefreshCw size={18} />}>
       <div class="stack">
-        <Seg<Circulation>
-          value={cfg.tank.circulation}
-          onChange={(v) => saveTank({ circulation: v })}
-          label={t("term.circulation")}
-          options={[
-            ["cycle", t("tank.circ.cycle")],
-            ["always", t("tank.circ.always")],
-            ["external", t("tank.circ.external")],
-          ]}
-        />
-        <p class="muted small">{t(cfg.tank.circulation === "cycle" ? "tank.circ.cycleText" : cfg.tank.circulation === "always" ? "tank.circ.alwaysText" : "tank.circ.externalText")}</p>
+        <p class="muted small">{t("tank.suctionText")}</p>
         <div class="kv" data-testid="flow-info">
           <span>{t("tank.flowNow")}</span>
           <span>{flow.usable ? `${num(flow.value, 1)} L/min` : "–"}</span>
@@ -245,7 +234,7 @@ export function TankPage() {
     <div class="stack">
       <div class="grid-2">
         <VolumeCard key={`v${rev}`} />
-        <CirculationCard />
+        <FlowCard />
       </div>
       <WaitCard key={`w${rev}`} />
       <MaintenanceCard />

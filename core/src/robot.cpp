@@ -63,7 +63,10 @@ Ctx Robot::ctx() {
   return c;
 }
 
+// Flow by the device's method (SD-109): with an outlet level sensor, it reports water while the
+// suction pump runs; with a flow meter, at least 0.5 L/min. The check proves it for 10 s.
 bool Robot::flowOk() const {
+  if (hw_.profile().flow == "outlet_level") return hw_.waterPath().outletWet == true && hw_.suctionPump() == true;
   const Reading& f = truth_.get(Signal::Flow);
   return f.usable() && *f.value >= kFlowMinLpm;
 }
@@ -199,6 +202,9 @@ void Robot::tick() {
   // The release is back: the check starts anew, nothing resumes on its own (R6)
   if (c.hold.empty() && !lastHold_.empty()) restartCycle();
   lastHold_ = c.hold;
+  // A channel job ended: the check starts anew (SD-109)
+  if (!c.channelJob && lastChannelJob_) restartCycle();
+  lastChannelJob_ = c.channelJob;
   act_.enforce(c);
   // Drops without a running pump went into the tank: the check mixes first and learns nothing,
   // as after a cut dose (SD-111)
@@ -591,7 +597,6 @@ Result Robot::putTank(const json& j) {
   if (!num("volumeL", next.tank.volumeL) || !num("waitEcMin", next.tank.waitEcMin) || !num("waitPhMin", next.tank.waitPhMin) ||
       !num("holdMin", next.tank.holdMin))
     return Result::fail(422, say("api.bad_input"));
-  next.tank.circulation = jstr(j, "circulation", next.tank.circulation);
   const bool volumeChanged = !(std::isnan(next.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) && next.tank.volumeL != cfg_.tank.volumeL;
   Result r = saveConfig(next, changed("cfg.what.tank"));
   if (r.status != 200) return r;

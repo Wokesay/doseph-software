@@ -30,7 +30,7 @@ void World::reset(int n) {
   lastSample_ = -100000;
   tank = Tank{};
   chamber = Chamber{};
-  output = external = false;
+  output = false;
   suctionLpm = 12.0;
   flowFault.clear();
   returnByPump = false;
@@ -97,7 +97,7 @@ void World::outOfTip(Pump& p, double ml) {
   }
 }
 
-bool World::primed() const { return external || primedMs_ >= kPrimeMs; }
+bool World::primed() const { return primedMs_ >= kPrimeMs; }
 
 bool World::flowing() const {
   return suctionRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && tank.volumeL > 1.0;
@@ -319,7 +319,6 @@ json World::toJson() const {
           {"chamber", {{"ec", chamber.ec}, {"ph", chamber.ph}, {"temp", chamber.temp}}},
           {"channels", ps},
           {"output", output},
-          {"external", external},
           {"suctionLpm", suctionLpm},
           {"primed", primed()},
           {"flowing", flowing()},

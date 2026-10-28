@@ -72,15 +72,14 @@ class World {
   void advance(Ms now);
   Ms now() const { return now_; }
 
-  // The suction pump: switched by the robot's output, or by itself (an
-  // external pump). It primes first, then delivers. `flowFault` "blocked"
+  // The suction pump: switched by the robot's output (SD-109). It primes
+  // first, then delivers. `flowFault` "blocked"
   // (filter) or "dry" (suction line out of the water) means it runs without
   // flow, "sensor" that water flows but the flow or outlet sensor sees none.
   bool output = false;
-  bool external = false;
   double suctionLpm = 12.0;  // flow when it runs (assumption)
   std::string flowFault;
-  bool suctionRuns() const { return external || output; }
+  bool suctionRuns() const { return output; }
   bool primed() const;
   bool flowing() const;
   // The outlet's level sensor: water passes the weir on its way back

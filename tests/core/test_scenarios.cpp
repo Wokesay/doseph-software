@@ -297,3 +297,18 @@ TEST_CASE("Scenario line fill cut by a restart: reported as a cut dose, and the 
   CHECK(r.state()["cycle"]["mixPending"] == true);
   CHECK(r.state()["channelJob"].is_null());  // nothing resumes
 }
+
+TEST_CASE("Scenario calibration: a channel calibration stops the check and the suction pump first; the check starts anew once it ends (SD-109)") {
+  Run r(device("home"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  REQUIRE(r.twin()["output"] == true);
+  r.ok("POST", "channels/2/calibrate", {{"seconds", 10}});
+  r.step(2 * kSecond);
+  CHECK(r.line() == "cycle.wait.channel_job");
+  CHECK(r.twin()["output"] == false);
+  r.waitUntil("the run into the cup", [&] { return r.state()["channelJob"]["state"] == "waiting_result"; }, 30);
+  r.step(30 * kSecond);
+  CHECK(r.line() == "cycle.wait.channel_job");  // the outlet is still over the cup
+  r.ok("POST", "channels/result", {{"ml", r.twin()["channels"][1]["cupMl"]}});
+  r.waitUntil("the check starts anew", [&] { return r.phase() == "flush"; }, 3 * 60);
+}
