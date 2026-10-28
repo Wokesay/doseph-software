@@ -119,6 +119,7 @@ static const struct {
     {"cfg.system.timezone", "Das ist kein Name einer Zeitzone"},
     {"cfg.tank.hold", "Die Pause zwischen Prüfungen muss zwischen {min} und {max} min liegen"},
     {"cfg.tank.mix_min", "Die Mindest-Mischzeit nach einer Gabe muss zwischen {min} und {max} min liegen"},
+    {"cfg.tank.system", "Dieses Anbausystem gibt es nicht"},
     {"cfg.tank.volume", "Das Tankvolumen muss zwischen {min} und {max} L liegen"},
     {"cfg.what.canisters", "Kanister"},
     {"cfg.what.control", "Regelung"},

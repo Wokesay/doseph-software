@@ -280,6 +280,7 @@ export const msgDe: Record<string, string> = {
   "cfg.plant.name": "Eine Pflanze oder ein Pflanzenrezept braucht einen Namen mit bis zu 40 Zeichen",
   "cfg.plant.phase": "{name}: Ihre aktuelle Phase gibt es nicht",
   "cfg.plant.lead": "Die führende Pflanze gibt es nicht",
+  "cfg.tank.system": "Dieses Anbausystem gibt es nicht",
   "cfg.what.plants": "Pflanzen",
   "ev.tank.new": "Neuer Tank",
   "ev.tank.new.text": "Die nächste Gabe ist eine kleine Testgabe, die das Tankvolumen prüft.",

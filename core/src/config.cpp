@@ -168,7 +168,8 @@ void to_json(json& j, const Config& c) {
   j["service"] = {{"days", c.service.days}};
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
                {"mixMinMin", numOrNull(c.tank.mixMinMin)},
-               {"holdMin", numOrNull(c.tank.holdMin)}};
+               {"holdMin", numOrNull(c.tank.holdMin)},
+               {"system", c.tank.system}};
   j["control"] = {{"ecTolerance", c.control.ecTolerance},       {"phTolerance", c.control.phTolerance},
                   {"maxEcStep", c.control.maxEcStep},           {"ecFloor", c.control.ecFloor},
                   {"phMaxMlPerDose", c.control.phMaxMlPerDose}, {"maxEcRounds", c.control.maxEcRounds},
@@ -288,6 +289,7 @@ Config configFromJson(const json& in) {
     c.tank.mixMinMin = isNum(ec) && isNum(ph) ? std::max(ec, ph) : isNum(ec) ? ec : ph;
   }
   if (t.contains("holdMin")) c.tank.holdMin = numOrNaN(t, "holdMin");
+  c.tank.system = jstr(t, "system");
   const json& k = objectAt(j, "control");
   auto num = [&](const char* key, double& into) {
     if (k.contains(key)) into = numOrNaN(k, key);
@@ -510,6 +512,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (p.phase < 0 || p.phase >= static_cast<int>(p.phases.size())) err(say("cfg.plant.phase", {{"name", p.name}}));
   }
   if (!c.lead.empty() && !c.plant(c.lead)) err(say("cfg.plant.lead"));
+  if (!c.tank.system.empty() &&
+      std::none_of(std::begin(kGrowSystems), std::end(kGrowSystems), [&](const GrowSystem& g) { return c.tank.system == g.id; }))
+    err(say("cfg.tank.system"));
   if (!c.active.recipe.empty()) {
     if (!c.recipe(c.active.recipe)) err(say("cfg.active.recipe"));
     if (c.active.until != 0 && c.active.until <= c.active.from) err(say("cfg.active.until"));

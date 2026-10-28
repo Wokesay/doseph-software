@@ -182,7 +182,11 @@ json plantsJson(const Config& cfg, Epoch now, const std::string& zone) {
     plants.push_back(std::move(j));
   }
   const WaterPlan w = waterPlan(cfg, now);
-  return {{"plantRecipes", all["plantRecipes"]},
+  json systems = json::object();
+  for (const auto& g : kGrowSystems) systems[g.id] = {g.phLow, g.phHigh};
+  return {{"system", cfg.tank.system},
+          {"systems", systems},
+          {"plantRecipes", all["plantRecipes"]},
           {"plants", plants},
           {"lead", lead ? json(lead->id) : json(nullptr)},
           {"plan", {{"source", w.source}, {"recipe", w.recipe ? json(w.recipe->id) : json(nullptr)}, {"plant", w.plant ? json(w.plant->id) : json(nullptr)}}}};

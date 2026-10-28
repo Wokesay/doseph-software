@@ -297,3 +297,35 @@ TEST_CASE("Plants: the calendar lists the next weeks by local day: phases that b
   CHECK(s.robot().state()["plan"]["source"] == "hand");
   CHECK(s.robot().state()["plan"]["recipe"] == "two_part");
 }
+
+TEST_CASE("Plants: the cultivation system is set per tank from a fixed list; it changes what the app offers, never the water plan (SD-128, RAT-076)") {
+  Config c = withRecipes();
+  const size_t base = validateConfig(c, 4).size();  // recipes without parts here: not the point
+  c.tank.system = "soil";
+  CHECK(validateConfig(c, 4).size() == base);
+  c.tank.system = "aeroponics";
+  CHECK(validateConfig(c, 4).size() == base + 1);
+  // The same plant on every system: the same water
+  c.plants = {plant("p1", kT0, {phase("A", 3, false)})};
+  c.tank.system = "";
+  const WaterPlan none = waterPlan(c, kT0);
+  for (const auto& g : kGrowSystems) {
+    c.tank.system = g.id;
+    const WaterPlan w = waterPlan(c, kT0);
+    CHECK(w.recipe == none.recipe);
+    CHECK(w.ecTarget == doctest::Approx(none.ecTarget));
+    CHECK(w.phTarget == doctest::Approx(none.phTarget));
+  }
+  // Over the API: saved with the tank, and the pH ranges the app offers new phases
+  sim::Simulation s(demo());
+  s.step(10 * kSecond);
+  REQUIRE(s.robot().putTank({{"system", "coco"}}).status == 200);
+  CHECK(s.robot().configJson()["tank"]["system"] == "coco");
+  CHECK(s.robot().putTank({{"system", "mud"}}).status == 422);
+  CHECK(s.robot().putTank({{"system", 3}}).status == 422);
+  const json pl = s.robot().plants();
+  CHECK(pl["system"] == "coco");
+  CHECK(pl["systems"]["soil"][0] == 6.2);
+  REQUIRE(s.robot().putTank({{"system", nullptr}}).status == 200);
+  CHECK(s.robot().configJson()["tank"]["system"] == "");
+}

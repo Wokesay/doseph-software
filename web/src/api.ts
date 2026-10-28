@@ -72,7 +72,7 @@ export type Plant = {
   harvestAt: number; completedAt: number; running: boolean; leading: boolean; day: number;
   phaseDay?: number; phaseEnd?: number; daysOver?: number; ecTarget?: number | null; phTarget?: number | null;
 };
-export type Plants = { plantRecipes: PlantRecipe[]; plants: Plant[]; lead: string | null; plan: { source: string; recipe: string | null; plant: string | null } };
+export type Plants = { system: GrowSystem | ""; systems: Record<GrowSystem, [number, number]>; plantRecipes: PlantRecipe[]; plants: Plant[]; lead: string | null; plan: { source: string; recipe: string | null; plant: string | null } };
 export type WaterPlan = {
   source: "plant" | "hand" | ""; recipe: string | null; ecTarget: number | null; phTarget: number | null; until: number; ended: boolean;
   plant: { id: string; name: string; phase: string; phaseEnd: number; confirm: boolean } | null;
@@ -140,7 +140,8 @@ export type Config = {
   system: { name: string; language: string; timezone: string; passwordSet: boolean };
   // Quiet hours in local minutes of the day; equal: none (SD-123)
   notify: { quietFromMin: number; quietToMin: number };
-  tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null };
+  // `system`: the cultivation system (SD-128), "" while none is chosen
+  tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null; system: GrowSystem | "" };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
@@ -171,7 +172,9 @@ export type RobotEvent = { id: number; ts: number; type: string; severity: "info
 export type SeriesData = { series: string; stepS: number; t: number[]; avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] };
 
 export type TemplateStep = { name: string; nameDe?: string; pair?: string; mlPerL: number };
-export type RecipeTemplate = { id: string; name: string; nameDe?: string; note?: string; noteDe?: string; source?: string; ecTarget?: number; ph?: [number, number]; steps: TemplateStep[] };
+export type RecipeTemplate = { id: string; name: string; nameDe?: string; note?: string; noteDe?: string; source?: string; systems?: GrowSystem[]; ecTarget?: number; ph?: [number, number]; steps: TemplateStep[] };
+export type GrowSystem = "hydro" | "coco" | "rockwool" | "soil";
+export const GROW_SYSTEMS: GrowSystem[] = ["hydro", "coco", "rockwool", "soil"];
 
 // The message is shown in the page language.
 export class ApiError extends Error {

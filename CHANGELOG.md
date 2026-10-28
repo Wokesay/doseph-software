@@ -22,6 +22,9 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The cultivation system per tank: hydro, coco, rock wool or soil
+  (SD-128). It sets the pH range a new phase is offered when its recipe has
+  none, and which templates come first; control never reads it.
 - A plants page (SD-128). It shows which plant sets the water, each plant
   with its day, phase and what is due (next phase, harvest, complete, set
   the water), a start dialog, and an editor for plant recipes. A calendar

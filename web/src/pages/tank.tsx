@@ -3,8 +3,8 @@
 // between checks, maintenance and its dates, and the control's settings.
 // The flow through the device is on the water path page.
 import { useEffect, useState } from "preact/hooks";
-import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
-import { get, post, put, type ServicePlan } from "../api";
+import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Sprout, Waves, Wrench } from "lucide-preact";
+import { GROW_SYSTEMS, get, post, put, type GrowSystem, type ServicePlan } from "../api";
 import { day, num, time } from "../format";
 import { msg, t } from "../i18n";
 import { LIMITS, config, refreshConfig, refreshState, state, toast, toastError } from "../store";
@@ -70,6 +70,35 @@ function VolumeCard() {
           }
         />
       )}
+    </Card>
+  );
+}
+
+// The cultivation system (SD-128): one water for every plant on the tank. It sets the pH a new
+// phase is offered and which templates come first; control never reads it.
+function SystemCard() {
+  const cfg = config.value!;
+  const [system, setSystem] = useState<GrowSystem | "">(cfg.tank.system);
+  return (
+    <Card title={t("tank.system")} icon={<Sprout size={18} />}>
+      <div class="stack">
+        <p class="muted small">{t("tank.systemIntro")}</p>
+        <div class="form-grid">
+          <Field label={t("tank.system")}>
+            <select class="select input" value={system} onChange={(e) => setSystem((e.target as HTMLSelectElement).value as GrowSystem | "")} name="system">
+              <option value="">{t("tank.system.none")}</option>
+              {GROW_SYSTEMS.map((g) => (
+                <option value={g}>{t(`tank.system.${g}`)}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div>
+          <Button variant="primary" onClick={() => saveTank({ system })} disabled={system === cfg.tank.system} data-testid="save-system">
+            {t("common.save")}
+          </Button>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -295,6 +324,7 @@ export function TankPage() {
         <VolumeCard key={`v${rev}`} />
         <MaintenanceCard />
       </div>
+      <SystemCard key={`s${rev}`} />
       <WaitCard key={`w${rev}`} />
       <ServiceCard />
       <ControlCard key={`c${rev}`} />

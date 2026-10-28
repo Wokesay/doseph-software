@@ -298,6 +298,7 @@ constexpr Entry kMessages[] = {
     {"cfg.plant.name", "A plant or plant recipe needs a name of up to 40 characters"},
     {"cfg.plant.phase", "{name}: its current phase does not exist"},
     {"cfg.plant.lead", "The leading plant does not exist"},
+    {"cfg.tank.system", "The cultivation system is not one there is"},
     {"cfg.what.plants", "plants"},
     {"ev.tank.new", "New tank"},
     {"ev.tank.new.text", "The next dose is a small test dose that checks the tank volume."},
