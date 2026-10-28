@@ -7,6 +7,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The robot reacts to the hardware release (SD-110): a leak or high level
+  in the measuring chamber switches everything off, raises an alarm and
+  latches; the lock can be released in the app only once the device no
+  longer reports its cause, and a restart never releases it. The stop
+  button on the device is the Stop of the app. While the release holds,
+  every run and the suction pump are refused with the reason, the check
+  waits with it, and the watchdog lists it.
 - The simulator panel switches the water path's faults (#10, step 3.5):
   a dry suction line, a blocked return or a failed return pump, a leak,
   the stop button, and per channel a blocked outlet or a siphoning

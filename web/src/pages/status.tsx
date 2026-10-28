@@ -6,7 +6,7 @@ import { Activity, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-
 import { del, get, post, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
 import { dateTime, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
-import { activeRecipe, config, refreshState, state, toast } from "../store";
+import { activeRecipe, config, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, CheckRow, Pill, Term, type Tone } from "../ui";
 import { EventList, MetricTile } from "../widgets";
 
@@ -252,9 +252,13 @@ function Locks() {
 }
 
 async function release(id: string, confirm: boolean) {
-  await post(`/latches/${encodeURIComponent(id)}/ack`, confirm ? { confirm: true } : {});
-  await refreshState();
-  toast(t("status.released"));
+  try {
+    await post(`/latches/${encodeURIComponent(id)}/ack`, confirm ? { confirm: true } : {});
+    await refreshState();
+    toast(t("status.released"));
+  } catch (e) {
+    toastError(e);  // e.g. the device still reports the cause (SD-110)
+  }
 }
 
 function WatchCard() {

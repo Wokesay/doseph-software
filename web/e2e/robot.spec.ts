@@ -241,3 +241,16 @@ test("the simulator panel switches the water path's faults: a leak turns the har
   await page.getByTestId("sim-leak").uncheck();
   await expect(release).toHaveText("Hardware release on");
 });
+
+test("a leak locks every pump; the lock is released only once the leak is fixed (SD-110)", async ({ page }) => {
+  await login(page);
+  // The leak through the simulator's API: the panel would cover the status page
+  await sim(page, "leak", { on: true });
+  const lock = page.getByTestId("latch-hw.leak");
+  await expect(lock).toContainText("Leak: every pump stays off");
+  await lock.getByRole("button", { name: "Release" }).click();
+  await expect(page.getByText("Not released: the device still reports it")).toBeVisible();
+  await sim(page, "leak", { on: false });
+  await lock.getByRole("button", { name: "Release" }).click();
+  await expect(lock).toHaveCount(0);
+});

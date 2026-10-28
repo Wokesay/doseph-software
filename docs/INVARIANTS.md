@@ -62,6 +62,9 @@ of its own.
 | One dosing run at a time; a run that does not report back in time is switched off and booked as failed | RAT-018 | ✓ | `gateway.cpp` · test_journal.cpp |
 | Stop switches everything off at once, books what ran and holds across a restart until Resume | RAT-036 | ✓ | `config.hpp`, `cycle.hpp`, `gateway.hpp`, `robot.cpp` · test_cycle.cpp |
 | A calibration or line fill is no dose into the tank; flows and amounts come from the actual run time | RAT-070 | ✓ | `config.hpp`, `gateway.hpp`, `hardware.hpp`, `journal.hpp`, `robot.hpp`, `gateway.cpp`, `robot.cpp` · test_cycle.cpp, test_journal.cpp |
+| The hardware release holds every pump: a run or the suction pump is refused with the input that holds it, and the cycle waits with it | SD-110 | ✓ | `gateway.hpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp`, `watchdog.cpp` · test_scenarios.cpp |
+| A leak or high level latches; a person releases the latch only once the device no longer reports the cause, and a restart never releases it | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
+| The stop button on the device is the Stop of the app: it holds across a restart until Resume in the app | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
 
 ## Sensor truth

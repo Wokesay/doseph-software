@@ -128,6 +128,7 @@ class Robot {
   void saveState(bool force = false);
   void saveEvents();
   void sampleHistory(Epoch epoch);
+  void watchRelease(Epoch epoch);
   void snapshot(Epoch epoch);
   void channelJobDone(const DoseProgress& p);
   Result startChannelJob(const std::string& type, int channel, double seconds);
@@ -166,6 +167,10 @@ class Robot {
   bool authKept_ = false;
 
   Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none
+
+  bool stopButtonSeen_ = false;  // the stop button was pressed; a new press stops again (SD-110)
+
+  std::string lastHold_;         // the hold of the last tick: when it ends, the cycle starts anew
   Epoch maintenanceUntil() const;
 
   Epoch bootEpoch_ = 0;
