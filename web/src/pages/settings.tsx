@@ -3,13 +3,13 @@
 // and what was notified, the password, backup and restore, reporting a
 // problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Upload } from "lucide-preact";
-import { ApiError, get, post, put, type Msg, type Notice } from "../api";
+import { Bell, Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Upload } from "lucide-preact";
+import { ApiError, get, post, put, type Msg, type Notice, type PushSettings } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
 import { currentTheme, setTheme, type Theme } from "../theme";
-import { Banner, Button, Card, Field, LANGS, Pill, Seg } from "../ui";
+import { Banner, Button, Card, Field, LANGS, Pill, Seg, Toggle } from "../ui";
 
 function LookCard() {
   const [theme, setThemeState] = useState<Theme>(currentTheme());
@@ -151,6 +151,151 @@ function NotifyCard() {
           <p class="muted small">{t("settings.recentNone")}</p>
         )}
         <p class="muted small">{t("settings.recentNote")}</p>
+      </div>
+    </Card>
+  );
+}
+
+type Channel = "ntfy" | "telegram" | "email";
+
+// The push channels without an account (SD-124): a secret is only ever sent, never shown; left
+// empty it stays as it is
+function PushCard() {
+  const [p, setP] = useState<PushSettings | null>(null);
+  const [secret, setSecret] = useState<Record<string, string>>({});
+  const load = () =>
+    get<PushSettings>("/push")
+      .then(setP)
+      .catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
+  // How a test went comes back a moment later
+  const eventId = state.value?.eventId;
+  useEffect(() => {
+    load();
+  }, [eventId]);
+  if (!p) return null;
+  const set = <C extends Channel>(ch: C, patch: Partial<PushSettings[C]>) => setP({ ...p, [ch]: { ...p[ch], ...patch } });
+  const field = (ch: Channel, key: string, label: string, opts: { placeholder?: string; email?: boolean; hint?: string } = {}) => (
+    <Field label={label} hint={opts.hint}>
+      <input
+        class="input"
+        inputMode={opts.email ? "email" : undefined}
+        name={`${ch}-${key}`}
+        value={(p[ch] as Record<string, unknown>)[key] as string}
+        placeholder={opts.placeholder}
+        autoCapitalize="off"
+        spellcheck={false}
+        onInput={(e) => set(ch, { [key]: (e.target as HTMLInputElement).value } as never)}
+      />
+    </Field>
+  );
+  const secretField = (ch: Channel, key: string, label: string, isSet: boolean) => (
+    <Field label={label} hint={isSet ? t("settings.push.secretSet") : undefined}>
+      <input
+        class="input"
+        type="password"
+        name={`${ch}-${key}`}
+        autoComplete="new-password"
+        value={secret[`${ch}.${key}`] ?? ""}
+        placeholder={isSet ? "••••••••" : ""}
+        onInput={(e) => setSecret({ ...secret, [`${ch}.${key}`]: (e.target as HTMLInputElement).value })}
+      />
+    </Field>
+  );
+  const save = async () => {
+    const body: Record<string, Record<string, unknown>> = {
+      ntfy: { enabled: p.ntfy.enabled, server: p.ntfy.server, topic: p.ntfy.topic },
+      telegram: { enabled: p.telegram.enabled, chatId: p.telegram.chatId },
+      email: { enabled: p.email.enabled, server: p.email.server, from: p.email.from, to: p.email.to, user: p.email.user },
+    };
+    for (const [k, v] of Object.entries(secret)) {
+      const [ch, key] = k.split(".");
+      if (v) body[ch][key] = v;
+    }
+    try {
+      setP(await put<PushSettings>("/push", body));
+      setSecret({});
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const test = async () => {
+    try {
+      await post("/push/test");
+      toast(t("settings.push.testSent"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const status = (ch: Channel) => {
+    const s = p.status[ch];
+    if (!s) return null;
+    return (
+      <div class="small" data-testid={`push-status-${ch}`}>
+        {s.ok ? (
+          <Pill tone="ok">{t("settings.push.ok", { time: dateTime(s.at) })}</Pill>
+        ) : (
+          <>
+            <Pill tone="bad">{t("settings.push.failed", { time: dateTime(s.at) })}</Pill> <span class="muted">{s.error}</span>
+          </>
+        )}
+      </div>
+    );
+  };
+  const section = (ch: Channel, title: string, body: preact.ComponentChildren) => (
+    <div class="stack-sm" data-testid={`push-${ch}`}>
+      <div class="row" style="justify-content:space-between">
+        <div class="section-title">{title}</div>
+        <Toggle checked={p[ch].enabled} onChange={(v) => set(ch, { enabled: v } as never)} label={t("settings.push.enabled")} />
+      </div>
+      {body}
+      {status(ch)}
+    </div>
+  );
+  return (
+    <Card title={t("settings.push")} icon={<Send size={18} />}>
+      <div class="stack">
+        <p class="muted small">{t("settings.push.intro")}</p>
+        {section(
+          "ntfy",
+          "ntfy",
+          <div class="form-grid">
+            {field("ntfy", "server", t("settings.push.server"), { placeholder: "https://ntfy.sh" })}
+            {field("ntfy", "topic", t("settings.push.topic"), { hint: t("settings.push.topicHint") })}
+            {secretField("ntfy", "token", t("settings.push.token"), p.ntfy.tokenSet)}
+          </div>,
+        )}
+        {section(
+          "telegram",
+          "Telegram",
+          <div class="form-grid">
+            {field("telegram", "chatId", t("settings.push.chatId"))}
+            {secretField("telegram", "token", t("settings.push.botToken"), p.telegram.tokenSet)}
+          </div>,
+        )}
+        {section(
+          "email",
+          t("settings.push.email"),
+          <div class="form-grid">
+            {field("email", "server", t("settings.push.mailServer"), { placeholder: "smtps://mail.example.org:465" })}
+            {field("email", "from", t("settings.push.from"), { email: true })}
+            {field("email", "to", t("settings.push.to"), { email: true })}
+            {field("email", "user", t("settings.push.user"))}
+            {secretField("email", "password", t("settings.push.password"), p.email.passwordSet)}
+          </div>,
+        )}
+        <div class="row">
+          <Button variant="primary" onClick={save} data-testid="save-push">
+            {t("common.save")}
+          </Button>
+          <Button onClick={test} disabled={!p.ntfy.enabled && !p.telegram.enabled && !p.email.enabled} data-testid="test-push">
+            {t("settings.push.test")}
+          </Button>
+        </div>
+        <p class="muted small">{t("settings.push.curl")}</p>
       </div>
     </Card>
   );
@@ -368,6 +513,7 @@ export function SettingsPage() {
         <DeviceCard key={rev} />
       </div>
       <NotifyCard key={`n${rev}`} />
+      <PushCard />
       <PasswordCard />
       <BackupCard />
       <ReportCard />

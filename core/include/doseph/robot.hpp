@@ -12,6 +12,7 @@
 
 #include "doseph/alarms.hpp"
 #include "doseph/auth.hpp"
+#include "doseph/push.hpp"
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
 #include "doseph/history.hpp"
@@ -115,9 +116,17 @@ class Robot {
   Result ackLatch(const std::string& id, const json& body);
   // Pauses the repetition of a raised alarm, or of all ("") (RAT-022, SD-123)
   Result ackAlarm(const std::string& id);
-  // The notifications of late, newest first, and those not yet delivered (SD-123)
+  // The notifications of late, newest first (SD-123)
   json notifications() const;
-  std::vector<Notification> takeNotifications();
+  // ---- Push channels (SD-124)
+  // Their settings without secrets, and how each fared last
+  json pushSettings() const;
+  Result putPush(const json& j);
+  // A test message to every channel set up, or to one
+  Result testPush(const std::string& channel);
+  // The platform takes what is to be sent and reports how it went
+  std::vector<Delivery> takeDeliveries();
+  void deliveryResult(const std::string& channel, bool ok, const std::string& error);
   Result stop(const Msg& who);
   Result resume();
   // Maintenance mode for `minutes` (at most kMaxMaintenanceMin; 0 ends it): the
@@ -166,6 +175,12 @@ class Robot {
   EventLog log_;
   WatchResult watch_;
   Alarms alarms_;
+  PushChannels push_;
+  std::vector<Delivery> deliveries_;
+  long long deliveryId_ = 1;
+  json pushStatus_ = json::object();  // channel → {at, ok, error}, in memory
+  static constexpr size_t kMaxDeliveries = 100;
+  void queueDeliveries(std::vector<Delivery> ds);
   std::optional<ChannelJob> job_;
   // A probe calibration: the kind, its points and when the last step was
   // taken. It holds the cycle until it is saved or cancelled; it explains

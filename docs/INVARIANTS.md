@@ -121,7 +121,7 @@ of its own.
 | An assessment older than 3 min is red | RAT-073 | ✓ | `watchdog.hpp`, `robot.cpp` · test_watchdog.cpp |
 | The watchdog only assesses and has no path to the pumps | RAT-074 | ✓ | `watchdog.hpp` · arch_check.sh |
 
-## Alarms and notifications (SD-123)
+## Alarms and notifications (SD-123, SD-124)
 
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|
@@ -129,6 +129,9 @@ of its own.
 | Critical alarms are pushed at once, at night too, and repeated after 5, 15 and 60 min; warnings once by day, else in the morning report; notes only there; acknowledging pauses the reminders for 12 h at most and the alarm stays | RAT-022 | ✓ | `alarms.cpp` · test_alarms.cpp, test_scenarios.cpp |
 | The alarms' state survives a restart, so nothing known is pushed again | SD-123 | ✓ | `config.hpp`, `config.cpp` · test_alarms.cpp |
 | Local time from the rules of the IANA time zone database, for quiet hours and the report; an unknown zone is UTC | SD-123 | ✓ | `localtime.hpp`, `localtime.cpp` · test_localtime.cpp |
+| Push channels: their settings and secrets in a file of their own, never in a backup, the diagnostics or the API; no control characters in any field; a damaged file is no channel | SD-124 | ✓ | `push.hpp`, `push.cpp`, `robot.cpp` · test_push.cpp |
+| One delivery per enabled channel and notification, in the device's language; the core sends nothing, the platform reports back; a channel that fails is logged once | SD-124 | ✓ | `push.cpp`, `robot.cpp`, `messages.cpp` · test_push.cpp, test_messages.cpp |
+| The simulator sends through the system's curl with the secret in a private config file that is deleted after the run | SD-124 | ✓ | `sim/push.cpp` · test_push.cpp |
 
 ## History and messages
 

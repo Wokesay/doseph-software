@@ -18,6 +18,7 @@ namespace {
 constexpr const char* kConfigFile = "config.json";
 constexpr const char* kStateFile = "state.json";
 constexpr const char* kAuthFile = "auth.json";
+constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
 constexpr const char* kHistoryFile = "history.bin";
@@ -114,6 +115,14 @@ void Robot::boot() {
     }
     // A configuration that cannot be read is kept as a copy and the robot stays stopped (R6)
     if (stateUnknown) store_.write("config.broken.json", *s);
+  }
+  // Push channels that cannot be read are none: nothing is sent to an address no one checked (SD-124)
+  if (auto s = store_.read(kPushFile)) {
+    try {
+      push_ = pushFromJson(json::parse(*s));
+    } catch (...) {
+      push_ = PushChannels{};
+    }
   }
   if (auto s = store_.read(kStateFile)) {
     try {
@@ -245,6 +254,8 @@ void Robot::tick() {
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
     alarms_.update(watch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
+    // Each notification to every channel set up, in the device's language (SD-124)
+    for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
   }
   saveState();
   saveEvents();
@@ -1150,9 +1161,61 @@ json Robot::notifications() const {
   return {{"notifications", out}};
 }
 
-std::vector<Notification> Robot::takeNotifications() {
+void Robot::queueDeliveries(std::vector<Delivery> ds) {
+  for (auto& d : ds) deliveries_.push_back(std::move(d));
+  // Nobody takes them (no platform that sends): the oldest go
+  while (deliveries_.size() > kMaxDeliveries) deliveries_.erase(deliveries_.begin());
+}
+
+std::vector<Delivery> Robot::takeDeliveries() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return alarms_.takeOutbox();
+  std::vector<Delivery> out;
+  out.swap(deliveries_);
+  return out;
+}
+
+void Robot::deliveryResult(const std::string& channel, bool ok, const std::string& error) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Epoch epoch = clock_.epoch();
+  const bool wasOk = !pushStatus_.contains(channel) || jbool(pushStatus_[channel], "ok", true);
+  pushStatus_[channel] = {{"at", epoch}, {"ok", ok}, {"error", ok ? "" : error.substr(0, 200)}};
+  // Once when a channel stops getting through, not for every message after
+  if (!ok && wasOk)
+    log_.add(epoch, "system", "warn", say("ev.push.failed", {{"channel", channel}}), say("ev.push.failed.text", {{"error", error.substr(0, 200)}}));
+}
+
+json Robot::pushSettings() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  json j = pushToJson(push_, false);
+  j["status"] = pushStatus_;
+  return j;
+}
+
+Result Robot::putPush(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  PushChannels next = push_;
+  const std::vector<Msg> errors = applyPush(next, j);
+  if (!errors.empty()) return Result::fail(422, errors.front());
+  if (!store_.write(kPushFile, pushToJson(next, true).dump())) return Result::fail(500, say("store.failed"));
+  push_ = next;
+  log_.add(clock_.epoch(), "config", "info", changed("cfg.what.push"));
+  return Result::ok(pushSettings());
+}
+
+Result Robot::testPush(const std::string& channel) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Notification n;
+  n.kind = "test";
+  n.level = "info";
+  n.at = clock_.epoch();
+  n.title = say("notify.test");
+  n.lines = {say("notify.test.text")};
+  auto ds = deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_, channel);
+  if (ds.empty()) return Result::fail(409, say("push.none"));
+  json sent = json::array();
+  for (const auto& d : ds) sent.push_back(d.channel);
+  queueDeliveries(std::move(ds));
+  return Result::ok({{"channels", sent}});
 }
 
 Result Robot::ackLatch(const std::string& id, const json& body) {

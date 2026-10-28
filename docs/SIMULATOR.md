@@ -28,6 +28,13 @@ Open http://localhost:8080. Options (`--help`):
 Without a password set, the console shows the setup code the first
 password needs, as the device will.
 
+**Pushes** (SD-124): the simulator sends the channels set up in the
+settings (ntfy, Telegram, e-mail) through the computer's `curl`, found on
+the `PATH` (part of Linux, macOS and Windows 10 and later); the variable
+`DP_CURL` names another program. Without curl nothing is sent and the
+settings say why. With a time-lapse, a critical alarm's reminders come as
+fast as the simulated time runs.
+
 ### Example profiles
 
 The device reports what it has (SD-108); `GET /api/v1/info` shows it as

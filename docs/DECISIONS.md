@@ -512,3 +512,33 @@ again.
   nothing itself; the platform delivers them. Until a channel is set up,
   the app lists what would have been sent.
 
+
+## SD-124: Push without an account: ntfy, Telegram, e-mail through the platform
+
+2026-10-28. Decided by the owner for #10, step 5; the channels themselves
+are the product's (#10, new function 4).
+
+- **Channels.** ntfy (any server; the topic is chosen like a password, an
+  access token is optional), Telegram (a bot's token and a chat ID) and
+  e-mail (an SMTP server with TLS: `smtps://`, or `smtp://` with STARTTLS
+  required). Each can be switched on and off; a test message checks it.
+  Home Assistant follows with MQTT (step 7).
+- **Secrets apart.** The channels' settings live in a file of their own,
+  not in the configuration: a backup, the diagnostics and `GET /config`
+  never carry them. The API shows a token or password only as set or not;
+  left empty in the app it stays, and it is never shown again. A file that
+  cannot be read is no channel at all.
+- **No line breaks.** No field may hold a control character, so nothing
+  can add a header line or a recipient of its own.
+- **The core sends nothing.** Each notification (SD-123) becomes one
+  delivery per enabled channel, titled with the device's name, in the
+  device's language. The German texts are the web app's own, copied into
+  the core by `tools/gen_msg_de.mjs` and checked against them. The
+  platform sends them and reports back; a channel that stops getting
+  through is logged once.
+- **The simulator sends through the system's curl**, on a thread of its
+  own. The address and the secret go into a curl config file that only
+  the user can read and that is deleted after the run; the command line
+  names only that file. Without curl nothing is sent, and the app says
+  why. The device will send with its own TLS.
+

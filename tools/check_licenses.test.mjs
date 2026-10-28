@@ -136,6 +136,9 @@ test("comments and look-alikes do not hide an import", () => {
     // a key that ends in "import" or "from" in a text table loads nothing
     '  "config.import": "This file cannot be loaded ({reason})",',
     'export const m = { "a.from": "y" };',
+    // the words as strings of their own, followed by more strings on the line
+    'field("email", "from", t("settings.push.from"));',
+    'x("import", y("z"));',
   ].join("\n");
   assert.deepEqual(runtimeImports(source).sort(), ["a", "pkg/data.json", "s", "t1", "t2", "tick"]);
 });

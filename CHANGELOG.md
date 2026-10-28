@@ -7,6 +7,19 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Push without an account (SD-124, #10 step 5): alarms and the morning
+  report go out through ntfy, Telegram or e-mail.
+  - The channels are set up in the settings, each with "On" and a test
+    message, and with how it fared last. A channel that stops getting
+    through is logged once.
+  - Tokens and passwords stay in a file of their own: they are not in the
+    backup, the diagnostics or `GET /config`, and are never shown again.
+    No field may hold a line break.
+  - Pushes come in the device's language: the core now has the web app's
+    German texts, copied by `tools/gen_msg_de.mjs` and checked against them.
+  - The simulator sends through the computer's curl, with the secret in a
+    private config file that is deleted after the run.
+  - API: `GET` and `PUT /api/v1/push`, `POST /api/v1/push/test`.
 - Alarms with three levels, quiet hours and a morning report (SD-123,
   RAT-022, #10 step 5): every watchdog problem becomes an alarm, a latch
   at once and anything else once it has stood 5 min; a target out of
