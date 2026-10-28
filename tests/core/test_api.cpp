@@ -86,7 +86,7 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
   Client c{s, "", "192.168.1.20"};
   REQUIRE(c.login("demo-password"));
   json st = c.get("state");
-  for (const char* k : {"now", "stopped", "online", "suctionPump", "flowOk", "readings", "cycle", "watchdog", "latches",
+  for (const char* k : {"now", "stopped", "online", "suctionPump", "flowOk", "hardware", "readings", "cycle", "watchdog", "latches",
                         "jumpLocks", "newTank", "effects", "dosing", "channels", "stock", "catchUp", "channelJob", "probe",
                         "maintenanceUntil", "eventId"})
     CHECK_MESSAGE(st.contains(k), k);

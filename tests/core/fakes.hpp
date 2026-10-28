@@ -40,6 +40,9 @@ class Hardware : public doseph::IHardware {
     return it->second;
   }
   const doseph::Profile& profile() const override { return prof; }
+  doseph::Release rel;
+  doseph::Release release() const override { return rel; }
+  doseph::WaterPath waterPath() const override { return {}; }
   bool startRun(int channel, Ms ms, const std::string& jobId, std::string&) override {
     runs[channel] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
     started++;

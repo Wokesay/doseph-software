@@ -14,6 +14,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     p.flow = "outlet_level";
     p.returnBy = "gravity";
     p.network = {"wifi"};
+    p.suctionLpmLow = 10.0;
   } else if (name == "pro") {
     // Larger tanks: six channels, a flow meter, a return pump, LAN as well (assumptions)
     p.line = "pro";
@@ -35,13 +36,29 @@ std::optional<doseph::Sample> SimHardware::sample(doseph::Signal c) const {
     case doseph::Signal::Ph: return doseph::Sample(w_.rawPh(), ts);
     case doseph::Signal::Ec: return doseph::Sample(w_.rawEc(), ts);
     case doseph::Signal::Temp: return doseph::Sample(w_.rawTemp(), ts);
-    case doseph::Signal::Flow: return doseph::Sample(w_.rawFlow(), ts);
+    case doseph::Signal::Flow:
+      // Without a flow meter the device estimates the flow from the low end of the
+      // suction pump's delivery while the outlet reports water (SD-109)
+      if (profile_.flow == "outlet_level")
+        return doseph::isNum(profile_.suctionLpmLow) ? std::optional<doseph::Sample>(doseph::Sample(w_.outletWet() ? profile_.suctionLpmLow : 0.0, ts))
+                                                     : std::nullopt;
+      return doseph::Sample(w_.rawFlow(), ts);
   }
   return std::nullopt;
 }
 
+doseph::WaterPath SimHardware::waterPath() const {
+  doseph::WaterPath p;
+  if (profile_.flow == "outlet_level") p.outletWet = w_.outletWet();
+  if (profile_.returnBy == "pump") p.returnPump = w_.returnPumpOn;
+  return p;
+}
+
 bool SimHardware::setSuctionPump(bool on, std::string& err) {
-  (void)err;
+  if (on && !w_.released()) {
+    err = "hardware release off";
+    return false;
+  }
   w_.output = on;
   return true;
 }

@@ -37,6 +37,8 @@ class SimHardware : public doseph::IHardware {
   bool online() const override { return w_.probeFault != "offline"; }
   std::optional<doseph::Sample> sample(doseph::Signal c) const override;
   const doseph::Profile& profile() const override { return profile_; }
+  doseph::Release release() const override { return {w_.released(), w_.leak, w_.highLevel(), w_.stopButton}; }
+  doseph::WaterPath waterPath() const override;
   bool startRun(int channel, doseph::Ms ms, const std::string& jobId, std::string& err) override {
     return w_.startRun(channel, ms, jobId, err);
   }

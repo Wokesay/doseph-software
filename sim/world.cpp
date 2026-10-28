@@ -13,6 +13,10 @@ constexpr Ms kHwLimitMs = 90000;       // the pump driver's own time limit (assu
 constexpr double kTwinEcCoeff = 0.019; // the twin's EC temperature term, deliberately not the robot's 0.02 (assumption)
 constexpr double kPlume = 0.2;         // share of a dose not mixed in yet that reaches the intake (assumption)
 constexpr double kPi = 3.14159265358979323846;
+// The water path (assumptions): the suction pump primes for 8 s; the chamber
+// holds 0.15 L up to the weir and 0.35 L up to the high-level sensor
+constexpr Ms kPrimeMs = 8000;
+constexpr double kWeirL = 0.15, kReturnOnL = 0.25, kReturnOffL = 0.18, kHighL = 0.35, kChamberMaxL = 0.40;
 }  // namespace
 
 World::World() : rng_(42) { reset(); }
@@ -25,6 +29,12 @@ void World::reset(int n) {
   output = external = false;
   suctionLpm = 12.0;
   flowFault.clear();
+  returnByPump = false;
+  chamberL = kWeirL;
+  returnPumpOn = false;
+  returnFault.clear();
+  leak = stopButton = false;
+  primedMs_ = 0;
   probeFault.clear();
   phBuffer.reset();
   ecBuffer.reset();
@@ -63,9 +73,21 @@ void World::fill(double volumeL, double ec, double ph) {
   phTrail_.clear();
 }
 
+bool World::primed() const { return external || primedMs_ >= kPrimeMs; }
+
+bool World::flowing() const {
+  return suctionRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && tank.volumeL > 1.0;
+}
+
+bool World::highLevel() const { return chamberL >= kHighL; }
+
 bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err) {
   if (pump < 1 || pump > static_cast<int>(pumps.size())) {
     err = "no such pump";
+    return false;
+  }
+  if (!released()) {
+    err = "hardware release off";
     return false;
   }
   Pump& p = pumps[static_cast<size_t>(pump - 1)];
@@ -122,6 +144,30 @@ void World::advance(Ms now) {
 
 void World::step(Ms dt) {
   const double dts = static_cast<double>(dt) / 1000.0;
+  // The hardware release switches everything off below the robot (SD-110)
+  if (!released()) {
+    output = false;
+    for (auto& p : pumps)
+      if (p.state == 1) {
+        p.state = 3;
+        p.error = "hardware release off";
+      }
+    running_ = 0;
+  }
+  // The suction pump primes before it delivers; off, the line runs empty again
+  primedMs_ = output ? primedMs_ + dt : 0;
+  // The chamber: water comes in with the flow and returns above the weir
+  const double in = flowing() ? suctionLpm / 60.0 : 0.0;  // L/s
+  double out = 0;
+  if (returnByPump) {
+    if (chamberL >= kReturnOnL) returnPumpOn = !leak;
+    if (chamberL <= kReturnOffL || leak) returnPumpOn = false;
+    if (returnPumpOn && returnFault != "failed") out = 1.6 * std::max(suctionLpm, 6.0) / 60.0;
+  } else if (chamberL > kWeirL && returnFault != "blocked") {
+    out = 2.0 * std::max(suctionLpm, 6.0) / 60.0;
+  }
+  out = std::min(out, std::max(0.0, chamberL - kWeirL) / dts + in);  // never below the weir
+  chamberL = std::clamp(chamberL + (in - out) * dts, 0.0, kChamberMaxL);
   // Pumps: a dose goes into the return line and with it into the tank, not mixed in yet
   for (size_t i = 0; i < pumps.size(); ++i) {
     Pump& p = pumps[i];
@@ -232,8 +278,18 @@ json World::toJson() const {
           {"output", output},
           {"external", external},
           {"suctionLpm", suctionLpm},
+          {"primed", primed()},
           {"flowing", flowing()},
           {"flowFault", flowFault},
+          {"outletWet", outletWet()},
+          {"chamberL", std::round(chamberL * 1000.0) / 1000.0},
+          {"highLevel", highLevel()},
+          {"returnByPump", returnByPump},
+          {"returnPump", returnPumpOn},
+          {"returnFault", returnFault},
+          {"leak", leak},
+          {"stopButton", stopButton},
+          {"released", released()},
           {"probeFault", probeFault},
           {"phBuffer", phBuffer ? json(*phBuffer) : json(nullptr)},
           {"ecBuffer", ecBuffer ? json(*ecBuffer) : json(nullptr)},

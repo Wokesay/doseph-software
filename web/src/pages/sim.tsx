@@ -13,6 +13,8 @@ type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
   channels: { channel: number; liquid: string; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
   output: boolean; external: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
+  primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
+  returnFault: string; leak: boolean; stopButton: boolean; released: boolean;
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
 };
 

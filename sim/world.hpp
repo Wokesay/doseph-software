@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Digital twin of the mixing robot at its tank: the tank, the circulation
-// pump that pushes tank water through the robot's measuring chamber, the dosing
-// pumps and the probes in the chamber. Numbers are measured where possible
+// Digital twin of the mixing robot at its tank: the tank, the suction pump
+// that draws tank water through the robot's measuring chamber and back, the
+// dosing pumps and the probes in the chamber. Numbers are measured where possible
 // (docs/SIMULATOR.md), otherwise marked as assumptions. It models no
 // particular hardware: what the device is, is the product side's.
 #pragma once
@@ -62,14 +62,34 @@ class World {
   Ms now() const { return now_; }
 
   // The suction pump: switched by the robot's output, or by itself (an
-  // external pump); `flowFault` "blocked" means it runs without flow,
-  // "sensor" that water flows but the flow sensor reads nothing.
+  // external pump). It primes first, then delivers. `flowFault` "blocked"
+  // (filter) or "dry" (suction line out of the water) means it runs without
+  // flow, "sensor" that water flows but the flow or outlet sensor sees none.
   bool output = false;
   bool external = false;
   double suctionLpm = 12.0;  // flow when it runs (assumption)
   std::string flowFault;
   bool suctionRuns() const { return external || output; }
-  bool flowing() const { return suctionRuns() && flowFault != "blocked" && tank.volumeL > 1.0; }
+  bool primed() const;
+  bool flowing() const;
+  // The outlet's level sensor: water passes the weir on its way back
+  bool outletWet() const { return flowing() && flowFault != "sensor"; }
+
+  // The measuring chamber holds water up to its weir, which keeps the probes
+  // wet; above it the water returns to the tank, by gravity or by a return
+  // pump that switches by level (SD-109). `returnFault` "blocked" (the
+  // return line) or "failed" (the return pump) lets the chamber fill up to
+  // its high-level sensor. Volumes are assumptions.
+  bool returnByPump = false;  // the profile's return
+  double chamberL = 0.15;     // water in the chamber, L
+  bool returnPumpOn = false;
+  std::string returnFault;
+  bool highLevel() const;
+  // The hardware release (SD-110): a leak, high level or the stop button
+  // switch the suction pump and every dosing pump off, below the robot
+  bool leak = false;
+  bool stopButton = false;
+  bool released() const { return !leak && !highLevel() && !stopButton; }
 
   // The probes' faults: "" | "offline" | "frozen" | "jump" | "ec_zero"
   std::string probeFault;
@@ -109,6 +129,7 @@ class World {
   mutable std::mt19937 rng_;
   std::deque<std::pair<Ms, double>> phTrail_;  // dead time of the pH response
   int running_ = 0;
+  Ms primedMs_ = 0;  // how long the suction pump has run since it started
   bool frozenSet_ = false;
   double frozenPh_ = 0, frozenEc_ = 0;
 };
