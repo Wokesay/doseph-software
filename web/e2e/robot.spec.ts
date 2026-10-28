@@ -354,3 +354,18 @@ test("push channels: a token is never shown again; a test message to a server th
   await page.getByTestId("save-push").click();
   await expect(page.getByTestId("test-push")).toBeDisabled();
 });
+
+test("maintenance dates: the next date with its items, cleaning marked done, a calibration item links to its page, intervals in bounds (SD-125)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/tank");
+  const card = page.getByTestId("service");
+  await expect(card).toContainText("Next date:");
+  await expect(card).toContainText("Clean the measuring chamber and the suction filter");
+  await page.getByTestId("service-done-chamber.clean").click();
+  await expect(page.getByText("Noted")).toBeVisible();
+  await expect(page.getByTestId("service-probe.ph.cal").getByRole("link", { name: "Calibrate" })).toHaveAttribute("href", "#/water");
+  await card.getByText("Adjust intervals").click();
+  await page.locator("input[name='service-chamber.clean']").fill("3");
+  await page.getByTestId("save-service").click();
+  await expect(page.getByText("A maintenance interval is 7 to 730")).toBeVisible();
+});

@@ -292,6 +292,9 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("GET", {"notifications"})) return jsonResp(200, robot_.notifications());
   if (is("GET", {"push"})) return jsonResp(200, robot_.pushSettings());
   if (is("PUT", {"push"})) return fromResult(robot_.putPush(body));
+  if (is("GET", {"service"})) return jsonResp(200, robot_.service());
+  if (is("PUT", {"service"})) return fromResult(robot_.putService(body));
+  if (is("POST", {"service", "*", "done"})) return fromResult(robot_.serviceDone(p[1]));
   if (is("POST", {"push", "test"})) return fromResult(robot_.testPush(jstr(body, "channel")));
   if (is("PUT", {"tank"})) return fromResult(robot_.putTank(body));
   if (is("POST", {"tank", "new"})) return fromResult(robot_.newTank());

@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "doseph/messages.hpp"
+#include "doseph/service.hpp"
 
 namespace doseph {
 
@@ -113,6 +114,7 @@ void to_json(json& j, const Config& c) {
                  {"timezone", c.system.timezone},
                  {"passwordSet", c.system.passwordSet}};
   j["notify"] = {{"quietFromMin", c.notify.quietFromMin}, {"quietToMin", c.notify.quietToMin}};
+  j["service"] = {{"days", c.service.days}};
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
                {"mixMinMin", numOrNull(c.tank.mixMinMin)},
                {"holdMin", numOrNull(c.tank.holdMin)}};
@@ -204,6 +206,10 @@ Config configFromJson(const json& in) {
   const json& nt = objectAt(j, "notify");
   c.notify.quietFromMin = intOr(nt, "quietFromMin", c.notify.quietFromMin);
   c.notify.quietToMin = intOr(nt, "quietToMin", c.notify.quietToMin);
+  const json& sv = objectAt(j, "service");
+  if (sv.contains("days") && sv["days"].is_object())
+    for (const auto& [k, v] : sv["days"].items())
+      if (v.is_number_integer()) c.service.days[k] = v.get<int>();
   const json& t = objectAt(j, "tank");
   c.tank.volumeL = numOrNaN(t, "volumeL");
   // "circulation" from before SD-109 is read over: the device's own suction pump runs for a check
@@ -297,6 +303,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!isTimeZoneName(c.system.timezone)) err(say("cfg.system.timezone"));
   auto minute = [](int m) { return m >= 0 && m < 24 * 60; };
   if (!minute(c.notify.quietFromMin) || !minute(c.notify.quietToMin)) err(say("cfg.notify.quiet"));
+  for (const auto& [kind, days] : c.service.days)
+    if (serviceDefaultDays(kind) == 0 || days < kServiceMinDays || days > kServiceMaxDays)
+      err(say("cfg.service.days", {{"min", kServiceMinDays}, {"max", kServiceMaxDays}}));
 
   // Limits only ever tighten (R7)
   const auto& L = c.limits;
@@ -424,6 +433,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["settleMin"] = s.settleMin;
   j["alarms"] = s.alarms;
   j["lastReport"] = s.lastReport;
+  j["serviceSince"] = s.serviceSince;
+  j["serviceDone"] = s.serviceDone;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -491,6 +502,11 @@ RuntimeState runtimeFromJson(const json& j) {
     for (const auto& [k, v] : j["alarms"].items())
       if (v.is_object()) s.alarms[k] = v;
   s.lastReport = j.contains("lastReport") && j["lastReport"].is_number_integer() ? j["lastReport"].get<Epoch>() : 0;
+  // A time that is no whole number is dropped: the item counts from now (SD-125)
+  for (const char* key : {"serviceSince", "serviceDone"})
+    if (j.contains(key) && j[key].is_object())
+      for (const auto& [k, v] : j[key].items())
+        if (v.is_number_integer()) (std::string(key) == "serviceSince" ? s.serviceSince : s.serviceDone)[k] = v.get<Epoch>();
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

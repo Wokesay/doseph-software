@@ -121,7 +121,7 @@ of its own.
 | An assessment older than 3 min is red | RAT-073 | ✓ | `watchdog.hpp`, `robot.cpp` · test_watchdog.cpp |
 | The watchdog only assesses and has no path to the pumps | RAT-074 | ✓ | `watchdog.hpp` · arch_check.sh |
 
-## Alarms and notifications (SD-123, SD-124)
+## Alarms, notifications and maintenance (SD-123, SD-124, SD-125)
 
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|
@@ -132,6 +132,8 @@ of its own.
 | Push channels: their settings and secrets in a file of their own, never in a backup, the diagnostics or the API; no control characters in any field; a damaged file is no channel | SD-124 | ✓ | `push.hpp`, `push.cpp`, `robot.cpp` · test_push.cpp |
 | One delivery per enabled channel and notification, in the device's language; the core sends nothing, the platform reports back; a channel that fails is logged once | SD-124 | ✓ | `push.cpp`, `robot.cpp`, `messages.cpp` · test_push.cpp, test_messages.cpp |
 | The simulator sends through the system's curl with the secret in a private config file that is deleted after the run | SD-124 | ✓ | `sim/push.cpp` · test_push.cpp |
+| Maintenance items by what the device has, each due its interval after it was done, calibrated or first had; items due within a week of the earliest join its date | SD-125 | ✓ | `service.hpp`, `service.cpp`, `config.cpp` · test_service.cpp |
+| A maintenance item on its date is a note in the morning report and the app until it is done; the watchdog stays as it is | SD-125 | ✓ | `robot.cpp` · test_service.cpp |
 
 ## History and messages
 

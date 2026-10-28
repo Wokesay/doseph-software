@@ -253,7 +253,12 @@ void Robot::tick() {
     watch_ = evaluate(in);
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
-    alarms_.update(watch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
+    // Maintenance items on their date join as notes; the watchdog's own verdict stays as it is (SD-125)
+    noteService(cfg_, rt_, epoch);
+    alarmWatch_ = watch_;
+    for (const auto& i : planService(cfg_, rt_, epoch, cfg_.system.timezone).items)
+      if (i.dueNow) alarmWatch_.items.push_back({"maint." + i.id, i.label, "problem", say("service.due")});
+    alarms_.update(alarmWatch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
   }
@@ -511,7 +516,7 @@ json Robot::state() {
           {"readings", readings},
           {"cycle", cycle_.status(c)},
           {"watchdog", watch},
-          {"alarms", alarms_.list(watch_, rt_)},  // raised, with level and pause (SD-123)
+          {"alarms", alarms_.list(alarmWatch_, rt_)},  // raised, with level and pause (SD-123)
           {"latches", rt_.latches},
           {"jumpLocks", rt_.jumpLocks},
           {"newTank", rt_.newTank},
@@ -641,6 +646,35 @@ Result Robot::putNotify(const json& j) {
   if (!minute("quietFromMin", next.notify.quietFromMin) || !minute("quietToMin", next.notify.quietToMin))
     return Result::fail(422, say("api.bad_input"));
   return saveConfig(next, changed("cfg.what.notify"));
+}
+
+json Robot::service() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return serviceJson(planService(cfg_, rt_, clock_.epoch(), cfg_.system.timezone));
+}
+
+Result Robot::serviceDone(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const auto items = serviceItems(cfg_);
+  if (std::none_of(items.begin(), items.end(), [&](const ServiceItem& i) { return i.id == id; })) return Result::fail(404, say("service.none"));
+  rt_.serviceDone[id] = clock_.epoch();
+  saveState(true);
+  return Result::ok(service());
+}
+
+Result Robot::putService(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("days") || !j["days"].is_object()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  // A number sets a kind's interval, null gives it back its own; the configuration checks the bounds
+  for (const auto& [kind, v] : j["days"].items()) {
+    if (v.is_null()) next.service.days.erase(kind);
+    else if (v.is_number_integer()) next.service.days[kind] = v.get<int>();
+    else return Result::fail(422, say("api.bad_input"));
+  }
+  Result r = saveConfig(next, changed("cfg.what.service"));
+  if (r.status != 200) return r;
+  return Result::ok(service());
 }
 
 Result Robot::putTank(const json& j) {
@@ -1151,7 +1185,7 @@ Result Robot::ackAlarm(const std::string& id) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!alarms_.ack(id, clock_.epoch(), rt_)) return Result::fail(404, say("alarm.none"));
   saveState(true);
-  return Result::ok({{"alarms", alarms_.list(watch_, rt_)}});
+  return Result::ok({{"alarms", alarms_.list(alarmWatch_, rt_)}});
 }
 
 json Robot::notifications() const {

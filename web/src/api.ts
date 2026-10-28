@@ -60,6 +60,10 @@ export type PushSettings = {
   status: Record<string, { at: number; ok: boolean; error: string }>;
 };
 
+/** A maintenance item (SD-125): its interval, when it was last done, when it is due and the date it is bundled into. */
+export type ServiceItem = { id: string; kind: string; channel: number; days: number; defaultDays: number; last: number; due: number; date: number; dueNow: boolean; label: Msg };
+export type ServicePlan = { dates: number[]; items: ServiceItem[] };
+
 export type Assessment = { id: string; label: Msg; status: "ok" | "problem" | "neutral"; text: Msg };
 export type Watchdog = {
   evaluatedAt: number; overall: "ok" | "problem" | "neutral"; ok: number; problems: number; neutral: number;

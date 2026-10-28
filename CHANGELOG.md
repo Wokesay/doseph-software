@@ -7,6 +7,19 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Maintenance dates (SD-125, #10 step 5). Each item comes from what the
+  device has, with an interval that can be set from 7 to 730 days:
+  - calibrate the pH probe (30 days) and the EC probe (90);
+  - calibrate each channel (90);
+  - clean the measuring chamber and suction filter (30);
+  - check the pump heads (180);
+  - replace the pH probe (365).
+
+  What falls due within a week goes onto one date. On that date it comes
+  as a note in the morning report and stands on the tank page until it is
+  done. A calibration resets its item by itself; everything else has
+  "Done". API: `GET` and `PUT /api/v1/service`,
+  `POST /api/v1/service/<id>/done`.
 - Push without an account (SD-124, #10 step 5): alarms and the morning
   report go out through ntfy, Telegram or e-mail.
   - The channels are set up in the settings, each with "On" and a test
