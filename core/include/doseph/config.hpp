@@ -70,7 +70,18 @@ struct TankCfg {
   // of one turnover and never shortens it; NaN: none
   double mixMinMin = kNaN;
   double holdMin = 60;                // between two checks once on target
+  // The cultivation system (SD-128): "hydro", "coco", "rockwool", "soil"; empty: not chosen. It
+  // sets what the app offers, never what control does (RAT-076)
+  std::string system;
 };
+
+// The cultivation systems with the pH range a new phase is offered when its recipe has none
+// (SD-128; assumptions, not from a chart)
+struct GrowSystem {
+  const char* id;
+  double phLow, phHigh;
+};
+inline constexpr GrowSystem kGrowSystems[] = {{"hydro", 5.5, 6.1}, {"coco", 5.6, 6.2}, {"rockwool", 5.5, 6.1}, {"soil", 6.2, 6.8}};
 
 // Control settings, within the bounds in code (R7, RAT-008).
 struct ControlCfg {

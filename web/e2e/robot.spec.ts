@@ -407,3 +407,14 @@ test("plants: a plant recipe with phases, a plant started from it sets the water
   await expect(page.getByTestId("plants-plan")).toContainText("No water plan");
   await expect(page.getByTestId("plants-completed")).toContainText("Bed A");
 });
+
+test("the cultivation system is chosen on the tank page; a new phase is offered its pH range (SD-128)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/tank");
+  await page.locator("select[name=system]").selectOption("soil");
+  await page.getByTestId("save-system").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.goto("/#/plants");
+  await page.getByTestId("new-plant-recipe").click();
+  await expect(page.getByRole("dialog")).toContainText("a new phase gets the one for Soil: 6.2–6.8");
+});

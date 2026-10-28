@@ -230,12 +230,21 @@ function CalendarCard(p: { cal: Calendar | null }) {
   );
 }
 
-const newPhase = (recipe: string): PlantPhase => ({ name: "", days: 14, confirm: false, recipe, ecTarget: null, ph: null });
+// A new phase: its recipe's pH range, else the cultivation system's (SD-128)
+const newPhase = (recipe: string, systemPh: [number, number] | null): PlantPhase => ({
+  name: "",
+  days: 14,
+  confirm: false,
+  recipe,
+  ecTarget: null,
+  ph: recipes.value.find((r) => r.id === recipe)?.ph ? null : systemPh,
+});
 
-function RecipeEditor(p: { recipe: PlantRecipe | null; onClose: () => void; onDone: (d: Plants) => void }) {
+function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: () => void; onDone: (d: Plants) => void }) {
   const list = recipes.value;
+  const systemPh = p.data.system ? p.data.systems[p.data.system] : null;
   const [name, setName] = useState(p.recipe?.name ?? "");
-  const [phases, setPhases] = useState<PlantPhase[]>(p.recipe?.phases ?? [newPhase(list[0]?.id ?? "")]);
+  const [phases, setPhases] = useState<PlantPhase[]>(p.recipe?.phases ?? [newPhase(list[0]?.id ?? "", systemPh)]);
   const set = (i: number, part: Partial<PlantPhase>) => setPhases(phases.map((x, n) => (n === i ? { ...x, ...part } : x)));
   const save = async () => {
     try {
@@ -269,6 +278,9 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; onClose: () => void; onDo
           <input class="input" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} name="plant-recipe-name" />
         </Field>
         <div class="section-title">{t("plants.phases")}</div>
+        {systemPh && p.data.system && (
+          <p class="muted small">{t("plants.systemPh", { system: t(`tank.system.${p.data.system}`), low: num(systemPh[0], 1), high: num(systemPh[1], 1) })}</p>
+        )}
         {phases.map((ph, i) => (
           <fieldset class="stack-sm" data-testid={`phase-${i}`}>
             <legend class="small">{t("plants.phaseN", { n: i + 1 })}</legend>
@@ -307,7 +319,7 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; onClose: () => void; onDo
           </fieldset>
         ))}
         <div>
-          <Button size="sm" onClick={() => setPhases([...phases, newPhase(phases[phases.length - 1]?.recipe ?? list[0]?.id ?? "")])} data-testid="add-phase">
+          <Button size="sm" onClick={() => setPhases([...phases, newPhase(phases[phases.length - 1]?.recipe ?? list[0]?.id ?? "", systemPh)])} data-testid="add-phase">
             <Plus size={15} /> {t("plants.addPhase")}
           </Button>
         </div>
@@ -362,7 +374,7 @@ function RecipesCard(p: { data: Plants; onChange: (d: Plants) => void }) {
       ) : (
         <p class="muted">{t("plants.recipesNone")}</p>
       )}
-      {editing !== undefined && <RecipeEditor recipe={editing} onClose={() => setEditing(undefined)} onDone={p.onChange} />}
+      {editing !== undefined && <RecipeEditor recipe={editing} data={p.data} onClose={() => setEditing(undefined)} onDone={p.onChange} />}
     </Card>
   );
 }

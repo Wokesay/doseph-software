@@ -292,12 +292,16 @@ function Templates(p: { onUse: (d: Draft) => void }) {
       steps: tp.steps.map((s) => ({ canister: match(s), mlPerL: s.mlPerL, fixed: false })),
     });
   if (!list.length) return null;
+  // Those made for the tank's cultivation system first (SD-128)
+  const system = config.value!.tank.system;
+  const fits = (tp: RecipeTemplate) => !system || !tp.systems || tp.systems.includes(system);
+  const sorted = [...list.filter(fits), ...list.filter((tp) => !fits(tp))];
   return (
     <Card title={t("recipe.templates")}>
       <div class="stack-sm">
         <p class="muted small">{t("recipe.templatesNote")}</p>
         <div class="tpl-grid">
-          {list.map((tp) => (
+          {sorted.map((tp) => (
             <div class="tpl" data-testid={`template-${tp.id}`}>
               <strong>{(de ? tp.nameDe : tp.name) ?? tp.name}</strong>
               <div class="tpl-rows">

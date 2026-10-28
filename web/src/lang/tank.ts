@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Texts of the tank page.
 export const de = {
+  "tank.system": "Anbausystem",
+  "tank.systemIntro": "Alle Pflanzen am Tank bekommen dasselbe Wasser. Das System setzt die pH-Vorgabe neuer Phasen und welche Vorlagen zuerst kommen; die Steuerung liest es nicht.",
+  "tank.system.none": "nicht gewählt",
+  "tank.system.hydro": "Hydro (Wasserkultur)",
+  "tank.system.coco": "Kokos",
+  "tank.system.rockwool": "Steinwolle",
+  "tank.system.soil": "Erde",
   "tank.saved": "Gespeichert",
   "tank.volume": "Liter im Tank",
   "tank.volumeRange": "Zwischen {min} und {max} L",
@@ -66,6 +73,13 @@ export const de = {
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
+  "tank.system": "Cultivation system",
+  "tank.systemIntro": "Every plant on the tank gets the same water. The system sets the pH a new phase is offered and which templates come first; control never reads it.",
+  "tank.system.none": "not chosen",
+  "tank.system.hydro": "Hydro (water culture)",
+  "tank.system.coco": "Coco",
+  "tank.system.rockwool": "Rock wool",
+  "tank.system.soil": "Soil",
   "tank.saved": "Saved",
   "tank.volume": "Litres in the tank",
   "tank.volumeRange": "Between {min} and {max} L",

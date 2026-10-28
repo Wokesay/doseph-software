@@ -686,9 +686,13 @@ this session.
 - **Harvest and the end** are the user's (RAT-002, RAT-077). The harvest
   is an event with its time. Completing is a step of its own, after which
   the next running plant leads.
-- **Cultivation system** per tank: hydro, coco, rock wool or soil. It sets
-  the defaults of new phases and which templates are offered first; control
-  never reads it (RAT-076). It is built in its own change.
+- **Cultivation system** per tank: hydro, coco, rock wool or soil. Every
+  plant on the tank gets the same water.
+  - It sets the pH range a new phase is offered when its recipe has none:
+    hydro and rock wool 5.5–6.1, coco 5.6–6.2, soil 6.2–6.8 (assumptions,
+    not from a chart).
+  - Templates made for it come first.
+  - Control never reads it (RAT-076).
 - **Calendar:** a list of the next 8 weeks by day. It shows phase changes,
   planned ends, harvest reminders and the maintenance dates (SD-125), with
   today at the top. What is past its plan stands at today, marked overdue.

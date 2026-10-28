@@ -950,6 +950,11 @@ Result Robot::putTank(const json& j) {
   if (!num("volumeL", next.tank.volumeL) || !num("mixMinMin", next.tank.mixMinMin) ||
       !num("holdMin", next.tank.holdMin))
     return Result::fail(422, say("api.bad_input"));
+  if (j.contains("system")) {
+    if (j["system"].is_null()) next.tank.system.clear();
+    else if (j["system"].is_string()) next.tank.system = j["system"].get<std::string>();
+    else return Result::fail(422, say("api.bad_input"));
+  }
   const bool volumeChanged = !(std::isnan(next.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) && next.tank.volumeL != cfg_.tank.volumeL;
   Result r = saveConfig(next, changed("cfg.what.tank"));
   if (r.status != 200) return r;

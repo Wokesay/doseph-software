@@ -7,6 +7,7 @@
       "note": "General starting values for A+B nutrient with CalMag, not from a manufacturer chart. Adjust them to your nutrient's label.",
       "noteDe": "Allgemeine Startwerte für A+B-Dünger mit CalMag, nicht aus einem Herstellerplan. Passe sie an die Angaben deines Düngers an.",
       "basis": "assumption",
+      "systems": ["hydro", "coco", "rockwool"],
       "ecTarget": 1.6,
       "ph": [5.8, 6.2],
       "steps": [
@@ -23,6 +24,7 @@
       "noteDe": "Werte aus dem Plan eines Herstellers für einen dreiteiligen Mineraldünger. Prüf sie vor dem Einsatz am Plan deines Düngers; unverbindlich.",
       "source": "a manufacturer's feed chart, metric (checked 2026-09-26)",
       "basis": "RAT-066",
+      "systems": ["hydro", "coco", "rockwool"],
       "ecTarget": 2.1,
       "ph": [5.8, 6.2],
       "steps": [
@@ -39,6 +41,7 @@
       "noteDe": "Ab Woche 3 höher und mit PK-Zusatz (Phosphor, Kalium). Werte aus dem Plan eines Herstellers für einen dreiteiligen Mineraldünger. Prüf sie vor dem Einsatz am Plan deines Düngers; unverbindlich.",
       "source": "a manufacturer's feed chart, metric (checked 2026-09-26)",
       "basis": "RAT-066",
+      "systems": ["hydro", "coco", "rockwool"],
       "ecTarget": 2.3,
       "ph": [5.8, 6.2],
       "steps": [
