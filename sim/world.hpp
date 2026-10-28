@@ -93,6 +93,8 @@ class World {
   // The feed pump's current, A (assumptions): 0.80 moving water, 0.32 running
   // dry or against a blocked inlet, 0.86 with the hose off; 0 when it stands
   double pumpA() const;
+  // The feed pump's cable leaks into the water: pH and EC read shifted while it runs (SD-127)
+  bool cableFault = false;
 
   // The measuring chamber holds water up to its weir, which keeps the probes
   // wet; above it the water returns to the tank, by gravity or by a return

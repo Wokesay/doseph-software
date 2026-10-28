@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "doseph/alarms.hpp"
 #include "doseph/messages.hpp"
 #include "fakes.hpp"
 #include "simulation.hpp"
@@ -192,6 +193,56 @@ TEST_CASE("Cycle: the feed pump's current is learned while it moves water; once 
   // The learned current survives a restart
   s.reboot();
   CHECK(s.robot().state()["pump"]["normalA"].get<double>() == doctest::Approx(0.80).epsilon(0.01));
+}
+
+TEST_CASE("Cycle: at the end of each check pH and EC with the feed pump running are compared with them standing; a shift is checked once more at once, and confirmed it locks the pump and dosing as a critical alarm until a person releases it (SD-127)") {
+  sim::Simulation s(demo());
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+  // A sound pump: the comparison passes, the pump stands
+  s.step(30 * kSecond);
+  CHECK_FALSE(s.world().output);
+  CHECK_FALSE(st(s)["latches"].contains("pump.cable"));
+  // The cable leaks: pH and EC read shifted while the pump runs, from the next check on
+  s.world().cableFault = true;
+  REQUIRE(runUntil(s, [&] { return phase(s) != "hold"; }, 61 * 60));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 2 * 3600));
+  // Standing 10–20 s after the stop, then once more running and standing: about a minute
+  bool ranAgain = false;
+  REQUIRE(runUntil(s, [&] {
+    ranAgain = ranAgain || s.world().output;
+    return st(s)["latches"].contains("pump.cable");
+  }, 90));
+  CHECK(ranAgain);
+  CHECK_FALSE(s.world().output);
+  const json l = st(s)["latches"]["pump.cable"];
+  CHECK(l["phOn"].get<double>() - l["phOff"].get<double>() == doctest::Approx(0.3).epsilon(0.2));
+  CHECK(hasEvent(s, "ev.pump.cable"));
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.cable");
+  CHECK(levelOf("latch.pump.cable") == Level::Critical);
+  // It stays off and doses nothing until a person releases it
+  const double ec = s.world().tank.ec;
+  s.step(30 * kMinute, 1000);
+  CHECK_FALSE(s.world().output);
+  CHECK(s.world().tank.ec == doctest::Approx(ec).epsilon(0.001));
+  s.world().cableFault = false;
+  REQUIRE(s.robot().ackLatch("pump.cable", json::object()).status == 200);
+  REQUIRE(runUntil(s, [&] { return phase(s) == "flush"; }, 60));
+}
+
+TEST_CASE("Cycle: a shift seen once that is gone when checked again locks nothing (SD-127)") {
+  sim::Simulation s(demo());
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+  s.step(30 * kSecond);
+  s.world().cableFault = true;
+  REQUIRE(runUntil(s, [&] { return phase(s) != "hold"; }, 61 * 60));
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 2 * 3600));
+  // The first comparison sees the shift; before the repeat the fault is gone
+  REQUIRE(runUntil(s, [&] { return s.world().output; }, 40));
+  s.world().cableFault = false;
+  s.step(60 * kSecond);
+  CHECK_FALSE(st(s)["latches"].contains("pump.cable"));
+  CHECK(phase(s) == "hold");
+  CHECK_FALSE(s.world().output);
 }
 
 TEST_CASE("Cycle: a dose that loses its flow stops at once; without flow for 6 s the pump goes off, and what went in mixes with flow before it is measured, learning nothing (SD-105, SD-127, RAT-057)") {

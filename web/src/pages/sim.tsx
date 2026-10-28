@@ -14,7 +14,7 @@ type World = {
   channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
   output: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
-  returnFault: string; leak: boolean; stopButton: boolean; released: boolean;
+  returnFault: string; leak: boolean; stopButton: boolean; released: boolean; cableFault: boolean;
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
 };
 
@@ -148,6 +148,9 @@ export function SimPanel() {
         />
         <label class="row small">
           <input type="checkbox" checked={!!w?.leak} onChange={(e) => act("leak", { on: (e.target as HTMLInputElement).checked })} data-testid="sim-leak" /> {t("sim.leak")}
+        </label>
+        <label class="row small">
+          <input type="checkbox" checked={!!w?.cableFault} onChange={(e) => act("cableFault", { on: (e.target as HTMLInputElement).checked })} data-testid="sim-cable" /> {t("sim.cableFault")}
         </label>
         <label class="row small">
           <input type="checkbox" checked={!!w?.stopButton} onChange={(e) => act("stopButton", { pressed: (e.target as HTMLInputElement).checked })} /> {t("sim.stopButton")}

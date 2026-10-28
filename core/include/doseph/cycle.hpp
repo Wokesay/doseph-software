@@ -42,6 +42,11 @@ constexpr int kDryTriesTank = 2;               // pump in the tank: each try may
 constexpr double kDryShare = 0.6;
 constexpr Ms kDryShareMs = 2 * kSecond;
 constexpr double kPumpLearnS = 60;
+// pH and EC with the feed pump running and standing (SD-127): a damaged cable in the water shifts
+// them while it runs. At the end of each check the last 10 s running are compared with 10–20 s
+// after the stop; a difference beyond these repeats it once, at once (assumptions)
+constexpr double kCablePh = 0.1, kCableEc = 0.05;
+constexpr Ms kCableMs = 10 * kSecond;
 constexpr Epoch kEcRestS = 240;               // pH waits this long after an EC dose (RAT-046)
 constexpr double kTestRiseEc = 0.1;           // a test dose's aim (SD-105)
 constexpr double kTestDropPh = 0.1;
@@ -140,6 +145,8 @@ class MixCycle {
   void startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph);
   void learn(Ctx& c, Actuators& act);
   void holdNow(Ctx& c, Actuators& act);
+  // The comparison with the pump running and standing in Hold; true while it runs (SD-127)
+  bool cableCheck(Ctx& c, Actuators& act);
   // SD-114: the pair parts of a round, and what they miss once it ended
   void recordPairs(Ctx& c, const std::string& recipe, const std::vector<DoseStep>& steps, bool catchUp);
   void settlePairs(Ctx& c);
@@ -165,6 +172,16 @@ class MixCycle {
   Epoch doseEndAt_ = 0;  // the round's last dose ended then: its settling is counted from there (SD-112)
   std::optional<Settled> settled_;
   int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109, SD-127)
+
+  // The comparison with the feed pump running and standing (SD-127): stage 1 standing, 2 running
+  // again, 3 standing again; 0 none
+  struct Cable {
+    int stage = 0;
+    Ms at = 0;
+    double phOn = kNaN, ecOn = kNaN;
+    double phSum = 0, ecSum = 0;
+    int phN = 0, ecN = 0;
+  } cable_;
 
   // Measuring
   struct Sample3 {

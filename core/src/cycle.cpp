@@ -100,6 +100,7 @@ CycleSettings cycleSettings(const Ctx& c) {
 }
 
 void MixCycle::enter(const Ctx& c, Phase p) {
+  if (p != Phase::Hold) cable_ = {};
   phase_ = p;
   since_ = c.now;
   sinceEpoch_ = c.epoch;
@@ -165,6 +166,27 @@ void MixCycle::wait(Ctx& c, Actuators& act, Msg why, Ms retry) {
 
 void MixCycle::holdNow(Ctx& c, Actuators& act) {
   enter(c, Phase::Hold);
+  // The last 10 s with the pump running, to compare once it stands (SD-127)
+  cable_ = {};
+  for (const auto& w : window_) {
+    if (w.at < c.now - kCableMs) continue;
+    if (isNum(w.ph)) {
+      cable_.phSum += w.ph;
+      cable_.phN++;
+    }
+    if (isNum(w.ec)) {
+      cable_.ecSum += w.ec;
+      cable_.ecN++;
+    }
+  }
+  if (cable_.phN > 0 || cable_.ecN > 0) {
+    cable_.stage = 1;
+    cable_.at = c.now;
+    cable_.phOn = cable_.phN ? cable_.phSum / cable_.phN : kNaN;
+    cable_.ecOn = cable_.ecN ? cable_.ecSum / cable_.ecN : kNaN;
+    cable_.phSum = cable_.ecSum = 0;
+    cable_.phN = cable_.ecN = 0;
+  }
   feedPump(c, act, false);
   const CycleSettings s = cycleSettings(c);
   retryAt_ = c.now + s.holdMs;
@@ -176,6 +198,67 @@ void MixCycle::holdNow(Ctx& c, Actuators& act) {
               say("ev.cycle.held.text", {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}}),
               {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}});
   anyDosed_ = false;
+}
+
+bool MixCycle::cableCheck(Ctx& c, Actuators& act) {
+  if (cable_.stage == 0) return false;
+  const Ms t = c.now - cable_.at;
+  const Reading& ph = c.truth.get(Signal::Ph);
+  const Reading& ec = c.truth.get(Signal::Ec);
+  const bool sampling = t >= kCableMs && t <= 2 * kCableMs;
+  if (sampling) {
+    if (ph.usable()) {
+      cable_.phSum += *ph.value;
+      cable_.phN++;
+    }
+    if (ec.usable()) {
+      cable_.ecSum += *ec.value;
+      cable_.ecN++;
+    }
+  }
+  if (cable_.stage == 2) {
+    // Running again: the chamber takes tank water, and its readings of 10–20 s count
+    feedPump(c, act, true);
+    if (!c.flowOk && c.now - flowSeen_ > kFlowStartMs) {
+      cable_ = {};  // no flow: the comparison says nothing; the next check tries again
+      return false;
+    }
+    if (t <= 2 * kCableMs) return true;
+    cable_.phOn = cable_.phN ? cable_.phSum / cable_.phN : kNaN;
+    cable_.ecOn = cable_.ecN ? cable_.ecSum / cable_.ecN : kNaN;
+    cable_.phSum = cable_.ecSum = 0;
+    cable_.phN = cable_.ecN = 0;
+    cable_.stage = 3;
+    cable_.at = c.now;
+    feedPump(c, act, false);
+    return true;
+  }
+  // Standing: its readings of 10–20 s after the stop against those running
+  feedPump(c, act, false);
+  if (t <= 2 * kCableMs) return true;
+  const double phOff = cable_.phN ? cable_.phSum / cable_.phN : kNaN;
+  const double ecOff = cable_.ecN ? cable_.ecSum / cable_.ecN : kNaN;
+  const bool shifted = (isNum(phOff) && isNum(cable_.phOn) && std::fabs(phOff - cable_.phOn) > kCablePh) ||
+                       (isNum(ecOff) && isNum(cable_.ecOn) && std::fabs(ecOff - cable_.ecOn) > kCableEc);
+  if (!shifted) {
+    cable_ = {};
+    return false;
+  }
+  if (cable_.stage == 1) {
+    // Once more at once, so that one stray reading never locks the pump
+    const Cable again{2, c.now};
+    cable_ = again;
+    feedPump(c, act, true);
+    return true;
+  }
+  const json args = {{"phOn", numOrNull(cable_.phOn)}, {"phOff", numOrNull(phOff)}, {"ecOn", numOrNull(cable_.ecOn)}, {"ecOff", numOrNull(ecOff)}};
+  json latch = args;
+  latch["at"] = c.epoch;
+  c.rt.latches["pump.cable"] = latch;
+  c.log.add(c.epoch, "alarm", "alarm", say("ev.pump.cable"), say("ev.pump.cable.text", args), args);
+  cable_ = {};
+  wait(c, act, say("cycle.wait.cable"), 0);
+  return true;
 }
 
 void MixCycle::stop(Ctx& c, Actuators& act, Doser& doser) {
@@ -795,6 +878,15 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
+  // pH or EC shifted while the feed pump ran: its cable may leak into the water; the pump and
+  // dosing stay off until a person releases it (SD-127)
+  if (c.rt.latches.count("pump.cable")) {
+    if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.cable")) {
+      restart(c, act, doser);
+      wait(c, act, say("cycle.wait.cable"), 0);
+    }
+    return;
+  }
   if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
   const Reading& flow = c.truth.get(Signal::Flow);
@@ -983,6 +1075,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       break;
     }
     case Phase::Hold:
+      if (cableCheck(c, act)) break;
       feedPump(c, act, false);
       if (c.now >= retryAt_) enter(c, Phase::PumpOn);
       break;
