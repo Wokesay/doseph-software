@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "doseph/gateway.hpp"
+#include "doseph/messages.hpp"
 #include "fakes.hpp"
 
 using namespace doseph;
@@ -274,6 +275,110 @@ TEST_CASE("Gateway: drops while the pump stands, past its own run, lock the chan
   CHECK(log.query(0, std::numeric_limits<Epoch>::max(), "alarm", 5).size() == 1);
   CHECK_FALSE(act.startRun(c, 3, 3000, "ph", "j2", err));
   CHECK(err.key == "act.channel_locked");
+}
+
+TEST_CASE("Doser: after a dose the line is pulled back; the channel's next run fills it first, unbooked (SD-111)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  Config cfg;
+  cfg.channels[2] = {60, 1, "S"};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Doser doser;
+  Msg err;
+  auto done = [&] {
+    hw.runs[2].state = RunStatus::State::Done;
+    hw.runs[2].actualMs = hw.runs[2].requestedMs;
+    c.now += hw.runs[2].requestedMs + 100;
+    doser.tick(c, act);
+  };
+  DoseOrder o;
+  o.purpose = "ec";
+  o.step.canister = "a";
+  o.step.name = "Part A";
+  o.step.channel = 2;
+  o.step.flowMlPerMin = 60;
+  o.step.runs = {3000};
+  REQUIRE(doser.start(c, act, o, err));
+  done();
+  // 0.2 ml backwards at 60 ml/min: 200 ms; the order ends after it
+  CHECK(hw.backwards);
+  CHECK(hw.runs[2].requestedMs == 200);
+  CHECK_FALSE(doser.takeFinished());
+  done();
+  auto f = doser.takeFinished();
+  REQUIRE(f);
+  CHECK(f->state == DoseProgress::State::Done);
+  CHECK(f->mlDone == doctest::Approx(3.0));
+  CHECK(rt.pulledBackMs.at(2) == 200);
+  // The next dose: first the line, 200 ms forwards, not booked and not in the journal
+  REQUIRE(doser.start(c, act, o, err));
+  CHECK_FALSE(hw.backwards);
+  CHECK(hw.runs[2].requestedMs == 200);
+  const size_t journaled = journal.runs().size();
+  done();
+  CHECK(rt.pulledBackMs.count(2) == 0);
+  CHECK(hw.runs[2].requestedMs == 3000);  // the dose follows at once
+  CHECK(doser.progress().mlDone == 0);
+  CHECK(journal.runs().size() == journaled + 1);
+  done();
+  done();
+  f = doser.takeFinished();
+  REQUIRE(f);
+  CHECK(f->mlDone == doctest::Approx(3.0));
+  // A dose that would be refused is refused before any refill: the line stays pulled back
+  c.flowOk = false;
+  CHECK_FALSE(doser.start(c, act, o, err));
+  CHECK(err.key == "act.no_flow");
+  CHECK(rt.pulledBackMs.at(2) == 200);
+  // A pump that cannot run backwards pulls nothing back
+  c.flowOk = true;
+  rt.pulledBackMs.clear();
+  hw.prof.channels[1].reverse = false;
+  REQUIRE(doser.start(c, act, o, err));
+  done();
+  CHECK(doser.takeFinished());
+  CHECK(rt.pulledBackMs.empty());
+}
+
+TEST_CASE("Doser: a Stop during the pull back keeps what it pulled back and the dose complete (SD-111)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  Config cfg;
+  cfg.channels[2] = {60, 1, "S"};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Doser doser;
+  Msg err;
+  DoseOrder o;
+  o.purpose = "ph";
+  o.step.canister = "down";
+  o.step.name = "pH−";
+  o.step.channel = 2;
+  o.step.flowMlPerMin = 60;
+  o.step.runs = {2000};
+  REQUIRE(doser.start(c, act, o, err));
+  hw.runs[2].state = RunStatus::State::Done;
+  hw.runs[2].actualMs = 2000;
+  c.now = 2100;
+  doser.tick(c, act);
+  REQUIRE(hw.backwards);
+  hw.runs[2].actualMs = 80;
+  doser.abort(c, act, say("abort.interrupted"));
+  auto f = doser.takeFinished();
+  REQUIRE(f);
+  CHECK(f->state == DoseProgress::State::Done);
+  CHECK(rt.pulledBackMs.at(2) == 80);
 }
 
 TEST_CASE("Dosing journal: a run recorded before the terms changed still names its canister (SD-107)") {

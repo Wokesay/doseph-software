@@ -136,6 +136,7 @@ constexpr Entry kMessages[] = {
     {"act.no_head", "channel {channel} has no pump head"},
     {"act.head_changed", "the pump head changed since the channel was calibrated"},
     {"act.channel_locked", "channel {channel} is locked: release it once its cause is fixed"},
+    {"act.no_reverse", "the pump of channel {channel} cannot run backwards"},
     {"act.no_flow", "no flow through the device – no dose without flow"},
     {"act.purpose", "unknown kind of run"},
     {"act.hw", "the device refused: {error}"},

@@ -242,3 +242,16 @@ TEST_CASE("Scenario pump head: a changed head voids the channel's calibration un
   CHECK(prime.status == 409);
   CHECK(prime.body.find("act.no_head") != std::string::npos);
 }
+
+TEST_CASE("Scenario pull back: after a dose the line is pulled back about 0.2 ml where the pump can; the next run fills it first, and every dose still drips in full (SD-111)") {
+  for (const char* profile : {"home", "pro"}) {
+    CAPTURE(profile);
+    Run r(device(profile));
+    r.waitUntil("the first dose", [&] { return !r.events("dose").empty(); }, 2 * 3600, 2000);
+    r.step(5 * kSecond);
+    const int ch = r.events("dose")[0]["data"]["channel"];
+    const double line = r.twin()["channels"][ch - 1]["lineMl"];
+    if (std::string(profile) == "home") CHECK(line == doctest::Approx(0.2).epsilon(0.1));
+    else CHECK(line == 0);  // its pumps cannot run backwards
+  }
+}

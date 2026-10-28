@@ -203,8 +203,12 @@ TEST_CASE("Run-time state: latches, jump locks and learned effects survive; a da
   s.phEffect = 3.2;
   s.stopped = true;
   s.newTank = false;
+  s.pulledBackMs[2] = 240;
   json j = s;
   RuntimeState back = runtimeFromJson(j);
+  CHECK(back.pulledBackMs.at(2) == 240);  // a line pulled back is filled after a restart too (SD-111)
+  // A pull back of no sensible length counts as none
+  CHECK(runtimeFromJson(json{{"pulledBackMs", {{"2", 5000}, {"x", 100}, {"3", -1}}}}).pulledBackMs.empty());
   CHECK(back.latches.count("ec.no_effect"));
   CHECK(back.jumpLocks["ph"]["until"] == 900);
   CHECK(back.ecEffects["r1"] == doctest::Approx(0.31));

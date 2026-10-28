@@ -20,6 +20,8 @@ Msg purposeLabel(const std::string& p) {
 bool intoTank(const std::string& purpose) { return purpose == "ec" || purpose == "ph"; }
 
 constexpr double kDropMl = 0.05;         // one drop at the outlet (SD-111)
+constexpr double kPullBackMl = 0.2;      // pulled back after a dose, so nothing dries at the tip
+constexpr Ms kPullBackMaxMs = kSecond;
 constexpr Ms kDropWaitMinMs = 5 * kSecond;  // the shortest wait for a drop
 constexpr Ms kAfterRunMs = 10 * kSecond;    // drops this long after a run are still its own
 
@@ -33,7 +35,7 @@ bool channelLocked(const RuntimeState& rt, int channel) {
 
 // ---------------------------------------------------------------- Actuators
 
-bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
+bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& purpose, Msg& err) const {
   auto fail = [&](Msg m) {
     err = std::move(m);
     return false;
@@ -57,11 +59,21 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
     // No dose without flow through the device: it would not reach the tank (SD-105)
     if (!c.flowOk) return fail(say("act.no_flow"));
     if (channelLocked(c.rt, channel)) return fail(say("act.channel_locked", {{"channel", channel}}));
-  } else if (purpose != "calibration" && purpose != "prime") {
+  } else if (purpose == "pullback") {
+    if (!canPullBack(channel)) return fail(say("act.no_reverse", {{"channel", channel}}));
+  } else if (purpose != "calibration" && purpose != "prime" && purpose != "refill") {
     return fail(say("act.purpose"));
   }
+  return true;
+}
+
+bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
+  if (!allowed(c, channel, ms, purpose, err)) return false;
   std::string e;
-  if (!hw_.startRun(channel, ms, jobId, e, false)) return fail(say("act.hw", {{"error", e}}));
+  if (!hw_.startRun(channel, ms, jobId, e, purpose == "pullback")) {
+    err = say("act.hw", {{"error", e}});
+    return false;
+  }
   runningChannel_ = channel;
   runningPurpose_ = purpose;
   cutLogged_ = false;
@@ -181,6 +193,27 @@ std::string Doser::busJob() const {
 
 bool Doser::launch(const Ctx& c, Actuators& act) {
   const auto& o = *active_;
+  // A line pulled back after the last dose is filled first: the same time forwards, not booked,
+  // so the dose stays the planned amount (SD-111)
+  if (auto back = c.rt.pulledBackMs.find(o.step.channel); back != c.rt.pulledBackMs.end()) {
+    Msg e;
+    // Only for a run that may start: a refused one is refused as without a refill
+    if (!act.allowed(c, o.step.channel, o.step.runs[progress_.run], o.purpose, e)) {
+      progress_.error = e;
+      return false;
+    }
+    job_ = busJob() + "f";
+    if (!act.startRun(c, o.step.channel, back->second, "refill", job_, e)) {
+      progress_.error = e;
+      return false;
+    }
+    leg_ = Leg::Refill;
+    running_ = true;
+    runStartedAt_ = c.now;
+    runRequestedMs_ = back->second;
+    return true;
+  }
+  leg_ = Leg::Dose;
   const Ms ms = o.step.runs[progress_.run];
   const int run = static_cast<int>(progress_.run) + 1;
   // Written before the pump starts: a restart while it runs is then reported (SD-106)
@@ -199,7 +232,8 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
     return false;
   }
   Msg e;
-  if (!act.startRun(c, o.step.channel, ms, o.purpose, busJob(), e)) {
+  job_ = busJob();
+  if (!act.startRun(c, o.step.channel, ms, o.purpose, job_, e)) {
     c.journal.end(o.id, run, 0, 0);  // nothing ran
     progress_.error = e;
     return false;
@@ -208,6 +242,48 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
   runStartedAt_ = c.now;
   runRequestedMs_ = ms;
   return true;
+}
+
+// After the last run of a dose into the tank the pump runs backwards briefly, where it can (SD-111)
+bool Doser::pullBack(const Ctx& c, Actuators& act) {
+  const auto& o = *active_;
+  const double flow = o.step.flowMlPerMin;
+  if (!intoTank(o.purpose) || !act.canPullBack(o.step.channel) || !(isNum(flow) && flow > 0)) return false;
+  const Ms ms = std::clamp<Ms>(std::llround(kPullBackMl / flow * 60000.0), 1, kPullBackMaxMs);
+  Msg e;
+  job_ = busJob() + "b";
+  if (!act.startRun(c, o.step.channel, ms, "pullback", job_, e)) return false;  // nothing pulled back: nothing to fill
+  leg_ = Leg::PullBack;
+  running_ = true;
+  runStartedAt_ = c.now;
+  runRequestedMs_ = ms;
+  return true;
+}
+
+void Doser::finish(const Ctx& c, DoseProgress::State state) {
+  progress_.state = state;
+  logOrder(c);
+  finished_ = progress_;
+  active_.reset();
+}
+
+// A refill or a pull back ended: neither is booked
+void Doser::legEnded(const Ctx& c, Actuators& act, bool done, Ms ran, const std::string& error) {
+  const auto& o = *active_;
+  if (leg_ == Leg::PullBack) {
+    if (ran > 0) c.rt.pulledBackMs[o.step.channel] = std::min(ran, kPullBackMaxMs);
+    finish(c, DoseProgress::State::Done);  // the dose itself is complete
+    return;
+  }
+  // The refill: done, the dose follows at once; cut, how full the line is is unknown, and the
+  // next run starts without a refill (the safe direction: less into the tank)
+  c.rt.pulledBackMs.erase(o.step.channel);
+  if (done) {
+    if (!launch(c, act)) finish(c, DoseProgress::State::Failed);
+    return;
+  }
+  progress_.error = say("dose.failed", {{"name", o.step.name}, {"reason", error.empty() ? json(say("dose.run_cancelled")) : json(error)}});
+  finish(c, DoseProgress::State::Failed);
 }
 
 void Doser::fail(const Ctx& c, Msg error) {
@@ -286,7 +362,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
   const auto& o = *active_;
   if (running_) {
     RunStatus st = act.runStatus(o.step.channel);
-    const bool mine = st.jobId == busJob();
+    const bool mine = st.jobId == job_;
     // A failure without a job ID: the pump driver disconnected or not answering
     const bool lost = !mine && st.state == RunStatus::State::Failed && st.jobId.empty();
     if (!lost && (!mine || st.state == RunStatus::State::Running)) {
@@ -295,12 +371,20 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       act.stopPumps();
       act.clearRun(o.step.channel);
       running_ = false;
+      if (leg_ != Leg::Dose) {
+        legEnded(c, act, false, 0, "");
+        return;
+      }
       book(c, mine && st.actualMs > 0 ? st.actualMs : runRequestedMs_);
       fail(c, say("dose.no_response", {{"name", o.step.name}}));
       return;
     }
     act.clearRun(o.step.channel);
     running_ = false;
+    if (leg_ != Leg::Dose) {
+      legEnded(c, act, mine && st.state == RunStatus::State::Done, mine ? st.actualMs : 0, mine ? st.error : "");
+      return;
+    }
     if (lost) {
       act.stopPumps();
       book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
@@ -312,10 +396,8 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       book(c, st.actualMs);
       progress_.run++;
       if (progress_.run >= o.step.runs.size()) {
-        progress_.state = DoseProgress::State::Done;
-        logOrder(c);
-        finished_ = progress_;
-        active_.reset();
+        if (pullBack(c, act)) return;  // the order ends after it
+        finish(c, DoseProgress::State::Done);
         return;
       }
       pauseUntil_ = c.now + 3 * kSecond;  // pause between partial runs (RAT-055)
@@ -344,8 +426,15 @@ void Doser::abort(const Ctx& c, Actuators& act, const Msg& reason) {
   act.stopPumps();
   if (running_) {
     RunStatus st = act.runStatus(active_->step.channel);
-    const Ms ran = st.jobId == busJob() ? st.actualMs : std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_);
-    book(c, std::max<Ms>(0, ran));
+    const Ms ran = std::max<Ms>(0, st.jobId == job_ ? st.actualMs : std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
+    if (leg_ == Leg::PullBack) {
+      act.clearRun(active_->step.channel);
+      running_ = false;
+      legEnded(c, act, false, ran, "");  // keeps what it pulled back; the dose itself is complete
+      return;
+    }
+    if (leg_ == Leg::Refill) c.rt.pulledBackMs.erase(active_->step.channel);  // how full the line is is unknown
+    else book(c, ran);
   }
   act.clearRun(active_->step.channel);
   running_ = false;

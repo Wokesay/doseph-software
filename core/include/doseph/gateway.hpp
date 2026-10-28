@@ -52,8 +52,14 @@ class Actuators {
  public:
   explicit Actuators(IHardware& hw) : hw_(hw) {}
 
+  // Whether a run may start now, and if not why; startRun checks the same
+  bool allowed(const Ctx& c, int channel, Ms ms, const std::string& purpose, Msg& err) const;
   bool startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err);
   RunStatus runStatus(int channel) const { return hw_.runStatus(channel); }
+  // The channel's pump can run backwards, to pull its line back (SD-111)
+  bool canPullBack(int channel) const {
+    return channel >= 1 && channel <= hw_.channelCount() && hw_.profile().channels[static_cast<size_t>(channel - 1)].reverse;
+  }
   bool channelRunning() const { return runningChannel_ != 0; }
   void clearRun(int channel);
   void stopPumps() { hw_.stopAllPumps(); }
@@ -100,7 +106,7 @@ class Actuators {
 // the journal before the pump starts (SD-106).
 struct DoseOrder {
   std::string id;
-  std::string purpose;  // ec | ph | calibration | prime
+  std::string purpose;  // ec | ph | calibration | prime (runs of the gateway also: refill | pullback)
   DoseStep step;
 };
 
@@ -135,12 +141,20 @@ class Doser {
   std::optional<DoseProgress> takeFinished();
 
  private:
+  // What runs now (SD-111): the line pulled back last time filled again, a run of the dose, or
+  // the line pulled back after its last run
+  enum class Leg { Refill, Dose, PullBack };
   void book(const Ctx& c, Ms ms);
   void logOrder(const Ctx& c);
   bool launch(const Ctx& c, Actuators& act);
+  bool pullBack(const Ctx& c, Actuators& act);
+  void legEnded(const Ctx& c, Actuators& act, bool done, Ms ran, const std::string& error);
+  void finish(const Ctx& c, DoseProgress::State state);
   void fail(const Ctx& c, Msg error);
   std::string busJob() const;
   std::optional<DoseOrder> active_;
+  Leg leg_ = Leg::Dose;
+  std::string job_;  // the job ID of the run under way
   DoseProgress progress_;
   std::optional<DoseProgress> finished_;
   Ms pauseUntil_ = 0;

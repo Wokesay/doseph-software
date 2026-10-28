@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <set>
 #include <stdexcept>
 
@@ -399,6 +400,9 @@ void to_json(json& j, const RuntimeState& s) {
   j["stockMl"] = s.stockMl;
   j["pairRound"] = s.pairRound;
   j["catchUp"] = s.catchUp;
+  json pulled = json::object();
+  for (const auto& [n, ms] : s.pulledBackMs) pulled[std::to_string(n)] = ms;
+  j["pulledBackMs"] = pulled;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -433,6 +437,12 @@ RuntimeState runtimeFromJson(const json& j) {
       if (v.is_number() && isNum(v.get<double>())) s.stockMl[k] = v.get<double>();
   if (j.contains("pairRound") && j["pairRound"].is_object()) s.pairRound = j["pairRound"];
   if (j.contains("catchUp") && j["catchUp"].is_object()) s.catchUp = j["catchUp"];
+  // A line pulled back for 1 ms to 1 s; anything else counts as not pulled back
+  if (j.contains("pulledBackMs") && j["pulledBackMs"].is_object())
+    for (const auto& [k, v] : j["pulledBackMs"].items()) {
+      const int n = std::atoi(k.c_str());
+      if (n > 0 && std::to_string(n) == k && v.is_number_integer() && v.get<Ms>() > 0 && v.get<Ms>() <= 1000) s.pulledBackMs[n] = v.get<Ms>();
+    }
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

@@ -7,6 +7,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- After a dose the line is pulled back (SD-111): where the pump can run
+  backwards, it pulls about 0.2 ml back (at most 1 s), so nothing dries
+  at the tip. The channel's next run first fills the line the same time
+  forwards, not booked, so the dose stays the planned amount; how long
+  each line is pulled back survives a restart. In the twin, a
+  calibration into a cup fills a pulled-back line first, too.
 - The drop sensor confirms each run into the tank (SD-111): when no drop
   falls within the wait (four drops' time at the calibrated flow, at
   least 5 s), the run is cut at once and the channel locked with an
