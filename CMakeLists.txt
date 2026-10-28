@@ -87,10 +87,13 @@ endif()
 
 if(DP_BUILD_SIM)
   find_package(Threads REQUIRED)
-  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp sim/push.cpp)
+  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp sim/push.cpp sim/mqtt_link.cpp)
   target_include_directories(doseph_sim PUBLIC sim)
   target_link_libraries(doseph_sim PUBLIC doseph_core Threads::Threads)
   target_compile_options(doseph_sim PRIVATE ${DP_WARN})
+  if(WIN32)
+    target_link_libraries(doseph_sim PUBLIC ws2_32)  # the MQTT connection (mqtt_link.cpp)
+  endif()
 
   add_executable(doseph_sim_server sim/main.cpp)
   target_link_libraries(doseph_sim_server PRIVATE doseph_sim Threads::Threads)
@@ -123,6 +126,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_alarms.cpp
     tests/core/test_push.cpp
     tests/core/test_mqtt.cpp
+    tests/core/test_mqtt_link.cpp
     tests/core/test_service.cpp
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp

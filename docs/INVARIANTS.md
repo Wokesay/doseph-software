@@ -173,6 +173,7 @@ of its own.
 | MQTT is off by default; values go out also without TLS, commands only over TLS with a user; the password stays in the device's own file and is never read back | SD-130 | ✓ | `mqtt.cpp`, `robot.cpp` · test_mqtt.cpp, robot.spec.ts |
 | A command over MQTT is a call of the account role with the same checks as one from the app; there is none for a limit, a release, a calibration or a single pump; each known command is logged | SD-130 | ✓ | `api.cpp` · test_mqtt.cpp |
 | A value the robot cannot use goes to the broker as null, never 0 (R5) | SD-130 | ✓ | `mqtt.cpp` · test_mqtt.cpp |
+| The simulator's connection has no TLS, so it takes no commands; it says it is online with "offline" as its last will, and a refusal or missing TLS shows in the settings | SD-130 | ✓ | `sim/mqtt_link.cpp` · test_mqtt_link.cpp |
 
 ## History and messages
 

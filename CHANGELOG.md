@@ -53,7 +53,9 @@ All notable changes to this software. The format follows
     force and its EC and pH targets. These are calls of the account
     role, with the same checks as from the app.
   - The settings and their password live apart from the configuration.
-  - The simulator does not connect to a broker yet.
+  - The simulator connects to a broker in the home network over plain
+    TCP. It sends values and takes no commands, since it has no TLS
+    (`docs/SIMULATOR.md`).
 - The device has a random ID of its own (SD-129). It is shown in `/info`,
   in the diagnostics and on the settings page, and never in a backup.
 

@@ -35,6 +35,14 @@ the `PATH` (part of Linux, macOS and Windows 10 and later); the variable
 settings say why. With a time-lapse, a critical alarm's reminders come as
 fast as the simulated time runs.
 
+**MQTT and Home Assistant** (SD-130): switched on under Settings → MQTT
+and Home Assistant, the simulator connects to a broker in your network
+over plain TCP and sends its values. Home Assistant finds the device by
+itself (discovery). The simulator has no TLS, so with TLS on it says so
+and does not connect; for the same reason it takes no commands, which
+need TLS (PD-461). To try it, use a Mosquitto broker without TLS, for
+example Home Assistant's own add-on, with a user of its own.
+
 ### Example profiles
 
 The device reports what it has (SD-108); `GET /api/v1/info` shows it as
