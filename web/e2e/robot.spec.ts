@@ -229,3 +229,15 @@ test("a canister's level is counted, entered by hand and set full when refilled 
   await expect(level).toContainText(/1,?000 of 1,?000 ml/);
   await expect(level).not.toContainText("nearly empty");
 });
+
+test("the simulator panel switches the water path's faults: a leak turns the hardware release off (SD-110)", async ({ page }) => {
+  await login(page);
+  await page.getByTestId("sim-open").click();
+  const release = page.getByTestId("sim-release");
+  await expect(release).toHaveText("Hardware release on");
+  await expect(page.getByTestId("sim-water-path")).toContainText("Measuring chamber");
+  await page.getByTestId("sim-leak").check();
+  await expect(release).toHaveText("Hardware release off: leak");
+  await page.getByTestId("sim-leak").uncheck();
+  await expect(release).toHaveText("Hardware release on");
+});

@@ -76,8 +76,8 @@ switches the faults; `POST /api/v1/sim/<action>` does the same for tests.
 Scenario tests (`tests/core/test_scenarios.cpp`) drive the core through
 the API with the harness in `tests/core/harness.hpp` and read what the
 core cannot see from the twin.
-The water path's faults are there for tests so far, and come to the panel
-with #10, step 3.5: `flowFault` with `{"fault": "dry"}`, `returnFault`
-with `{"fault": "blocked"}` or `{"fault": "failed"}`, `leak` with
-`{"on": true}`, `stopButton` with `{"pressed": true}`, and on
-`channelFault` the keys `outletBlocked` and `siphon`.
+The water path's faults are in the panel and in the API: `flowFault` with
+`{"fault": "dry"}`, `returnFault` with `{"fault": "blocked"}` or
+`{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
+`{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and
+`siphon`.
