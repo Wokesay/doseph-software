@@ -187,6 +187,8 @@ struct RuntimeState {
   // no dose went in since; null otherwise. `topUp`: "top up water" is raised.
   json ecInBand = nullptr;
   bool topUp = false;
+  // The settling times of the last three clean doses, min (SD-112): a large tank waits 1.5 × the longest
+  std::vector<double> settleMin;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

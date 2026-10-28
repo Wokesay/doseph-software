@@ -231,6 +231,25 @@ EffectEdit editEcEffect(const RecipeCfg& before, const RecipeCfg& after, double 
   return e;
 }
 
+double settleSeconds(const std::vector<Epoch>& t, const std::vector<double>& v, Epoch end, double final, double band, int stepS) {
+  if (!isNum(final)) return kNaN;
+  bool any = false;
+  Epoch lastOut = end;
+  for (size_t i = 0; i < t.size() && i < v.size(); ++i) {
+    if (t[i] < end || !isNum(v[i])) continue;
+    any = true;
+    if (std::abs(v[i] - final) > band) lastOut = t[i] + stepS;  // out of the band until this point's end
+  }
+  return any ? static_cast<double>(lastOut - end) : kNaN;
+}
+
+double learnedSettleMin(const std::vector<double>& lastMin) {
+  double longest = kNaN;
+  for (double m : lastMin)
+    if (isNum(m)) longest = isNum(longest) ? std::max(longest, m) : m;
+  return isNum(longest) ? std::clamp(1.5 * longest, kSettleMinMin, kSettleMaxMin) : kNaN;
+}
+
 double suggestedWaitMin(double volumeL, double flowLpm, double turnovers) {
   if (!isNum(volumeL) || volumeL <= 0 || !isNum(flowLpm) || flowLpm <= 0 || !isNum(turnovers)) return kNaN;
   return std::clamp(std::ceil(turnovers * volumeL / flowLpm), kWaitMinMin, kWaitMaxMin);

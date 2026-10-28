@@ -13,6 +13,7 @@
 #pragma once
 
 #include <deque>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,18 @@ class MixCycle {
   void mixFirst(Ms ms) { mixPendingMs_ = std::max(mixPendingMs_, ms); }
   // The recipe a round doses changed or went: the round learns nothing (RAT-057)
   // A dose order of the cycle finished (the robot routes the doser's result here)
+  // A clean round just learned: its kind ("ec", "ph"), when its dosing ended and its final value, for
+  // the robot to read its settling time from the history (SD-112)
+  struct Settled {
+    std::string kind;
+    Epoch end = 0;
+    double final = kNaN;
+  };
+  std::optional<Settled> takeSettled() {
+    auto s = settled_;
+    settled_.reset();
+    return s;
+  }
   void doseFinished(Ctx& c, const DoseProgress& p);
   void recipeChanged(const std::string& id) {
     if (id == roundRecipe_) clean_ = false;
@@ -137,6 +150,8 @@ class MixCycle {
   double flowSum_ = 0;
   int flowN_ = 0;
   bool noFlowLogged_ = false;
+  Epoch doseEndAt_ = 0;  // the round's last dose ended then: its settling is counted from there (SD-112)
+  std::optional<Settled> settled_;
   int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109)
 
   // Measuring

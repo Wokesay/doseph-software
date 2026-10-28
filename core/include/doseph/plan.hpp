@@ -94,4 +94,14 @@ EffectEdit editEcEffect(const RecipeCfg& before, const RecipeCfg& after, double 
 // minutes, within the bounds (SD-105); NaN without volume or flow
 double suggestedWaitMin(double volumeL, double flowLpm, double turnovers);
 
+// The settling of large tanks (SD-112): a tank above this mixes by the customer's pump, the flow
+// through the device is only a sample stream; its wait is the settling time learned from its doses
+constexpr double kLargeTankL = 150;
+constexpr double kSettleDefaultMin = 60, kSettleMinMin = 5, kSettleMaxMin = 600;
+// A dose's settling time, s: from its end until the readings (t, value) stay within `band` of their
+// final value; NaN without a reading after its end
+double settleSeconds(const std::vector<Epoch>& t, const std::vector<double>& v, Epoch end, double final, double band, int stepS);
+// The wait learned from the last three clean doses' settling times (min): 1.5 × the longest, 5 to 600
+double learnedSettleMin(const std::vector<double>& lastMin);
+
 }  // namespace doseph

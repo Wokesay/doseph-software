@@ -132,6 +132,7 @@ class Robot {
   void watchRelease(Epoch epoch);
   void checkHeads(Epoch epoch);
   void mixFirstNow();
+  void learnSettling(const MixCycle::Settled& st, Epoch epoch);
   void snapshot(Epoch epoch);
   void channelJobDone(const DoseProgress& p);
   Result startChannelJob(const std::string& type, int channel, double seconds);
