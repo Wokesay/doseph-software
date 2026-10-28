@@ -31,7 +31,8 @@ const char* levelName(Level l) {
 // into the tank on its own, and pH out of its range (SD-123). Info: what can wait for a date.
 // Everything else is a warning.
 Level levelOf(const std::string& id) {
-  if (id == "latch.hw.leak" || id == "latch.hw.high_level" || id == "latch.hw.return" || id == "latch.flow.dry" || id == "target.ph")
+  if (id == "latch.hw.leak" || id == "latch.hw.high_level" || id == "latch.hw.return" || id == "latch.flow.dry" || id == "latch.pump.cable" ||
+      id == "target.ph")
     return Level::Critical;
   if (startsWith(id, "latch.channel.") && endsWith(id, ".siphon")) return Level::Critical;
   if (startsWith(id, "maint.")) return Level::Info;

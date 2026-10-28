@@ -41,7 +41,7 @@ void World::reset(int n) {
   returnFault.clear();
   leak = stopButton = false;
   primedMs_ = noFlowMs_ = 0;
-  noFlowCut = false;
+  noFlowCut = cableFault = false;
   probeFault.clear();
   phBuffer.reset();
   ecBuffer.reset();
@@ -299,6 +299,7 @@ double World::rawPh() const {
   if (!phBuffer && tank.volumeL < 0.5) truth = 7.3 + noise(0.2);  // a dry probe
   double raw = 7.0 + (truth - 7.0) / phSlope + phOffset + noise(0.006);
   if (probeFault == "jump") raw += 2.1;
+  if (cableFault && pumpRuns()) raw += 0.3;  // a leaking cable shifts it while the pump runs (assumption)
   return std::round(raw * 1000.0) / 1000.0;
 }
 
@@ -307,7 +308,7 @@ double World::rawEc() const {
   if (probeFault == "ec_zero") return std::round(std::max(0.0, 0.01 + noise(0.004)) * 1000.0) / 1000.0;
   // The solution's EC at 25 °C, read at the chamber's temperature (not compensated)
   const double ec25 = ecBuffer ? *ecBuffer : (tank.volumeL < 0.5 ? 0.0 : chamber.ec);
-  const double raw = ec25 * (1.0 + kTwinEcCoeff * (chamber.temp - 25.0)) * ecFactor + noise(0.004);
+  const double raw = ec25 * (1.0 + kTwinEcCoeff * (chamber.temp - 25.0)) * ecFactor + noise(0.004) + (cableFault && pumpRuns() ? 0.12 : 0.0);
   return std::max(0.0, std::round(raw * 1000.0) / 1000.0);
 }
 
@@ -344,6 +345,7 @@ json World::toJson() const {
           {"pumpInTank", pumpInTank},
           {"noFlowCut", noFlowCut},
           {"pumpA", pumpA()},
+          {"cableFault", cableFault},
           {"pumpLpm", pumpLpm},
           {"primed", primed()},
           {"flowing", flowing()},

@@ -22,6 +22,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- pH and EC are compared with the feed pump running and standing at the
+  end of each check (SD-127, from PD-476). A damaged cable in the water
+  can shift them. A difference beyond 0.1 pH or 0.05 mS/cm is checked
+  once more at once. Confirmed, it locks the pump and dosing with a
+  critical alarm, "check the pump and its cable", until it is released.
+  The simulator panel has a damaged cable as a fault.
 - A dry run of the feed pump is seen in its current (SD-127, RAT-049).
   The device learns the current while the pump moves water. Once the pump
   has moved water in a check, less than 60 % of it for 2 s switches the

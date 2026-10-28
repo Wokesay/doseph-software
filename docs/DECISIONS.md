@@ -622,13 +622,16 @@ the control details in this session.
     without flow, with the reason "dry run".
   - Until the current is learned, only the 6 s window protects.
   - The thresholds are assumptions until the bench test.
-- **pH and EC with the pump on and off** (decided, built next).
+- **pH and EC with the pump on and off.**
   - At the end of each check, the readings of the last 10 s with the pump
     running are compared with those 10–20 s after it stopped.
   - A difference beyond 0.1 pH or 0.05 mS/cm (assumptions) repeats the
     comparison once, at once.
   - If confirmed, the pump and dosing are locked with a critical alarm
-    ("check the pump and its cable") until a person releases it.
+    ("check the pump and its cable") until a person releases it. This adds
+    a critical alarm to SD-123.
+  - A comparison during which no flow comes back says nothing; the next
+    check compares again.
 - **Maintenance.** "Clean the measuring chamber, the feed pump and its inlet
   screen" replaces the suction filter (SD-125).
 - **Later.** Commissioning (step 7) brings:

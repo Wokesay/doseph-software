@@ -293,6 +293,7 @@ json Simulation::control(const std::string& action, const json& b) {
       world_.tank.volumeL = v + add;
     }
   } else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
+  else if (action == "cableFault") world_.cableFault = doseph::jbool(b, "on", false);
   else if (action == "pumpLpm") world_.pumpLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
   else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
   else if (action == "leak") world_.leak = doseph::jbool(b, "on", false);
