@@ -170,11 +170,35 @@ TEST_CASE("Cycle: when the hardware cuts the feed pump for no flow, the check st
   CHECK_FALSE(st(s)["latches"].contains("flow.dry"));
 }
 
+TEST_CASE("Cycle: the feed pump's current is learned while it moves water; once it has, far less for 2 s is a dry run that switches it off at once as a try without flow (SD-127, RAT-049)") {
+  sim::Simulation s(demo());
+  // Out of the water at its start, before anything is learned: the window protects it
+  s.world().flowFault = "dry";
+  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 60));
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.no_flow");
+  s.world().flowFault.clear();
+  // The next try moves water: the current is learned over a minute of flow
+  REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 7 * 60));
+  CHECK(s.robot().state()["pump"]["normalA"].get<double>() == doctest::Approx(0.80).epsilon(0.01));
+  // Lifted out of the water while it runs: off within 2 s, long before the window
+  s.world().flowFault = "dry";
+  const Ms lifted = s.world().now();
+  REQUIRE(runUntil(s, [&] { return phase(s) == "wait"; }, 10));
+  CHECK(s.world().now() - lifted <= 3 * kSecond);
+  CHECK(st(s)["cycle"]["line"]["key"] == "cycle.wait.dry_run");
+  CHECK_FALSE(s.world().output);
+  // The second try in a row: the pump starts out of the water, the window ends it, and it is locked
+  REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("flow.dry"); }, 6 * 60));
+  // The learned current survives a restart
+  s.reboot();
+  CHECK(s.robot().state()["pump"]["normalA"].get<double>() == doctest::Approx(0.80).epsilon(0.01));
+}
+
 TEST_CASE("Cycle: a dose that loses its flow stops at once; without flow for 6 s the pump goes off, and what went in mixes with flow before it is measured, learning nothing (SD-105, SD-127, RAT-057)") {
   sim::Simulation s(demo());
   REQUIRE(runUntil(s, [&] { return dosing(s); }, 20 * 60));
   s.step(2 * kSecond);
-  s.world().flowFault = "blocked";
+  s.world().flowFault = "hose";  // the pump draws its normal current: only the window sees it
   s.step(2 * kSecond);
   CHECK_FALSE(dosing(s));
   CHECK(hasEvent(s, "ev.flow_cut"));

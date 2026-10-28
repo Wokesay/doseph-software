@@ -121,6 +121,8 @@ class IHardware {
   // The return pump runs by the chamber's level on its own; held off, it does not run (SD-109)
   virtual void allowReturnPump(bool allowed) = 0;
   virtual std::optional<bool> feedPump() const = 0;  // nullopt: state unknown
+  // The feed pump's current in A while it runs; nullopt where the device does not measure it
+  virtual std::optional<double> feedPumpA() const = 0;
 };
 
 // Storage for configuration and state (device: flash, host: files). write()

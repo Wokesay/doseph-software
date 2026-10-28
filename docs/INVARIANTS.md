@@ -44,6 +44,7 @@ of its own.
 | Flow by the device's method: an outlet level sensor proves it while it reports water and the feed pump runs, a flow meter at 0.5 L/min, each for 10 s | SD-109 | ✓ | `robot.cpp`, `cycle.cpp` · test_cycle.cpp |
 | The feed pump in the tank goes off after 6 s without flow, at its start or later, before the hardware's own cut; a new try in 5 min, and the second try in a row locks it until a person releases it; in the device 2 min and three tries | SD-127 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | The hardware's cut for no flow stops the check and counts as a try; switching the pump off re-arms it | SD-127 | ✓ | `cycle.cpp`, `robot.cpp`, `hardware.hpp` · test_cycle.cpp |
+| The feed pump's current is learned while it moves water; once it has, below 60 % of it for 2 s it goes off at once as a try without flow | RAT-049 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | A probe or channel calibration, or a line fill, stops the check and the feed pump first; the check starts anew once it ends | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
 | A return pump that runs a minute without a pause is dry or blocked: it is held off and latched, everything holds, and a restart holds it off again until a person releases it | SD-109 | ✓ | `hardware.hpp`, `gateway.hpp`, `robot.cpp` · test_scenarios.cpp |
 

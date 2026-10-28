@@ -108,6 +108,12 @@ bool World::flowing() const {
 
 bool World::highLevel() const { return chamberL >= kHighL; }
 
+double World::pumpA() const {
+  if (!pumpRuns()) return 0.0;
+  const bool dry = flowFault == "dry" || flowFault == "blocked" || tank.volumeL <= 1.0 || (!pumpInTank && !primed());
+  return dry ? 0.32 : flowFault == "hose" ? 0.86 : 0.80;
+}
+
 bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards) {
   if (pump < 1 || pump > static_cast<int>(pumps.size())) {
     err = "no such pump";
@@ -337,6 +343,7 @@ json World::toJson() const {
           {"output", output},
           {"pumpInTank", pumpInTank},
           {"noFlowCut", noFlowCut},
+          {"pumpA", pumpA()},
           {"pumpLpm", pumpLpm},
           {"primed", primed()},
           {"flowing", flowing()},

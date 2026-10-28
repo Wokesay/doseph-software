@@ -213,6 +213,10 @@ struct RuntimeState {
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)
   Epoch flowAt = 0;
+  // The feed pump's current while it moves water, learned while flow is proven, and for how
+  // long; a dry run draws far less (SD-127, RAT-049). Missing until learned (R5).
+  double pumpNormalA = kNaN;
+  double pumpLearnedS = 0;
   std::optional<Stamp> clock;              // time and operating time when saved
   std::uint32_t bootCount = 0;
 };

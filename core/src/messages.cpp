@@ -53,6 +53,7 @@ constexpr Entry kMessages[] = {
     {"cycle.wait.stock_empty", "{name} is used up by the count – refill it and mark it refilled, or enter the amount left"},
     {"cycle.wait.ph_plan", "Waiting: {reason}"},
     {"cycle.wait.no_flow", "Waiting: no flow, so the feed pump is off – check that it lies in the water, its hose and its inlet"},
+    {"cycle.wait.dry_run", "Dry run: the feed pump drew {amps:2}\u00a0A instead of about {normal:2}\u00a0A, so it is off – check that it lies in the water and its inlet"},
     {"cycle.wait.pump_cut", "No flow: the hardware switched the feed pump off – check that it lies in the water and its hose"},
     {"cycle.wait.dry", "Waiting: the feed pump is locked after tries without flow – release the lock under Status once fixed"},
     {"cycle.wait.nothing_dosed", "Waiting: nothing could be dosed"},

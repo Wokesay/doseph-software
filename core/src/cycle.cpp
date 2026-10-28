@@ -131,7 +131,11 @@ void MixCycle::feedPump(Ctx& c, Actuators& act, bool on) {
   auto st = act.feedPump();
   // After a cut for no flow the hardware holds the pump off until it is switched off once more
   if (st && *st == on && !(c.pumpCut && !on)) return;
-  if (on) flowSeen_ = c.now;  // the window without flow starts with the pump
+  if (on) {
+    flowSeen_ = c.now;  // the window without flow starts with the pump
+    flowedThisRun_ = false;
+    lowAmpsSince_ = 0;
+  }
   Msg err;
   if (!act.setFeedPump(c, on, err) && on) line_ = say("cycle.pump_failed", {{"reason", err}});
 }
@@ -813,6 +817,32 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
 
   // The window without flow counts from the pump's start or the last flow seen, in every phase
   if (c.flowOk) flowSeen_ = c.now;
+  // The feed pump's current, where measured (SD-127, RAT-049): learned while it moves water. Once
+  // it has moved water in this run, far less for 2 s is a dry run, and it goes off at once as a
+  // try without flow; at its start the window without flow protects it
+  if (act.feedPump().value_or(false) && c.pumpA && isNum(*c.pumpA)) {
+    const double a = *c.pumpA, normal = c.rt.pumpNormalA;
+    const bool low = isNum(normal) && c.rt.pumpLearnedS >= kPumpLearnS && a < kDryShare * normal;
+    if (c.flowOk && !low && a > 0) {
+      const double dts = static_cast<double>(dt) / 1000.0;
+      c.rt.pumpNormalA = isNum(normal) ? normal + (a - normal) * std::min(1.0, dts / 60.0) : a;
+      c.rt.pumpLearnedS += dts;
+    }
+    if (c.flowOk) flowedThisRun_ = true;
+    if (low && flowedThisRun_) {
+      if (lowAmpsSince_ == 0) lowAmpsSince_ = c.now;
+      if (c.now - lowAmpsSince_ >= kDryShareMs) {
+        lowAmpsSince_ = 0;
+        restart(c, act, doser);  // a round going on is cut: what went in is mixed first later
+        noFlow(c, act, say("cycle.wait.dry_run", {{"amps", a}, {"normal", c.rt.pumpNormalA}}));
+        return;
+      }
+    } else {
+      lowAmpsSince_ = 0;
+    }
+  } else {
+    lowAmpsSince_ = 0;
+  }
 
   switch (phase_) {
     case Phase::PumpOn:

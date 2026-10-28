@@ -70,6 +70,8 @@ class Hardware : public doseph::IHardware {
     return true;
   }
   std::optional<bool> feedPump() const override { return out; }
+  std::optional<double> amps;
+  std::optional<double> feedPumpA() const override { return amps; }
   bool returnAllowed = true;
   void allowReturnPump(bool allowed) override { returnAllowed = allowed; }
 };

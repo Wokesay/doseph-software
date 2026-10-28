@@ -22,6 +22,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A dry run of the feed pump is seen in its current (SD-127, RAT-049).
+  The device learns the current while the pump moves water. Once the pump
+  has moved water in a check, less than 60 % of it for 2 s switches the
+  pump off at once, as a try without flow. The water page shows the
+  current and its usual value.
 - The history keeps five years at one hour (SD-126, #10 step 5): a
   fourth level with min, mean and max per hour after 10 s for a day,
   1 min for a week and 15 min for a year. The history page offers 1 and 5

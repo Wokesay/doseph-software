@@ -28,6 +28,9 @@ export const de = {
   "water.releaseOffWhy": "entzogen: {why}",
   "water.leak": "Leck",
   "water.cutNoFlow": "aus: kein Durchfluss",
+  "water.pumpA": "Strom der Pumpe",
+  "water.pumpANormal": "{a}\u00a0A, üblich {n}\u00a0A",
+  "water.pumpALearning": "{a}\u00a0A, wird gelernt",
   "water.stopButton": "Stopptaste",
   "water.releaseNote":
     "Ein Leck, der Hochstand in der Kammer und die Stopptaste schalten jede Pumpe ab, unterhalb der Software. Nach einem Leck oder Hochstand bleibt der Roboter gesperrt, bis du ihn unter Status freigibst.",
@@ -61,6 +64,9 @@ export const en: Record<keyof typeof de, string> = {
   "water.releaseOffWhy": "withdrawn: {why}",
   "water.leak": "leak",
   "water.cutNoFlow": "off: no flow",
+  "water.pumpA": "Pump current",
+  "water.pumpANormal": "{a}\u00a0A, usually {n}\u00a0A",
+  "water.pumpALearning": "{a}\u00a0A, being learned",
   "water.stopButton": "stop button",
   "water.releaseNote":
     "A leak, a high level in the chamber and the stop button switch every pump off, below the software. After a leak or a high level the robot stays locked until you release it under Status.",

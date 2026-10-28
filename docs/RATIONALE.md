@@ -411,13 +411,13 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Evidence:** Observed on the reference installation (2026): over 14 days, all five water-temperature jumps of 0.5 °C or more (out of 6,953 changes) came at 0 L, while the tank was filled or drained.
 - **Later:** step 9 (water heater and level sensor). The robot's probe sits in the measuring chamber, which keeps its water without flow, and temperature is recorded only with flow (RAT-016).
 
-### RAT-049 – Dry-run detection from pump power (planned)
+### RAT-049 – Dry-run detection from pump power
 
-- **Dropped:** the grow controller only (dry-run detection from pump power); not part of the mixing robot (SD-105).
-- **Rule:** A circulation pump that runs without pumping is detected from its power draw: pump on, start-up grace over, below 2.5 W for more than 20 s. It needs power measurement on the pump's output. Such a dry run switches the pump off in the gateway and latches until a person releases it; the watchdog only reports.
-- **Why:** A level says whether there is water in the tank, not whether the pump moves it. Air in the pump head, a blocked intake or a valve in the wrong position leave the level unchanged.
-- **Evidence:** Measured on the reference installation (2026; a pump of about 3.4 W, three weeks of power readings): about 3.3–3.4 W pumping water and about 1.7 W running dry. 2.5 W told the two apart without false trips, also over past data, where it found a dry run nobody had noticed. Clearing air from the pump head took up to about 2 min, so the start-up grace has to be generous. Thresholds for other pumps are open.
-- **Later:** step 4 (the feed pump's dry-run latch), as a second sign beside the flow proof (SD-109) if the pump's power can be measured – a hardware question for the product session.
+- **Rule:** A pump that runs without pumping is told by what it draws: running dry it takes about half the current or power it takes moving water. The robot learns its feed pump's current while flow is proven; once the pump has moved water in a run, less than 60 % of the learned current for 2 s switches it off at once, as a try without flow (SD-127). At its start, while air clears, the window without flow protects it instead.
+- **Why:** A level says whether there is water in the tank, not whether the pump moves it. Air in the pump head, a blocked intake or a valve in the wrong position leave the level unchanged. The current shows a dry run within seconds, before a missing flow would.
+- **Evidence:** Measured on the reference installation (2026; a pump of about 3.4 W, three weeks of power readings): about 3.3–3.4 W pumping water and about 1.7 W running dry. 2.5 W told the two apart without false trips, also over past data, where it found a dry run nobody had noticed. Clearing air from the pump head took up to about 2 min, so the start-up grace has to be generous. Thresholds for other pumps are open; the robot's are assumptions until the bench test.
+- **Implemented in:** `core/include/doseph/cycle.hpp`, `core/src/cycle.cpp`, `core/include/doseph/hardware.hpp`
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: the feed pump's current is learned while it moves water; once it has, far less for 2 s is a dry run that switches it off at once as a try without flow (SD-127, RAT-049)"
 
 ### RAT-050 – Effect-based cap and minimum run time for pH-lowering doses
 

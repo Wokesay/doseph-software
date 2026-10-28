@@ -37,6 +37,7 @@ export const msgDe: Record<string, string> = {
   "cycle.wait.stock_empty": "{name} ist laut Zählung aufgebraucht – füll nach und markier ihn als nachgefüllt, oder gib die Restmenge ein",
   "cycle.wait.ph_plan": "Wartet: {reason}",
   "cycle.wait.no_flow": "Wartet: kein Durchfluss, die Förderpumpe ist aus – prüf, ob sie im Wasser liegt, ihren Schlauch und ihren Einlass",
+  "cycle.wait.dry_run": "Trockenlauf: Die Förderpumpe nahm {amps:2}\u00a0A statt etwa {normal:2}\u00a0A auf und ist aus – prüf, ob sie im Wasser liegt, und ihren Einlass",
   "cycle.wait.pump_cut": "Kein Durchfluss: Die Hardware hat die Förderpumpe abgeschaltet – prüf, ob sie im Wasser liegt, und ihren Schlauch",
   "cycle.wait.dry": "Wartet: Die Förderpumpe ist nach Versuchen ohne Durchfluss gesperrt – gib die Sperre unter Status frei, sobald behoben",
   "cycle.wait.nothing_dosed": "Wartet: Es ließ sich nichts dosieren",

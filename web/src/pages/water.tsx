@@ -53,6 +53,16 @@ function FlowCard() {
           ) : (
             <YesNo id="feed-pump" value={st.feedPump} yes="water.running" no="water.standing" />
           )}
+          {st.pump.amps != null && st.feedPump && (
+            <>
+              <span>{t("water.pumpA")}</span>
+              <span data-testid="pump-amps">
+                {st.pump.normalA != null
+                  ? t("water.pumpANormal", { a: num(st.pump.amps, 2), n: num(st.pump.normalA, 2) })
+                  : t("water.pumpALearning", { a: num(st.pump.amps, 2) })}
+              </span>
+            </>
+          )}
           <span>{t("water.flowProven")}</span>
           <YesNo id="flow-proven" value={st.feedPump ? st.flowOk : null} yes="water.proven" no="water.notProven" noTone="warn" />
           <span>{t("tank.flowNow")}</span>

@@ -53,6 +53,7 @@ Ctx Robot::ctx() {
   c.stopped = rt_.stopped;
   c.flowOk = flowOk();
   c.pumpInTank = hw_.profile().pumpIn != "device";
+  c.pumpA = hw_.feedPumpA();
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();
   c.channelJob = channelJobActive();
@@ -506,6 +507,9 @@ json Robot::state() {
              return st ? json(*st) : json(nullptr);
            }()},
           {"flowOk", c.flowOk},
+          // The feed pump's current now and as learned while it moves water (SD-127)
+          {"pump", {{"amps", c.pumpA ? numOrNull(*c.pumpA) : json(nullptr)},
+                    {"normalA", rt_.pumpLearnedS >= kPumpLearnS ? numOrNull(rt_.pumpNormalA) : json(nullptr)}}},
           // What the hardware reports of its release and the water path (SD-109, SD-110)
           {"hardware", [&] {
              const Release r = hw_.release();
