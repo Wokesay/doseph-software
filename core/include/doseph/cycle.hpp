@@ -28,9 +28,10 @@ constexpr double kFlowMinLpm = 0.5;           // the least flow that counts as f
 constexpr Ms kFlowProveMs = 10 * kSecond;     // … for this long without a break
 constexpr Ms kFlowWaitMs = 2 * kMinute;       // no flow by then: wait and try again
 constexpr Ms kFlushMs = 60 * kSecond;         // flow time until the measuring chamber holds tank water
-constexpr Ms kStableWindowMs = 60 * kSecond;  // readings within the band for this long
+constexpr Ms kStableWindowMs = 60 * kSecond;  // readings within the band at least this long (SD-112)
+constexpr Ms kStableWindowMaxMs = 10 * kMinute;
 constexpr double kStablePh = 0.05, kStableEc = 0.03;
-constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by then: wait and try again
+constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by the window and this: wait and try again
 constexpr Ms kRetryMs = 5 * kMinute;          // a wait tries again after this
 constexpr int kDryTries = 3;                   // tries without flow in a row: the suction pump may run dry (SD-109)
 constexpr Ms kNoFlowMixMaxMs = 30 * kMinute;  // the mixing clock stood this long: wait
@@ -60,8 +61,11 @@ struct CycleSettings {
   double volumeL = kNaN;
   double ecTarget = kNaN, ecTol = kNaN, phTarget = kNaN, phTol = kNaN;
   double flowLpm = kNaN, turnoverMin = kNaN;
-  double waitEcMin = kNaN, waitPhMin = kNaN;  // in force: the user's, else the suggestion
-  double suggestEcMin = kNaN, suggestPhMin = kNaN;
+  // The mixing wait after a dose, EC and pH alike (SD-112): the robot's own (one turnover, at least
+  // 2 min), lengthened by the user's minimum; why: "turnover", "user" or "minimum" (flow not known)
+  double mixOwnMin = kNaN, mixUserMin = kNaN, mixMin = kNaN;
+  std::string mixWhy;
+  Ms stableMs = kStableWindowMs;  // readings steady this long: 60 s or a fifth of a turnover, at most 10 min
   Ms holdMs = 60 * kMinute;
 };
 CycleSettings cycleSettings(const Ctx& c);

@@ -374,7 +374,7 @@ constexpr Entry kMessages[] = {
     {"cfg.control.ec_rounds", "Nutrient rounds per check: {min} to {max}"},
     {"cfg.control.ph_doses", "pH doses per check: {min} to {max}"},
     {"cfg.tank.volume", "The tank volume must be between {min} and {max} L"},
-    {"cfg.tank.wait", "The mixing wait must be between {min} and {max} min"},
+    {"cfg.tank.mix_min", "The least mixing wait after a dose must be between {min} and {max} min"},
     {"cfg.tank.hold", "The pause between checks must be between {min} and {max} min"},
     {"cfg.canister.id", "Every canister needs an ID of its own"},
     {"cfg.canister.name", "A canister needs a name of at most 40 characters"},

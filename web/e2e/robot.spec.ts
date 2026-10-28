@@ -101,7 +101,7 @@ test("a new tank volume makes the next dose a test dose; the turnover is shown",
   await page.getByTestId("save-volume").click();
   await expect(page.getByText("The next dose is a small test dose that checks the volume.")).toBeVisible();
   // A mixing wait outside its bounds is not sent
-  await page.locator("input[name=waitEcMin]").fill("1");
+  await page.locator("input[name=mixMinMin]").fill("700");
   await expect(page.getByTestId("save-waits")).toBeDisabled();
 });
 

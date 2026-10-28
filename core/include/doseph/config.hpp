@@ -64,9 +64,9 @@ struct ActiveCfg {
 // The tank as the user describes it, and the timing of the cycle (SD-105).
 struct TankCfg {
   double volumeL = kNaN;              // as entered; the test dose checks it (SD-105)
-  // The user's mixing wait after a dose; NaN: the suggestion from volume and
-  // flow (about 2 turnovers for EC, 3 for pH, SD-105)
-  double waitEcMin = kNaN, waitPhMin = kNaN;
+  // The user's "at least N min after a dose", 0 to 600 (SD-112): it lengthens the robot's own wait
+  // of one turnover and never shortens it; NaN: none
+  double mixMinMin = kNaN;
   double holdMin = 60;                // between two checks once on target
 };
 

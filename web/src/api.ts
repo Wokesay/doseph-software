@@ -25,7 +25,8 @@ export type CycleSettings = {
   ecTarget: number | null; ecTolerance: number | null; phTarget: number | null; phTolerance: number | null;
   volumeL: number | null; flowLpm: number | null; turnoverMin: number | null;
   // The waits in force (the user's, else the suggestion) and the suggestions from volume and flow
-  waitEcMin: number | null; waitPhMin: number | null; suggestEcMin: number | null; suggestPhMin: number | null;
+  // The mixing wait after a dose (SD-112): in force, the robot's own, the user's least; why; the stability window
+  mixMin: number | null; mixOwnMin: number | null; mixUserMin: number | null; mixWhy: "turnover" | "user" | "minimum"; stableS: number;
   holdMin: number;
 };
 
@@ -96,7 +97,7 @@ export type Recipe = { id: string; name: string; note: string; steps: { canister
 export type Config = {
   schemaVersion: number; revision: number;
   system: { name: string; language: string; timezone: string; passwordSet: boolean };
-  tank: { volumeL: number | null; waitEcMin: number | null; waitPhMin: number | null; holdMin: number | null };
+  tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];

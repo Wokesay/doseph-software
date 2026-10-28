@@ -178,6 +178,14 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- The mixing wait (SD-112, answers #1): after a dose the robot waits one
+  turnover, at least 2 minutes, after nutrients and after pH− alike,
+  then measures until the readings hold within their band over 60 s or
+  a fifth of a turnover, at most 10 minutes. The tank's two wait fields
+  become one value, "at least N min after a dose" (0 to 600), which
+  lengthens the wait and never shortens it; a saved configuration keeps
+  the longer of its two waits as that value. The tank page shows the
+  wait in force and why.
 - The circulation modes of the tank (`cycle`, `always`, `external`) are
   gone (SD-109): the device's own suction pump runs for every check. A
   setting `circulation` in a saved or imported configuration is read

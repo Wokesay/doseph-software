@@ -437,10 +437,10 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-052 – Mixing and settling: pH needs much longer than EC
 
-- **Rule:** After a dose the robot circulates before it measures again, and pH waits longer than EC. The waits are set by the user per tank; the suggestion is 2 turnovers after nutrients and 3 after pH− (SD-105), and the mixing clock runs only while water flows.
+- **Rule:** After a dose the robot circulates before it measures again: at least one turnover, at least 2 minutes, after nutrients and after pH− alike, and the mixing clock runs only while water flows; then stability decides (SD-112). pH keeps its rest after a nutrient dose (RAT-046).
 - **Why:** Dosing again before the previous dose is visible stacks doses and overshoots – irreversibly for pH. EC and pH respond very differently, so one shared waiting time does not fit.
 - **Evidence:** Measured on the reference installation (2026; 20.4 L, circulation running): after nutrient doses EC reached tolerance after a median of 32 s (t63 median 26 s). After a pH-lowering dose the reading stayed flat for 99 s, about 80 s of that after the circulation pump had restarted, then fell steeply and reached tolerance after 194 s. Cutting the pH wait to about 45 s, in line with a faster sensor filter, would have let four doses in before the first one showed.
-- **Changed:** The grow controller's fixed waits became the user's waits with a suggestion from volume and flow (SD-105).
+- **Changed:** The grow controller's fixed waits became the user's waits with a suggestion from volume and flow (SD-105); then one turnover as the robot's own wait, which the user may only lengthen, and pH waiting like EC (SD-112).
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/src/cycle.cpp`, `sim/world.cpp`
 - **Tests:** `tests/core/test_cycle.cpp` "Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
@@ -486,12 +486,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-058 – Waiting times cover the time to tolerance
 
-- **Rule:** The wait after a dose has to cover the time until the reading stays within the control tolerance, with margin. The robot does not measure it on its own yet: the user sets the waits, and the suggestion from volume and flow is a starting point (SD-105).
+- **Rule:** The wait after a dose has to cover the time until the reading stays within the control tolerance, with margin. The robot waits one turnover, then measures until the readings hold within their band over 60 s or a fifth of a turnover, at most 10 minutes; the user may lengthen the wait, never shorten it (SD-112).
 - **Why:** The next dosing decision only changes while the remaining error is outside the control tolerance (EC 0.05 mS/cm, pH 0.1), so that is the time to measure. A t95 value mostly measures display resolution, because the slow end of the response disappears in the last digit.
 - **Evidence:** Measured on the reference installation (2026): one EC response was within 0.03 mS/cm after 51 s, yet its t95 came out at 127 s. At about 20 L, EC reached tolerance after at most 47 s; with the factor 2.2 this gives about 100 s.
-- **Changed:** by SD-105, the waits are the user's per tank; whether the suggestion is a lower bound is open (product question #1).
+- **Changed:** by SD-105, the waits are the user's per tank; by SD-112 (answering #1), one turnover is the lower bound and stability over a window that grows with the turnover decides.
 - **Implemented in:** `core/src/cycle.cpp`
-- **Tests:** —
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: the mixing clock runs only with flow; the wait is one turnover, at least 2 min, which the user may only lengthen; then stable over a fifth of a turnover (SD-105, SD-112, RAT-052, RAT-058)"
 
 ### RAT-059 – Freshness and standstill are separate checks
 

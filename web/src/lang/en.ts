@@ -59,7 +59,7 @@ const base: Record<keyof typeof deBase, string> = {
   "term.turnover": "Turnover time",
   "help.turnover": "How long the suction pump takes to pump the tank once through the device: tank volume divided by flow.",
   "term.waitTime": "Mixing wait",
-  "help.waitTime": "How long the robot circulates after a dose before it measures again. The clock runs only while water flows. The suggestion allows 2 turnovers for EC and 3 for pH; you set the time.",
+  "help.waitTime": "How long the robot circulates after a dose before it measures again: one turnover, at least 2 minutes, the same for EC and pH, then until the readings are steady. The clock runs only while water flows. You may lengthen it, never shorten it.",
   "term.holdTime": "Pause between checks",
   "help.holdTime": "Once the tank is on target, the robot rests this long and then checks again. It does not mix all the time.",
   "term.circulation": "Flow",

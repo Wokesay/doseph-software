@@ -113,8 +113,7 @@ void to_json(json& j, const Config& c) {
                  {"timezone", c.system.timezone},
                  {"passwordSet", c.system.passwordSet}};
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
-               {"waitEcMin", numOrNull(c.tank.waitEcMin)},
-               {"waitPhMin", numOrNull(c.tank.waitPhMin)},
+               {"mixMinMin", numOrNull(c.tank.mixMinMin)},
                {"holdMin", numOrNull(c.tank.holdMin)}};
   j["control"] = {{"ecTolerance", c.control.ecTolerance},       {"phTolerance", c.control.phTolerance},
                   {"maxEcStep", c.control.maxEcStep},           {"ecFloor", c.control.ecFloor},
@@ -203,8 +202,13 @@ Config configFromJson(const json& in) {
   const json& t = objectAt(j, "tank");
   c.tank.volumeL = numOrNaN(t, "volumeL");
   // "circulation" from before SD-109 is read over: the device's own suction pump runs for a check
-  c.tank.waitEcMin = numOrNaN(t, "waitEcMin");
-  c.tank.waitPhMin = numOrNaN(t, "waitPhMin");
+  if (t.contains("mixMinMin")) {
+    c.tank.mixMinMin = numOrNaN(t, "mixMinMin");
+  } else {
+    // The two waits from before SD-112: the longer one, as the least wait the user wanted
+    const double ec = numOrNaN(t, "waitEcMin"), ph = numOrNaN(t, "waitPhMin");
+    c.tank.mixMinMin = isNum(ec) && isNum(ph) ? std::max(ec, ph) : isNum(ec) ? ec : ph;
+  }
   if (t.contains("holdMin")) c.tank.holdMin = numOrNaN(t, "holdMin");
   const json& k = objectAt(j, "control");
   auto num = [&](const char* key, double& into) {
@@ -304,10 +308,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
 
   const auto& t = c.tank;
   if (isNum(t.volumeL) && !inRange(t.volumeL, 1, 100000)) err(say("cfg.tank.volume", {{"min", 1}, {"max", 100000}}));
-  if (isNum(t.waitEcMin) && !inRange(t.waitEcMin, kWaitMinMin, kWaitMaxMin))
-    err(say("cfg.tank.wait", {{"min", kWaitMinMin}, {"max", kWaitMaxMin}}));
-  if (isNum(t.waitPhMin) && !inRange(t.waitPhMin, kWaitMinMin, kWaitMaxMin))
-    err(say("cfg.tank.wait", {{"min", kWaitMinMin}, {"max", kWaitMaxMin}}));
+  if (isNum(t.mixMinMin) && !inRange(t.mixMinMin, 0, kWaitMaxMin)) err(say("cfg.tank.mix_min", {{"min", 0}, {"max", kWaitMaxMin}}));
   if (!inRange(t.holdMin, kHoldMinMin, kHoldMaxMin)) err(say("cfg.tank.hold", {{"min", kHoldMinMin}, {"max", kHoldMaxMin}}));
 
   std::set<std::string> ids;

@@ -101,54 +101,33 @@ function FlowCard() {
 function WaitCard() {
   const cfg = config.value!;
   const s = state.value!.cycle.settings;
-  const [ec, setEc] = useState<number | null>(cfg.tank.waitEcMin);
-  const [ph, setPh] = useState<number | null>(cfg.tank.waitPhMin);
+  const [least, setLeast] = useState<number | null>(cfg.tank.mixMinMin);
   const [hold, setHold] = useState<number | null>(cfg.tank.holdMin);
-  const badWait = (v: number | null) => v !== null && !inRange(v, LIMITS.waitMin);
+  const badLeast = least !== null && !inRange(least, LIMITS.mixMinMin);
   const badHold = hold === null || !inRange(hold, LIMITS.holdMin);
-  const short = (v: number | null, sug: number | null) => v !== null && sug !== null && v < sug;
-  const field = (label: string, v: number | null, setV: (v: number | null) => void, sug: number | null, name: string) => (
-    <Field
-      label={label}
-      error={badWait(v) ? t("tank.waitRange", { min: LIMITS.waitMin[0], max: LIMITS.waitMin[1] }) : null}
-      hint={
-        sug !== null
-          ? v === null
-            ? t("tank.waitAuto", { n: num(sug, 0) })
-            : t("common.suggested", { v: t("common.minutes", { n: num(sug, 0) }) })
-          : t("tank.noSuggestion")
-      }
-    >
-      <NumberInput value={v} onValue={setV} unit="min" placeholder={sug !== null ? num(sug, 0) : ""} name={name} />
-      {short(v, sug) && <small class="warn-text">{t("tank.waitShort")}</small>}
-    </Field>
-  );
+  // The wait in force and why (SD-112): one turnover, the user's minimum, or the shortest while the flow is not known
+  const why = s.mixWhy === "user" ? t("tank.mixWhyUser") : s.mixWhy === "turnover" ? t("tank.mixWhyTurnover") : t("tank.mixWhyMinimum");
   return (
     <Card title={<Term topic="waitTime" />} icon={<Clock size={18} />}>
       <div class="stack">
-        <p class="muted small">{t("tank.waitIntro")}</p>
+        <p class="muted small">{t("tank.mixIntro")}</p>
+        <p data-testid="mix-in-force">{s.mixMin !== null ? t("tank.mixInForce", { n: num(s.mixMin, 0), why }) : "–"}</p>
         <div class="form-grid">
-          {field(t("tank.waitEc"), ec, setEc, s.suggestEcMin, "waitEcMin")}
-          {field(t("tank.waitPh"), ph, setPh, s.suggestPhMin, "waitPhMin")}
+          <Field
+            label={t("tank.mixLeast")}
+            error={badLeast ? t("tank.waitRange", { min: LIMITS.mixMinMin[0], max: LIMITS.mixMinMin[1] }) : null}
+            hint={t("tank.mixLeastHint")}
+          >
+            <NumberInput value={least} onValue={setLeast} unit="min" name="mixMinMin" />
+          </Field>
           <Field label={<Term topic="holdTime" />} error={badHold ? t("tank.holdRange", { min: LIMITS.holdMin[0], max: LIMITS.holdMin[1] }) : null}>
             <NumberInput value={hold} onValue={setHold} unit="min" name="holdMin" />
           </Field>
         </div>
         <div class="row">
-          <Button variant="primary" onClick={() => saveTank({ waitEcMin: ec, waitPhMin: ph, holdMin: hold })} disabled={badWait(ec) || badWait(ph) || badHold} data-testid="save-waits">
+          <Button variant="primary" onClick={() => saveTank({ mixMinMin: least, holdMin: hold })} disabled={badLeast || badHold} data-testid="save-waits">
             {t("common.save")}
           </Button>
-          {(ec !== null || ph !== null) && (
-            <button
-              class="btn ghost"
-              onClick={() => {
-                setEc(null);
-                setPh(null);
-              }}
-            >
-              {t("tank.useSuggestion")}
-            </button>
-          )}
         </div>
       </div>
     </Card>
