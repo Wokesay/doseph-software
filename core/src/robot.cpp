@@ -431,6 +431,8 @@ json Robot::state() {
     channels.push_back({{"channel", n},
                      {"canister", b ? json(b->id) : json(nullptr)},
                      {"head", head.empty() ? json(nullptr) : json(head)},  // the pump head fitted (SD-108)
+                     // Its run time into the tank in the last 24 h and its cap (SD-113)
+                     {"day", {{"usedS", rt_.dayRunMs(n, c.epoch - 24 * 3600) / 1000.0}, {"capS", act_.dailyCapMin(n) * 60}}},
                      {"flowMlPerMin", it == cfg_.channels.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
                      {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)},
                      // What its drop sensor saw (SD-111): null without one
@@ -685,6 +687,10 @@ Result Robot::putCanister(const json& j) {
   }
   b->pair = jstr(j, "pair", b->pair);
   b->color = jstr(j, "color", b->color);
+  if (j.contains("maxMlPerDay")) {
+    if (!j["maxMlPerDay"].is_null() && !j["maxMlPerDay"].is_number()) return Result::fail(422, say("api.bad_input"));
+    b->maxMlPerDay = j["maxMlPerDay"].is_number() ? j["maxMlPerDay"].get<double>() : kNaN;
+  }
   if (j.contains("capacityMl")) {
     if (!j["capacityMl"].is_null() && !j["capacityMl"].is_number()) return Result::fail(422, say("api.bad_input"));
     b->capacityMl = j["capacityMl"].is_number() ? j["capacityMl"].get<double>() : kNaN;

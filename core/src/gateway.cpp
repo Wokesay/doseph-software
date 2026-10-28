@@ -19,6 +19,9 @@ Msg purposeLabel(const std::string& p) {
 }
 
 bool intoTank(const std::string& purpose) { return purpose == "ec" || purpose == "ph"; }
+// What counts against a channel's daily amount: what goes into the tank (SD-113)
+bool counted(const std::string& purpose) { return intoTank(purpose) || purpose == "fill"; }
+constexpr Epoch kDayS = 24 * 3600;
 
 constexpr double kDropMl = 0.05;         // one drop at the outlet (SD-111)
 constexpr double kPullBackMl = 0.2;      // pulled back after a dose, so nothing dries at the tip
@@ -65,7 +68,29 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
   } else if (purpose != "calibration" && purpose != "prime" && purpose != "fill" && purpose != "refill") {
     return fail(say("act.purpose"));
   }
+  if (counted(purpose))
+    if (auto why = dailyCap(c, channel, ms)) return fail(*why);
   return true;
+}
+
+double Actuators::dailyCapMin(int channel) const {
+  if (channel < 1 || channel > hw_.channelCount()) return kDailyMaxMin;
+  const double head = hw_.profile().channels[static_cast<size_t>(channel - 1)].dailyMaxMin;
+  return isNum(head) && head > 0 ? std::min(head, kDailyMaxMin) : kDailyMaxMin;
+}
+
+std::optional<Msg> Actuators::dailyCap(const Ctx& c, int channel, Ms ms) const {
+  if (channel < 1 || channel > hw_.channelCount()) return std::nullopt;
+  const double capMin = dailyCapMin(channel);
+  const Ms used = c.rt.dayRunMs(channel, c.epoch - kDayS);
+  if (static_cast<double>(used + ms) > capMin * 60000.0) return say("act.daily_cap", {{"channel", channel}, {"min", capMin}});
+  // The user's amount per day, below the cap, from the calibrated flow
+  const CanisterCfg* b = c.cfg.canisterOnChannel(channel);
+  const double flow = c.cfg.channelFlow(channel);
+  if (b && isNum(b->maxMlPerDay) && isNum(flow) && flow > 0 &&
+      flow * static_cast<double>(used + ms) / 60000.0 > b->maxMlPerDay + 1e-9)
+    return say("act.daily_ml", {{"name", b->name}, {"ml", b->maxMlPerDay}});
+  return std::nullopt;
 }
 
 bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
@@ -78,6 +103,12 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
   runningChannel_ = channel;
   runningPurpose_ = purpose;
   cutLogged_ = false;
+  // Counted at its start for the full time asked: the safe side if it is cut (SD-113)
+  if (counted(purpose)) {
+    auto& runs = c.rt.dayRuns[channel];
+    runs.erase(std::remove_if(runs.begin(), runs.end(), [&](const auto& r) { return r.first <= c.epoch - kDayS; }), runs.end());
+    runs.emplace_back(c.epoch, ms);
+  }
   // A run into the tank must drip: a drop at the calibrated flow is expected within a quarter of
   // the wait. A run after one that has not dripped yet waits from where that one left off.
   if (intoTank(purpose)) {

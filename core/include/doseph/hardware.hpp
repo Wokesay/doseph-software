@@ -42,6 +42,7 @@ struct ChannelCaps {
   std::string head;         // head size "S", "M", "L"; "" without a head
   bool dropSensor = false;  // drops at the outlet are seen
   bool reverse = false;     // the pump can run backwards, to pull the line back (SD-111)
+  double dailyMaxMin = kNaN;  // the head's run time per 24 h (SD-113); NaN: the code's ceiling alone
 };
 
 // What a channel's drop sensor has seen (SD-111): the drops counted since the

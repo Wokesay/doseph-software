@@ -123,7 +123,8 @@ void to_json(json& j, const Config& c) {
   json canisters = json::array();
   for (const auto& b : c.canisters)
     canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"channel", b.channel}, {"pair", b.pair}, {"color", b.color},
-                         {"capacityMl", numOrNull(b.capacityMl)}});
+                         {"capacityMl", numOrNull(b.capacityMl)},
+                         {"maxMlPerDay", numOrNull(b.maxMlPerDay)}});
   j["canisters"] = canisters;
   json recipes = json::array();
   for (const auto& r : c.recipes) {
@@ -235,6 +236,7 @@ Config configFromJson(const json& in) {
     x.pair = jstr(b, "pair");
     x.color = jstr(b, "color", x.color);
     x.capacityMl = numOrNaN(b, "capacityMl");
+    x.maxMlPerDay = numOrNaN(b, "maxMlPerDay");
     c.canisters.push_back(x);
   }
   for (const auto& r : arrayAt(j, "recipes")) {
@@ -325,6 +327,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     else if (b.channel > 0 && !channels.insert(b.channel).second) err(say("cfg.canister.channel_twice", {{"name", b.name}, {"channel", b.channel}}));
     if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));
     if (b.pair.size() > 8) err(say("cfg.canister.pair_name", {{"name", b.name}}));
+    if (!std::isnan(b.maxMlPerDay) && !inRange(b.maxMlPerDay, 0.1, kCapacityMaxMl))
+      err(say("cfg.canister.max_per_day", {{"name", b.name}, {"min", 0.1}, {"max", kCapacityMaxMl}}));
     if (!std::isnan(b.capacityMl) && !inRange(b.capacityMl, kCapacityMinMl, kCapacityMaxMl))
       err(say("cfg.canister.capacity", {{"name", b.name}, {"min", kCapacityMinMl}, {"max", kCapacityMaxMl}}));
     if (!b.pair.empty()) pairCount[b.pair]++;
@@ -402,12 +406,27 @@ void to_json(json& j, const RuntimeState& s) {
   json pulled = json::object();
   for (const auto& [n, ms] : s.pulledBackMs) pulled[std::to_string(n)] = ms;
   j["pulledBackMs"] = pulled;
+  json day = json::object();
+  for (const auto& [n, runs] : s.dayRuns) {
+    json list = json::array();
+    for (const auto& [at, ms] : runs) list.push_back({at, ms});
+    day[std::to_string(n)] = list;
+  }
+  j["dayRuns"] = day;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
   j["flowAt"] = s.flowAt;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
+}
+
+Ms RuntimeState::dayRunMs(int channel, Epoch since) const {
+  Ms sum = 0;
+  if (auto it = dayRuns.find(channel); it != dayRuns.end())
+    for (const auto& [at, ms] : it->second)
+      if (at > since) sum += ms;
+  return sum;
 }
 
 std::string stockStatus(const CanisterCfg& b, const RuntimeState& rt) {
@@ -441,6 +460,15 @@ RuntimeState runtimeFromJson(const json& j) {
     for (const auto& [k, v] : j["pulledBackMs"].items()) {
       const int n = std::atoi(k.c_str());
       if (n > 0 && std::to_string(n) == k && v.is_number_integer() && v.get<Ms>() > 0 && v.get<Ms>() <= 1000) s.pulledBackMs[n] = v.get<Ms>();
+    }
+  // The runs that count against the daily cap: a damaged entry is dropped, the rest kept (SD-113)
+  if (j.contains("dayRuns") && j["dayRuns"].is_object())
+    for (const auto& [k, v] : j["dayRuns"].items()) {
+      const int n = std::atoi(k.c_str());
+      if (n <= 0 || std::to_string(n) != k || !v.is_array()) continue;
+      for (const auto& r : v)
+        if (r.is_array() && r.size() == 2 && r[0].is_number_integer() && r[1].is_number_integer() && r[1].get<Ms>() > 0)
+          s.dayRuns[n].emplace_back(r[0].get<Epoch>(), r[1].get<Ms>());
     }
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);

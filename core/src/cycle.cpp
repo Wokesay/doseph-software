@@ -39,9 +39,14 @@ std::string mmss(Ms ms) {
 
 // A dose needs at least its amount in the canister where the level is known; an unknown level is
 // no reason to hold (SD-119)
-// Why a dose cannot start now: its channel is locked (SD-111), or its canister holds too little (SD-119)
-std::optional<Msg> shortOf(const RuntimeState& rt, const DoseStep& d) {
+// Why a dose cannot start now: its channel is locked (SD-111), it would pass the channel's daily
+// amount (SD-113), or its canister holds too little (SD-119)
+std::optional<Msg> shortOf(const Ctx& c, const Actuators& act, const DoseStep& d) {
+  const RuntimeState& rt = c.rt;
   if (channelLocked(rt, d.channel)) return say("cycle.wait.channel_locked", {{"name", d.name}, {"channel", d.channel}});
+  Ms total = 0;
+  for (Ms r : d.runs) total += r;
+  if (auto why = act.dailyCap(c, d.channel, total)) return say("cycle.wait.daily", {{"name", d.name}, {"reason", *why}});
   auto it = rt.stockMl.find(d.canister);
   if (it == rt.stockMl.end() || !isNum(it->second) || !isNum(d.ml) || it->second >= d.ml) return std::nullopt;
   return say(it->second <= kStockBelowZeroMl ? "cycle.wait.stock_empty" : "cycle.wait.stock",
@@ -346,7 +351,7 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
     return;
   }
   for (const auto& st : plan.steps)
-    if (auto why = shortOf(c.rt, st)) {
+    if (auto why = shortOf(c, act, st)) {
       wait(c, act, *why);
       return;
     }
@@ -400,7 +405,7 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
     wait(c, act, say("cycle.wait.ph_plan", {{"reason", err}}));
     return;
   }
-  if (auto why = shortOf(c.rt, step)) {
+  if (auto why = shortOf(c, act, step)) {
     wait(c, act, *why);
     return;
   }
@@ -540,7 +545,7 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
       dropCatchUp(c, err);
       return false;
     }
-    if (auto why = shortOf(c.rt, d)) {
+    if (auto why = shortOf(c, act, d)) {
       wait(c, act, *why);
       return true;
     }

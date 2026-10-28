@@ -213,8 +213,11 @@ TEST_CASE("Run-time state: latches, jump locks and learned effects survive; a da
   s.stopped = true;
   s.newTank = false;
   s.pulledBackMs[2] = 240;
+  s.dayRuns[3] = {{1000, 60000}, {2000, 5000}};
   json j = s;
   RuntimeState back = runtimeFromJson(j);
+  CHECK(back.dayRunMs(3, 0) == 65000);  // the daily cap counts across a restart (SD-113, RAT-028)
+  CHECK(back.dayRunMs(3, 1500) == 5000);
   CHECK(back.pulledBackMs.at(2) == 240);  // a line pulled back is filled after a restart too (SD-111)
   // A pull back of no sensible length counts as none
   CHECK(runtimeFromJson(json{{"pulledBackMs", {{"2", 5000}, {"x", 100}, {"3", -1}}}}).pulledBackMs.empty());
