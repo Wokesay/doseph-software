@@ -466,7 +466,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Aiming at 80 % of the gap leaves room for incomplete mixing at measurement time, and an EC overshoot can only be undone by dilution. Both clamp directions yield the smaller dose. Silently shortened doses falsify the recipe. With pumps far too slow for the tank a single round rises by less than the noise, yet an empty canister or a pump that delivers nothing must still be caught: small rounds are judged together once they should have raised EC by 0.06.
 - **Evidence:** Measured on the reference installation (2026): the nutrient pair raised EC by 0.275 mS/cm per ml/L in reverse-osmosis water (about 20 L). In model runs from EC 0.55 to 3.0 with 30 % of the last dose not yet mixed, aiming at the full gap ended at 3.30 and aiming at 80 % at 3.15. Before splitting, base doses cut to 60 s delivered only 64–80 % of the recipe amount in a 100 L tank.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/include/doseph/plan.hpp`, `core/src/cycle.cpp`, `core/src/gateway.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"; `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: canisters without effect: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"; `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"
 
 ### RAT-056 – A small learned effect never widens the EC cap
 
@@ -523,7 +523,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Latching while the device is already off (e.g. an empty tank between runs) produces permanent red states and acknowledgements that seem to do nothing; a reason rewritten every cycle no longer tells what triggered the shutdown.
 - **Evidence:** Observed on the reference installation (2026): when the tank was emptied with pump and heater already off, both protections latched anyway and stayed red; acknowledging had no effect while the tank was still empty, and the stored reason kept changing as the level fell. With latching limited to real shutdowns, switch-on attempts at 0 L were cut within 84–138 ms and latched, and acknowledging took effect within about 50 ms.
 - **Implemented in:** `core/src/watchdog.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: canisters without effect: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)"
 
 ### RAT-063 – Latches survive a restart
 
