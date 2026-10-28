@@ -32,7 +32,11 @@ All notable changes to this software. The format follows
     runs while the leader's does, and it doses only on the leader's
     request, through its own gateway.
   - After 10 s without a call it stops the run and takes no new one.
-  - The leader dosing on the second device's channels follows.
+  - On the leader, a canister may stand at a channel of the second device.
+    The leader plans with that device's calibrations, sends it each run,
+    and books the result. Never more than one channel runs across both.
+  - The watchdog shows the link. Readings of the two devices that differ
+    by more than 0.3 pH or 0.2 mS/cm for 10 minutes raise a warning.
 - Access tokens with three roles (SD-129), for the app, the account and a
   coupled device. They are made in the settings with a name and a role,
   shown once, kept as a hash and revoked one by one.

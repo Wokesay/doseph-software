@@ -2,9 +2,9 @@
 // Channels: which canister sits on which channel, its pump head and drop
 // sensor, calibrating and priming the channels. The probes are on the water
 // path page, in the measuring chamber.
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Beaker, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
-import { del, post, type Canister, type Stock } from "../api";
+import { del, get, post, type Canister, type Coupling, type Stock } from "../api";
 import { ago, dateTime, num } from "../format";
 import { msg, t } from "../i18n";
 import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
@@ -16,8 +16,15 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
   const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, maxMlPerDay: null, ...p.canister });
   // A new canister: how much is in it now; empty leaves the level unknown (SD-119)
   const [stockMl, setStockMl] = useState<number | null>(null);
-  const channels = info.value?.channelCount ?? 0;
-  const used = (n: number) => canisters.value.find((x) => x.channel === n && x.id !== b.id);
+  // Coupled as the leader: a canister may stand at the other device's channel (SD-131)
+  const [coupling, setCoupling] = useState<Coupling | null>(null);
+  useEffect(() => {
+    get<Coupling>("/coupling").then(setCoupling).catch(() => {});
+  }, []);
+  const peer = coupling?.peer?.role === "leader" ? coupling.peer : null;
+  const device = b.device ?? "";
+  const channels = device ? 8 : (info.value?.channelCount ?? 0);
+  const used = (n: number) => canisters.value.find((x) => x.channel === n && (x.device ?? "") === device && x.id !== b.id);
   // One pH− canister at most (SD-108)
   const otherPhDown = b.role === "ph_down" ? canisters.value.find((x) => x.role === "ph_down" && x.id !== b.id) : undefined;
   const save = async () => {
@@ -57,6 +64,18 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
           />
           {otherPhDown && <p class="small warn-text">{t("channels.phDownTaken", { name: otherPhDown.name })}</p>}
         </Field>
+        {(peer || device) && (
+          <Field label={t("channels.device")} group>
+            <Seg
+              value={device}
+              onChange={(v) => setB({ ...b, device: v, channel: 0 })}
+              options={[
+                ["", t("channels.thisDevice")],
+                [peer?.id ?? device, peer?.name ?? t("channels.coupledDevice")],
+              ]}
+            />
+          </Field>
+        )}
         <Field label={t("channels.channel")}>
           <select class="select input" value={String(b.channel ?? 0)} onChange={(e) => setB({ ...b, channel: Number((e.target as HTMLSelectElement).value) })} name="channel">
             <option value="0">{t("channels.noChannel")}</option>
@@ -193,7 +212,7 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
                   {b.role === "ph_down" ? "pH−" : t("channels.role.nutrient")}
                   {b.pair && ` · ${t("channels.pairName", { pair: b.pair })}`}
                   {" · "}
-                  {b.channel ? t("channels.channelN", { channel: b.channel }) : t("channels.noChannel")}
+                  {b.channel ? t(b.device ? "channels.channelOnPeer" : "channels.channelN", { channel: b.channel }) : t("channels.noChannel")}
                 </div>
                 <Level canister={b} stock={stock[b.id]} />
               </div>

@@ -537,9 +537,10 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   step.canister = down->id;
   step.name = down->name;
   step.channel = down->channel;
+  step.device = down->device;
   step.color = down->color;
   step.ml = plan.ml;
-  step.flowMlPerMin = c.cfg.channelFlow(down->channel);
+  step.flowMlPerMin = c.cfg.canisterFlow(*down);
   Msg err;
   const Limits lim = c.cfg.limits.bounded();
   step.runs = splitRuns(plan.ml, step.flowMlPerMin, c.cfg.limits, lim.maxPartialRuns, err);
@@ -668,11 +669,12 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
     d.canister = b->id;
     d.name = b->name;
     d.channel = b->channel;
+    d.device = b->device;
     d.pair = b->pair;
     d.color = b->color;
     d.mlPerL = rs.mlPerL;
     d.ml = parts[rs.canister].get<double>();
-    d.flowMlPerMin = c.cfg.channelFlow(b->channel);
+    d.flowMlPerMin = c.cfg.canisterFlow(*b);
     steps.push_back(d);
   }
   if (fits && steps.size() != parts.size()) fits = false;  // a part the recipe no longer has
@@ -1124,7 +1126,9 @@ json MixCycle::checks(const Ctx& c) const {
     return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
   };
   // A canister that can dose: on a channel, with a calibration (RAT-015)
-  auto ready = [&](const CanisterCfg* b) { return b && b->channel > 0 && isNum(c.cfg.channelFlow(b->channel)) && !channelLocked(c.rt, b->channel); };
+  auto ready = [&](const CanisterCfg* b) {
+    return b && b->channel > 0 && isNum(c.cfg.canisterFlow(*b)) && (!b->device.empty() || !channelLocked(c.rt, b->channel));
+  };
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));

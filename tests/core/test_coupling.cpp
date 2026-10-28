@@ -281,3 +281,95 @@ TEST_CASE("Coupling: the follower doses on the leader's request through its own 
   b.reboot();
   CHECK(call(b, lt, "POST", "peer/run", {{"job", "j4"}, {"channel", 2}, {"ms", 2000}, {"purpose", "ec"}}).status == 409);
 }
+
+namespace {
+
+bool anyPumpRuns(sim::Simulation& s) {
+  for (const auto& p : s.world().pumps)
+    if (p.state == 1) return true;
+  return false;
+}
+
+}  // namespace
+
+TEST_CASE("Coupling: the leader doses a canister on the follower's channel there; the follower's gateway decides, the leader books, and never two channels run at once across both (SD-131, PD-457)") {
+  sim::Simulation a(demo()), b(demo());
+  const std::string at = login(a), bt = login(b);
+  couple(a, at, b, bt);
+  const std::string bid = b.robot().deviceId();
+  // Part B stands at the follower's channel 3
+  REQUIRE(call(a, at, "POST", "canisters", {{"id", "part_b"}, {"device", bid}, {"channel", 3}}).status == 200);
+  CHECK(call(a, at, "POST", "canisters", {{"id", "calmag"}, {"device", "nope"}}).status == 422);
+  const double before = get(a, at, "state")["stock"]["part_b"]["ml"];
+  bool both = false, remoteRan = false;
+  for (int i = 0; i < 40 * 60 && !remoteRan; ++i) {
+    a.step(500);
+    b.step(500);
+    carry(a, b);
+    both |= anyPumpRuns(a) && anyPumpRuns(b);
+    for (const auto& e : b.robot().events(0, b.robot().now() + 1, "dose", 20))
+      remoteRan |= e["title"]["key"] == "ev.dose" && e["data"]["channel"] == 3 && jstr(e["data"], "order").rfind("peer-", 0) == 0;
+  }
+  REQUIRE(remoteRan);
+  together(a, b, 10 * kSecond);
+  CHECK_FALSE(both);
+  // The leader booked what ran there, from the follower's own calibration
+  CHECK(get(a, at, "state")["stock"]["part_b"]["ml"].get<double>() < before);
+  bool booked = false;
+  for (const auto& e : a.robot().events(0, a.robot().now() + 1, "dose", 50))
+    booked |= e["title"]["key"] == "ev.dose" && e["data"]["canister"] == "part_b" && e["data"]["ml"].get<double>() > 0;
+  CHECK(booked);
+  // The follower's own channel runs only while the leader is in maintenance
+  CHECK(json::parse(call(b, bt, "POST", "channels/1/calibrate", {{"seconds", 5}}).body)["error"]["key"] == "coupling.channel_job");
+  REQUIRE(call(a, at, "POST", "maintenance", {{"minutes", 30}}).status == 200);
+  together(a, b, 5 * kSecond);
+  CHECK(call(b, bt, "POST", "channels/1/calibrate", {{"seconds", 5}}).status == 200);
+}
+
+TEST_CASE("Coupling: without the follower its canisters are not planned and a run there ends; the watchdog says so on both devices (SD-131)") {
+  sim::Simulation a(demo()), b(demo());
+  const std::string at = login(a), bt = login(b);
+  couple(a, at, b, bt);
+  REQUIRE(call(a, at, "POST", "canisters", {{"id", "part_b"}, {"device", b.robot().deviceId()}, {"channel", 3}}).status == 200);
+  together(a, b, 30 * kSecond);
+  auto item = [&](sim::Simulation& s, const std::string& token, const std::string& id) {
+    const json st = get(s, token, "state");
+    for (const auto& it : st["watchdog"]["items"])
+      if (it["id"] == id) return it;
+    return json();
+  };
+  CHECK(item(a, at, "coupling.link")["status"] == "ok");
+  CHECK(item(b, bt, "coupling.link")["status"] == "ok");
+  // The link drops
+  together(a, b, 20 * kSecond, false);
+  CHECK(item(a, at, "coupling.link")["status"] == "problem");
+  CHECK(item(a, at, "coupling.link")["text"]["key"] == "watch.coupling.follower_lost");
+  CHECK(item(b, bt, "coupling.link")["text"]["key"] == "watch.coupling.leader_lost");
+  CHECK(item(a, at, "canister.part_b")["text"]["key"] == "watch.canister_peer");
+  bool notReady = false;
+  const json st = get(a, at, "state");
+  for (const auto& c : st["cycle"]["checks"]["ec"]) notReady |= c["key"] == "check.part_not_ready";
+  CHECK(notReady);
+  // Back: linked again
+  together(a, b, 10 * kSecond);
+  CHECK(item(a, at, "coupling.link")["status"] == "ok");
+}
+
+TEST_CASE("Coupling: readings of the two devices that differ by more than 0.3 pH for 10 min raise a warning; the leader keeps dosing by its own (SD-131)") {
+  sim::Simulation a(demo()), b(demo());
+  const std::string at = login(a), bt = login(b);
+  couple(a, at, b, bt);
+  // The follower's pH probe drifts by 0.6 after its calibration
+  b.world().phOffset += 0.6;
+  bool warned = false;
+  for (int i = 0; i < 40 && !warned; ++i) {
+    together(a, b, kMinute);
+    for (const auto& e : a.robot().events(0, a.robot().now() + 1, "coupling", 20)) warned |= e["title"]["key"] == "ev.coupling.deviation";
+  }
+  CHECK(warned);
+  bool problem = false;
+  const json st = get(a, at, "state");
+  for (const auto& it : st["watchdog"]["items"]) problem |= it["id"] == "coupling.deviation" && it["status"] == "problem";
+  CHECK(problem);
+  CHECK(get(a, at, "state")["stopped"] == false);
+}

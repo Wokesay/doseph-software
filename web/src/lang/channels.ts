@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Texts of the page for channels and probes.
 export const de = {
+  "channels.device": "Gerät",
+  "channels.thisDevice": "Dieses Gerät",
+  "channels.coupledDevice": "Gekoppeltes Gerät",
+  "channels.channelOnPeer": "Kanal {channel} am gekoppelten Gerät",
   "channels.canisters": "Kanister",
   "channels.newCanister": "Kanister hinzufügen",
   "channels.editCanister": "Kanister bearbeiten",
@@ -87,6 +91,10 @@ export const de = {
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
+  "channels.device": "Device",
+  "channels.thisDevice": "This device",
+  "channels.coupledDevice": "Coupled device",
+  "channels.channelOnPeer": "Channel {channel} on the coupled device",
   "channels.canisters": "Canisters",
   "channels.newCanister": "Add canister",
   "channels.editCanister": "Edit canister",

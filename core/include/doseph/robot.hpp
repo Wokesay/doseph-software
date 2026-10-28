@@ -44,7 +44,7 @@ struct ChannelJob {
   Epoch at = 0;
 };
 
-class Robot {
+class Robot : public RemoteRuns {
  public:
   Robot(IHardware& hw, IStorage& storage, const IClock& clock, RandomFn rng);
 
@@ -93,6 +93,11 @@ class Robot {
   // link, while another runs, or by its own gateway
   Result peerRun(const std::string& token, const json& j);
   Result peerAbort(const std::string& token);
+  // On the leader (SD-131): the runs on the follower's channels, for the doser
+  bool linked() const override;
+  void send(const std::string& job, int channel, Ms ms, const std::string& purpose) override;
+  std::optional<RemoteResult> result(const std::string& job) override;
+  void abort(const std::string& job) override;
   // What the platform sends to the other device, and the answers it gets
   std::vector<PeerRequest> takePeerRequests();
   void peerResponse(long long id, int status, const json& body);
@@ -256,8 +261,12 @@ class Robot {
   std::optional<PairingCode> pairing_;
   std::vector<PeerRequest> peerOut_;
   struct PeerPending {
-    std::string kind, address, tokenId;
+    std::string kind, address, tokenId, job;
   };
+  std::map<std::string, RemoteResult> remoteRuns_;  // job → its state there: running until it ended
+  bool leaderMaintenance_ = false;                  // on the follower: the leader is in maintenance
+  Ms deviatesSince_ = -1;                           // on the leader: pH or EC differ from the follower's
+  bool deviation_ = false;
   std::map<long long, PeerPending> peerPending_;
   long long peerSeq_ = 0;
   json pairStatus_ = nullptr;  // the last pairing from here: {state, address, error, at}
@@ -271,6 +280,7 @@ class Robot {
   Ms beatSent_ = -1;
   bool peerLinkOk(Ms now) const { return peerHeard_ >= 0 && now - peerHeard_ <= kPeerLinkMs; }
   void watchPeer(Ctx& c);
+  void watchDeviation(const Ctx& c);
   bool savePeer();
   MqttSettings mqtt_;
   int mqttRevision_ = 0;

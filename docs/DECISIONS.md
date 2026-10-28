@@ -888,12 +888,29 @@ decided the three questions of this step in this session.
     takes no new run until the leader calls again. Losing and regaining
     the link are events. After a restart it waits for a call (R6).
   - Only the token made for the leader opens these calls.
-- **Dosing across both** comes with the next pull request. The leader
-  plans for canisters on either device, and never more than one channel
-  runs across both. Each device keeps its own hardware lock.
-- **The check.** The follower measures as well. While both pumps run,
-  readings that differ by more than 0.3 pH or 0.2 mS/cm for 10 minutes
-  raise a warning. The leader keeps dosing by its own readings.
+- **Dosing across both.**
+  - On the leader, a canister may stand at a channel of the follower.
+    It names the follower by its ID and the channel there.
+  - The leader plans with the follower's calibrations, which the
+    follower reports with each answer. While the link is down, those
+    canisters are not planned, and the watchdog says so.
+  - The leader's doser sends each run of such a step to the follower
+    and books its result. The follower journals, refills, pulls back
+    and books its own channel.
+  - A run there that does not end in its time plus 12 s is booked as
+    run and fails, the safe direction.
+  - The leader's doser runs one order at a time, so never more than one
+    channel runs across both devices for dosing.
+  - The follower's own channel jobs (calibration, priming) run only
+    while the leader is in maintenance.
+  - Stop, a hardware hold and the placement on the leader hold the
+    follower's runs too.
+- **The watchdog** on both devices shows the link, as linked or lost,
+  and the check of the readings.
+- **The check.** The follower measures as well. While both pumps move
+  water, readings that differ by more than 0.3 pH or 0.2 mS/cm for
+  10 minutes raise a warning, with an event. Readings that agree again
+  end it. The leader keeps dosing by its own readings.
 - **The platform** carries the requests between the devices (R8). The
   simulator uses plain HTTP in the home network; the device will use
   HTTPS with the device security items (#10).

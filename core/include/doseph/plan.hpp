@@ -17,6 +17,7 @@ namespace doseph {
 struct DoseStep {
   std::string canister, name, pair, color;
   int channel = 0;
+  std::string device;  // "" this device; the coupled device's ID: the run goes to it (SD-131)
   double mlPerL = kNaN;
   double ml = kNaN;
   double flowMlPerMin = kNaN;

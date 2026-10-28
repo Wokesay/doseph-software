@@ -228,6 +228,20 @@ std::string Doser::busJob() const {
 
 bool Doser::launch(const Ctx& c, Actuators& act) {
   const auto& o = *active_;
+  if (remote_) {
+    // The other device journals it before its pump starts, refills and pulls back its own line
+    if (!c.remote || !c.remote->linked()) {
+      progress_.error = say("coupling.no_link");
+      return false;
+    }
+    leg_ = Leg::Dose;
+    job_ = busJob();
+    c.remote->send(job_, o.step.channel, o.step.runs[progress_.run], o.purpose);
+    running_ = true;
+    runStartedAt_ = c.now;
+    runRequestedMs_ = o.step.runs[progress_.run];
+    return true;
+  }
   // A line pulled back after the last dose is filled first: the same time forwards, not booked,
   // so the dose stays the planned amount (SD-111)
   if (auto back = c.rt.pulledBackMs.find(o.step.channel); back != c.rt.pulledBackMs.end()) {
@@ -343,8 +357,23 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
     err = say("dose.empty");
     return false;
   }
+  // A run on the coupled device's channel (SD-131): its own gateway decides there; here only what
+  // holds every dose of this device holds it too, and the link must be up
+  if (!order.step.device.empty()) {
+    Msg e;
+    if (c.stopped) e = say("act.stopped");
+    else if (!c.hold.empty()) e = say("act.hold." + c.hold);
+    else if (!placementConfirmed(c.cfg)) e = say("act.placement");
+    else if (!intoTank(order.purpose)) e = say("act.purpose");
+    else if (!c.remote || !c.remote->linked()) e = say("coupling.no_link");
+    if (!e.key.empty()) {
+      err = e;
+      return false;
+    }
+  }
   order.id = order.id.empty() ? "d" + std::to_string(++seq_) : order.id;
   active_ = order;
+  remote_ = !order.step.device.empty();
   progress_ = DoseProgress{};
   progress_.state = DoseProgress::State::Running;
   progress_.orderId = active_->id;
@@ -352,7 +381,7 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   running_ = false;
   pauseUntil_ = 0;
   filled_ = false;
-  const auto d = act.drops(order.step.channel);
+  const auto d = remote_ ? std::nullopt : act.drops(order.step.channel);
   fillFrom_ = d ? d->count : 0;
   if (!launch(c, act)) {
     err = progress_.error;
@@ -368,7 +397,7 @@ void Doser::book(const Ctx& c, Ms ms) {
   const double ml = isNum(o.step.flowMlPerMin) ? o.step.flowMlPerMin * static_cast<double>(ms) / 60000.0 : kNaN;
   progress_.msDone += ms;
   if (isNum(ml)) progress_.mlDone += ml;
-  c.journal.end(o.id, static_cast<int>(progress_.run) + 1, ms, ml);
+  if (!remote_) c.journal.end(o.id, static_cast<int>(progress_.run) + 1, ms, ml);
   // The canister's level, run by run: a dose and a line fill take from it alike; a calibration is
   // booked from the cup when its amount is entered (SD-119). Kept below zero, never hidden as 0 (RAT-015).
   if (o.purpose != "calibration") takeStock(c, o.step.canister, o.step.name, ml);
@@ -409,8 +438,54 @@ void Doser::logOrder(const Ctx& c) {
              {"order", o.id}});
 }
 
+// A run on the coupled device: its result comes with the link. One that does not come back in
+// time is booked as run (the safe direction: no dosing again) and the order fails.
+void Doser::remoteTick(const Ctx& c) {
+  const auto& o = *active_;
+  if (!running_) {
+    if (c.now < pauseUntil_) return;
+    if (!c.remote || !c.remote->linked()) {
+      fail(c, say("coupling.no_link"));
+      return;
+    }
+    c.remote->send(job_ = busJob(), o.step.channel, o.step.runs[progress_.run], o.purpose);
+    running_ = true;
+    runStartedAt_ = c.now;
+    runRequestedMs_ = o.step.runs[progress_.run];
+    return;
+  }
+  const auto r = c.remote ? c.remote->result(job_) : std::nullopt;
+  if (!r) {
+    const Ms deadline = runStartedAt_ + runRequestedMs_ + std::max<Ms>(5 * kSecond, runRequestedMs_ / 5) + kRemoteGraceMs;
+    if (c.now <= deadline) return;
+    if (c.remote) c.remote->abort(job_);
+    running_ = false;
+    book(c, runRequestedMs_);
+    fail(c, say("dose.no_response", {{"name", o.step.name}}));
+    return;
+  }
+  running_ = false;
+  book(c, std::max<Ms>(0, r->ms));
+  if (r->state == "done") {
+    progress_.run++;
+    if (progress_.run >= o.step.runs.size()) finish(c, DoseProgress::State::Done);
+    else pauseUntil_ = c.now + 3 * kSecond;  // pause between partial runs (RAT-055)
+    return;
+  }
+  progress_.state = DoseProgress::State::Failed;
+  const json reason = r->error.key.empty() ? json(say("dose.run_cancelled")) : json(r->error);
+  progress_.error = say("dose.failed", {{"name", o.step.name}, {"reason", reason}});
+  logOrder(c);
+  finished_ = progress_;
+  active_.reset();
+}
+
 void Doser::tick(const Ctx& c, Actuators& act) {
   if (!active_) return;
+  if (remote_) {
+    remoteTick(c);
+    return;
+  }
   const auto& o = *active_;
   // A line fill stops at its first drops (SD-111)
   if (running_ && leg_ == Leg::Dose && o.purpose == "fill" && !filled_ && dripped(act)) {
@@ -496,6 +571,20 @@ void Doser::tick(const Ctx& c, Actuators& act) {
 
 void Doser::abort(const Ctx& c, Actuators& act, const Msg& reason) {
   if (!active_) return;
+  if (remote_) {
+    // The other device stops it and books there; here what ran is booked as far as it may have run
+    if (running_) {
+      if (c.remote) c.remote->abort(job_);
+      book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
+    }
+    running_ = false;
+    progress_.state = DoseProgress::State::Aborted;
+    progress_.error = say("dose.aborted", {{"name", active_->step.name}, {"reason", reason}});
+    logOrder(c);
+    finished_ = progress_;
+    active_.reset();
+    return;
+  }
   act.stopPumps();
   if (running_) {
     RunStatus st = act.runStatus(active_->step.channel);

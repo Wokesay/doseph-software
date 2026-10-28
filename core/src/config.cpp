@@ -71,7 +71,7 @@ const CanisterCfg* Config::canister(const std::string& id) const {
 
 const CanisterCfg* Config::canisterOnChannel(int channel) const {
   for (const auto& b : canisters)
-    if (channel > 0 && b.channel == channel) return &b;
+    if (channel > 0 && b.channel == channel && b.device.empty()) return &b;
   return nullptr;
 }
 
@@ -144,6 +144,13 @@ bool placementConfirmed(const Config& cfg) {
   return it != cfg.setup.end() && it->second.state == "done";
 }
 
+double Config::canisterFlow(const CanisterCfg& b) const {
+  if (b.device.empty()) return channelFlow(b.channel);
+  if (b.device != peerId) return kNaN;
+  const auto it = peerFlows.find(b.channel);
+  return it == peerFlows.end() ? kNaN : it->second;
+}
+
 double Config::channelFlow(int channel) const {
   auto it = channels.find(channel);
   return it == channels.end() ? kNaN : it->second.flowMlPerMin;
@@ -190,7 +197,8 @@ void to_json(json& j, const Config& c) {
   for (const auto& b : c.canisters)
     canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"channel", b.channel}, {"pair", b.pair}, {"color", b.color},
                          {"capacityMl", numOrNull(b.capacityMl)},
-                         {"maxMlPerDay", numOrNull(b.maxMlPerDay)}});
+                         {"maxMlPerDay", numOrNull(b.maxMlPerDay)},
+                         {"device", b.device}});
   j["canisters"] = canisters;
   json recipes = json::array();
   for (const auto& r : c.recipes) {
@@ -330,6 +338,7 @@ Config configFromJson(const json& in) {
     x.color = jstr(b, "color", x.color);
     x.capacityMl = numOrNaN(b, "capacityMl");
     x.maxMlPerDay = numOrNaN(b, "maxMlPerDay");
+    x.device = jstr(b, "device");
     c.canisters.push_back(x);
   }
   for (const auto& r : arrayAt(j, "recipes")) {
@@ -447,8 +456,14 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (b.role != "nutrient" && b.role != "ph_down") err(say("cfg.canister.role", {{"name", b.name}}));
     // One pH− canister at most (SD-108)
     if (b.role == "ph_down" && ++phDowns == 2) err(say("cfg.canister.ph_down_twice", {{"name", b.name}}));
-    if (b.channel < 0 || b.channel > std::min(channelCount, kMaxChannels)) err(say("cfg.canister.channel", {{"name", b.name}, {"max", channelCount}}));
-    else if (b.channel > 0 && !channels.insert(b.channel).second) err(say("cfg.canister.channel_twice", {{"name", b.name}, {"channel", b.channel}}));
+    // On the coupled device (SD-131): its ID, and a channel there; one canister per channel there too
+    const bool remote = !b.device.empty();
+    if (remote && (b.device.size() != 16 || b.device.find_first_not_of("0123456789abcdef") != std::string::npos))
+      err(say("cfg.canister.device", {{"name", b.name}}));
+    if (b.channel < 0 || b.channel > (remote ? kMaxChannels : std::min(channelCount, kMaxChannels)))
+      err(say("cfg.canister.channel", {{"name", b.name}, {"max", remote ? kMaxChannels : channelCount}}));
+    else if (b.channel > 0 && !channels.insert(remote ? 1000 + b.channel : b.channel).second)
+      err(say("cfg.canister.channel_twice", {{"name", b.name}, {"channel", b.channel}}));
     if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));
     if (b.pair.size() > 8) err(say("cfg.canister.pair_name", {{"name", b.name}}));
     if (!std::isnan(b.maxMlPerDay) && !inRange(b.maxMlPerDay, 0.1, kCapacityMaxMl))

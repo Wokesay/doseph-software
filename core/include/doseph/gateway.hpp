@@ -24,6 +24,24 @@
 namespace doseph {
 
 // The context of one tick for gateway, doser and cycle.
+// Runs on the coupled device (SD-131): the robot sends them there and brings back how each ended.
+// This device's gateway switches nothing for them; the other device's decides.
+struct RemoteResult {
+  std::string state;  // done | failed | aborted
+  Ms ms = 0;
+  double ml = kNaN;
+  Msg error;
+};
+class RemoteRuns {
+ public:
+  virtual ~RemoteRuns() = default;
+  virtual bool linked() const = 0;
+  virtual void send(const std::string& job, int channel, Ms ms, const std::string& purpose) = 0;
+  // Once the run ended there; nothing while it is under way
+  virtual std::optional<RemoteResult> result(const std::string& job) = 0;
+  virtual void abort(const std::string& job) = 0;
+};
+
 struct Ctx {
   const Config& cfg;
   RuntimeState& rt;
@@ -48,6 +66,7 @@ struct Ctx {
   bool follower = false;
   bool linkOk = false;      // the leader was heard within 10 s
   bool leaderPump = false;  // … and its feed pump runs
+  RemoteRuns* remote = nullptr;  // on the leader: the runs on the coupled device's channels
 };
 
 // A channel's own lock (SD-111): "channel.<n>.no_drops" (it ran and nothing dripped) or
@@ -142,6 +161,10 @@ struct DoseProgress {
 // once when the count falls below zero (SD-119).
 void takeStock(const Ctx& c, const std::string& canister, const std::string& name, double ml);
 
+// What a run on the coupled device may take beyond its own time before it counts as lost: the
+// link's 10 s and a call (SD-131)
+constexpr Ms kRemoteGraceMs = 12 * kSecond;
+
 class Doser {
  public:
   // The tag of this start, appended to every job ID, so an ID after a
@@ -183,6 +206,8 @@ class Doser {
   Ms runStartedAt_ = 0;
   Ms runRequestedMs_ = 0;
   bool running_ = false;
+  bool remote_ = false;  // the order's runs go to the coupled device (SD-131)
+  void remoteTick(const Ctx& c);
   int seq_ = 0;
   std::string bootTag_;
 };

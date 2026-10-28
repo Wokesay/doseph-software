@@ -4019,6 +4019,10 @@
               "number",
               "null"
             ]
+          },
+          "device": {
+            "type": "string",
+            "description": "\"\" on this device; the coupled device's ID for a canister on its channel (SD-131)"
           }
         },
         "required": [
