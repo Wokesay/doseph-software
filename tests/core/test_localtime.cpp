@@ -64,6 +64,10 @@ TEST_CASE("Local time: the offset changes at the transitions of each zone, north
   CHECK(offsetAt("Asia/Jerusalem", 1774569600) == 10800);
   CHECK(offsetAt("Asia/Kolkata", 1774569600) == 5 * 3600 + 1800);
   CHECK(offsetAt("UTC", 1774569600) == 0);
+  // Past 2038: the arithmetic is 64-bit on every platform (25 Mar 2040, 01:00 UTC)
+  CHECK(offsetAt("Europe/Berlin", 2216250000 - 1) == 3600);
+  CHECK(offsetAt("Europe/Berlin", 2216250000) == 7200);
+  CHECK(localTime(2216250000, "Europe/Berlin").year == 2040);
   const LocalTime none = localTime(1774569600, "Mars/Olympus_Mons");
   CHECK_FALSE(none.known);
   CHECK(none.offsetS == 0);
