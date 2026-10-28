@@ -25,6 +25,7 @@ struct WatchInput {
   bool stopped = false;
   bool maintenance = false;  // someone works at tank or device: the targets are not judged
   int channelCount = 0;
+  std::string hold{};  // what holds every pump below the robot, as Ctx::hold (SD-110)
 };
 
 struct Assessment {

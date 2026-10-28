@@ -35,6 +35,9 @@ struct Ctx {
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
+  // What holds every pump below the robot (SD-110): "leak", "high_level" (both latched until a
+  // person releases them), "stop_button", "release" (off without a known input); "": nothing
+  std::string hold{};
 };
 
 class Actuators {

@@ -29,6 +29,7 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
     return false;
   };
   if (c.stopped) return fail(say("act.stopped"));
+  if (!c.hold.empty()) return fail(say("act.hold." + c.hold));  // the hardware release holds every pump (SD-110)
   if (runningChannel_ != 0) return fail(say("act.busy"));  // one run at a time (RAT-018)
   if (channel < 1 || channel > hw_.channelCount()) return fail(say("act.no_channel", {{"channel", channel}}));
   const Limits lim = c.cfg.limits.bounded();  // fixed limits; settings only tighten (R7)
@@ -63,6 +64,10 @@ bool Actuators::setSuctionPump(const Ctx& c, bool on, Msg& err) {
     err = say("act.stopped");
     return false;
   }
+  if (on && !c.hold.empty()) {
+    err = say("act.hold." + c.hold);
+    return false;
+  }
   std::string e;
   if (!hw_.setSuctionPump(on, e)) {
     err = say("act.hw", {{"error", e}});
@@ -79,10 +84,11 @@ void Actuators::stopAll() {
 
 void Actuators::enforce(const Ctx& c) {
   if (runningChannel_ == 0) return;
-  // A Stop ends every run; a dose without flow stops: what it pumps would stay in the device (SD-105)
-  if (c.stopped || (intoTank(runningPurpose_) && !c.flowOk)) {
+  // A Stop or the hardware release ends every run (SD-110); a dose without flow stops: what it
+  // pumps would stay in the device (SD-105)
+  if (c.stopped || !c.hold.empty() || (intoTank(runningPurpose_) && !c.flowOk)) {
     hw_.stopAllPumps();
-    if (!cutLogged_ && !c.stopped) {
+    if (!cutLogged_ && !c.stopped && c.hold.empty()) {
       c.log.add(c.epoch, "block", "warn", say("ev.flow_cut"), say("ev.flow_cut.text"));
       cutLogged_ = true;
     }

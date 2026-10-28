@@ -678,6 +678,17 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
+  // The hardware release holds every pump (SD-110): a dose going on is cut, what went in is mixed
+  // first later; the cycle waits with the reason until the release is back
+  if (!c.hold.empty()) {
+    const std::string key = "cycle.wait.hold." + c.hold;
+    if (!(phase_ == Phase::Wait && line_.key == key)) {
+      restart(c, act, doser);
+      wait(c, act, say(key), 0);
+    }
+    suctionPump(c, act, false);
+    return;
+  }
   const CycleSettings s = cycleSettings(c);
   // A probe in a buffer: its readings are not the tank's. The cycle waits until the calibration ends.
   if (c.probeCalibrating) {

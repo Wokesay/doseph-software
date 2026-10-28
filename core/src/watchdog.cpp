@@ -72,6 +72,8 @@ WatchResult evaluate(const WatchInput& in) {
 
   // Latches hold until a person releases them (RAT-062, RAT-063)
   for (const auto& [id, l] : in.rt.latches) add("latch." + id, say("watch.latch"), "problem", say("latch." + id, l.is_object() ? l : json::object()));
+  // The hardware release, where no latch already says it (SD-110)
+  if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));
 
   // The recipe in force, the volume and the channels it needs (RAT-015)
   if (!recipe) add("recipe", say("watch.recipe"), "neutral", say("watch.no_recipe"));

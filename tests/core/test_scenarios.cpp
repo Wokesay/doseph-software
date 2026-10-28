@@ -90,22 +90,78 @@ TEST_CASE("Scenario blocked outlet: the pump runs but nothing drips and nothing 
   CHECK(r.twin()["tank"]["ec"].get<double>() + r.twin()["tank"]["pendingEc"].get<double>() > tankEc);
 }
 
-TEST_CASE("Scenario high level: a blocked return fills the chamber; the hardware release stops the suction pump and every dose, and the state says why (SD-110)") {
+TEST_CASE("Scenario high level: a blocked return fills the chamber; the hardware release stops every pump, the robot latches it with the reason, and a person releases it once the chamber has drained (SD-110)") {
   Run r(device("home"));
   r.waitUntil("water flows", [&] { return r.twin()["flowing"] == true; }, 60);
   r.act("returnFault", {{"fault", "blocked"}});
   r.waitUntil("high level", [&] { return r.state()["hardware"]["release"]["highLevel"] == true; }, 30);
-  const json hw = r.state()["hardware"];
-  CHECK(hw["release"]["on"] == false);
+  r.step(5 * kSecond);
+  json st = r.state();
+  CHECK(st["hardware"]["release"]["on"] == false);
+  CHECK(st["latches"].contains("hw.high_level"));
+  CHECK(st["cycle"]["line"]["key"] == "cycle.wait.hold.high_level");
+  CHECK(r.events("alarm")[0]["title"]["key"] == "ev.hw.high_level");
   CHECK(r.twin()["output"] == false);
   r.step(2 * kMinute);
   const json channels = r.twin()["channels"];
   for (const auto& ch : channels) CHECK(ch["state"] != 1);  // no pump runs
-  CHECK(r.state()["suctionPump"] == false);
   CHECK(r.state()["dosing"].is_null());
-  // The core's suction pump is refused and it waits for flow; its lock and reason come with step 4.1
-  const std::string line = r.line();
-  CHECK((line == "cycle.suction_failed" || line == "cycle.wait_flow" || line == "cycle.wait.no_flow"));
+  // While the chamber is full, the latch stays
+  const auto refused = r.call("POST", "latches/hw.high_level/ack", json::object());
+  CHECK(refused.status == 409);
+  CHECK(json::parse(refused.body)["error"]["key"] == "latch.cause_present");
+  // The return is cleared and the chamber drains; the latch still holds until a person releases it
+  r.act("returnFault", {{"fault", ""}});
+  r.waitUntil("the chamber has drained", [&] { return r.state()["hardware"]["release"]["on"] == true; }, 60);
+  r.step(30 * kSecond);
+  CHECK(r.line() == "cycle.wait.hold.high_level");
+  CHECK(r.twin()["output"] == false);
+  r.ok("POST", "latches/hw.high_level/ack", json::object());
+  r.waitUntil("flow is proven again", [&] { return r.phase() == "flush"; }, 3 * 60);
+}
+
+TEST_CASE("Scenario leak: everything goes off at once and stays off, latched across a restart, until the leak is fixed and a person releases it (SD-110, RAT-063)") {
+  Run r(device("pro"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  r.act("leak", {{"on", true}});
+  r.step(2 * kSecond);
+  CHECK(r.twin()["output"] == false);
+  CHECK(r.twin()["returnPump"] == false);
+  CHECK(r.state()["latches"].contains("hw.leak"));
+  CHECK(r.line() == "cycle.wait.hold.leak");
+  // A channel job is refused with the reason
+  const auto prime = r.call("POST", "channels/1/prime", {{"seconds", 3}});
+  CHECK(prime.status != 200);
+  CHECK(prime.body.find("act.hold.leak") != std::string::npos);
+  CHECK(r.call("POST", "latches/hw.leak/ack", json::object()).status == 409);
+  // A restart releases nothing (RAT-063)
+  r.act("reboot", {{"outageS", 10}});
+  REQUIRE(r.login("demo-password"));
+  r.step(5 * kSecond);
+  CHECK(r.state()["latches"].contains("hw.leak"));
+  CHECK(r.twin()["output"] == false);
+  r.act("leak", {{"on", false}});
+  r.step(10 * kSecond);
+  CHECK(r.line() == "cycle.wait.hold.leak");  // fixed, but nothing resumes on its own
+  r.ok("POST", "latches/hw.leak/ack", json::object());
+  r.waitUntil("the check starts again", [&] { return r.phase() == "flush"; }, 3 * 60);
+}
+
+TEST_CASE("Scenario stop button: it is the Stop of the app; it holds after a restart, and Resume is in the app (SD-110, RAT-036)") {
+  Run r(device("home"));
+  r.waitUntil("water flows", [&] { return r.twin()["flowing"] == true; }, 60);
+  r.act("stopButton", {{"pressed", true}});
+  r.step(2 * kSecond);
+  CHECK(r.state()["stopped"] == true);
+  CHECK(r.twin()["output"] == false);
+  r.act("stopButton", {{"pressed", false}});
+  r.act("reboot", {{"outageS", 10}});
+  REQUIRE(r.login("demo-password"));
+  r.step(30 * kSecond);
+  CHECK(r.state()["stopped"] == true);  // a restart never resumes (R6)
+  CHECK(r.twin()["output"] == false);
+  r.ok("POST", "resume", json::object());
+  r.waitUntil("the check starts again", [&] { return r.phase() == "flush"; }, 3 * 60);
 }
 
 TEST_CASE("Scenario return pump: it runs while water comes back and stops below its level; when it fails, the chamber rises to high level (SD-109, SD-110)") {

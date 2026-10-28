@@ -52,6 +52,13 @@ Ctx Robot::ctx() {
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();
   c.channelJob = channelJobActive();
+  // The hardware release (SD-110): a leak and high level hold until a person releases their latch
+  const Release r = hw_.release();
+  c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
+           : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
+           : r.stopButton                                      ? "stop_button"
+           : !r.on                                             ? "release"
+                                                               : "";
   return c;
 }
 
@@ -185,7 +192,11 @@ void Robot::tick() {
   if (maintenanceUntilMs_ > 0)
     for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp})
       truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
+  watchRelease(epoch);
   Ctx c = ctx();
+  // The release is back: the check starts anew, nothing resumes on its own (R6)
+  if (c.hold.empty() && !lastHold_.empty()) restartCycle();
+  lastHold_ = c.hold;
   act_.enforce(c);
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
@@ -214,11 +225,29 @@ void Robot::tick() {
     in.stopped = rt_.stopped;
     in.maintenance = maintenanceUntilMs_ > 0;
     in.channelCount = hw_.channelCount();
+    in.hold = c.hold;
     watch_ = evaluate(in);
   }
   saveState();
   saveEvents();
   if (epoch - lastSnapshot_ >= kSnapshotS) snapshot(epoch);
+}
+
+// The hardware release (SD-110): a leak and high level switch everything off and latch until a
+// person releases them once the cause is fixed; the stop button is the Stop of the app (RAT-036)
+void Robot::watchRelease(Epoch epoch) {
+  const Release r = hw_.release();
+  auto latch = [&](const char* id, const char* title) {
+    if (rt_.latches.count(id)) return;
+    act_.stopAll();
+    rt_.latches[id] = {{"at", epoch}};
+    log_.add(epoch, "alarm", "alarm", say(title), say(std::string(title) + ".text"));
+    saveState(true);
+  };
+  if (r.leak) latch("hw.leak", "ev.hw.leak");
+  if (r.highLevel) latch("hw.high_level", "ev.hw.high_level");
+  if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
+  stopButtonSeen_ = r.stopButton;
 }
 
 void Robot::sampleHistory(Epoch epoch) {
@@ -996,6 +1025,10 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   auto it = rt_.latches.find(id);
   if (it == rt_.latches.end()) return Result::fail(404, say("latch.none"));
+  // A latch of the hardware release stays while the device still reports its cause (SD-110)
+  const Release rel = hw_.release();
+  if ((id == "hw.leak" && rel.leak) || (id == "hw.high_level" && rel.highLevel))
+    return Result::fail(409, say("latch.cause_present"));
   if (id == "tank.volume") {
     // Only a person who confirms the entered volume releases it; a new volume releases it too (putTank)
     if (!jbool(body, "confirm", false)) return Result::fail(422, say("latch.volume_confirm"));
