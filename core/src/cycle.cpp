@@ -28,6 +28,7 @@ const char* phaseName(Phase p) {
 namespace {
 
 constexpr double kEcFromPhDown = 1.04;  // mS/cm per ml/L pH− (RAT-053)
+constexpr double kPhReserveEffect = kPhStartEffect / 2;  // the pH− effect the reserve assumes until one is learned (SD-121)
 constexpr Ms kAnnounceMs = kMinute;     // an announced change explains jumps this much longer (RAT-042)
 
 Ms minutes(double m) { return static_cast<Ms>(std::llround(m * 60.0)) * kSecond; }
@@ -314,11 +315,13 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   const CanisterCfg* down = c.cfg.phDown();
   const bool phLatched = c.rt.latches.count("ph.no_effect") > 0;
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
-  // EC aims below its target by what the pH− dose that follows adds (RAT-053)
+  // EC aims below its target by what the pH− dose that follows adds (RAT-053). Until the pH− effect
+  // is learned it is planned at half the start effect: too little EC is topped up once pH is in its
+  // range, too much cannot be taken back. Never below what lets pH be dosed at all (RAT-046, SD-121)
   double aim = s.ecTarget;
   if (isNum(aim) && phHigh && down && !phLatched) {
-    const double eff = clampEffect(c.rt.phEffect, kPhStartEffect);
-    aim -= std::min(0.3, (ph - s.phTarget) / eff * kEcFromPhDown);
+    const double eff = isNum(c.rt.phEffect) ? clampEffect(c.rt.phEffect, kPhStartEffect) : kPhReserveEffect;
+    aim = std::max(aim - (ph - s.phTarget) / eff * kEcFromPhDown, std::min(aim, c.cfg.control.ecFloor + s.ecTol));
   }
 
   // EC first: nutrients move pH, so pH is corrected last (RAT-004, RAT-046)
@@ -329,8 +332,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   } else if (ec < aim - s.ecTol) {
     if (ecRounds_ >= c.cfg.control.maxEcRounds) {
       notes_.push_back(say("cycle.note.ec_max", {{"n", ecRounds_}}));
-    } else {
-      startEc(c, act, s, ec, aim);
+    } else if (startEc(c, act, s, ec, aim)) {
       return;
     }
   } else if (ec > s.ecTarget + s.ecTol) {
@@ -369,23 +371,28 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   holdNow(c, act);
 }
 
-void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim) {
+bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim) {
   const RecipeCfg& r = *s.recipe;
   const RecipeEffect eff = recipeEffect(r, learnedEcEffect(c.rt, r.id));
   // The first dose of a new tank is a small test dose (SD-105)
   // A pair that misses a part from a round cut short gets it first, alone (SD-114)
   settlePairs(c);
-  if (c.rt.catchUp.is_object() && startCatchUp(c, act, s, ec)) return;
+  if (c.rt.catchUp.is_object() && startCatchUp(c, act, s, ec)) return true;
   const bool test = c.rt.newTank;
   auto plan = planEcDose(c.cfg, r, s.volumeL, aim - ec, eff.dose, eff.largest, c.cfg.control.maxEcStep, test ? kTestRiseEc : kNaN);
   if (!plan.ok) {
+    if (plan.tooSmall) {
+      // A round under 1 s for a part is not dosed: the robot goes on to pH and rests visibly (RAT-050, SD-122)
+      notes_.push_back(say("cycle.note.ec_too_small", {{"reason", plan.reason}}));
+      return false;
+    }
     wait(c, act, say("cycle.wait.ec_plan", {{"reason", plan.reason}}));
-    return;
+    return true;
   }
   for (const auto& st : plan.steps)
     if (auto why = shortOf(c, act, st)) {
       wait(c, act, *why);
-      return;
+      return true;
     }
   recordPairs(c, r.id, plan.steps, false);
   kind_ = Kind::Ec;
@@ -406,6 +413,7 @@ void MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   enter(c, Phase::Dose);
   line_ = say(test ? "cycle.dose_ec_test" : "cycle.dose_ec",
               {{"from", ec}, {"aim", aim}, {"round", ecRounds_}, {"ml", plan.totalMl}, {"limited", plan.limited}});
+  return true;
 }
 
 void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph) {

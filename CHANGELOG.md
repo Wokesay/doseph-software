@@ -7,6 +7,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Step 4's acceptance in the twin (#10, step 4.9): from tap water to the
+  demo recipe and held there for 12 h at 50 and 100 L (Home example) and
+  100 L (Pro example): pH within ± 0.2, EC within ± 0.1, an overshoot of
+  at most 0.2 pH, and every dose seen by its drop sensor. 5 L waits for
+  the product question on the smallest tank (#48).
 - A water path page (#10, step 4.8): how the device proves flow (flow
   meter or the outlet's level sensor), whether the suction pump runs and
   the flow is proven, the measured flow and the turnover; the measuring
@@ -212,6 +217,17 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- The reserve an EC round keeps for the pH− dose that follows (RAT-053,
+  SD-121): until the pH− effect is learned it is planned at half the
+  start effect, without the 0.3 mS/cm cap, and never below the EC floor
+  plus its tolerance; once pH is in range, a last round tops EC up to its
+  target. Before, a device's first tank of tap water ended about 0.25
+  mS/cm above the EC target, which only fresh water can take back.
+- A nutrient dose too small for a pump (SD-122): a test dose is made as
+  large as the smallest round every part can run, in the recipe's ratio,
+  within the round's cap and never past the aim; any other round under
+  1 s for a part is not dosed, and the check notes it and goes on to pH.
+  Before, the check waited for it without end.
 - The mixing wait (SD-112, answers #1): after a dose the robot waits one
   turnover, at least 2 minutes, after nutrients and after pH− alike,
   then measures until the readings hold within their band over 60 s or
@@ -224,7 +240,7 @@ All notable changes to this software. The format follows
   gone (SD-109): the device's own suction pump runs for every check. A
   setting `circulation` in a saved or imported configuration is read
   over; a circulation pump of your own comes later as a role on a smart
-  plug. The tank page shows the flow and the turnover instead.
+  plug. The water path page shows the flow and the turnover instead.
 - Doseph's terms reach the API, the configuration and the app (SD-107):
   a dosing pump is a **channel** ("Channels & probes", `channel` on a
   canister, `channels` in the configuration and the state,

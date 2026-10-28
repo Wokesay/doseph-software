@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Scenarios of the new water path (#10, step 3): priming, flow, dose, drops,
-// blocked outlet, high level, return pump; and of the device's parts (#10,
-// step 4): the pump heads. They run the core against the
+// blocked outlet, high level, return pump; of the device's parts (#10,
+// step 4): the pump heads; and step 4's acceptance (4.9). They run the core against the
 // twin through the API. Where the core does not react yet, they say which
 // step brings it (#10, step 4).
 #include <cmath>
@@ -23,6 +23,70 @@ std::map<int, double> dropsOf(Run& r) {
   for (const auto& ch : channels)
     if (ch["drops"].is_object()) d[ch["channel"].get<int>()] = ch["drops"]["count"].get<double>();
   return d;
+}
+
+// Every dose dripped through its outlet: the drop sensor saw, channel by
+// channel, what the journal booked since `before` (SD-111)
+void dropsSawEveryDose(Run& r, const std::map<int, double>& before) {
+  std::map<int, double> ml;
+  std::map<int, int> runs;
+  const json doses = r.events("dose");
+  for (const auto& e : doses) {
+    ml[e["data"]["channel"].get<int>()] += e["data"]["ml"].get<double>();
+    runs[e["data"]["channel"].get<int>()] += e["data"]["runs"].get<int>();
+  }
+  REQUIRE_FALSE(ml.empty());
+  const auto after = dropsOf(r);
+  for (const auto& [ch, m] : ml) {
+    CAPTURE(ch);
+    const double seen = (after.at(ch) - before.at(ch)) * 0.05;
+    CHECK(seen > 0);
+    // Booked from the run time with the calibrated flow; the drops see the true flow:
+    // within 3 % of what was booked, and a drop per run that stayed in the tip
+    CHECK(std::abs(seen - m) <= 0.03 * m + 0.05 * runs[ch]);
+  }
+}
+
+// Step 4's acceptance in the twin (#10, step 4.9): from tap water (EC 0.45,
+// pH 7.6) to the demo recipe (EC 1.6 ± 0.1, pH 5.8–6.2), then held there for
+// 12 h. The tank's own values, which the robot cannot see, are taken every
+// minute: on the way pH falls at most 0.2 below its target; once the recipe
+// is reached, pH stays within ± 0.2 and EC within ± 0.1, though the pH−
+// dose adds EC (RAT-053, SD-121); the drop sensors saw every dose. 5 L waits
+// for the smallest tank the device is meant for (#48).
+void acceptance(const std::string& profile, double volumeL) {
+  Run r(device(profile));
+  r.act("fill", {{"volumeL", volumeL}, {"ec", 0.45}, {"ph", 7.6}});
+  r.ok("PUT", "tank", {{"volumeL", volumeL}});
+  const auto before = dropsOf(r);
+  const double phTarget = 6.0, ecTarget = 1.6;
+  double phMin = 99;
+  int minutes = 0;
+  for (; minutes < 12 * 60 && r.phase() != "hold"; ++minutes) {
+    r.step(kMinute, 2000);
+    phMin = std::min(phMin, r.twin()["tank"]["ph"].get<double>());
+  }
+  INFO(profile << ", " << volumeL << " L, the recipe reached after " << minutes << " min");
+  REQUIRE(r.phase() == "hold");
+  double phLo = 99, phHi = 0, ecLo = 99, ecHi = 0;
+  for (int m = 0; m < 12 * 60; ++m) {
+    r.step(kMinute, 2000);
+    const json tank = r.twin()["tank"];
+    const double ph = tank["ph"].get<double>(), ec = tank["ec"].get<double>();
+    phMin = std::min(phMin, ph);
+    phLo = std::min(phLo, ph);
+    phHi = std::max(phHi, ph);
+    ecLo = std::min(ecLo, ec);
+    ecHi = std::max(ecHi, ec);
+  }
+  INFO("pH " << phLo << "–" << phHi << ", lowest " << phMin << "; EC " << ecLo << "–" << ecHi);
+  CHECK(phMin >= phTarget - 0.2);  // the overshoot
+  CHECK(phLo >= phTarget - 0.2);
+  CHECK(phHi <= phTarget + 0.2);
+  CHECK(ecLo >= ecTarget - 0.1);
+  CHECK(ecHi <= ecTarget + 0.1);
+  CHECK(r.state()["latches"].empty());
+  dropsSawEveryDose(r, before);
 }
 
 }  // namespace
@@ -55,23 +119,7 @@ TEST_CASE("Scenario dose and drops: every dose drips through its outlet; the dro
   const auto before = dropsOf(r);
   REQUIRE(before.size() == 4);
   r.waitUntil("the check holds", [&] { return r.phase() == "hold"; }, 8 * 3600, 2000);
-  std::map<int, double> ml;
-  std::map<int, int> runs;
-  const json doses = r.events("dose");
-  for (const auto& e : doses) {
-    ml[e["data"]["channel"].get<int>()] += e["data"]["ml"].get<double>();
-    runs[e["data"]["channel"].get<int>()] += e["data"]["runs"].get<int>();
-  }
-  REQUIRE_FALSE(ml.empty());
-  const auto after = dropsOf(r);
-  for (const auto& [ch, m] : ml) {
-    CAPTURE(ch);
-    const double seen = (after.at(ch) - before.at(ch)) * 0.05;
-    CHECK(seen > 0);
-    // Booked from the run time with the calibrated flow; the drops see the true flow:
-    // within 3 % of what was booked, and a drop per run that stayed in the tip
-    CHECK(std::abs(seen - m) <= 0.03 * m + 0.05 * runs[ch]);
-  }
+  dropsSawEveryDose(r, before);
 }
 
 TEST_CASE("Scenario blocked outlet: the pump runs but nothing drips; the run is cut within the wait for a drop and the channel locked until a person releases it (SD-111)") {
@@ -408,4 +456,16 @@ TEST_CASE("Scenario large tank: above 150 L the wait is 60 min until a clean dos
   set = r.state()["cycle"]["settings"];
   CHECK(set["mixWhy"] == "settling");
   CHECK(set["mixOwnMin"].get<double>() == doctest::Approx(std::max(5.0, 1.5 * settled)));
+}
+
+TEST_CASE("Acceptance 50 L: tap water to the recipe and held there; pH within ± 0.2, EC within ± 0.1, an overshoot of at most 0.2 pH, every dose seen by its drop sensor (#10, step 4.9, SD-121)") {
+  acceptance("home", 50);
+}
+
+TEST_CASE("Acceptance 100 L: tap water to the recipe and held there; pH within ± 0.2, EC within ± 0.1, an overshoot of at most 0.2 pH, every dose seen by its drop sensor (#10, step 4.9, SD-121)") {
+  acceptance("home", 100);
+}
+
+TEST_CASE("Acceptance 100 L with the Pro example: a flow meter, a return pump and larger pump heads hold the recipe the same way (#10, step 4.9, SD-121)") {
+  acceptance("pro", 100);
 }

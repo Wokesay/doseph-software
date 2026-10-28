@@ -126,7 +126,8 @@ class MixCycle {
   bool measuring(Ctx& c, Actuators& act);  // true once the window is stable; fills `measured_`
   void evaluate(Ctx& c, Actuators& act);
   void watchWater(Ctx& c, const RecipeCfg& r, double ec, const CycleSettings& s);
-  void startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim);
+  // false: the round is too small to run, noted; the check goes on to pH (SD-122)
+  bool startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim);
   void startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph);
   void learn(Ctx& c, Actuators& act);
   void holdNow(Ctx& c, Actuators& act);

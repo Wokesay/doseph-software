@@ -63,6 +63,7 @@ export const msgDe: Record<string, string> = {
   "ev.maintenance_over": "Wartungszeit abgelaufen",
   "watch.maintenance": "Wartung: nicht bewertet",
   "cycle.note.ph_too_small": "Die pH−-Gabe ({ml:2} ml) ist zu klein für die Pumpe – nichts dosiert",
+  "cycle.note.ec_too_small": "Die Nährstoffrunde ist zu klein für die Pumpen – nichts dosiert ({reason})",
   "check.stopped": "Gestoppt: nichts läuft bis „Fortsetzen“",
   "check.not_stopped": "Nicht gestoppt",
   "check.recipe": "Rezept in Kraft: {name}",
