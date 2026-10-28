@@ -232,6 +232,10 @@ void Simulation::configureDemo() {
                                       {{"canister", "calmag"}, {"mlPerL", 0.5}}})}});
   r.putTank({{"volumeL", 100}, {"holdMin", 60}});
   r.setActive({{"recipe", "two_part"}, {"days", 28}});
+  // Set up as a device in use: what the user confirms, confirmed; no push channel (SD-129)
+  r.setSetup("placement", {{"state", "done"}});
+  r.setSetup("test", {{"state", "done"}});
+  r.setSetup("push", {{"state", "skipped"}});
 }
 
 void Simulation::step(Ms dt, Ms tick) {

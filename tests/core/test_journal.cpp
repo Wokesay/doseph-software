@@ -22,6 +22,13 @@ JournalRun run(const std::string& order, int n, const std::string& purpose = "ec
   return r;
 }
 
+// A configuration whose owner confirmed where pump and canisters stand (SD-118)
+Config placed() {
+  Config c;
+  c.setup["placement"] = {"done", 1};
+  return c;
+}
+
 }  // namespace
 
 TEST_CASE("Dosing journal: a run begun is on record before it ends; after a restart it is reported once as cut (SD-106, R6)") {
@@ -80,7 +87,7 @@ TEST_CASE("Dosing journal: a damaged file counts as a dose that may be in, never
 TEST_CASE("Doser: a run whose journal record cannot be written does not start (SD-106)") {
   fake::FailingStorage store;
   fake::Hardware hw;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {50, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
@@ -112,7 +119,7 @@ TEST_CASE("Doser: a run whose journal record cannot be written does not start (S
 TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once; one run at a time (SD-105, RAT-018)") {
   MemoryStorage store;
   fake::Hardware hw;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {50, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
@@ -151,7 +158,7 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
 TEST_CASE("Gateway: a channel without a pump head runs nothing; a calibration of another head doses nothing (SD-108)") {
   MemoryStorage store;
   fake::Hardware hw;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {50, 1, "M"};  // the head fitted is "S"
   RuntimeState rt;
   SensorTruth truth;
@@ -178,7 +185,7 @@ TEST_CASE("Gateway: a run into the tank needs drops; none within the wait cuts i
   MemoryStorage store;
   fake::Hardware hw;
   hw.dropsSeen[2] = {0, -1};
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {50, 1, "S"};  // a drop every 0.06 s: the wait is its shortest, 5 s
   RuntimeState rt;
   SensorTruth truth;
@@ -234,7 +241,7 @@ TEST_CASE("Gateway: drops while the pump stands, past its own run, lock the chan
   MemoryStorage store;
   fake::Hardware hw;
   hw.dropsSeen[3] = {0, -1};
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[3] = {50, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
@@ -280,7 +287,7 @@ TEST_CASE("Gateway: drops while the pump stands, past its own run, lock the chan
 TEST_CASE("Doser: after a dose the line is pulled back; the channel's next run fills it first, unbooked (SD-111)") {
   MemoryStorage store;
   fake::Hardware hw;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {60, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
@@ -349,7 +356,7 @@ TEST_CASE("Doser: after a dose the line is pulled back; the channel's next run f
 TEST_CASE("Doser: a Stop during the pull back keeps what it pulled back and the dose complete (SD-111)") {
   MemoryStorage store;
   fake::Hardware hw;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {60, 1, "S"};
   RuntimeState rt;
   SensorTruth truth;
@@ -385,7 +392,7 @@ TEST_CASE("Gateway: a channel's run time into the tank per rolling 24 h stays wi
   MemoryStorage store;
   fake::Hardware hw;
   hw.prof.channels[1].dailyMaxMin = 2;
-  Config cfg;
+  Config cfg = placed();
   cfg.channels[2] = {60, 1, "S"};
   cfg.canisters = {{"a", "Part A", "nutrient", 2, "", "#00c"}};
   RuntimeState rt;
@@ -438,4 +445,30 @@ TEST_CASE("Dosing journal: a run recorded before the terms changed still names i
   CHECK(j.runs()[0].canister == "a");
   CHECK(j.runs()[0].channel == 2);  // "pump" before SD-107
   CHECK(j.closeOpen().size() == 1);
+}
+
+TEST_CASE("Gateway: nothing runs towards the tank before the owner confirmed the placement; into a cup it may (SD-118)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  Config cfg;
+  cfg.channels[2] = {50, 1, "S"};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  Msg err;
+  for (const char* purpose : {"ec", "ph", "fill", "refill"}) {
+    CAPTURE(purpose);
+    CHECK_FALSE(act.startRun(c, 2, 6000, purpose, "j1", err));
+    CHECK(err.key == "act.placement");
+  }
+  CHECK(act.startRun(c, 2, 6000, "calibration", "j2", err));
+  act.clearRun(2);
+  CHECK(act.startRun(c, 2, 6000, "prime", "j3", err));
+  act.clearRun(2);
+  cfg.setup["placement"] = {"done", 1};
+  CHECK(act.startRun(c, 2, 6000, "ec", "j4", err));
 }

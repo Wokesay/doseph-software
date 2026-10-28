@@ -99,6 +99,10 @@ class Robot {
   Result putNotify(const json& j);
   // Maintenance dates (SD-125): the plan, an item done by hand, the intervals {"days": {kind: n | null}}
   // Plants and plant recipes (SD-128)
+  // Commissioning (SD-129): each step of #10 with its state, and the next open one. A step the
+  // robot sees is done while it sees it; the user confirms or skips the others.
+  json setup() const;
+  Result setSetup(const std::string& id, const json& j);
   json plants() const;
   // What lies ahead in the next `days` days, by local day: the plants' phases and harvests and
   // the maintenance dates (SD-128, SD-125)

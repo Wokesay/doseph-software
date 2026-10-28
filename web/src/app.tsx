@@ -2,7 +2,7 @@
 // Shell: navigation, header with the Stop, page choice, sign-in.
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, MoreHorizontal, OctagonX, Route, Settings, Sprout, Syringe, Waves } from "lucide-preact";
+import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, ListChecks, MoreHorizontal, OctagonX, Route, Settings, Sprout, Syringe, Waves } from "lucide-preact";
 import { ApiError, post } from "./api";
 import { msg, t, type TextKey } from "./i18n";
 import { authed, config, info, lastUpdate, refreshState, simulated, stale, state, toast, toastError } from "./store";
@@ -16,6 +16,7 @@ import { WaterPage } from "./pages/water";
 import { HistoryPage } from "./pages/history";
 import { ChannelsPage } from "./pages/channels";
 import { SettingsPage } from "./pages/settings";
+import { SetupBanner, SetupPage } from "./pages/setup";
 import { SimPanel } from "./pages/sim";
 
 type NavItem = { path: string; label: TextKey; icon: ComponentChildren; el: () => ComponentChildren };
@@ -27,6 +28,7 @@ const NAV: NavItem[] = [
   { path: "/water", label: "nav.water", icon: <Route size={19} />, el: () => <WaterPage /> },
   { path: "/history", label: "nav.history", icon: <History size={19} />, el: () => <HistoryPage /> },
   { path: "/channels", label: "nav.channels", icon: <Syringe size={19} />, el: () => <ChannelsPage /> },
+  { path: "/setup", label: "nav.setup", icon: <ListChecks size={19} />, el: () => <SetupPage /> },
   { path: "/settings", label: "nav.settings", icon: <Settings size={19} />, el: () => <SettingsPage /> },
 ];
 // The bar at the bottom on phones; "More" has the rest
@@ -252,6 +254,7 @@ export function App() {
         <main class="content">
           <div class="stack">
             <TestingNotice />
+            <SetupBanner path={page.path} />
             <ErrorBoundary key={page.path}>{page.el()}</ErrorBoundary>
           </div>
         </main>

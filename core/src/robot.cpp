@@ -98,6 +98,83 @@ bool Robot::saveAuth() {
   return store_.write(kAuthFile, auth_.toJson().dump());
 }
 
+json Robot::setup() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  // What the robot sees of each step it judges itself
+  auto calibrated = [&](int ch) {
+    if (ch < 1 || ch > hw_.channelCount()) return false;
+    const auto it = cfg_.channels.find(ch);
+    const std::string& head = hw_.profile().channels[static_cast<size_t>(ch - 1)].head;
+    return it != cfg_.channels.end() && isNum(it->second.flowMlPerMin) && it->second.flowMlPerMin > 0 && !head.empty() && it->second.head == head;
+  };
+  bool phDown = false, channels = true, lines = true;
+  for (const auto& b : cfg_.canisters) {
+    if (b.channel < 1) continue;
+    phDown |= b.role == "ph_down";
+    channels &= calibrated(b.channel);
+    lines &= rt_.filled.count(b.channel) > 0;
+  }
+  const std::map<std::string, bool> seen = {
+      {"password", auth_.hasPassword()},
+      {"flow", rt_.flowAt > 0},
+      {"probes", !cfg_.phCal.is_null() && !cfg_.ecCal.is_null()},
+      {"channels", phDown && channels},
+      {"lines", phDown && lines},
+      {"tank", isNum(cfg_.tank.volumeL) && waterPlan(cfg_, clock_.epoch()).recipe != nullptr},
+      {"push", push_.ntfy.enabled || push_.telegram.enabled || push_.email.enabled}};
+  json steps = json::array();
+  json next = nullptr;
+  bool complete = true;
+  for (const auto& st : kSetupSteps) {
+    const std::string how = st.how;
+    const auto mark = cfg_.setup.find(st.id);
+    std::string state = "open";
+    Epoch at = 0;
+    if (how == "later") state = "later";
+    else if (how == "device" && seen.at(st.id)) state = "done";
+    else if (mark != cfg_.setup.end()) {
+      state = mark->second.state;
+      at = mark->second.at;
+    }
+    if (state == "open") {
+      complete = false;
+      if (next.is_null()) next = st.id;
+    }
+    steps.push_back({{"id", st.id}, {"how", how}, {"optional", st.optional}, {"state", state}, {"at", at}});
+  }
+  return {{"steps", steps}, {"next", next}, {"complete", complete}};
+}
+
+Result Robot::setSetup(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const SetupStep* st = setupStep(id);
+  if (!st) return Result::fail(404, say("setup.unknown"));
+  const std::string state = jstr(j, "state"), how = st->how;
+  Config next = cfg_;
+  if (state == "open") {
+    next.setup.erase(id);
+  } else if (state == "done") {
+    // A step the robot sees is done only when it sees it
+    if (how != "confirm") return Result::fail(409, say("setup.seen"));
+    next.setup[id] = SetupMark{state, clock_.epoch()};
+    if (id == "placement") {  // a statement of the owner, kept as an event (SD-118)
+      Result r = saveConfig(next, say("ev.setup.placement"));
+      if (r.status != 200) return r;
+      restartCycle();
+      return Result::ok(setup());
+    }
+  } else if (state == "skipped") {
+    if (!st->optional) return Result::fail(409, say("setup.needed"));
+    next.setup[id] = SetupMark{state, clock_.epoch()};
+  } else {
+    return Result::fail(422, say("setup.state"));
+  }
+  Result r = saveConfig(next, changed("cfg.what.setup"));
+  if (r.status != 200) return r;
+  if (id == "placement") restartCycle();  // opened again: the cycle goes off
+  return Result::ok(setup());
+}
+
 json Robot::tokens() const {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   const Ms nowMs = clock_.nowMs();
@@ -290,6 +367,8 @@ void Robot::tick() {
   if (act_.takeUnplannedDrops()) mixFirstNow();
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
+    // A run that went through its line has filled it: a step of commissioning the robot sees (SD-129)
+    if (p->state == DoseProgress::State::Done && p->msDone > 0 && p->channel > 0 && rt_.filled.insert(p->channel).second) saveState(true);
     if (job_ && p->orderId == job_->id) channelJobDone(*p);
     else cycle_.doseFinished(c, *p);
   }
@@ -578,6 +657,11 @@ json Robot::state() {
           {"flowOk", c.flowOk},
           // The water plan: the leading plant's phase or the recipe chosen by hand (SD-128)
           {"plan", waterPlanJson(cfg_, c.epoch, cfg_.system.timezone)},
+          // Commissioning (SD-129): whether every step is done or skipped, and the next open one
+          {"setup", [&] {
+             const json su = setup();
+             return json{{"complete", su["complete"]}, {"next", su["next"]}};
+           }()},
           // The feed pump's current now and as learned while it moves water (SD-127)
           {"pump", {{"amps", c.pumpA ? numOrNull(*c.pumpA) : json(nullptr)},
                     {"normalA", rt_.pumpLearnedS >= kPumpLearnS ? numOrNull(rt_.pumpNormalA) : json(nullptr)}}},
@@ -1298,6 +1382,9 @@ Result Robot::importConfig(const json& j) {
   if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing()) return Result::fail(409, say("config.busy"));
   // The lock against a second first setup never comes from a file
   next.system.passwordSet = cfg_.system.passwordSet || auth_.hasPassword();
+  // Nor what the owner confirmed of commissioning: placement is physical, so a restored or new
+  // device asks again (SD-118, SD-129)
+  next.setup = cfg_.setup;
   const Config before = cfg_;
   Result r = saveConfig(next, say("ev.config.imported"));
   if (r.status != 200) return r;

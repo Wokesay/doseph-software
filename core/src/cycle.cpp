@@ -87,7 +87,9 @@ CycleSettings cycleSettings(const Ctx& c) {
   s.phTol = std::max(0.05, isNum(cfg.control.phTolerance) ? cfg.control.phTolerance : 0.15);
   // The water plan: the leading plant's phase, else the recipe chosen by hand (SD-128)
   const WaterPlan w = waterPlan(cfg, c.epoch);
-  if (!w.recipe) {
+  if (!placementConfirmed(cfg)) {
+    s.off = say("cycle.off.placement");  // where pump and canisters stand is confirmed first (SD-118)
+  } else if (!w.recipe) {
     s.off = say("cycle.off.no_recipe");
   } else if (w.ended) {
     s.off = say("cycle.off.ended", {{"name", w.recipe->name}, {"until", w.until}});
@@ -1109,6 +1111,8 @@ json MixCycle::checks(const Ctx& c) const {
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));
+  const bool placed = placementConfirmed(c.cfg);
+  all.push_back(item(placed, say(placed ? "check.placement" : "cycle.off.placement")));
   if (s.off.key == "cycle.off.ended") all.push_back(item(false, s.off));  // its time is over
   else all.push_back(item(r != nullptr, r ? say("check.recipe", {{"name", r->name}}) : say("cycle.off.no_recipe")));
   const bool volume = isNum(s.volumeL) && s.volumeL > 0;

@@ -11,6 +11,7 @@ import { en as settings } from "./settings";
 import { en as sim } from "./sim";
 import { en as water } from "./water";
 import { en as plants } from "./plants";
+import { en as setup } from "./setup";
 
 const base: Record<keyof typeof deBase, string> = {
   "app.tagline": "Mixing robot for nutrient solution",
@@ -115,4 +116,4 @@ const base: Record<keyof typeof deBase, string> = {
 };
 
 // The base texts plus the texts of each area.
-export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants };
+export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup };

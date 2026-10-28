@@ -748,13 +748,32 @@ device in this session. Where updates come from is a product question
   start and kept in its own file. It is in `/info` and in the diagnostics.
   It is never in a backup, so restoring a backup on another device does
   not copy the identity. A damaged file gives a new ID.
-- **Commissioning** (built next):
-  - The steps of #10 are kept in the device, each as open, done or
-    skipped, so they resume after a restart.
-  - A step is done when the device sees it: flow proven, probes and
-    channels calibrated, lines filled, a tank volume and a recipe or
-    plant. Otherwise it is done when the user confirms it: the pump lies
-    in the tank, the container is open, the canisters stand below the
-    device (PD-476).
-  - The web app shows the next open step.
-  - Network and account stay "later" until they exist.
+- **Commissioning.** The steps of #10 are kept in the device, in their
+  order, so they resume after a restart:
+  - Language and password, placement, flow, probes, channels and pump
+    heads, lines filled, test run, tank and recipe, push. Network and
+    account are shown as "later" until they exist.
+  - A step the robot sees is done while it sees it, and nothing of it is
+    stored: the password is set, flow was proven, both probes are
+    calibrated, every canister's channel is calibrated for its head with
+    pH− among them, a run went through each of those lines to its end
+    (filled until it drips, or calibrated into the cup), a tank volume and
+    a recipe in force.
+  - The user confirms the rest: the placement (the pump lies in the tank,
+    the container is open, the canisters stand below the device; PD-476),
+    and the test run of drop sensors, high level and Stop. Push is
+    optional and may be skipped. These marks are kept in the
+    configuration, with their time, and can be opened again.
+  - The web app has a page for it, and shows the next open step above
+    every other page until all are done or skipped. The state carries
+    whether it is complete and the next step.
+  - The placement confirmation is the one of SD-118. Until it is given,
+    the cycle stays off and says why. The gateway lets nothing run
+    towards the tank: no dose, no line fill into the tank, no refill of
+    a pulled-back line. Calibrating or priming into a cup still runs.
+    Confirming it is an event. A backup never brings any commissioning
+    mark: the device keeps its own, so a restored or new device asks
+    again.
+  - Apart from that, commissioning only shows the way. Dosing keeps its
+    own checks.
+  - The simulator's demo is set up as a device in use.

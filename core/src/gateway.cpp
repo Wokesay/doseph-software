@@ -53,6 +53,9 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
   if (head.empty()) return fail(say("act.no_head", {{"channel", channel}}));
   const Limits lim = c.cfg.limits.bounded();  // fixed limits; settings only tighten (R7)
   if (ms <= 0 || ms > static_cast<Ms>(lim.maxRunS * 1000)) return fail(say("act.too_long", {{"s", lim.maxRunS}}));
+  // Nothing runs towards the tank before the owner confirmed where pump and canisters stand
+  // (SD-118); into a cup it may
+  if ((intoTank(purpose) || purpose == "fill" || purpose == "refill") && !placementConfirmed(c.cfg)) return fail(say("act.placement"));
   if (intoTank(purpose)) {
     // No dose without a measured calibration (RAT-015), no run under the minimum (RAT-050)
     const double flow = c.cfg.channelFlow(channel);
@@ -345,6 +348,7 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   progress_ = DoseProgress{};
   progress_.state = DoseProgress::State::Running;
   progress_.orderId = active_->id;
+  progress_.channel = active_->step.channel;
   running_ = false;
   pauseUntil_ = 0;
   filled_ = false;
