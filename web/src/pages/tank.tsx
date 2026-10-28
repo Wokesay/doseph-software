@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Tank: its volume and a new fill, the flow through the device and the
-// turnover, how long a dose is mixed in, the pause between checks and the
-// control's settings.
+// Tank: its volume and a new fill, how long a dose is mixed in, the pause
+// between checks, maintenance and the control's settings. The flow through
+// the device is on the water path page.
 import { useState } from "preact/hooks";
 import { Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
 import { post, put } from "../api";
@@ -70,30 +70,6 @@ function VolumeCard() {
           }
         />
       )}
-    </Card>
-  );
-}
-
-function FlowCard() {
-  const st = state.value!;
-  const s = st.cycle.settings;
-  const flow = st.readings.flow;
-  return (
-    <Card title={<Term topic="circulation" />} icon={<RefreshCw size={18} />}>
-      <div class="stack">
-        <p class="muted small">{t("tank.suctionText")}</p>
-        <div class="kv" data-testid="flow-info">
-          <span>{t("tank.flowNow")}</span>
-          <span>{flow.usable ? `${num(flow.value, 1)} L/min` : "–"}</span>
-          <span>{t("tank.flowMeasured")}</span>
-          <span>{s.flowLpm != null ? `${num(s.flowLpm, 1)} L/min` : t("tank.notYet")}</span>
-          <span>
-            <Term topic="turnover" />
-          </span>
-          <span data-testid="turnover">{s.turnoverMin != null ? t("common.minutes", { n: num(s.turnoverMin, 1) }) : "–"}</span>
-        </div>
-        {s.flowLpm == null && <p class="muted small">{t("tank.flowUnknown")}</p>}
-      </div>
     </Card>
   );
 }
@@ -222,10 +198,9 @@ export function TankPage() {
     <div class="stack">
       <div class="grid-2">
         <VolumeCard key={`v${rev}`} />
-        <FlowCard />
+        <MaintenanceCard />
       </div>
       <WaitCard key={`w${rev}`} />
-      <MaintenanceCard />
       <ControlCard key={`c${rev}`} />
     </div>
   );

@@ -7,6 +7,15 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A water path page (#10, step 4.8): how the device proves flow (flow
+  meter or the outlet's level sensor), whether the suction pump runs and
+  the flow is proven, the measured flow and the turnover; the measuring
+  chamber with its readings, the outlet, the high level and the probe
+  calibration (moved here from the channels page); the return by gravity
+  or pump, and the hardware release with its reason. The dry-run and
+  return locks show here with a pointer to Status. The channels page
+  shows each channel's drop sensor (last drop, or none fitted) and
+  whether it pulls back after a dose.
 - Large tanks wait for their learned settling (SD-112): above 150 L the
   flow through the device is only a sample stream and the customer's pump
   mixes, so the robot's own wait is not a turnover but the settling time

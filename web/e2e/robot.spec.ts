@@ -93,10 +93,9 @@ test("a pH− canister is refused in a recipe, with the robot's reason", async (
   await expect(page.getByText("Without parts has no parts")).toBeVisible();
 });
 
-test("a new tank volume makes the next dose a test dose; the turnover is shown", async ({ page }) => {
+test("a new tank volume makes the next dose a test dose", async ({ page }) => {
   await login(page);
   await page.goto("/#/tank");
-  await expect(page.getByTestId("turnover")).toContainText("min");
   await page.locator("input[name=volumeL]").fill("80");
   await page.getByTestId("save-volume").click();
   await expect(page.getByText("The next dose is a small test dose that checks the volume.")).toBeVisible();
@@ -126,6 +125,7 @@ test("another pump head voids a channel's calibration; without a head the channe
   await login(page);
   await page.goto("/#/channels");
   await expect(page.getByTestId("head-2")).toContainText("pump head S");
+  await expect(page.getByTestId("drops-2")).toContainText("pulls back after each dose");
   await sim(page, "channelHead", { channel: 2, head: "M" });
   await expect(page.getByTestId("head-2")).toContainText("pump head M");
   await expect(page.getByTestId("head-2")).toContainText("not calibrated");
@@ -162,11 +162,27 @@ test("a line is filled into the tank until it drips (SD-111)", async ({ page }) 
   await page.getByTestId("job-start").click();
   await sim(page, "speed", { speed: 10 });
   await expect(page.getByTestId("job-done")).toContainText("Channel 4: the line is full", { timeout: 30_000 });
+  await expect(page.getByTestId("drops-4")).toContainText("Drop sensor: last drop");
+});
+
+test("the water path shows how flow is proven, the chamber and the hardware release (SD-109, SD-110)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/water");
+  // The example Home profile: flow by the outlet's level sensor, return by gravity
+  await expect(page.getByTestId("flow-method")).toContainText("The outlet's level sensor reports water");
+  await expect(page.getByTestId("turnover")).toContainText("min");
+  await expect(page.getByTestId("return-by")).toContainText("by itself");
+  await expect(page.getByTestId("chamber")).toContainText("pH");
+  await expect(page.getByTestId("release")).toContainText("given");
+  await sim(page, "stopButton", { pressed: true });
+  await expect(page.getByTestId("release")).toContainText("withdrawn: stop button");
+  await sim(page, "stopButton", { pressed: false });
+  await expect(page.getByTestId("release")).toContainText("given");
 });
 
 test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await login(page);
-  await page.goto("/#/channels");
+  await page.goto("/#/water");
   await page.getByTestId("calibrate-ph").click();
   await page.getByTestId("probe-start").click();
   await sim(page, "buffer", { kind: "ph", value: 7 });

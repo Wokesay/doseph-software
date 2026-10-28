@@ -7,6 +7,7 @@ import { de as history } from "./history";
 import { de as channels } from "./channels";
 import { de as settings } from "./settings";
 import { de as sim } from "./sim";
+import { de as water } from "./water";
 
 // German texts of the app. Keys are stable; the English table (en.ts)
 // must have every key. Placeholders in {braces}.
@@ -52,8 +53,9 @@ export const deBase = {
   "nav.status": "Status",
   "nav.recipe": "Rezept",
   "nav.tank": "Tank",
+  "nav.water": "Wasserweg",
   "nav.history": "Verlauf",
-  "nav.channels": "Kanäle & Sonden",
+  "nav.channels": "Kanäle",
   "nav.settings": "Einstellungen",
   "nav.label": "Menü",
 
@@ -116,4 +118,4 @@ export const deBase = {
 } as const;
 
 // The base texts plus the texts of each area.
-export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim };
+export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water };
