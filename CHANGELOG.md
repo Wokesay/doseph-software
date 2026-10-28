@@ -32,6 +32,9 @@ All notable changes to this software. The format follows
   - A peer token may read.
   - A call outside the role is refused with 403. Creating and revoking a
     token are events. Tokens survive a password change.
+- An OpenAPI file of the API, `docs/openapi.json` (SD-129). It covers
+  every route and the roles that may call it, and tests keep both in
+  step with the device.
 - The device has a random ID of its own (SD-129). It is shown in `/info`,
   in the diagnostics and on the settings page, and never in a backup.
 

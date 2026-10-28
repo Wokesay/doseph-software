@@ -725,6 +725,11 @@ device in this session. Where updates come from is a product question
   - A password change ends every session; the tokens stay, and the event
     says so. A reset of access with the device security items will clear
     them (#10).
+- **OpenAPI.** `docs/openapi.json` describes every route, by hand. Each
+  operation names its roles as `x-roles`. Tests check that every route of
+  the router is in the file and nothing else, and that the roles named
+  are exactly the ones the device lets call it. The device does not serve
+  the file: it stays in the repository and costs no flash.
 - **Roles.** A call that a role may not make is refused with 403. The
   message names the role.
 
