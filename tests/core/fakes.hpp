@@ -40,24 +40,24 @@ class Hardware : public doseph::IHardware {
     return it->second;
   }
   const doseph::Profile& profile() const override { return prof; }
-  bool startRun(int pump, Ms ms, const std::string& jobId, std::string&) override {
-    runs[pump] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
+  bool startRun(int channel, Ms ms, const std::string& jobId, std::string&) override {
+    runs[channel] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
     started++;
     return true;
   }
-  doseph::RunStatus runStatus(int pump) const override {
-    auto it = runs.find(pump);
+  doseph::RunStatus runStatus(int channel) const override {
+    auto it = runs.find(channel);
     return it == runs.end() ? doseph::RunStatus{} : it->second;
   }
   void stopAllPumps() override {
     for (auto& [n, r] : runs)
       if (r.state == doseph::RunStatus::State::Running) r.state = doseph::RunStatus::State::Failed;
   }
-  bool setCirculation(bool on, std::string&) override {
+  bool setSuctionPump(bool on, std::string&) override {
     out = on;
     return true;
   }
-  std::optional<bool> circulation() const override { return out; }
+  std::optional<bool> suctionPump() const override { return out; }
 };
 
 // A storage whose writes fail on demand

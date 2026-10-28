@@ -29,7 +29,7 @@ device, tank, pumps and probes. In it you can watch and steer:
   nutrients and pH−, and every lock and hold with its reason.
 - **Recipes** – your own or from templates, pairs that keep their ratio,
   a recipe in force for a number of days.
-- **Canisters and pumps** – roles, sizes and levels counted from use,
+- **Canisters and channels** – roles, sizes and levels counted from use,
   "Refilled", pump calibration into a cup, filling the lines.
 - **Probes** – pH calibration with two buffers, EC with one reference
   solution, temperature compensation.

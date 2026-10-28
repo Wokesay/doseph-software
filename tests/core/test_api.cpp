@@ -86,8 +86,8 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
   Client c{s, "", "192.168.1.20"};
   REQUIRE(c.login("demo-password"));
   json st = c.get("state");
-  for (const char* k : {"now", "stopped", "online", "circulation", "flowOk", "readings", "cycle", "watchdog", "latches",
-                        "jumpLocks", "newTank", "effects", "dosing", "pumps", "stock", "catchUp", "pumpJob", "probe",
+  for (const char* k : {"now", "stopped", "online", "suctionPump", "flowOk", "readings", "cycle", "watchdog", "latches",
+                        "jumpLocks", "newTank", "effects", "dosing", "channels", "stock", "catchUp", "channelJob", "probe",
                         "maintenanceUntil", "eventId"})
     CHECK_MESSAGE(st.contains(k), k);
   for (const char* ch : {"ph", "ec", "temp", "flow"}) {
@@ -104,11 +104,11 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
                         "suggestEcMin", "suggestPhMin", "holdMin", "circulation"})
     CHECK_MESSAGE(st["cycle"]["settings"].contains(k), k);
   CHECK(st["watchdog"].contains("stale"));
-  CHECK(st["pumps"].size() == 4);
+  CHECK(st["channels"].size() == 4);
   for (const auto& [id, x] : st["stock"].items()) CHECK((x.contains("ml") && x["status"].is_string()));
   CHECK(c.call("DELETE", "catchup").status == 404);  // nothing to catch up
   json cfg = c.get("config");
-  for (const char* k : {"system", "tank", "control", "canisters", "recipes", "active", "pumps", "probes"}) CHECK(cfg.contains(k));
+  for (const char* k : {"system", "tank", "control", "canisters", "recipes", "active", "channels", "probes"}) CHECK(cfg.contains(k));
   CHECK(c.get("templates")["recipes"].size() == 3);
 }
 
@@ -121,9 +121,9 @@ TEST_CASE("API: tank, canisters, recipes and the recipe in force; refusals say w
   CHECK(c.call("PUT", "tank", {{"volumeL", 80}, {"waitPhMin", 20}}).status == 200);
   CHECK(c.get("config")["tank"]["volumeL"] == 80);
   CHECK(c.get("state")["newTank"] == true);  // another volume: checked again
-  auto b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"pump", 2}});
+  auto b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"channel", 2}});
   CHECK(b.status == 422);  // pump 2 carries Part A
-  b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"pump", 0}});
+  b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"channel", 0}});
   REQUIRE(b.status == 200);
   const std::string pk = json::parse(b.body)["id"];
   auto r = c.call("POST", "recipes", {{"name", "With pH"}, {"steps", {{{"canister", "ph_down"}, {"mlPerL", 0.1}}}}});
@@ -149,7 +149,7 @@ TEST_CASE("API: Stop and resume; the Stop is logged") {
   REQUIRE(c.login("demo-password"));
   CHECK(c.call("POST", "stop").status == 200);
   CHECK(c.get("state")["stopped"] == true);
-  CHECK(c.call("POST", "pumps/2/prime", {{"seconds", 5}}).status == 409);  // nothing runs while stopped
+  CHECK(c.call("POST", "channels/2/prime", {{"seconds", 5}}).status == 409);  // nothing runs while stopped
   CHECK(c.call("POST", "resume").status == 200);
   CHECK(c.get("state")["stopped"] == false);
   bool logged = false;
@@ -246,7 +246,7 @@ TEST_CASE("API: the diagnostics package of \"Report a problem\" carries the stat
   const std::string id = d["reportId"];
   CHECK(id.size() == 11);
   CHECK(id.rfind("DP-", 0) == 0);
-  for (const char* k : {"createdAt", "info", "config", "readings", "cycle", "watchdog", "latches", "jumpLocks", "pumps", "events", "redacted"})
+  for (const char* k : {"createdAt", "info", "config", "readings", "cycle", "watchdog", "latches", "jumpLocks", "channels", "events", "redacted"})
     CHECK_MESSAGE(d.contains(k), k);
   CHECK(d["info"]["version"].is_string());
   CHECK_FALSE(d["events"].empty());
@@ -361,7 +361,7 @@ TEST_CASE("API: a backup restores the settings, checked like a change; never the
   CHECK(fresh.robot().configJson()["system"]["passwordSet"] == false);
 }
 
-TEST_CASE("API: a backup is not restored while a pump runs; what the robot learned stays only where the file keeps it (RAT-085)") {
+TEST_CASE("API: a backup is not restored while a channel runs; what the robot learned stays only where the file keeps it (RAT-085)") {
   sim::Simulation s(demo());
   s.step(6 * kHour);
   Robot& robot = s.robot();

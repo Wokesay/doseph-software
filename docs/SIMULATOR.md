@@ -59,8 +59,8 @@ http://localhost:5173 (the API is passed through).
 |---|---|
 | Tank | volume, EC, pH, temperature; a dose spreads with the flow (time constant about one turnover, at least 20 s), pH with a dead time of 60 s |
 | Measuring chamber | holds what flows through it; without flow it keeps its water |
-| Flow | the circulation pump delivers 12 L/min; faults: blocked, broken sensor; an outside pump |
-| Dosing pumps | four, each with its own true flow (42–53 ml/min), may be blocked or empty; calibration and priming go into a cup |
+| Flow | the suction pump delivers 12 L/min; faults: blocked, broken sensor; a pump of your own |
+| Dosing channels | four, each pump with its own true flow (42–53 ml/min), may be blocked or empty; calibration and priming go into a cup |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |
 | Probes | pH and EC with their own errors, measured noise (RAT-082); faults: offline, frozen, jump, dry EC; calibration solutions |
 

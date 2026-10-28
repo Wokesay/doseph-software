@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Configuration of the mixing robot: the tank, the canisters on the pumps,
+// Configuration of the mixing robot: the tank, the canisters on the channels,
 // the recipes and which one is in force, and the calibrations. The run-time
 // state (latches, jump locks, learned effects) is stored apart in
 // RuntimeState, so a dose does not make a new configuration revision.
@@ -15,14 +15,14 @@
 namespace doseph {
 
 // 2: bottles became canisters, their kind a role (SD-107)
-constexpr int kSchemaVersion = 2;
-constexpr int kMaxPumps = 8;
+constexpr int kSchemaVersion = 3;
+constexpr int kMaxChannels = 8;
 
-// A liquid on a dosing pump.
+// A liquid on a dosing channel.
 struct CanisterCfg {
   std::string id, name;
   std::string role = "nutrient";  // nutrient | ph_down (SD-108)
-  int pump = 0;                   // 1..pumpCount; 0: on no pump
+  int channel = 0;                // 1..channelCount; 0: on no channel
   std::string pair;               // pair group, e.g. "AB": its parts keep their ratio (RAT-054)
   std::string color = "#4c9a52";
   double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
@@ -104,8 +104,8 @@ struct Limits {
   Limits bounded() const;
 };
 
-struct PumpCal {
-  double flowMlPerMin = kNaN;  // measured into a cup (RAT-070); missing: the pump doses nothing (RAT-015)
+struct ChannelCal {
+  double flowMlPerMin = kNaN;  // measured into a cup (RAT-070); missing: the channel doses nothing (RAT-015)
   Epoch at = 0;
 };
 
@@ -126,17 +126,17 @@ struct Config {
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
   ActiveCfg active;
-  std::map<int, PumpCal> pumps;
+  std::map<int, ChannelCal> channels;
   // Probe calibrations: pH {points: [[raw, ref], [raw, ref]], zeroMv, at},
   // EC {factor, at}; null when not calibrated (RAT-025)
   json phCal = nullptr, ecCal = nullptr;
 
   const CanisterCfg* canister(const std::string& id) const;
-  const CanisterCfg* canisterOnPump(int pump) const;
+  const CanisterCfg* canisterOnChannel(int channel) const;
   const RecipeCfg* recipe(const std::string& id) const;
-  // The pH− canister on a pump, the first one listed
+  // The pH− canister on a channel, the first one listed
   const CanisterCfg* phDown() const;
-  double pumpFlow(int pump) const;  // NaN when not calibrated
+  double channelFlow(int channel) const;  // NaN when not calibrated
 };
 
 void to_json(json& j, const Config& c);
@@ -147,9 +147,9 @@ void to_json(json& j, const Config& c);
 json migrateConfig(json j);
 Config configFromJson(const json& j);  // migrates first; throws on structure errors
 
-// Checks references and the rules of the domain and of safety; pumpCount is
-// how many pumps the device has.
-std::vector<Msg> validateConfig(const Config& c, int pumpCount);
+// Checks references and the rules of the domain and of safety; channelCount
+// is how many channels the device has.
+std::vector<Msg> validateConfig(const Config& c, int channelCount);
 // A name in the form of the time zone database ("Europe/Berlin", "UTC"):
 // letters, digits, "_", "+" and "-" in parts separated by "/", at most 64
 // characters; never "." (the firmware may look it up as a file one day).

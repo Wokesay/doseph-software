@@ -37,13 +37,13 @@ class SimHardware : public doseph::IHardware {
   bool online() const override { return w_.probeFault != "offline"; }
   std::optional<doseph::Sample> sample(doseph::Signal c) const override;
   const doseph::Profile& profile() const override { return profile_; }
-  bool startRun(int pump, doseph::Ms ms, const std::string& jobId, std::string& err) override {
-    return w_.startRun(pump, ms, jobId, err);
+  bool startRun(int channel, doseph::Ms ms, const std::string& jobId, std::string& err) override {
+    return w_.startRun(channel, ms, jobId, err);
   }
-  doseph::RunStatus runStatus(int pump) const override { return w_.runStatus(pump); }
+  doseph::RunStatus runStatus(int channel) const override { return w_.runStatus(channel); }
   void stopAllPumps() override { w_.stopAllPumps(); }
-  bool setCirculation(bool on, std::string& err) override;
-  std::optional<bool> circulation() const override { return w_.output; }
+  bool setSuctionPump(bool on, std::string& err) override;
+  std::optional<bool> suctionPump() const override { return w_.output; }
 
  private:
   World& w_;

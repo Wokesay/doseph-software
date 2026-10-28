@@ -19,7 +19,7 @@ struct JournalRun {
   int run = 0;            // partial run, from 1
   std::string purpose;    // ec | ph | calibration | prime
   std::string canister, name;
-  int pump = 0;
+  int channel = 0;
   double ml = kNaN;       // planned for this run
   Ms ms = 0;              // planned run time
   Epoch at = 0;

@@ -67,16 +67,16 @@ class IHardware {
   virtual bool online() const = 0;
   virtual std::optional<Sample> sample(Signal c) const = 0;
   virtual const Profile& profile() const = 0;
-  // Dosing pumps are numbered 1..pumpCount(), one per channel of the profile.
-  int pumpCount() const { return static_cast<int>(profile().channels.size()); }
-  // A pump run in ms with a job ID: a repeated order with the same ID does
-  // not run twice. The driver allows one pump at a time.
-  virtual bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err) = 0;
-  virtual RunStatus runStatus(int pump) const = 0;
+  // Dosing channels are numbered 1..channelCount(), as the profile lists them.
+  int channelCount() const { return static_cast<int>(profile().channels.size()); }
+  // A run of a channel's pump in ms with a job ID: a repeated order with the
+  // same ID does not run twice. The driver allows one channel at a time.
+  virtual bool startRun(int channel, Ms ms, const std::string& jobId, std::string& err) = 0;
+  virtual RunStatus runStatus(int channel) const = 0;
   virtual void stopAllPumps() = 0;
-  // The output that switches the circulation pump, where the device switches it.
-  virtual bool setCirculation(bool on, std::string& err) = 0;
-  virtual std::optional<bool> circulation() const = 0;  // nullopt: state unknown
+  // The output that switches the suction pump, where the device switches it.
+  virtual bool setSuctionPump(bool on, std::string& err) = 0;
+  virtual std::optional<bool> suctionPump() const = 0;  // nullopt: state unknown
 };
 
 // Storage for configuration and state (device: flash, host: files). write()

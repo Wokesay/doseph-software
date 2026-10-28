@@ -2,7 +2,7 @@
 // Dose planning as pure functions (testable, no side effects): an EC round
 // with the recipe and a pH− dose. Invariants (docs/RATIONALE.md): pH always
 // last (RAT-004); paired nutrients scaled together at every limit, never
-// capped or rounded per pump (RAT-054); no dosing without a calibration
+// capped or rounded per channel (RAT-054); no dosing without a calibration
 // value (RAT-015); a missing quantity aborts without a stand-in (RAT-006);
 // no runs under 1 s (RAT-050); large doses in equal partial runs (RAT-055).
 #pragma once
@@ -16,7 +16,7 @@ namespace doseph {
 
 struct DoseStep {
   std::string canister, name, pair, color;
-  int pump = 0;
+  int channel = 0;
   double mlPerL = kNaN;
   double ml = kNaN;
   double flowMlPerMin = kNaN;
@@ -25,7 +25,7 @@ struct DoseStep {
 void to_json(json& j, const DoseStep& s);
 
 // Splits a dose into equal runs ≤ maxRunS. Errors: a run under minRunS, more
-// runs than maxRuns (0 = no limit), no pump calibration.
+// runs than maxRuns (0 = no limit), no channel calibration.
 std::vector<Ms> splitRuns(double ml, double flowMlPerMin, const Limits& lim, int maxRuns, Msg& err);
 
 // Raise EC with the recipe: dose = 0.8 × gap / effect × V, capped in EC per

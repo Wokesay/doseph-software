@@ -53,8 +53,8 @@ test("Stop switches everything off and holds until Resume", async ({ page }) => 
   await page.getByTestId("stop-confirm").click();
   await expect(page.getByTestId("stopped-bar")).toBeVisible();
   await expect(page.getByTestId("cycle-line")).toHaveText(/Stopped/);
-  // Nothing runs while stopped, not even a pump into a cup
-  await page.goto("/#/pumps");
+  // Nothing runs while stopped, not even a channel into a cup
+  await page.goto("/#/channels");
   await expect(page.getByTestId("calibrate-2")).toBeDisabled();
   await page.getByTestId("resume").click();
   await expect(page.getByTestId("stopped-bar")).toHaveCount(0);
@@ -105,26 +105,26 @@ test("a new tank volume makes the next dose a test dose; the turnover is shown",
   await expect(page.getByTestId("save-waits")).toBeDisabled();
 });
 
-test("a pump is calibrated: run into a cup, enter the ml", async ({ page }) => {
+test("a channel is calibrated: run into a cup, enter the ml", async ({ page }) => {
   await login(page);
   // Without a recipe the cycle doses nothing that a calibration would have to wait for
   await page.goto("/#/recipe");
   await page.getByRole("button", { name: "No recipe" }).click();
   await expect(page.getByText("No recipe in force any more")).toBeVisible();
-  await page.goto("/#/pumps");
+  await page.goto("/#/channels");
   await page.getByTestId("calibrate-4").click();
   await page.locator("input[name=seconds]").fill("10");
-  await page.getByTestId("pump-start").click();
+  await page.getByTestId("job-start").click();
   await sim(page, "speed", { speed: 10 });
   await expect(page.locator("input[name=ml]")).toBeVisible({ timeout: 30_000 });
   await page.locator("input[name=ml]").fill("8");
-  await page.getByTestId("pump-result").click();
-  await expect(page.getByTestId("pump-done")).toContainText("Pump 4: 48.0 ml/min saved");
+  await page.getByTestId("job-result").click();
+  await expect(page.getByTestId("job-done")).toContainText("Channel 4: 48.0 ml/min saved");
 });
 
 test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await login(page);
-  await page.goto("/#/pumps");
+  await page.goto("/#/channels");
   await page.getByTestId("calibrate-ph").click();
   await page.getByTestId("probe-start").click();
   await sim(page, "buffer", { kind: "ph", value: 7 });
@@ -217,7 +217,7 @@ test("settings are backed up and restored; a broken backup is refused with every
 
 test("a canister's level is counted, entered by hand and set full when refilled (SD-119)", async ({ page }) => {
   await login(page);
-  await page.goto("/#/pumps");
+  await page.goto("/#/channels");
   const level = page.getByTestId("level-part_b");
   await expect(level).toContainText(/of 1,?000 ml/);
   await page.getByRole("button", { name: "Enter level: Part B" }).click();

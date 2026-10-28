@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Layer 8: actuator gateway and dose execution.
 //
-// Actuators is the ONLY way to the pumps and the circulation output (rule
+// Actuators is the ONLY way to the pumps and the suction pump's output (rule
 // R1). It holds the safety minimum in code that settings can only tighten
 // (R7): a calibration value present, run time limits, one run at a time,
 // the Stop, and no dose without proven flow (SD-105).
@@ -34,31 +34,31 @@ struct Ctx {
   bool flowOk = false;  // flow through the device proven now: no dose without it (SD-105)
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
-  bool pumpJob = false;           // a pump is being calibrated or primed: no dose starts meanwhile
+  bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
 };
 
 class Actuators {
  public:
   explicit Actuators(IHardware& hw) : hw_(hw) {}
 
-  bool startRun(const Ctx& c, int pump, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err);
-  RunStatus runStatus(int pump) const { return hw_.runStatus(pump); }
-  bool pumpRunning() const { return runningPump_ != 0; }
-  void clearRun(int pump);
+  bool startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err);
+  RunStatus runStatus(int channel) const { return hw_.runStatus(channel); }
+  bool channelRunning() const { return runningChannel_ != 0; }
+  void clearRun(int channel);
   void stopPumps() { hw_.stopAllPumps(); }
 
-  // The circulation pump, where the device switches it: on is refused while stopped.
-  bool setCirculation(const Ctx& c, bool on, Msg& err);
-  std::optional<bool> circulation() const { return hw_.circulation(); }
+  // The suction pump, where the device switches it: on is refused while stopped.
+  bool setSuctionPump(const Ctx& c, bool on, Msg& err);
+  std::optional<bool> suctionPump() const { return hw_.suctionPump(); }
 
-  // Stop and start: every pump and the circulation output off, idempotent (RAT-036, R6).
+  // Stop and start: every pump and the suction pump's output off, idempotent (RAT-036, R6).
   void stopAll();
   // Each tick: a dose that loses its flow stops at once; only ever switches off (SD-105).
   void enforce(const Ctx& c);
 
  private:
   IHardware& hw_;
-  int runningPump_ = 0;
+  int runningChannel_ = 0;
   std::string runningPurpose_;
   bool cutLogged_ = false;
 };

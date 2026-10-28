@@ -40,7 +40,7 @@ std::optional<doseph::Sample> SimHardware::sample(doseph::Signal c) const {
   return std::nullopt;
 }
 
-bool SimHardware::setCirculation(bool on, std::string& err) {
+bool SimHardware::setSuctionPump(bool on, std::string& err) {
   (void)err;
   w_.output = on;
   return true;

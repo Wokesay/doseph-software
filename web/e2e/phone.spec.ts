@@ -22,7 +22,7 @@ async function offScreen(page: Page): Promise<string[]> {
 test("every page fits a phone and has the Stop", async ({ page, request }) => {
   await scenario(request, "demo");
   await login(page);
-  for (const path of ["/", "/recipe", "/tank", "/history", "/pumps", "/settings"]) {
+  for (const path of ["/", "/recipe", "/tank", "/history", "/channels", "/settings"]) {
     await page.goto(`/#${path}`);
     await page.waitForTimeout(800);
     expect(await offScreen(page), path).toEqual([]);

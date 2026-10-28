@@ -12,7 +12,7 @@ import { StatusPage } from "./pages/status";
 import { RecipePage } from "./pages/recipe";
 import { TankPage } from "./pages/tank";
 import { HistoryPage } from "./pages/history";
-import { PumpsPage } from "./pages/pumps";
+import { ChannelsPage } from "./pages/channels";
 import { SettingsPage } from "./pages/settings";
 import { SimPanel } from "./pages/sim";
 
@@ -22,7 +22,7 @@ const NAV: NavItem[] = [
   { path: "/recipe", label: "nav.recipe", icon: <FlaskConical size={19} />, el: () => <RecipePage /> },
   { path: "/tank", label: "nav.tank", icon: <Waves size={19} />, el: () => <TankPage /> },
   { path: "/history", label: "nav.history", icon: <History size={19} />, el: () => <HistoryPage /> },
-  { path: "/pumps", label: "nav.pumps", icon: <Syringe size={19} />, el: () => <PumpsPage /> },
+  { path: "/channels", label: "nav.channels", icon: <Syringe size={19} />, el: () => <ChannelsPage /> },
   { path: "/settings", label: "nav.settings", icon: <Settings size={19} />, el: () => <SettingsPage /> },
 ];
 // The bar at the bottom on phones; "More" has the rest

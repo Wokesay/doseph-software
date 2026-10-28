@@ -7,7 +7,7 @@ namespace {
 
 json runJson(const JournalRun& r) {
   return {{"order", r.order}, {"run", r.run},       {"purpose", r.purpose}, {"canister", r.canister},
-          {"name", r.name},   {"pump", r.pump},     {"ml", numOrNull(r.ml)}, {"ms", r.ms},
+          {"name", r.name},   {"channel", r.channel},     {"ml", numOrNull(r.ml)}, {"ms", r.ms},
           {"at", r.at},       {"ended", r.ended},   {"msDone", r.msDone},   {"mlDone", numOrNull(r.mlDone)}, {"cut", r.cut}};
 }
 
@@ -34,7 +34,7 @@ void DoseJournal::load() {
     r.purpose = jstr(e, "purpose");
     r.canister = jstr(e, "canister", jstr(e, "bottle"));  // "bottle" before SD-107
     r.name = jstr(e, "name");
-    r.pump = static_cast<int>(jnum(e, "pump", 0));
+    r.channel = static_cast<int>(jnum(e, "channel", jnum(e, "pump", 0)));  // written before SD-107: "pump"
     r.ml = jnum(e, "ml");
     r.ms = static_cast<Ms>(jnum(e, "ms", 0));
     r.at = static_cast<Epoch>(jnum(e, "at", 0));

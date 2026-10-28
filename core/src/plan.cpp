@@ -10,7 +10,7 @@
 namespace doseph {
 
 void to_json(json& j, const DoseStep& s) {
-  j = {{"canister", s.canister}, {"name", s.name},   {"pump", s.pump},   {"pair", s.pair},
+  j = {{"canister", s.canister}, {"name", s.name},   {"channel", s.channel},   {"pair", s.pair},
        {"color", s.color},   {"mlPerL", numOrNull(s.mlPerL)},       {"ml", numOrNull(s.ml)},
        {"flowMlPerMin", numOrNull(s.flowMlPerMin)}, {"runs", s.runs}};
 }
@@ -86,12 +86,12 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
     DoseStep ds;
     ds.canister = b->id;
     ds.name = b->name;
-    ds.pump = b->pump;
+    ds.channel = b->channel;
     ds.pair = b->pair;
     ds.color = b->color;
     ds.mlPerL = s.mlPerL;
     ds.ml = totalMlPerL * (s.mlPerL / sumMlPerL) * volumeL;
-    ds.flowMlPerMin = cfg.pumpFlow(b->pump);
+    ds.flowMlPerMin = cfg.channelFlow(b->channel);
     d.steps.push_back(ds);
   }
   // A round one part of which needs more partial runs than allowed is made
@@ -113,8 +113,8 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
   // Partial runs: if one part is too small or too large, that holds for all
   // together (never capped one by one, RAT-054).
   for (auto& ds : d.steps) {
-    if (ds.pump <= 0) {
-      d.reason = say("dose.no_pump", {{"name", ds.name}});
+    if (ds.channel <= 0) {
+      d.reason = say("dose.no_channel", {{"name", ds.name}});
       d.steps.clear();
       return d;
     }

@@ -61,15 +61,15 @@ class World {
   void advance(Ms now);
   Ms now() const { return now_; }
 
-  // The circulation pump: switched by the robot's output, or by itself
-  // (an external pump); `flowFault` "blocked" means it runs without flow,
+  // The suction pump: switched by the robot's output, or by itself (an
+  // external pump); `flowFault` "blocked" means it runs without flow,
   // "sensor" that water flows but the flow sensor reads nothing.
   bool output = false;
   bool external = false;
-  double pumpLpm = 12.0;  // flow when it runs (assumption)
+  double suctionLpm = 12.0;  // flow when it runs (assumption)
   std::string flowFault;
-  bool pumpRuns() const { return external || output; }
-  bool flowing() const { return pumpRuns() && flowFault != "blocked" && tank.volumeL > 1.0; }
+  bool suctionRuns() const { return external || output; }
+  bool flowing() const { return suctionRuns() && flowFault != "blocked" && tank.volumeL > 1.0; }
 
   // The probes' faults: "" | "offline" | "frozen" | "jump" | "ec_zero"
   std::string probeFault;

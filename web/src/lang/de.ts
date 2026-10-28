@@ -4,7 +4,7 @@ import { de as status } from "./status";
 import { de as recipe } from "./recipe";
 import { de as tank } from "./tank";
 import { de as history } from "./history";
-import { de as pumps } from "./pumps";
+import { de as channels } from "./channels";
 import { de as settings } from "./settings";
 import { de as sim } from "./sim";
 
@@ -53,7 +53,7 @@ export const deBase = {
   "nav.recipe": "Rezept",
   "nav.tank": "Tank",
   "nav.history": "Verlauf",
-  "nav.pumps": "Pumpen & Sonden",
+  "nav.channels": "Kanäle & Sonden",
   "nav.settings": "Einstellungen",
   "nav.label": "Menü",
 
@@ -61,19 +61,19 @@ export const deBase = {
   "term.volume": "Tankvolumen",
   "help.volume": "So viele Liter Nährlösung sind im Tank. Der Roboter rechnet jede Gabe darauf um; die erste Gabe eines neuen Tanks ist eine kleine Testgabe, die den Wert prüft.",
   "term.turnover": "Umlaufzeit",
-  "help.turnover": "So lange braucht die Umwälzpumpe, um den Tank einmal durch das Gerät zu pumpen: Tankvolumen geteilt durch Durchfluss.",
+  "help.turnover": "So lange braucht die Ansaugpumpe, um den Tank einmal durch das Gerät zu pumpen: Tankvolumen geteilt durch Durchfluss.",
   "term.waitTime": "Mischzeit",
   "help.waitTime": "So lange wird nach einer Gabe umgewälzt, bevor der Roboter wieder misst. Die Uhr läuft nur, solange Wasser fließt. Der Vorschlag rechnet mit 2 Umläufen für EC und 3 für pH; du legst die Zeit fest.",
   "term.holdTime": "Pause zwischen Prüfungen",
   "help.holdTime": "Ist der Tank im Ziel, ruht der Roboter so lange und prüft dann erneut. Er mischt nicht ständig.",
-  "term.circulation": "Umwälzpumpe",
-  "help.circulation": "„Nur zum Prüfen“: Der Roboter schaltet die Pumpe für jede Prüfung ein und danach aus. „Immer an“: Sie läuft durch. „Eigene Steuerung“: Du schaltest sie selbst, der Roboter wartet auf Durchfluss.",
+  "term.circulation": "Umwälzung",
+  "help.circulation": "„Nur zum Prüfen“: Der Roboter schaltet die Ansaugpumpe für jede Prüfung ein und danach aus. „Immer an“: Sie läuft durch. „Eigene Steuerung“: Eine eigene Pumpe fördert, du schaltest sie selbst; der Roboter wartet auf Durchfluss.",
   "term.testDose": "Testgabe",
   "help.testDose": "Die erste Gabe eines neuen Tanks ist klein. Wirkt sie viel stärker oder schwächer als für das eingetragene Volumen erwartet, hält der Roboter an und fragt nach dem Volumen.",
   "term.tolerance": "Toleranz",
   "help.tolerance": "Spielraum um das Ziel, in dem der Roboter nichts tut. Zu eng heißt ständiges Nachregeln.",
   "term.canister": "Kanister",
-  "help.canister": "Ein Kanister mit Nährstoff oder pH−, an ihm hängt eine Dosierpumpe. Was darin ist, sieht der Roboter nicht – das sagst du ihm.",
+  "help.canister": "Ein Kanister mit Nährstoff oder pH−, er hängt an einem Dosierkanal. Was darin ist, sieht der Roboter nicht – das sagst du ihm.",
   "term.pair": "Paar (A/B)",
   "help.pair": "Zwei Teile, die nur zusammen wirken. Der Roboter dosiert sie immer im festen Verhältnis, auch bei kleineren Gaben.",
   "term.fixed": "Feste Menge",
@@ -96,8 +96,8 @@ export const deBase = {
   "shell.stopAsk": "Alles stoppen?",
   "shell.stopAll": "Alles stoppen",
   "shell.stopped": "Gestoppt: alles aus",
-  "shell.stoppedBar": "Gestoppt – Dosierpumpen und Umwälzpumpe sind aus und bleiben aus, bis du fortsetzt.",
-  "shell.stopText": "Dosierpumpen und Umwälzpumpe gehen sofort aus. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
+  "shell.stoppedBar": "Gestoppt – Dosierkanäle und Ansaugpumpe sind aus und bleiben aus, bis du fortsetzt.",
+  "shell.stopText": "Dosierkanäle und Ansaugpumpe gehen sofort aus. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
   "shell.stopNote": "Messen läuft weiter.",
   "shell.stopSending": "Sende …",
   "shell.stopRetry": "Erneut senden",
@@ -116,4 +116,4 @@ export const deBase = {
 } as const;
 
 // The base texts plus the texts of each area.
-export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...pumps, ...settings, ...sim };
+export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim };

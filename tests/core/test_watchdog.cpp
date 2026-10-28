@@ -25,8 +25,8 @@ struct Fix {
   Fix() {
     cfg.tank.volumeL = 100;
     cfg.canisters = {{"a", "Part A", "nutrient", 2, "", "#00c"}, {"down", "pH−", "ph_down", 1, "", "#c00"}};
-    cfg.pumps[1] = {40, 1};
-    cfg.pumps[2] = {50, 1};
+    cfg.channels[1] = {40, 1};
+    cfg.channels[2] = {50, 1};
     RecipeCfg r{"r", "Veg", "", {{"a", 2.0}}};
     r.ecTarget = 1.6;
     r.phLow = 5.8;
@@ -42,7 +42,7 @@ struct Fix {
     in.lastAt = 5000;
     in.epoch = 5000;
     in.bootEpoch = 1000;
-    in.pumpCount = 4;
+    in.channelCount = 4;
     return in;
   }
 };
@@ -112,18 +112,18 @@ TEST_CASE("Watchdog: no flow is a problem only while the cycle needs it") {
   CHECK(item(evaluate(in), "flow").status == "neutral");
 }
 
-TEST_CASE("Watchdog: latches, an ended recipe and an uncalibrated pump are problems; the headline names the first and counts the rest (RAT-015, RAT-072)") {
+TEST_CASE("Watchdog: latches, an ended recipe and an uncalibrated channel are problems; the headline names the first and counts the rest (RAT-015, RAT-072)") {
   Fix f;
   auto w = evaluate(f.input(6.0, 1.6));
   CHECK(w.overall == "ok");
   CHECK(w.headline.key == "watch.headline_ok");
   f.rt.latches["ec.no_effect"] = {{"at", 4000}};
-  f.cfg.pumps.erase(2);
+  f.cfg.channels.erase(2);
   w = evaluate(f.input(6.0, 1.6));
   CHECK(w.overall == "problem");
   CHECK(w.problems == 2);
   CHECK(item(w, "latch.ec.no_effect").text.key == "latch.ec.no_effect");
-  CHECK(item(w, "canister.a").text.key == "watch.pump_uncalibrated");
+  CHECK(item(w, "canister.a").text.key == "watch.channel_uncalibrated");
   CHECK(w.headline.key == "watch.headline_more");
   f.cfg.active.until = 4000;
   CHECK(item(evaluate(f.input(6.0, 1.6)), "recipe").status == "problem");

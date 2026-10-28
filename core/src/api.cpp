@@ -71,7 +71,7 @@ std::string sessionCookie(const std::string& token, int maxAge) {
 // The browser keeps the cookie as long as the robot keeps an unused session
 constexpr int kCookieMaxAgeS = static_cast<int>(Auth::kSessionIdle / kSecond);
 
-int pumpOf(const std::string& s) {
+int channelOf(const std::string& s) {
   if (s.empty() || s.size() > 2 || !std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isdigit(c); })) return 0;
   return std::stoi(s);
 }
@@ -299,10 +299,10 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("DELETE", {"recipes", "*"})) return fromResult(robot_.deleteRecipe(p[1]));
   if (is("PUT", {"active"})) return fromResult(robot_.setActive(body));
 
-  if (is("POST", {"pumps", "*", "prime"})) return fromResult(robot_.prime(pumpOf(p[1]), jnum(body, "seconds", 5)));
-  if (is("POST", {"pumps", "*", "calibrate"})) return fromResult(robot_.startCalibration(pumpOf(p[1]), jnum(body, "seconds", 30)));
-  if (is("POST", {"pumps", "result"})) return fromResult(robot_.calibrationResult(jnum(body, "ml")));
-  if (is("POST", {"pumps", "cancel"})) return fromResult(robot_.cancelPumpJob());
+  if (is("POST", {"channels", "*", "prime"})) return fromResult(robot_.prime(channelOf(p[1]), jnum(body, "seconds", 5)));
+  if (is("POST", {"channels", "*", "calibrate"})) return fromResult(robot_.startCalibration(channelOf(p[1]), jnum(body, "seconds", 30)));
+  if (is("POST", {"channels", "result"})) return fromResult(robot_.calibrationResult(jnum(body, "ml")));
+  if (is("POST", {"channels", "cancel"})) return fromResult(robot_.cancelChannelJob());
   if (is("POST", {"probe"})) return fromResult(robot_.probe(body));
   if (is("POST", {"latches", "*", "ack"})) return fromResult(robot_.ackLatch(p[1], body));
   if (is("POST", {"stop"})) return fromResult(robot_.stop(say("stop.app")));

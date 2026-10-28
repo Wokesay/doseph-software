@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Layer 7: the control cycle of the mixing robot as a state machine (SD-105).
 //
-//   pump on → prove flow → flush → measure until stable → EC before pH →
+//   suction pump on → prove flow → flush → measure until stable → EC before pH →
 //   dose in partial doses → wait for mixing (the clock runs only with flow)
 //   → measure again and learn the effect → hold, and after the hold anew.
 //
@@ -20,7 +20,7 @@
 
 namespace doseph {
 
-enum class Phase { Off, Stopped, PumpOn, ProveFlow, Flush, Measure, Dose, Mix, Remeasure, Hold, Wait };
+enum class Phase { Off, Stopped, SuctionOn, ProveFlow, Flush, Measure, Dose, Mix, Remeasure, Hold, Wait };
 const char* phaseName(Phase p);
 
 // Timing of the cycle: starting points, assumptions until measured (SD-105)
@@ -105,7 +105,7 @@ class MixCycle {
   enum class Kind { None, Ec, Ph };
   void enter(const Ctx& c, Phase p);
   void wait(Ctx& c, Actuators& act, Msg why, Ms retry = kRetryMs);
-  void circulation(Ctx& c, Actuators& act, bool on);
+  void suctionPump(Ctx& c, Actuators& act, bool on);
   bool measuring(Ctx& c, Actuators& act);  // true once the window is stable; fills `measured_`
   void evaluate(Ctx& c, Actuators& act);
   void startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim);
