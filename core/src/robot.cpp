@@ -512,6 +512,8 @@ json Robot::state() {
              return st ? json(*st) : json(nullptr);
            }()},
           {"flowOk", c.flowOk},
+          // The water plan: the leading plant's phase or the recipe chosen by hand (SD-128)
+          {"plan", waterPlanJson(cfg_, c.epoch, cfg_.system.timezone)},
           // The feed pump's current now and as learned while it moves water (SD-127)
           {"pump", {{"amps", c.pumpA ? numOrNull(*c.pumpA) : json(nullptr)},
                     {"normalA", rt_.pumpLearnedS >= kPumpLearnS ? numOrNull(rt_.pumpNormalA) : json(nullptr)}}},
@@ -664,6 +666,25 @@ Result Robot::putNotify(const json& j) {
 json Robot::plants() const {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   return plantsJson(cfg_, clock_.epoch(), cfg_.system.timezone);
+}
+
+json Robot::calendar(int days) const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Epoch now = clock_.epoch();
+  const std::string& tz = cfg_.system.timezone;
+  const Epoch until = localDaysLater(localMidnight(now, tz), std::clamp(days, 1, 366), tz);
+  json entries = plantDates(cfg_, now, until, tz);
+  // The maintenance dates with their items, today's included (SD-125)
+  const ServicePlan sp = planService(cfg_, rt_, now, tz);
+  for (const Epoch d : sp.dates) {
+    if (d > until) continue;
+    json items = json::array();
+    for (const auto& i : sp.items)
+      if (i.date == d) items.push_back(i.label);
+    entries.push_back({{"date", std::max(d, localMidnight(now, tz))}, {"kind", "maintenance"}, {"items", items}, {"overdue", d < localMidnight(now, tz)}});
+  }
+  std::stable_sort(entries.begin(), entries.end(), [](const json& a, const json& b) { return a["date"].get<Epoch>() < b["date"].get<Epoch>(); });
+  return {{"today", localMidnight(now, tz)}, {"until", until}, {"entries", entries}};
 }
 
 namespace {

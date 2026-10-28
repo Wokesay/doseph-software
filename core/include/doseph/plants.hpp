@@ -56,6 +56,15 @@ struct PlantNote {
 };
 std::vector<PlantNote> plantNotes(const Config& cfg, Epoch now, const std::string& zone);
 
+// What lies ahead for the running plants until `until`, by local day (SD-128): a phase that
+// begins by itself ("phase"), one that waits for confirmation ("confirm"), the end of the last
+// one ("harvest"); one already past its plan stands at today, marked overdue
+json plantDates(const Config& cfg, Epoch now, Epoch until, const std::string& zone);
+
+// The water plan for the app: where it comes from, the recipe, the targets, and the leading
+// plant's phase with its end
+json waterPlanJson(const Config& cfg, Epoch now, const std::string& zone);
+
 // The plant recipes and plants with where each stands now, for the app
 json plantsJson(const Config& cfg, Epoch now, const std::string& zone);
 

@@ -369,3 +369,41 @@ test("maintenance dates: the next date with its items, cleaning marked done, a c
   await page.getByTestId("save-service").click();
   await expect(page.getByText("A maintenance interval is 7 to 730")).toBeVisible();
 });
+
+test("plants: a plant recipe with phases, a plant started from it sets the water, the next phase and the calendar, and once completed the robot holds (SD-128)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/plants");
+  await expect(page.getByTestId("plants-plan")).toContainText("Two-part nutrient");  // chosen by hand
+  await page.getByTestId("new-plant-recipe").click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("input[name=plant-recipe-name]").fill("Lettuce");
+  await dialog.locator("input[name=phase-name-0]").fill("Young");
+  await dialog.locator("input[name=phase-days-0]").fill("10");
+  await dialog.locator("input[name=phase-ec-0]").fill("1.2");
+  await dialog.getByTestId("add-phase").click();
+  await dialog.locator("input[name=phase-name-1]").fill("Grown");
+  await dialog.locator("input[name=phase-days-1]").fill("20");
+  await dialog.getByTestId("save-plant-recipe").click();
+  await expect(page.getByText("Young → Grown")).toBeVisible();
+  await page.getByTestId("open-start-plant").click();
+  await page.getByRole("dialog").locator("input[name=plant-name]").fill("Bed A");
+  await page.getByRole("dialog").getByTestId("start-plant").click();
+  await expect(page.getByTestId("plants-plan")).toContainText("Bed A sets the water: phase Young");
+  await expect(page.getByText("Young: day 1 of 10")).toBeVisible();
+  await expect(page.getByTestId("calendar").getByTestId("cal-phase")).toContainText("Bed A: Grown begins");
+  // The status page names the plant and its phase, with the phase's EC target
+  await page.goto("/#/");
+  await expect(page.getByTestId("plan-plant")).toHaveText("Bed A, Young");
+  await expect(page.getByText("1.20 ± 0.10 mS/cm")).toBeVisible();
+  // The recipe page leads to the plants
+  await page.goto("/#/recipe");
+  await expect(page.getByTestId("active-recipe")).toContainText("Bed A sets the water");
+  // The next phase by hand, then completed: no water plan is left
+  await page.goto("/#/plants");
+  await page.locator("[data-testid^=plant-next-]").click();
+  await expect(page.getByText("Grown: day 1 of 20")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.locator("[data-testid^=plant-complete-]").click();
+  await expect(page.getByTestId("plants-plan")).toContainText("No water plan");
+  await expect(page.getByTestId("plants-completed")).toContainText("Bed A");
+});

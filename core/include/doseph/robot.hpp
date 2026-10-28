@@ -92,6 +92,9 @@ class Robot {
   // Maintenance dates (SD-125): the plan, an item done by hand, the intervals {"days": {kind: n | null}}
   // Plants and plant recipes (SD-128)
   json plants() const;
+  // What lies ahead in the next `days` days, by local day: the plants' phases and harvests and
+  // the maintenance dates (SD-128, SD-125)
+  json calendar(int days) const;
   Result putPlantRecipe(const json& j);
   Result deletePlantRecipe(const std::string& id);
   Result startPlant(const json& j);

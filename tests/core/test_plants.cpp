@@ -265,3 +265,35 @@ TEST_CASE("Plants over the API: at the local midnight after its days a phase mov
     if (a["id"].get<std::string>().find(".phase") != std::string::npos) noted = a["level"] == "info";
   CHECK(noted);
 }
+
+TEST_CASE("Plants: the calendar lists the next weeks by local day: phases that begin, a phase that waits for confirmation, the planned end, and the maintenance dates; one past its plan stands at today (SD-128, SD-125)") {
+  Config c = withRecipes();
+  c.plants = {plant("p1", kT0, {phase("A", 3, false), phase("B", 4, true), phase("C", 5, false, "r2")})};
+  const Epoch day1 = c.plants[0].start;
+  const json d = plantDates(c, kT0, localDaysLater(day1, 56, kZone), kZone);
+  REQUIRE(d.size() == 3);
+  CHECK(d[0]["kind"] == "phase");
+  CHECK(d[0]["phase"] == "B");
+  CHECK(d[0]["date"] == localDaysLater(day1, 3, kZone));
+  CHECK(d[1]["kind"] == "confirm");
+  CHECK(d[1]["phase"] == "C");
+  CHECK(d[1]["date"] == localDaysLater(day1, 7, kZone));
+  CHECK(d[2]["kind"] == "harvest");
+  CHECK(d[2]["date"] == localDaysLater(day1, 12, kZone));
+  // B over by two days and not confirmed: it stands at today, overdue, and C follows from today
+  c.plants[0].phase = 1;
+  c.plants[0].phaseStart = localDaysLater(day1, 3, kZone);
+  const Epoch now = localDaysLater(day1, 9, kZone) + 3600;
+  const json o = plantDates(c, now, localDaysLater(day1, 60, kZone), kZone);
+  REQUIRE(o.size() == 2);
+  CHECK(o[0]["date"] == localMidnight(now, kZone));
+  CHECK(o[0]["overdue"] == true);
+  CHECK(o[1]["date"] == localDaysLater(localMidnight(now, kZone), 5, kZone));
+  // Over the API, with the maintenance dates and the water plan in the state
+  sim::Simulation s(demo());
+  s.step(10 * kSecond);
+  const json cal = s.robot().calendar(56);
+  CHECK(std::any_of(cal["entries"].begin(), cal["entries"].end(), [](const json& e) { return e["kind"] == "maintenance"; }));
+  CHECK(s.robot().state()["plan"]["source"] == "hand");
+  CHECK(s.robot().state()["plan"]["recipe"] == "two_part");
+}

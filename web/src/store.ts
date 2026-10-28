@@ -164,7 +164,8 @@ export function logoutLocal() {
 // What several pages need
 export const canisters = computed(() => config.value?.canisters ?? []);
 export const recipes = computed(() => config.value?.recipes ?? []);
-export const activeRecipe = computed(() => recipes.value.find((r) => r.id === config.value?.active.recipe));
+/** The recipe in force: the leading plant's phase's, or the one chosen by hand (SD-128). */
+export const activeRecipe = computed(() => recipes.value.find((r) => r.id === state.value?.plan.recipe));
 /** The middle of a recipe's pH range, its pH target (RAT-066); null without a range. */
 export const phMiddle = (r: { ph?: [number, number] | null } | undefined) => (r?.ph ? Math.round(((r.ph[0] + r.ph[1]) / 2) * 100) / 100 : null);
 // The bounds the robot accepts (config.hpp); the page checks them before it sends

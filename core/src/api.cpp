@@ -293,6 +293,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("GET", {"push"})) return jsonResp(200, robot_.pushSettings());
   if (is("PUT", {"push"})) return fromResult(robot_.putPush(body));
   if (is("GET", {"plants"})) return jsonResp(200, robot_.plants());
+  if (is("GET", {"calendar"})) return jsonResp(200, robot_.calendar(56));
   if (is("POST", {"plants"})) return fromResult(robot_.startPlant(body));
   if (is("PUT", {"plants", "*"})) return fromResult(robot_.putPlant(p[1], body));
   if (is("DELETE", {"plants", "*"})) return fromResult(robot_.deletePlant(p[1]));
