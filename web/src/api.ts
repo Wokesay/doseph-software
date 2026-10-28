@@ -26,7 +26,7 @@ export type CycleSettings = {
   volumeL: number | null; flowLpm: number | null; turnoverMin: number | null;
   // The waits in force (the user's, else the suggestion) and the suggestions from volume and flow
   waitEcMin: number | null; waitPhMin: number | null; suggestEcMin: number | null; suggestPhMin: number | null;
-  holdMin: number; circulation: Circulation;
+  holdMin: number;
 };
 
 // One thing a kind of dose needs, and whether it holds now (MixCycle::checks)
@@ -87,7 +87,6 @@ export type RobotState = {
   sim?: { speed: number; scenario: string };
 };
 
-export type Circulation = "cycle" | "always" | "external";
 export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; channel: number; pair: string; color: string; capacityMl: number | null };
 /** A canister's level counted from use (SD-119): unknown until entered; may fall below zero. */
 export type Stock = { ml: number | null; status: "unknown" | "ok" | "low" | "empty" };
@@ -97,7 +96,7 @@ export type Recipe = { id: string; name: string; note: string; steps: { canister
 export type Config = {
   schemaVersion: number; revision: number;
   system: { name: string; language: string; timezone: string; passwordSet: boolean };
-  tank: { volumeL: number | null; circulation: Circulation; waitEcMin: number | null; waitPhMin: number | null; holdMin: number | null };
+  tank: { volumeL: number | null; waitEcMin: number | null; waitPhMin: number | null; holdMin: number | null };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];

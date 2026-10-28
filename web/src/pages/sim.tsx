@@ -12,7 +12,7 @@ import { Button, Field, NumberInput, Seg } from "../ui";
 type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
   channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
-  output: boolean; external: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
+  output: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
   returnFault: string; leak: boolean; stopButton: boolean; released: boolean;
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
@@ -82,8 +82,8 @@ export function SimPanel() {
             <span>{num(w.tank.temp, 1)} °C</span>
           </div>
           <div class="small muted">
-            {t("sim.suctionPump", { state: w.output || w.external ? t("common.on") : t("common.off") })}
-            {(w.output || w.external) && !w.primed ? ` (${t("sim.priming")})` : ""} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
+            {t("sim.suctionPump", { state: w.output ? t("common.on") : t("common.off") })}
+            {w.output && !w.primed ? ` (${t("sim.priming")})` : ""} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
           </div>
           <div class="small muted" data-testid="sim-water-path">
             {t("sim.chamber", { l: num(w.chamberL, 2) })} · {w.outletWet ? t("sim.outletWet") : t("sim.outletDry")} ·{" "}
@@ -133,9 +133,6 @@ export function SimPanel() {
             ["sensor", t("sim.fault.sensor")],
           ]}
         />
-        <label class="row small">
-          <input type="checkbox" checked={!!w?.external} onChange={(e) => act("external", { on: (e.target as HTMLInputElement).checked })} /> {t("sim.external")}
-        </label>
       </div>
       <div class="stack-sm">
         <div class="section-title">{t("sim.return")}</div>

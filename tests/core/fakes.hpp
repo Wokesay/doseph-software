@@ -42,7 +42,8 @@ class Hardware : public doseph::IHardware {
   const doseph::Profile& profile() const override { return prof; }
   doseph::Release rel;
   doseph::Release release() const override { return rel; }
-  doseph::WaterPath waterPath() const override { return {}; }
+  doseph::WaterPath water;
+  doseph::WaterPath waterPath() const override { return water; }
   std::map<int, doseph::Drops> dropsSeen;  // the channels with a drop sensor and what it counted
   std::optional<doseph::Drops> drops(int channel) const override {
     auto it = dropsSeen.find(channel);

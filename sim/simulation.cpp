@@ -228,7 +228,7 @@ void Simulation::configureDemo() {
                {"steps", json::array({{{"canister", "part_b"}, {"mlPerL", 2.0}},
                                       {{"canister", "part_a"}, {"mlPerL", 2.0}},
                                       {{"canister", "calmag"}, {"mlPerL", 0.5}}})}});
-  r.putTank({{"volumeL", 100}, {"circulation", "cycle"}, {"holdMin", 60}});
+  r.putTank({{"volumeL", 100}, {"holdMin", 60}});
   r.setActive({{"recipe", "two_part"}, {"days", 28}});
 }
 
@@ -289,7 +289,6 @@ json Simulation::control(const std::string& action, const json& b) {
       world_.tank.volumeL = v + add;
     }
   } else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
-  else if (action == "external") world_.external = doseph::jbool(b, "on", false);
   else if (action == "suctionLpm") world_.suctionLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
   else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
   else if (action == "leak") world_.leak = doseph::jbool(b, "on", false);

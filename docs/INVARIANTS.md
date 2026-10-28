@@ -38,6 +38,10 @@ of its own.
 | An EC round keeps a reserve for the pH− dose that follows | RAT-053 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | The wait after a dose covers the time to tolerance (the user's wait, else the suggestion from volume and flow) | RAT-058 | ◐ | `cycle.cpp` · no test of its own |
 | A latch only after a dose without effect or a test dose that did not fit; its reason is frozen | RAT-062 | ✓ | `watchdog.cpp` · test_cycle.cpp |
+| The device's suction pump runs for a check and is off in Hold, Wait and Off; no modes | SD-109 | ✓ | `cycle.cpp` · test_cycle.cpp |
+| Flow by the device's method: an outlet level sensor proves it while it reports water and the suction pump runs, a flow meter at 0.5 L/min, each for 10 s | SD-109 | ✓ | `robot.cpp`, `cycle.cpp` · test_cycle.cpp |
+| No flow within 2 min: the pump off, a new try in 5 min; after the third try in a row a dry-run latch holds the pump until a person releases it | SD-109 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
+| A probe or channel calibration, or a line fill, stops the check and the suction pump first; the check starts anew once it ends | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
 
 ## Dose planning and learning
 

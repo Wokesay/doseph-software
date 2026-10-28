@@ -53,7 +53,6 @@ std::optional<Msg> shortOf(const RuntimeState& rt, const DoseStep& d) {
 CycleSettings cycleSettings(const Ctx& c) {
   CycleSettings s;
   const auto& cfg = c.cfg;
-  s.circulation = cfg.tank.circulation;
   s.volumeL = cfg.tank.volumeL;
   s.holdMs = minutes(isNum(cfg.tank.holdMin) ? std::clamp(cfg.tank.holdMin, kHoldMinMin, kHoldMaxMin) : 60.0);
   s.flowLpm = c.rt.flowLpm;
@@ -111,8 +110,8 @@ void MixCycle::enter(const Ctx& c, Phase p) {
   }
 }
 
+// The device's own suction pump runs for a check and is off in Hold, Wait and Off (SD-109)
 void MixCycle::suctionPump(Ctx& c, Actuators& act, bool on) {
-  if (c.cfg.tank.circulation == "external") return;
   auto st = act.suctionPump();
   if (st && *st == on) return;
   Msg err;
@@ -123,11 +122,12 @@ void MixCycle::wait(Ctx& c, Actuators& act, Msg why, Ms retry) {
   enter(c, Phase::Wait);
   line_ = std::move(why);
   retryAt_ = retry > 0 ? c.now + retry : 0;
-  if (c.cfg.tank.circulation == "cycle") suctionPump(c, act, false);
+  suctionPump(c, act, false);
 }
 
 void MixCycle::holdNow(Ctx& c, Actuators& act) {
   enter(c, Phase::Hold);
+  suctionPump(c, act, false);
   const CycleSettings s = cycleSettings(c);
   retryAt_ = c.now + s.holdMs;
   line_ = say("cycle.hold", {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}});
@@ -138,7 +138,6 @@ void MixCycle::holdNow(Ctx& c, Actuators& act) {
               say("ev.cycle.held.text", {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}}),
               {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}});
   anyDosed_ = false;
-  if (s.circulation == "cycle") suctionPump(c, act, false);
 }
 
 void MixCycle::stop(Ctx& c, Actuators& act, Doser& doser) {
@@ -173,7 +172,7 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
     line_ = s.off;
   } else {
     enter(c, Phase::SuctionOn);
-    line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.suction_on");
+    line_ = say("cycle.suction_on");
   }
 }
 
@@ -288,9 +287,6 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   } else if (ec < aim - s.ecTol) {
     if (ecRounds_ >= c.cfg.control.maxEcRounds) {
       notes_.push_back(say("cycle.note.ec_max", {{"n", ecRounds_}}));
-    } else if (c.channelJob) {
-      wait(c, act, say("cycle.wait.channel_job"), kMinute);
-      return;
     } else {
       startEc(c, act, s, ec, aim);
       return;
@@ -319,9 +315,6 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
       evaluateAt_ = c.now + (kEcRestS - (c.epoch - lastEcDoseAt_)) * kSecond;
       enter(c, Phase::Measure);
       line_ = say("cycle.ph_rest", {{"left", mmss(evaluateAt_ - c.now)}});
-      return;
-    } else if (c.channelJob) {
-      wait(c, act, say("cycle.wait.channel_job"), kMinute);
       return;
     } else {
       startPh(c, act, s, ph);
@@ -692,11 +685,13 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     return;
   }
   const CycleSettings s = cycleSettings(c);
-  // A probe in a buffer: its readings are not the tank's. The cycle waits until the calibration ends.
-  if (c.probeCalibrating) {
-    if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.calibrating")) {
+  // A probe in a buffer, or a channel calibrated or its line filled: the check and the suction pump
+  // stop first and start anew once it ends (SD-109)
+  if (c.probeCalibrating || c.channelJob) {
+    const char* key = c.probeCalibrating ? "cycle.wait.calibrating" : "cycle.wait.channel_job";
+    if (!(phase_ == Phase::Wait && line_.key == key)) {
       restart(c, act, doser);
-      wait(c, act, say("cycle.wait.calibrating"), 0);
+      wait(c, act, say(key), 0);
     }
     return;
   }
@@ -716,8 +711,15 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         c.log.add(c.epoch, "control", "notice", say("ev.cycle.recipe_ended"), s.off);
     }
     line_ = s.off;
-    if (s.circulation == "always") suctionPump(c, act, true);
-    else if (s.circulation == "cycle") suctionPump(c, act, false);
+    suctionPump(c, act, false);
+    return;
+  }
+  // Tries without flow in a row: the suction pump may run dry; a person releases it (SD-109)
+  if (c.rt.latches.count("flow.dry")) {
+    if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.dry")) {
+      restart(c, act, doser);
+      wait(c, act, say("cycle.wait.dry"), 0);
+    }
     return;
   }
   if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::SuctionOn);
@@ -737,27 +739,36 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       announceChamber();
       suctionPump(c, act, true);
       enter(c, Phase::ProveFlow);
-      line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.suction_on");
+      line_ = say("cycle.suction_on");
       break;
     case Phase::ProveFlow:
       announceChamber();
-      if (s.circulation == "always" || s.circulation == "cycle") suctionPump(c, act, true);
+      suctionPump(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
+        noFlowTries_ = 0;
         if (flowSince_ == 0) flowSince_ = c.now;
         line_ = say("cycle.prove_flow", {{"flow", numOrNull(flow.value)}});
         if (c.now - flowSince_ >= kFlowProveMs) enter(c, Phase::Flush);
       } else {
         flowSince_ = 0;
-        line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.wait_flow");
+        line_ = say("cycle.wait_flow");
         if (c.now - since_ > kFlowWaitMs) {
-          const Msg why = say(s.circulation == "external" ? "cycle.wait.no_flow_external" : "cycle.wait.no_flow");
+          // No flow within 2 min: the pump goes off, the check tries again in 5 min; after the
+          // third try in a row the pump may run dry, and a person releases it (SD-109)
+          const Msg why = say("cycle.wait.no_flow");
           if (!noFlowLogged_) {
             c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
             noFlowLogged_ = true;
           }
-          if (s.circulation != "external") suctionPump(c, act, false);  // a pump without flow may run dry
-          wait(c, act, why);
+          if (++noFlowTries_ >= kDryTries) {
+            noFlowTries_ = 0;
+            c.rt.latches["flow.dry"] = {{"at", c.epoch}, {"tries", kDryTries}};
+            c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", kDryTries}}));
+            wait(c, act, say("cycle.wait.dry"), 0);
+          } else {
+            wait(c, act, why);  // the pump off: without flow it may run dry
+          }
         }
       }
       break;
@@ -861,7 +872,6 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
           mixingFirst_ = false;
           const Msg why = say("cycle.wait.no_flow");
           c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
-          if (s.circulation != "external") suctionPump(c, act, false);
           wait(c, act, why);
           break;
         }
@@ -879,12 +889,11 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       break;
     }
     case Phase::Hold:
-      if (s.circulation == "always") suctionPump(c, act, true);
-      else if (s.circulation == "cycle") suctionPump(c, act, false);
+      suctionPump(c, act, false);
       if (c.now >= retryAt_) enter(c, Phase::SuctionOn);
       break;
     case Phase::Wait:
-      if (s.circulation == "always") suctionPump(c, act, true);
+      suctionPump(c, act, false);
       if (retryAt_ > 0 && c.now >= retryAt_) enter(c, Phase::SuctionOn);
       break;
     case Phase::Off:
@@ -1003,8 +1012,7 @@ json MixCycle::status(const Ctx& c) const {
                    {"waitPhMin", numOrNull(s.waitPhMin)},
                    {"suggestEcMin", numOrNull(s.suggestEcMin)},
                    {"suggestPhMin", numOrNull(s.suggestPhMin)},
-                   {"holdMin", s.holdMs / kMinute},
-                   {"circulation", s.circulation}};
+                   {"holdMin", s.holdMs / kMinute}};
   return j;
 }
 
