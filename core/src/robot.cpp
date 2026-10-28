@@ -27,6 +27,7 @@ constexpr Epoch kSnapshotS = 6 * 3600;   // history and events written whole, th
 constexpr Epoch kStateSaveS = 60;        // the clock in the state, at most this often
 constexpr Ms kProbeIdle = 30 * kMinute;  // a probe calibration explains jumps this long after its last step (RAT-042)
 constexpr Ms kFillMaxMs = 5 * kMinute;  // a line fill runs at most this long in all (SD-111)
+constexpr Ms kReturnMaxMs = 60 * kSecond;  // a return pump running this long without a pause is dry or blocked (SD-109)
 const std::set<std::string> kSeries = {"ph", "ec", "temp", "flow"};
 
 Msg changed(const char* what) { return say("ev.config.changed", {{"what", say(what)}}); }
@@ -57,6 +58,7 @@ Ctx Robot::ctx() {
   const Release r = hw_.release();
   c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
            : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
+           : rt_.latches.count("hw.return")                    ? "return"
            : r.stopButton                                      ? "stop_button"
            : !r.on                                             ? "release"
                                                                : "";
@@ -145,6 +147,7 @@ void Robot::boot() {
   doser_.setBootTag(std::to_string(rt_.bootCount));
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
   act_.stopAll();
+  if (rt_.latches.count("hw.return")) act_.allowReturnPump(false);  // the device forgot it (SD-109)
   if (stateUnknown) {
     rt_.stopped = true;
     log_.add(bootEpoch_, "alarm", "alarm", say("ev.boot.state_unknown"), say("ev.boot.state_unknown.text"));
@@ -257,6 +260,18 @@ void Robot::watchRelease(Epoch epoch) {
   };
   if (r.leak) latch("hw.leak", "ev.hw.leak");
   if (r.highLevel) latch("hw.high_level", "ev.hw.high_level");
+  // A return pump that runs on and on is dry or blocked: it is held off and latched (SD-109). The
+  // robot sees whether it runs, not the chamber's level; working, it empties the chamber in seconds.
+  const Ms now = clock_.nowMs();
+  if (hw_.waterPath().returnPump == true) {
+    if (returnSince_ < 0) returnSince_ = now;
+  } else {
+    returnSince_ = -1;
+  }
+  if (returnSince_ >= 0 && now - returnSince_ >= kReturnMaxMs && !rt_.latches.count("hw.return")) {
+    act_.allowReturnPump(false);
+    latch("hw.return", "ev.hw.return");
+  }
   if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
   stopButtonSeen_ = r.stopButton;
 }
@@ -1104,6 +1119,10 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   }
   const json args = it->second.is_object() ? it->second : json::object();
   rt_.latches.erase(it);
+  if (id == "hw.return") {
+    act_.allowReturnPump(true);  // it runs by the level again; on and on once more, it latches again
+    returnSince_ = -1;
+  }
   log_.add(clock_.epoch(), "unblock", "notice", say("ev.latch.released"), say("latch." + jstr(args, "key", id), args));
   restartCycle();
   saveState(true);

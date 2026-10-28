@@ -70,6 +70,8 @@ class Hardware : public doseph::IHardware {
     return true;
   }
   std::optional<bool> suctionPump() const override { return out; }
+  bool returnAllowed = true;
+  void allowReturnPump(bool allowed) override { returnAllowed = allowed; }
 };
 
 // A storage whose writes fail on demand

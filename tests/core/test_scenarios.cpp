@@ -312,3 +312,31 @@ TEST_CASE("Scenario calibration: a channel calibration stops the check and the s
   r.ok("POST", "channels/result", {{"ml", r.twin()["channels"][1]["cupMl"]}});
   r.waitUntil("the check starts anew", [&] { return r.phase() == "flush"; }, 3 * 60);
 }
+
+TEST_CASE("Scenario return pump dry or blocked: it runs a minute without pause; it is held off and latched across a restart, everything holds, and a person releases it once fixed (SD-109)") {
+  Run r(device("pro"));
+  r.waitUntil("water flows", [&] { return r.twin()["flowing"] == true; }, 60);
+  r.act("returnFault", {{"fault", "failed"}});  // it runs and moves nothing
+  r.waitUntil("the return pump is held off", [&] { return r.state()["latches"].contains("hw.return"); }, 3 * 60);
+  bool alarmed = false;
+  const json alarms = r.events("alarm");
+  for (const auto& e : alarms) alarmed |= e["title"]["key"] == "ev.hw.return";
+  CHECK(alarmed);
+  r.step(2 * kSecond);
+  CHECK(r.twin()["returnLocked"] == true);
+  CHECK(r.twin()["returnPump"] == false);
+  CHECK(r.twin()["output"] == false);
+  // A restart: the device forgets it, the robot holds it off again (R6)
+  r.act("reboot", {{"outageS", 10}});
+  REQUIRE(r.login("demo-password"));
+  r.step(2 * kSecond);
+  CHECK(r.state()["latches"].contains("hw.return"));
+  CHECK(r.twin()["returnLocked"] == true);
+  // Fixed: the return pump is released first, the chamber drains, then high level is released
+  r.act("returnFault", {{"fault", ""}});
+  CHECK(r.call("POST", "latches/hw.high_level/ack", json::object()).status == 409);
+  r.ok("POST", "latches/hw.return/ack", json::object());
+  r.waitUntil("the chamber has drained", [&] { return r.state()["hardware"]["release"]["on"] == true; }, 60);
+  r.ok("POST", "latches/hw.high_level/ack", json::object());
+  r.waitUntil("the check starts anew", [&] { return r.phase() == "flush"; }, 3 * 60);
+}

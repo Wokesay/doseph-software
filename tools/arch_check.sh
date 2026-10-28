@@ -12,7 +12,7 @@ if grep -rnE '#include <(esp_|freertos/|driver/|sys/|unistd|windows|httplib|file
 fi
 
 # R1: only the actuator gateway (gateway.cpp) calls the hardware's actuator methods.
-if grep -rnE '(hw_?|hardware)(\.|->)(startRun|setCirculation|stopAllPumps)\(' core/src | grep -v '^core/src/gateway.cpp'; then
+if grep -rnE '(hw_?|hardware)(\.|->)(startRun|setSuctionPump|allowReturnPump|stopAllPumps)\(' core/src | grep -v '^core/src/gateway.cpp'; then
   err "actuator call outside the gateway"
 fi
 

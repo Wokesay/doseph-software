@@ -69,6 +69,8 @@ class Actuators {
   // The suction pump, where the device switches it: on is refused while stopped.
   bool setSuctionPump(const Ctx& c, bool on, Msg& err);
   std::optional<bool> suctionPump() const { return hw_.suctionPump(); }
+  // A return pump found dry or blocked is held off until a person releases it (SD-109)
+  void allowReturnPump(bool allowed) { hw_.allowReturnPump(allowed); }
 
   // Stop and start: every pump and the suction pump's output off, idempotent (RAT-036, R6).
   void stopAll();

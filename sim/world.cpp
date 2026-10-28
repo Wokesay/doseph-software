@@ -35,7 +35,7 @@ void World::reset(int n) {
   flowFault.clear();
   returnByPump = false;
   chamberL = kWeirL;
-  returnPumpOn = false;
+  returnPumpOn = returnLocked = false;
   returnFault.clear();
   leak = stopButton = false;
   primedMs_ = 0;
@@ -190,7 +190,7 @@ void World::step(Ms dt) {
   double out = 0;
   if (returnByPump) {
     if (chamberL >= kReturnOnL) returnPumpOn = !leak;
-    if (chamberL <= kReturnOffL || leak) returnPumpOn = false;
+    if (chamberL <= kReturnOffL || leak || returnLocked) returnPumpOn = false;
     if (returnPumpOn && returnFault != "failed") out = 1.6 * std::max(suctionLpm, 6.0) / 60.0;
   } else if (chamberL > kWeirL && returnFault != "blocked") {
     out = 2.0 * std::max(suctionLpm, 6.0) / 60.0;
@@ -328,6 +328,7 @@ json World::toJson() const {
           {"highLevel", highLevel()},
           {"returnByPump", returnByPump},
           {"returnPump", returnPumpOn},
+          {"returnLocked", returnLocked},
           {"returnFault", returnFault},
           {"leak", leak},
           {"stopButton", stopButton},

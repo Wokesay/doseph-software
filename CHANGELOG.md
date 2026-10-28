@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A return pump that runs a minute without a pause is dry or blocked
+  (SD-109): the robot holds it off, latches it with an alarm and holds
+  every pump until a person releases it; a restart holds it off again.
+  The robot sees whether the return pump runs, not the chamber's level;
+  working, it empties the chamber in seconds. The hardware interface can
+  hold the return pump off (`allowReturnPump`), and the architecture
+  check now names the suction pump's and the return pump's switches
+  among those only the gateway may call (R1).
 - The suction pump is the device's own (SD-109): it runs for a check and
   is off while the robot holds or waits. Flow is proven by the device's
   method: an outlet level sensor while it reports water and the pump
