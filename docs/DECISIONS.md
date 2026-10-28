@@ -438,3 +438,45 @@ counts.
   drops the catch-up with a note.
 - **The app** shows a pending catch-up on the status page with the parts
   and amounts, and "Don't catch up" ends it (`DELETE /api/v1/catchup`).
+
+
+## SD-121: The EC reserve for pH− is planned cautiously until the effect is learned
+
+2026-10-28. Found by step 4's acceptance in the twin (#10, step 4.9): from
+tap water at pH 7.6, the pH− dose after the nutrients raised EC to about
+1.85 at an EC target of 1.6, at 50 and 100 L. The reserve of RAT-053 was
+planned at the start effect of 5 pH per ml/L and capped at 0.3 mS/cm; in
+water with more alkalinity pH− works less, so more of it goes in, and EC
+cannot be taken back.
+
+- **Until the pH− effect is learned** (RAT-057), the reserve is planned
+  at half the start effect, 2.5 pH per ml/L; once learned, at the learned
+  effect, as before.
+- **No cap** of 0.3 mS/cm. The aim never falls below the EC floor of
+  RAT-046 plus the EC tolerance, so pH can always be dosed after the
+  nutrients.
+- **Topped up afterwards.** Once pH is within its range, the reserve no
+  longer applies and the next round raises EC to its target; that round
+  is measured like any other, and pH is checked again after it.
+- The cost is one more nutrient round on a device's first tank. Too
+  little EC can be dosed again; too much can only be diluted.
+
+RAT-053 is changed accordingly.
+
+
+## SD-122: A dose too small for a pump
+
+2026-10-28. Found by step 4's acceptance in the twin (#10, step 4.9): at
+5 L, the test dose of a new tank (SD-105) would run its smallest part
+under 1 s (RAT-050), and the check waited for it without end.
+
+- **A test dose** whose smallest part would run under the minimum run
+  time is made as large as the smallest round every part can run, by one
+  factor for all parts (RAT-054), as long as it stays within the round's
+  cap (RAT-056) and does not go past the aim. It still checks the volume
+  (SD-105), with a larger expected rise.
+- **Otherwise**, and for every other nutrient round that is too small,
+  nothing is dosed: the check notes it with the reason and goes on to pH,
+  as a pH− dose that is too small already does (RAT-050).
+- Whether a device can dose a small tank at all is a question of its
+  pumps (#48).

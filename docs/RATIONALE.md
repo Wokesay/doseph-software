@@ -446,11 +446,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-053 – EC keeps a reserve for the pH-lowering dose that follows
 
-- **Rule:** An EC round aims below its target by a reserve for the pH− dose that follows: the expected EC rise of that dose (1.04 mS/cm per ml/L), at most 0.3 mS/cm.
-- **Why:** Acid adds ions, and the pH step always follows the EC step, so dosing EC exactly to target and then lowering pH ends above the EC target. Ending slightly low is the safe side: a shortfall is made up by the next dose, while surplus nutrients can only be removed by diluting.
+- **Rule:** An EC round aims below its target by a reserve for the pH− dose that follows: the expected EC rise of that dose (1.04 mS/cm per ml/L). Until the pH− effect is learned, the dose is planned at half the start effect; the reserve has no cap, but the aim never falls below the EC floor plus the EC tolerance. Once pH is within its range, the next round tops EC up to its target (SD-121).
+- **Why:** Acid adds ions, and the pH step always follows the EC step, so dosing EC exactly to target and then lowering pH ends above the EC target. Ending slightly low is the safe side: a shortfall is made up by the next dose, while surplus nutrients can only be removed by diluting. Water with more alkalinity needs more acid than the start effect says, so a reserve planned at that effect is too small until the effect is learned.
 - **Evidence:** Measured on the reference installation (2026): 4.9 ml of pH− in 20.4 L (0.24 ml/L) raised EC from 2.96 to 3.21 mS/cm, i.e. 1.04 mS/cm per ml/L – almost four times the effect of the nutrient pair itself (0.275). That run ended 7 % above the EC target. For a 1.0 pH gap the reserve is 1.0 ÷ 5.0 × 1.04 ≈ 0.21 mS/cm.
 - **Implemented in:** `core/src/cycle.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an EC round aims below its target by the reserve for the pH− dose that follows (RAT-053)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: an EC round aims below its target by the reserve for the pH− dose that follows (RAT-053)"; `tests/core/test_scenarios.cpp` "Acceptance 50 L: tap water to the recipe and held there; pH within ± 0.2, EC within ± 0.1, an overshoot of at most 0.2 pH, every dose seen by its drop sensor (#10, step 4.9, SD-121)"; `tests/core/test_scenarios.cpp` "Acceptance 100 L: tap water to the recipe and held there; pH within ± 0.2, EC within ± 0.1, an overshoot of at most 0.2 pH, every dose seen by its drop sensor (#10, step 4.9, SD-121)"; `tests/core/test_scenarios.cpp` "Acceptance 100 L with the Pro example: a flow meter, a return pump and larger pump heads hold the recipe the same way (#10, step 4.9, SD-121)"
 
 ### RAT-054 – Paired nutrients keep their ratio at every limit
 

@@ -94,6 +94,22 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
     ds.flowMlPerMin = cfg.channelFlow(b->channel);
     d.steps.push_back(ds);
   }
+  // A test dose too small for a pump is made as large as the smallest round
+  // every part can run, by one factor (RAT-054), if that still fits the cap
+  // and does not go past the aim; otherwise it stays too small (SD-122)
+  if (isNum(aimRise) && aimRise > 0) {
+    double lift = 1.0;
+    for (const auto& ds : d.steps)
+      if (isNum(ds.flowMlPerMin) && ds.flowMlPerMin > 0 && isNum(ds.ml) && ds.ml > 0)
+        lift = std::max(lift, cfg.limits.bounded().minRunS * ds.flowMlPerMin / 60.0 / ds.ml);
+    lift *= 1.0 + 1e-9;  // just over the minimum, whatever the rounding of the run times
+    const double roomMlPerL = std::min(maxEcStep / largest, gapEc / effectPerMlL);  // never past the aim
+    if (lift > 1.0 && totalMlPerL * lift <= roomMlPerL) {
+      for (auto& ds : d.steps) ds.ml *= lift;
+      d.factor *= lift;
+      d.lifted = true;
+    }
+  }
   // A round one part of which needs more partial runs than allowed is made
   // smaller by one factor for all parts, as at every limit, instead of
   // refused (RAT-054). A part too small or without a calibration still
@@ -122,6 +138,7 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
     ds.runs = splitRuns(ds.ml, ds.flowMlPerMin, cfg.limits, lim.maxPartialRuns, err);
     if (!err.key.empty()) {
       d.reason = say("dose.part", {{"name", ds.name}, {"reason", err}});
+      d.tooSmall = err.key == "dose.too_small";
       d.steps.clear();
       return d;
     }

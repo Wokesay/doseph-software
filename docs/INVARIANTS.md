@@ -36,7 +36,7 @@ of its own.
 | No pH dose on an old reading: the cycle measures afresh after flushing before every decision | RAT-043 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | No pH dose below the EC floor, nor within 240 s after a nutrient dose | RAT-046 | ✓ | `config.hpp`, `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | After a dose it mixes with flow at least one turnover, at least 2 min, before it measures again; pH waits like EC | RAT-052 | ✓ | `config.hpp`, `cycle.cpp`, `world.cpp` · test_cycle.cpp |
-| An EC round keeps a reserve for the pH− dose that follows | RAT-053 | ✓ | `cycle.cpp` · test_cycle.cpp |
+| An EC round keeps a reserve for the pH− dose that follows: at half the start effect until it is learned, no cap, never below the EC floor; EC is topped up once pH is in range (SD-121) | RAT-053 | ✓ | `cycle.cpp` · test_cycle.cpp, test_scenarios.cpp |
 | The wait after a dose covers the time to tolerance: one turnover, then steady over 60 s or a fifth of a turnover (at most 10 min); the user may only lengthen it | RAT-058 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | Above 150 L the wait is the settling learned from clean doses (1.5 × the longest of the last three, 5 to 600 min), 60 min until one is learned | SD-112 | ✓ | `plan.cpp`, `cycle.cpp`, `robot.cpp` · test_plan.cpp, test_scenarios.cpp |
 | A latch only after a dose without effect or a test dose that did not fit; its reason is frozen | RAT-062 | ✓ | `watchdog.cpp` · test_cycle.cpp |
@@ -51,6 +51,7 @@ of its own.
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|
 | A pH− dose is capped by its effect (0.3 pH, 0.3 ml/L, the set maximum); no run under 1 s | RAT-050 | ✓ | `config.hpp`, `plan.hpp`, `cycle.cpp`, `gateway.cpp`, `plan.cpp` · test_plan.cpp |
+| A test dose too small for a pump is made as large as the smallest round every part can run, never past the aim; any other round too small is not dosed, noted, and the check goes on to pH | SD-122 | ✓ | `plan.hpp`, `plan.cpp`, `cycle.cpp` · test_plan.cpp, test_cycle.cpp |
 | A pair is scaled by one factor at every limit and keeps its ratio; a part missing from a round cut short is caught up first (SD-114) | RAT-054 | ✓ | `config.hpp`, `plan.hpp`, `config.cpp`, `plan.cpp`, `world.cpp`, `cycle.cpp` · test_config.cpp, test_plan.cpp, test_cycle.cpp |
 | Each round doses 0.8 × gap ÷ effect × volume; large doses go in equal partial runs | RAT-055 | ✓ | `config.hpp`, `cycle.hpp`, `plan.hpp`, `cycle.cpp`, `gateway.cpp` · test_cycle.cpp, test_plan.cpp |
 | A small learned effect never widens the EC cap | RAT-056 | ✓ | `config.hpp`, `plan.hpp`, `config.cpp`, `plan.cpp` · test_config.cpp, test_plan.cpp |

@@ -76,16 +76,21 @@ TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose f
   const double ec = h["cycle"]["last"]["ec"], ph = h["cycle"]["last"]["ph"];
   CHECK(ec == doctest::Approx(1.6).epsilon(0.1));
   CHECK(ph == doctest::Approx(6.0).epsilon(0.03));
-  // EC first, pH after: the first pH dose comes after the last nutrient round (RAT-004)
+  // EC first, pH after: the first pH dose comes after a nutrient round (RAT-004); a round that tops
+  // EC up after pH (the reserve, SD-121) is measured again before the robot holds
   const auto keys = eventKeys(s);
-  size_t lastEc = 0, firstPh = keys.size();
+  size_t firstEc = keys.size(), lastEc = 0, firstPh = keys.size(), held = keys.size();
   for (size_t i = 0; i < keys.size(); ++i) {
+    if (keys[i] == "ev.cycle.ec_round" && firstEc == keys.size()) firstEc = i;
     if (keys[i] == "ev.cycle.ec_round") lastEc = i;
     if (keys[i] == "ev.cycle.ph_dose" && firstPh == keys.size()) firstPh = i;
+    if (keys[i] == "ev.cycle.held" && held == keys.size()) held = i;
   }
-  CHECK(lastEc > 0);
+  CHECK(firstEc < keys.size());
   CHECK(firstPh < keys.size());
-  CHECK(lastEc < firstPh);
+  CHECK(firstEc < firstPh);
+  CHECK(lastEc < held);
+  CHECK(firstPh < held);
   CHECK(hasEvent(s, "ev.cycle.held"));
   // Holding: the suction pump off (SD-109), the journal empty again (SD-106)
   CHECK_FALSE(s.world().output);
@@ -641,9 +646,38 @@ TEST_CASE("Cycle: an EC round aims below its target by the reserve for the pH−
   const json j = st(s);
   const double ph = j["cycle"]["last"]["ph"], aim = j["cycle"]["line"]["args"]["aim"];
   REQUIRE(ph > 6.0 + 0.15);
-  const double eff = j["effects"]["ph"].is_number() ? j["effects"]["ph"].get<double>() : 5.0;
-  CHECK(aim == doctest::Approx(1.6 - std::min(0.3, (ph - 6.0) / eff * 1.04)).epsilon(0.001));
+  // Until the pH− effect is learned, at half the start effect, without a cap; never below the EC
+  // floor and its tolerance (SD-121)
+  const double eff = j["effects"]["ph"].is_number() ? j["effects"]["ph"].get<double>() : 2.5;
+  CHECK(aim == doctest::Approx(std::max(1.6 - (ph - 6.0) / eff * 1.04, 0.5 + 0.1)).epsilon(0.001));
   CHECK(aim < 1.6);
+}
+
+TEST_CASE("Cycle: a nutrient round too small for a pump is not dosed; the check notes it and goes on to pH (SD-122, RAT-050)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
+  // A trace part: a round for a small gap would run it well under 1 s
+  REQUIRE(r.putRecipe({{"id", "trace"}, {"name", "Trace"}, {"ecTarget", 1.6}, {"ph", {5.8, 6.2}},
+                       {"steps", json::array({{{"canister", "part_b"}, {"mlPerL", 2.0}},
+                                              {{"canister", "part_a"}, {"mlPerL", 2.0}},
+                                              {{"canister", "calmag"}, {"mlPerL", 0.03}}})}}).status == 200);
+  REQUIRE(r.setActive({{"recipe", "trace"}}).status == 200);
+  auto phDoses = [&] {
+    int n = 0;
+    for (const auto& e : r.events(0, std::numeric_limits<Epoch>::max(), "dose", 1000)) n += e["data"].value("canister", "") == "ph_down";
+    return n;
+  };
+  const int before = phDoses();
+  s.control("fill", {{"volumeL", 100}, {"ec", 1.2}, {"ph", 6.5}});
+  auto noted = [&] {
+    const json notes = st(s)["cycle"]["notes"];
+    for (const auto& n : notes)
+      if (n["key"] == "cycle.note.ec_too_small") return true;
+    return false;
+  };
+  REQUIRE(runUntil(s, noted, 3 * 3600));
+  REQUIRE(runUntil(s, [&] { return phDoses() > before; }, 30 * 60));
 }
 
 TEST_CASE("Cycle: pH waits below the EC floor and after a nutrient dose, and is dosed only on a fresh reading (RAT-046, RAT-043)") {

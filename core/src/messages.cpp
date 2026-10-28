@@ -79,6 +79,7 @@ constexpr Entry kMessages[] = {
     {"ev.maintenance_over", "Maintenance time is over"},
     {"watch.maintenance", "Maintenance: not judged"},
     {"cycle.note.ph_too_small", "The pH− dose ({ml:2} ml) is too small for the pump – nothing dosed"},
+    {"cycle.note.ec_too_small", "The nutrient round is too small for the pumps – nothing dosed ({reason})"},
     // Why the robot doses or not (MixCycle::checks)
     {"check.stopped", "Stopped: nothing runs until Resume"},
     {"check.not_stopped", "Not stopped"},

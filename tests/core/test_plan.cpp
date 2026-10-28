@@ -145,6 +145,28 @@ TEST_CASE("Test dose: the first round of a new tank aims at a small rise at the 
   CHECK(ph.ml == doctest::Approx(0.1 / 5.0 * 100));
 }
 
+TEST_CASE("Test dose too small for a pump: as large as the smallest round every part can run, by one factor, never past the aim; else too small (SD-122, RAT-050, RAT-054)") {
+  Fix f;
+  f.recipe().steps = {{"a", 2.0}, {"b", 2.0}, {"cm", 0.5}};
+  // 5 L: the test's 0.1 mS/cm is 0.36 ml/L of the recipe; CalMag would get 0.2 ml, 0.24 s at 50 ml/min
+  auto t = planEcDose(f.cfg, f.recipe(), 5, 1.0, 0.275, 0.275, 1.0, 0.1);
+  REQUIRE(t.ok);
+  CHECK(t.lifted);
+  CHECK(t.steps[2].ml == doctest::Approx(50.0 / 60).epsilon(0.001));  // CalMag runs the 1 s minimum
+  CHECK(t.steps[0].ml / t.steps[2].ml == doctest::Approx(4.0));       // the recipe's ratio kept
+  CHECK(t.steps[0].ml == doctest::Approx(t.steps[1].ml));
+  // A gap smaller than that round: never lifted past the aim, so it is too small
+  auto n = planEcDose(f.cfg, f.recipe(), 5, 0.2, 0.275, 0.275, 1.0, 0.1);
+  CHECK_FALSE(n.ok);
+  CHECK(n.tooSmall);
+  CHECK_FALSE(n.lifted);
+  // A normal round is never lifted
+  auto r = planEcDose(f.cfg, f.recipe(), 5, 0.1, 0.275, 0.275, 1.0);
+  CHECK_FALSE(r.ok);
+  CHECK(r.tooSmall);
+  CHECK_FALSE(r.lifted);
+}
+
 TEST_CASE("pH dose: its cap and the start effect (RAT-050)") {
   auto d = planPhDose(6.5, 5.9, 5.0, 20, 20);
   REQUIRE(d.ok);

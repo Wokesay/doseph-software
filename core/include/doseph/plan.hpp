@@ -37,12 +37,17 @@ struct EcDose {
   Msg reason;
   double factor = 1.0;    // the common factor of the caps
   bool limited = false;   // made smaller to fit the partial-run limit
+  bool lifted = false;    // a test dose made as large as the smallest round the pumps can run (SD-122)
+  bool tooSmall = false;  // a part would run under the minimum run time (RAT-050)
   double totalMl = 0;
   std::vector<DoseStep> steps;
 };
 // Cap per round in ml/L: maxEcStep / max(start effect, effect). A small
 // measured effect never widens the cap (RAT-056). `aimRise` caps the rise the
-// round is planned for (a test dose, SD-105); NaN: no such cap.
+// round is planned for (a test dose, SD-105); NaN: no such cap. A test dose
+// whose smallest part would run under the minimum run time is made as large
+// as the smallest round the pumps can run, if that stays within the cap and
+// the gap (SD-122).
 EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, double gapEc, double effectPerMlL,
                   double startEffect, double maxEcStep, double aimRise = kNaN);
 
