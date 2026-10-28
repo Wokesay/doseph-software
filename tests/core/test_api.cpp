@@ -27,6 +27,7 @@ struct Client {
     return s.api().handle(r);
   }
   json get(const std::string& path) { return json::parse(call("GET", path).body); }
+  int status(const std::string& method, const std::string& path, const json& body = nullptr) { return call(method, path, body).status; }
   bool login(const std::string& pw) {
     auto r = call("POST", "auth/login", {{"password", pw}});
     for (const auto& [k, v] : r.headers)
@@ -426,4 +427,122 @@ TEST_CASE("API: a password file the robot cannot read is kept: no new password o
   Client c{s};
   CHECK(c.get("info")["passwordProblem"].is_null());
   CHECK(c.login("demo-password"));
+}
+
+TEST_CASE("API: access tokens by role: the app may do all but the password and tokens; the account reads, stops, acknowledges alarms and changes recipes and plants; a peer reads (SD-129)") {
+  sim::Simulation s(demo());
+  s.step(kMinute);
+  Client owner{s};
+  REQUIRE(owner.login("demo-password"));
+  auto make = [&](const char* name, const char* role) {
+    auto r = owner.call("POST", "tokens", {{"name", name}, {"role", role}});
+    REQUIRE(r.status == 200);
+    const json j = json::parse(r.body);
+    CHECK(j["role"] == role);
+    return j["token"].get<std::string>();
+  };
+  Client app{s, make("Phone", "app"), "192.168.1.30"};
+  Client account{s, make("Account", "account"), "192.168.1.31"};
+  Client peer{s, make("Second device", "peer"), "192.168.1.32"};
+  CHECK(owner.status("POST", "tokens", {{"name", "x"}, {"role", "owner"}}) == 422);
+  CHECK(owner.status("POST", "tokens", {{"name", " "}, {"role", "app"}}) == 422);
+
+  // Everyone reads
+  for (Client* c : {&app, &account, &peer}) {
+    CHECK(c->status("GET", "state") == 200);
+    CHECK(c->status("GET", "config") == 200);
+    CHECK(c->status("GET", "plants") == 200);
+    CHECK(c->status("GET", "tokens") == 403);  // only the owner sees the tokens
+  }
+  const json session = json::parse(account.call("GET", "auth/session").body);
+  CHECK(session["authenticated"] == true);
+  CHECK(session["role"] == "account");
+  for (const auto& [k, v] : account.call("GET", "auth/session").headers) CHECK(k != "Set-Cookie");  // never a token in a cookie
+  CHECK(json::parse(owner.call("GET", "auth/session").body)["role"] == "owner");
+
+  // The account: recipes, the recipe in force, plants, Stop, alarms
+  const json recipe = json::parse(owner.call("GET", "config").body)["recipes"][0];
+  json changed = recipe;
+  changed["name"] = "Changed from the account";
+  CHECK(account.status("POST", "recipes", changed) == 200);
+  CHECK(account.status("PUT", "active", {{"recipe", recipe["id"]}}) == 200);
+  CHECK(account.status("POST", "alarms/ack") != 403);  // allowed, whether or not an alarm stands
+  // Never limits, releases, calibration, single pumps, settings or a backup
+  const auto refused = account.call("PUT", "control", {{"ecTolerance", 0.5}});
+  CHECK(refused.status == 403);
+  CHECK(json::parse(refused.body)["error"]["key"] == "auth.role");
+  CHECK(account.status("POST", "latches/flow.dry/ack") == 403);
+  CHECK(account.status("POST", "resume") == 403);
+  CHECK(account.status("POST", "channels/1/prime", {{"seconds", 1}}) == 403);
+  CHECK(account.status("POST", "channels/1/calibrate", {{"seconds", 1}}) == 403);
+  CHECK(account.status("POST", "probe", {{"action", "start"}}) == 403);
+  CHECK(account.status("PUT", "system", {{"name", "x"}}) == 403);
+  CHECK(account.status("PUT", "push", json::object()) == 403);
+  CHECK(account.status("POST", "config/import", json::object()) == 403);
+  CHECK(account.status("POST", "maintenance", {{"minutes", 10}}) == 403);
+  CHECK(account.status("PUT", "tank", {{"volumeL", 50}}) == 403);
+  CHECK(account.status("POST", "tokens", {{"name", "x"}, {"role", "app"}}) == 403);
+  CHECK(account.status("POST", "stop") == 200);
+
+  // A peer reads only, until the coupling's calls come (#10 step 8)
+  CHECK(peer.status("POST", "stop") == 403);
+  CHECK(peer.status("PUT", "active", {{"recipe", recipe["id"]}}) == 403);
+
+  // The app: all but the password and the tokens
+  CHECK(app.status("POST", "resume") == 200);
+  CHECK(app.status("PUT", "control", {{"ecTolerance", 0.5}}) == 200);
+  CHECK(app.status("PUT", "auth/password", {{"old", "demo-password"}, {"new", "another-password"}}) == 403);
+  CHECK(app.status("POST", "tokens", {{"name", "x"}, {"role", "app"}}) == 403);
+  CHECK(app.status("DELETE", "tokens/x") == 403);
+
+  // The owner sees the list, never a token; a revoked token is refused at once
+  const json list = owner.get("tokens");
+  REQUIRE(list["tokens"].size() == 3);
+  CHECK(list["tokens"].dump().find(app.token.substr(4)) == std::string::npos);
+  CHECK(list["tokens"][0]["used"].is_number());
+  CHECK(owner.status("DELETE", "tokens/" + list["tokens"][1]["id"].get<std::string>()) == 200);
+  CHECK(account.status("GET", "state") == 401);
+  CHECK(owner.status("DELETE", "tokens/" + list["tokens"][1]["id"].get<std::string>()) == 404);
+  CHECK(app.status("GET", "state") == 200);
+
+  // A restart keeps the tokens; a password change ends the sessions, not the tokens
+  s.reboot();
+  CHECK(app.status("GET", "state") == 200);
+  CHECK(peer.status("GET", "state") == 200);
+  Client again{s};
+  REQUIRE(again.login("demo-password"));
+  CHECK(again.status("PUT", "auth/password", {{"old", "demo-password"}, {"new", "another-password"}}) == 200);
+  CHECK(again.status("GET", "state") == 401);
+  CHECK(app.status("GET", "state") == 200);
+
+  // Created and revoked are events, with the name and the role, never the token
+  int created = 0, revoked = 0;
+  for (const auto& e : s.robot().events(0, s.robot().now() + 1, "auth", 50)) {
+    created += e["title"]["key"] == "ev.auth.token_created";
+    revoked += e["title"]["key"] == "ev.auth.token_revoked";
+    CHECK(e.dump().find(app.token.substr(4)) == std::string::npos);
+  }
+  CHECK(created == 3);
+  CHECK(revoked == 1);
+}
+
+TEST_CASE("API: the device ID is random, made once and kept across a restart; never in a backup (SD-129)") {
+  sim::Simulation s(demo());
+  Client c{s};
+  const std::string id = c.get("info")["deviceId"];
+  CHECK(id.size() == 16);
+  CHECK(id.find_first_not_of("0123456789abcdef") == std::string::npos);
+  s.reboot();
+  CHECK(c.get("info")["deviceId"] == id);
+  REQUIRE(c.login("demo-password"));
+  CHECK(c.call("GET", "config/export").body.find(id) == std::string::npos);
+  CHECK(json::parse(c.call("GET", "diagnostics").body)["info"]["deviceId"] == id);
+  // A damaged identity file gives a new one, and that one is kept
+  REQUIRE(s.storage().write("device.json", "{\"id\": \"XYZ\"}"));
+  s.reboot();
+  const std::string fresh = c.get("info")["deviceId"];
+  CHECK(fresh != id);
+  CHECK(fresh.size() == 16);
+  s.reboot();
+  CHECK(c.get("info")["deviceId"] == fresh);
 }

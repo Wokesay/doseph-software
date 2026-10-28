@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Settings: language and look, the device's name and time zone, quiet hours
-// and what was notified, the password, backup and restore, reporting a
-// problem, signing out, the version.
+// and what was notified, the password, access tokens, backup and restore,
+// reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Upload } from "lucide-preact";
-import { ApiError, get, post, put, type Msg, type Notice, type PushSettings } from "../api";
+import { Bell, Bug, Copy, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
@@ -343,6 +343,107 @@ function PasswordCard() {
   );
 }
 
+// Access tokens (SD-129): for an app, the account and a coupled device. Each has a role that says
+// what it may do; the token is shown once, the robot keeps only its hash.
+function TokensCard() {
+  const [list, setList] = useState<AccessTokens | null>(null);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<TokenRole>("app");
+  const [made, setMade] = useState<NewToken | null>(null);
+  const load = async () => setList(await get<AccessTokens>("/tokens"));
+  useEffect(() => {
+    load().catch(toastError);
+  }, []);
+  const full = list !== null && list.tokens.length >= list.max;
+  return (
+    <Card title={t("settings.tokens")} icon={<Ticket size={18} />}>
+      <div class="stack">
+        <p class="muted small">{t("settings.tokens.intro")}</p>
+        {made && (
+          <Banner tone="warn">
+            <div class="stack">
+              <span>{t("settings.tokens.once", { name: made.name })}</span>
+              <code class="mono token" data-testid="new-token">{made.token}</code>
+              <div>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(made.token);
+                    toast(t("settings.tokens.copied"));
+                  }}
+                >
+                  <Copy size={16} /> {t("settings.tokens.copy")}
+                </Button>
+              </div>
+            </div>
+          </Banner>
+        )}
+        {list && list.tokens.length === 0 && <p class="muted">{t("settings.tokens.none")}</p>}
+        {list && list.tokens.length > 0 && (
+          <div class="list" data-testid="tokens">
+            {list.tokens.map((tk) => (
+              <div class="item wrap-row" key={tk.id} data-testid={`token-${tk.id}`}>
+                <div class="grow">
+                  <div class="title">
+                    {tk.name} <Pill>{t(`settings.tokens.as.${tk.role}`)}</Pill>
+                  </div>
+                  <div class="muted small">
+                    {t("settings.tokens.created", { at: dateTime(tk.created) })}
+                    {" · "}
+                    {tk.used ? t("settings.tokens.used", { at: dateTime(tk.used) }) : t("settings.tokens.unused")}
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <Button
+                    size="sm"
+                    variant="danger-soft"
+                    onClick={async () => {
+                      if (!confirm(t("settings.tokens.revokeAsk", { name: tk.name }))) return;
+                      await del(`/tokens/${encodeURIComponent(tk.id)}`);
+                      if (made?.id === tk.id) setMade(null);
+                      toast(t("settings.tokens.revoked"));
+                      await load();
+                    }}
+                  >
+                    {t("settings.tokens.revoke")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <form class="stack" onSubmit={(e) => e.preventDefault()}>
+          <div class="form-grid">
+            <Field label={t("settings.tokens.name")} hint={t("settings.tokens.nameHint")}>
+              <input class="input" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} name="tokenName" />
+            </Field>
+            <Field label={t("settings.tokens.role")} group>
+              <Seg value={role} onChange={setRole} options={TOKEN_ROLES.map((r) => [r, t(`settings.tokens.as.${r}`)] as [TokenRole, string])} />
+            </Field>
+          </div>
+          <p class="muted small">{t(`settings.tokens.role.${role}`)}</p>
+          <div>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={!name.trim() || full}
+              data-testid="create-token"
+              onClick={async () => {
+                setMade(await post<NewToken>("/tokens", { name: name.trim(), role }));
+                setName("");
+                await load();
+              }}
+            >
+              {t("settings.tokens.create")}
+            </Button>
+          </div>
+          {full && <p class="muted small">{t("settings.tokens.full", { max: list!.max })}</p>}
+        </form>
+      </div>
+    </Card>
+  );
+}
+
 // Backup and restore: the configuration as a file, and back. The robot checks
 // a file like any change and says every reason it refuses one.
 function BackupCard() {
@@ -515,6 +616,7 @@ export function SettingsPage() {
       <NotifyCard key={`n${rev}`} />
       <PushCard />
       <PasswordCard />
+      <TokensCard />
       <BackupCard />
       <ReportCard />
       <Card title={t("settings.about")}>
@@ -524,6 +626,8 @@ export function SettingsPage() {
             <span data-testid="version">{info.value?.version}</span>
             <span>{t("settings.channels")}</span>
             <span>{info.value?.channelCount}</span>
+            <span>{t("settings.deviceId")}</span>
+            <span data-testid="device-id">{info.value?.deviceId}</span>
           </div>
           <Banner tone="info">{t("settings.localOnly")}</Banner>
           <div>

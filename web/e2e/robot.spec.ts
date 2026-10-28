@@ -418,3 +418,33 @@ test("the cultivation system is chosen on the tank page; a new phase is offered 
   await page.getByTestId("new-plant-recipe").click();
   await expect(page.getByRole("dialog")).toContainText("a new phase gets the one for Soil: 6.2–6.8");
 });
+
+test("an access token is made in the settings, shown once, works within its role and is revoked (SD-129)", async ({ page, request }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  await expect(page.getByTestId("device-id")).toHaveText(/^[0-9a-f]{16}$/);
+  await page.locator("input[name=tokenName]").fill("Account e2e");
+  await page.getByRole("tab", { name: "Account" }).click();
+  await expect(page.getByText("Never limits, releases, calibration")).toBeVisible();
+  await page.getByTestId("create-token").click();
+  const token = (await page.getByTestId("new-token").textContent()) ?? "";
+  expect(token).toMatch(/^dpt_[0-9a-f]{64}$/);
+  const row = page.getByTestId("tokens").getByText("Account e2e");
+  await expect(row).toBeVisible();
+
+  const bearer = { Authorization: `Bearer ${token}` };
+  expect((await request.get("/api/v1/state", { headers: bearer })).status()).toBe(200);
+  expect((await request.put("/api/v1/control", { headers: bearer, data: { ecTolerance: 0.5 } })).status()).toBe(403);
+  expect((await request.post("/api/v1/sim/speed", { headers: bearer, data: { speed: 1 } })).status()).toBe(403);
+  expect((await request.post("/api/v1/stop", { headers: bearer, data: {} })).status()).toBe(200);
+
+  // Shown once: after a reload only the name and role are left
+  await page.reload();
+  await expect(page.getByTestId("new-token")).toHaveCount(0);
+  await expect(page.getByTestId("tokens")).toContainText("Account e2e");
+  await expect(page.getByTestId("tokens")).toContainText("last used");
+  page.once("dialog", (d) => d.accept());
+  await page.getByTestId("tokens").getByRole("button", { name: "Revoke" }).click();
+  await expect(page.getByText("No access token yet.")).toBeVisible();
+  expect((await request.get("/api/v1/state", { headers: bearer })).status()).toBe(401);
+});

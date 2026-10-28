@@ -150,6 +150,14 @@ of its own.
 | The cultivation system is one of a fixed list per tank; it sets what the app offers, never the water plan | SD-128 | ✓ | `config.hpp`, `config.cpp`, `robot.cpp` · test_plants.cpp, robot.spec.ts |
 | The calendar lists the next 8 weeks by local day: phases that begin, a phase that waits for confirmation, planned ends and the maintenance dates; what is past its plan stands at today | SD-128 | ✓ | `plants.cpp`, `robot.cpp` · test_plants.cpp, robot.spec.ts |
 
+## Sign-in and access (SD-129)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| An access token is shown once and kept as a hash; it has one of three roles, never the owner's; a revoked token is refused at once; a password change ends the sessions, not the tokens | SD-129 | ✓ | `auth.cpp`, `robot.cpp` · test_auth.cpp, test_api.cpp |
+| A call outside a token's role is refused: an app token never reaches the password or the tokens, an account token never limits, releases, calibration, single pumps or settings, a peer token only reads; a token never goes into a cookie | SD-129 | ✓ | `api.cpp`, `sim/main.cpp` · test_api.cpp, robot.spec.ts |
+| The device ID is random, made once, kept across a restart and never in a backup | SD-129 | ✓ | `robot.cpp` · test_api.cpp, robot.spec.ts |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

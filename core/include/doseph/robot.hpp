@@ -65,6 +65,14 @@ class Robot {
   // simulator's console); "" when a password is set.
   std::string armSetupCode(Ms validFor = 0);
   void setPlatform(json p) { platform_ = std::move(p); }
+  // The device's own identity (SD-129): random, made at the first start, kept apart from the
+  // configuration so a restored backup does not copy it
+  const std::string& deviceId() const { return deviceId_; }
+
+  // ---- Access tokens (SD-129): only the owner manages them
+  json tokens() const;
+  Result createToken(const json& j);
+  Result revokeToken(const std::string& id);
 
   // ---- Reading
   json info() const;
@@ -217,6 +225,7 @@ class Robot {
   };
   std::optional<ProbeSession> probe_;
   bool authKept_ = false;
+  std::string deviceId_;
 
   Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none
 

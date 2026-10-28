@@ -9,12 +9,29 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "doseph/common.hpp"
 
 namespace doseph {
 
 using RandomFn = std::function<void(std::uint8_t*, size_t)>;
+
+// Who a request comes from (SD-129): a session signed in with the password is
+// the owner; an access token has one of three fixed roles that say what it may do.
+enum class Role { Owner, App, Account, Peer };
+const char* roleName(Role r);
+// "app", "account" or "peer"; nothing for anything else, the owner included
+std::optional<Role> tokenRole(const std::string& name);
+
+// An access token for the app, the account relay or a coupled device. The
+// robot keeps its SHA-256 hash only: the token itself is shown once.
+struct AccessToken {
+  std::string id, name, hash;
+  Role role = Role::App;
+  Epoch created = 0;
+  std::optional<Ms> used;  // the last use since the start, in memory only
+};
 
 class Auth {
  public:
@@ -43,13 +60,21 @@ class Auth {
   // `client` is the peer's key (clientKey), "" when unknown.
   std::optional<std::string> login(const std::string& pw, Ms now, Msg& err, const std::string& client);
   bool check(const std::string& token, Ms now);
+  // Who a credential is: a session is the owner, an access token has its role; nothing for neither.
+  // A use counts as now.
+  std::optional<Role> access(const std::string& credential, Ms now);
+  // A new access token: its secret on success, to be shown once; else the reason in `err`.
+  // Never a token for the owner's role.
+  std::optional<std::string> createToken(const std::string& name, Role role, Epoch created, Msg& err);
+  bool revokeToken(const std::string& id);
+  const std::vector<AccessToken>& tokens() const { return tokens_; }
   // A known client using its session counts as seen now: the one seen
   // longest ago is the first to lose its own count.
   void seen(const std::string& client, Ms now);
   void logout(const std::string& token) { sessions_.erase(token); }
   void logoutAll() { sessions_.clear(); }
 
-  json toJson() const;  // hash and salt only, never sessions
+  json toJson() const;  // hash and salt, and the tokens' hashes; never sessions
   void load(const json& j);
 
   static constexpr std::uint32_t kIterations = 10000;
@@ -60,6 +85,9 @@ class Auth {
   // from many addresses. Kept in memory only.
   static constexpr size_t kKnownClients = 16;
   static constexpr Ms kForgetFailures = 24 * kHour;
+  static constexpr size_t kMaxTokens = 16;
+  // Tokens carry a prefix of their own: never taken for a session, and easy to find in a leak
+  static constexpr const char* kTokenPrefix = "dpt_";
 
  private:
   struct Attempts {
@@ -87,6 +115,7 @@ class Auth {
   std::map<std::string, Ms> sessions_;  // token → last used
   Attempts shared_;                    // every client that has not signed in
   std::map<std::string, Known> known_;  // clientKey → its own count
+  std::vector<AccessToken> tokens_;
 };
 
 // The key of a peer's address for the lockout: IPv4 as a.b.c.d, IPv6 as

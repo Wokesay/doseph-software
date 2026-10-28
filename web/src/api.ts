@@ -154,6 +154,8 @@ export type Config = {
 export type Info = {
   product: string; version: string; api: number; schemaVersion: number;
   platform: { kind: string; simulated?: boolean; scenario?: string };
+  // The device's own identity (SD-129): random, made at the first start, never in a backup
+  deviceId: string;
   hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; channelCount: number;
   // Why neither sign-in nor a first password works: the password file is unreadable or gone
   passwordProblem?: Msg | null;
@@ -166,6 +168,13 @@ export type Profile = {
   channels: { pump: string; head: string | null; dropSensor: boolean; reverse: boolean }[];
   flow: string; pumpIn: "tank" | "device"; return: string; network: string[]; pumpLpmLow: number | null; example: boolean;
 };
+
+// Access tokens (SD-129): the owner sees each with its role and last use since the start, never the token
+export type TokenRole = "app" | "account" | "peer";
+export const TOKEN_ROLES: TokenRole[] = ["app", "account", "peer"];
+export type AccessToken = { id: string; name: string; role: TokenRole; created: number; used: number | null };
+export type AccessTokens = { tokens: AccessToken[]; max: number };
+export type NewToken = { id: string; name: string; role: TokenRole; created: number; token: string };
 
 export type RobotEvent = { id: number; ts: number; type: string; severity: "info" | "notice" | "warn" | "alarm"; title: Msg; text: Msg; data: Record<string, any> };
 

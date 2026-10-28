@@ -19,7 +19,32 @@ bool sameHash(const std::string& a, const std::string& b) {
   for (size_t i = 0; i < a.size(); ++i) diff |= static_cast<unsigned char>(a[i]) ^ static_cast<unsigned char>(b[i]);
   return diff == 0;
 }
+std::string tokenHash(const std::string& token) {
+  const Digest d = sha256(token);
+  return toHex(d.data(), d.size());
+}
+
+bool isHex64(const std::string& s) {
+  return s.size() == 64 && std::all_of(s.begin(), s.end(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+}
 }  // namespace
+
+const char* roleName(Role r) {
+  switch (r) {
+    case Role::Owner: return "owner";
+    case Role::App: return "app";
+    case Role::Account: return "account";
+    case Role::Peer: return "peer";
+  }
+  return "";
+}
+
+std::optional<Role> tokenRole(const std::string& name) {
+  if (name == "app") return Role::App;
+  if (name == "account") return Role::Account;
+  if (name == "peer") return Role::Peer;
+  return std::nullopt;
+}
 
 Msg Auth::checkStrength(const std::string& pw) {
   if (pw.size() < 8) return say("auth.too_short");
@@ -166,13 +191,83 @@ bool Auth::check(const std::string& token, Ms now) {
   return true;
 }
 
-json Auth::toJson() const { return {{"salt", salt_}, {"hash", hash_}, {"iterations", iterations_}}; }
+std::optional<Role> Auth::access(const std::string& credential, Ms now) {
+  if (credential.rfind(kTokenPrefix, 0) != 0) return check(credential, now) ? std::optional<Role>(Role::Owner) : std::nullopt;
+  // 256 random bits: a plain hash is enough, and it is compared in constant time
+  const std::string h = tokenHash(credential);
+  for (auto& t : tokens_)
+    if (sameHash(h, t.hash)) {
+      t.used = now;
+      return t.role;
+    }
+  return std::nullopt;
+}
+
+std::optional<std::string> Auth::createToken(const std::string& name, Role role, Epoch created, Msg& err) {
+  if (role == Role::Owner) {
+    err = say("auth.token.role");
+    return std::nullopt;
+  }
+  if (name.empty() || name.size() > 40) {
+    err = say("auth.token.name");
+    return std::nullopt;
+  }
+  if (tokens_.size() >= kMaxTokens) {
+    err = say("auth.token.full", {{"max", kMaxTokens}});
+    return std::nullopt;
+  }
+  std::uint8_t secret[32];
+  rng_(secret, sizeof secret);
+  const std::string token = kTokenPrefix + toHex(secret, sizeof secret);
+  AccessToken t;
+  do {
+    std::uint8_t id[4];
+    rng_(id, sizeof id);
+    t.id = toHex(id, sizeof id);
+  } while (std::any_of(tokens_.begin(), tokens_.end(), [&](const AccessToken& o) { return o.id == t.id; }));
+  t.name = name;
+  t.role = role;
+  t.hash = tokenHash(token);
+  t.created = created;
+  tokens_.push_back(std::move(t));
+  return token;
+}
+
+bool Auth::revokeToken(const std::string& id) {
+  auto it = std::find_if(tokens_.begin(), tokens_.end(), [&](const AccessToken& t) { return t.id == id; });
+  if (it == tokens_.end()) return false;
+  tokens_.erase(it);
+  return true;
+}
+
+json Auth::toJson() const {
+  json tokens = json::array();
+  for (const auto& t : tokens_)
+    tokens.push_back({{"id", t.id}, {"name", t.name}, {"role", roleName(t.role)}, {"hash", t.hash}, {"created", t.created}});
+  return {{"salt", salt_}, {"hash", hash_}, {"iterations", iterations_}, {"tokens", tokens}};
+}
 
 void Auth::load(const json& j) {
   salt_ = jstr(j, "salt");
   hash_ = jstr(j, "hash");
   double it = jnum(j, "iterations", kIterations);
   iterations_ = isNum(it) && it >= 1000 && it <= 1e7 ? static_cast<std::uint32_t>(it) : kIterations;
+  // A token that cannot be read is left out: it only loses its access
+  tokens_.clear();
+  if (j.contains("tokens") && j["tokens"].is_array())
+    for (const auto& x : j["tokens"]) {
+      if (!x.is_object() || tokens_.size() >= kMaxTokens) continue;
+      AccessToken t;
+      t.id = jstr(x, "id");
+      t.name = jstr(x, "name");
+      t.hash = jstr(x, "hash");
+      const auto role = tokenRole(jstr(x, "role"));
+      const double created = jnum(x, "created", 0);
+      if (t.id.empty() || !role || !isHex64(t.hash)) continue;
+      t.role = *role;
+      t.created = isNum(created) ? static_cast<Epoch>(created) : 0;
+      tokens_.push_back(std::move(t));
+    }
 }
 
 namespace {
