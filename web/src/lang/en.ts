@@ -9,6 +9,7 @@ import { en as history } from "./history";
 import { en as channels } from "./channels";
 import { en as settings } from "./settings";
 import { en as sim } from "./sim";
+import { en as water } from "./water";
 
 const base: Record<keyof typeof deBase, string> = {
   "app.tagline": "Mixing robot for nutrient solution",
@@ -49,8 +50,9 @@ const base: Record<keyof typeof deBase, string> = {
   "nav.status": "Status",
   "nav.recipe": "Recipe",
   "nav.tank": "Tank",
+  "nav.water": "Water path",
   "nav.history": "History",
-  "nav.channels": "Channels & probes",
+  "nav.channels": "Channels",
   "nav.settings": "Settings",
   "nav.label": "Menu",
 
@@ -111,4 +113,4 @@ const base: Record<keyof typeof deBase, string> = {
 };
 
 // The base texts plus the texts of each area.
-export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim };
+export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water };

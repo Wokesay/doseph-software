@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Channels & probes: which canister sits on which channel, calibrating and
-// priming the channels, calibrating the pH and EC probes.
-import { useEffect, useState } from "preact/hooks";
-import { Beaker, Gauge, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
+// Channels: which canister sits on which channel, its pump head and drop
+// sensor, calibrating and priming the channels. The probes are on the water
+// path page, in the measuring chamber.
+import { useState } from "preact/hooks";
+import { Beaker, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
 import { del, post, type Canister, type Stock } from "../api";
-import { dateTime, num } from "../format";
+import { ago, dateTime, num } from "../format";
 import { msg, t } from "../i18n";
 import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
 import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term } from "../ui";
@@ -316,6 +317,8 @@ function ChannelsCard() {
   const st = state.value!;
   const [dialog, setDialog] = useState<{ channel: number; type: "calibration" | "prime" } | null>(null);
   const name = (id: string | null) => canisters.value.find((b) => b.id === id)?.name;
+  // What the device has on this channel (SD-108)
+  const caps = (channel: number) => info.value?.profile?.channels[channel - 1];
   return (
     <Card title={t("channels.channels")} icon={<Syringe size={18} />}>
       <div class="list">
@@ -332,6 +335,14 @@ function ChannelsCard() {
               )}
               <div class="muted small" data-testid={`day-${p.channel}`}>
                 {t("channels.day", { used: num(p.day.usedS / 60, 1), cap: num(p.day.capS / 60, 0) })}
+              </div>
+              <div class="muted small" data-testid={`drops-${p.channel}`}>
+                {!p.drops
+                  ? t("channels.noDropSensor")
+                  : p.drops.lastAgoS == null
+                    ? t("channels.noDropsYet")
+                    : t("channels.lastDrop", { ago: ago(p.drops.lastAgoS) })}
+                {caps(p.channel)?.reverse && ` · ${t("channels.pullsBack")}`}
               </div>
               <div class="small" data-testid={`head-${p.channel}`}>
                 {!p.head ? (
@@ -372,134 +383,12 @@ function ChannelsCard() {
   );
 }
 
-function ProbeDialog(p: { kind: "ph" | "ec"; onClose: () => void }) {
-  const st = state.value!;
-  const s = st.probe;
-  const points = s?.points ?? [];
-  const [ref, setRef] = useState<number | null>(p.kind === "ph" ? 7 : 1.413);
-  useEffect(() => {
-    // The next buffer once the first is measured
-    if (p.kind === "ph" && points.length === 1 && ref === points[0][1]) setRef(points[0][1] >= 6 ? 4 : 7);
-  }, [points.length]);
-  const call = async (body: Record<string, unknown>) => {
-    await post("/probe", { kind: p.kind, ...body });
-    await refreshState();
-  };
-  const close = async () => {
-    if (st.probe) await post("/probe", { action: "cancel" }).catch(() => {});
-    await refreshState();
-    p.onClose();
-  };
-  const save = async () => {
-    await call({ action: "save" });
-    await refreshConfig();
-    toast(t("channels.probeSaved"));
-    p.onClose();
-  };
-  const raw = p.kind === "ph" ? s?.rawPh : s?.rawEc;
-  const ready = p.kind === "ph" ? points.length === 2 : points.length === 1;
-  return (
-    <Modal
-      title={t(p.kind === "ph" ? "channels.calibratePh" : "channels.calibrateEc")}
-      onClose={close}
-      footer={
-        <>
-          <button class="btn" onClick={close}>
-            {t("common.cancel")}
-          </button>
-          {s && (
-            <Button variant="primary" onClick={save} disabled={!ready} data-testid="probe-save">
-              {t("common.save")}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {!s ? (
-        <div class="stack">
-          <p>{t(p.kind === "ph" ? "channels.phIntro" : "channels.ecIntro")}</p>
-          <div>
-            <Button variant="primary" onClick={() => call({ action: "start" })} data-testid="probe-start">
-              {t("channels.start")}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div class="stack">
-          <div class="kv">
-            <span>{t("channels.raw")}</span>
-            <span data-testid="probe-raw">{num(raw ?? null, p.kind === "ph" ? 2 : 3)}</span>
-            {p.kind === "ec" && (
-              <>
-                <span>{t("status.temp")}</span>
-                <span>{s.temp != null ? `${num(s.temp, 1)} °C` : "–"}</span>
-              </>
-            )}
-            {points.map(([r, v], i) => (
-              <>
-                <span>{t("channels.point", { n: i + 1 })}</span>
-                <span>
-                  {num(v, p.kind === "ph" ? 2 : 3)} ← {num(r, p.kind === "ph" ? 2 : 3)}
-                </span>
-              </>
-            ))}
-          </div>
-          <p class="muted small">{t(p.kind === "ph" ? (points.length ? "channels.phNext" : "channels.phFirst") : "channels.ecStep")}</p>
-          {!ready && (
-            <div class="row" style="align-items:flex-end">
-              <Field label={t(p.kind === "ph" ? "channels.buffer" : "channels.reference")}>
-                <NumberInput value={ref} onValue={setRef} unit={p.kind === "ec" ? "mS/cm" : undefined} name="reference" />
-              </Field>
-              <Button onClick={() => call({ action: "point", reference: ref })} disabled={ref === null} data-testid="probe-point">
-                {t("channels.takePoint")}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function ProbesCard() {
-  const cfg = config.value!;
-  const st = state.value!;
-  const [kind, setKind] = useState<"ph" | "ec" | null>(st.probe?.kind ?? null);
-  const row = (k: "ph" | "ec", label: string) => {
-    const at = cfg.probes[k]?.at;
-    return (
-      <div class="item wrap-row" data-testid={`probe-${k}`}>
-        <div class="grow">
-          <div class="title">{label}</div>
-          <div class="small">{at ? <span class="muted">{t("channels.calibratedAt", { date: dateTime(at) })}</span> : <Pill tone="warn">{t("widgets.quality.uncalibrated")}</Pill>}</div>
-        </div>
-        <button class="btn sm" onClick={() => setKind(k)} data-testid={`calibrate-${k}`}>
-          {t("channels.calibrate")}
-        </button>
-      </div>
-    );
-  };
-  return (
-    <Card title={<Term topic="calibrateProbe" />} icon={<Gauge size={18} />}>
-      <div class="list">
-        {row("ph", t("channels.phProbe"))}
-        {row("ec", t("channels.ecProbe"))}
-      </div>
-      <p class="muted small" style="margin-top:8px">
-        {t("channels.probeNote")}
-      </p>
-      {kind && <ProbeDialog kind={kind} onClose={() => setKind(null)} />}
-    </Card>
-  );
-}
-
 export function ChannelsPage() {
   const [edit, setEdit] = useState<Partial<Canister> | null>(null);
   return (
     <div class="stack">
       <CanistersCard onEdit={setEdit} />
       <ChannelsCard />
-      <ProbesCard />
       {edit && <CanisterEditor canister={edit} onClose={() => setEdit(null)} />}
     </div>
   );

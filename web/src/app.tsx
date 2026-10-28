@@ -2,7 +2,7 @@
 // Shell: navigation, header with the Stop, page choice, sign-in.
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, MoreHorizontal, OctagonX, Settings, Syringe, Waves } from "lucide-preact";
+import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, MoreHorizontal, OctagonX, Route, Settings, Syringe, Waves } from "lucide-preact";
 import { ApiError, post } from "./api";
 import { msg, t, type TextKey } from "./i18n";
 import { authed, config, info, lastUpdate, refreshState, simulated, stale, state, toast, toastError } from "./store";
@@ -11,6 +11,7 @@ import { Login } from "./pages/login";
 import { StatusPage } from "./pages/status";
 import { RecipePage } from "./pages/recipe";
 import { TankPage } from "./pages/tank";
+import { WaterPage } from "./pages/water";
 import { HistoryPage } from "./pages/history";
 import { ChannelsPage } from "./pages/channels";
 import { SettingsPage } from "./pages/settings";
@@ -21,6 +22,7 @@ const NAV: NavItem[] = [
   { path: "/", label: "nav.status", icon: <LayoutDashboard size={19} />, el: () => <StatusPage /> },
   { path: "/recipe", label: "nav.recipe", icon: <FlaskConical size={19} />, el: () => <RecipePage /> },
   { path: "/tank", label: "nav.tank", icon: <Waves size={19} />, el: () => <TankPage /> },
+  { path: "/water", label: "nav.water", icon: <Route size={19} />, el: () => <WaterPage /> },
   { path: "/history", label: "nav.history", icon: <History size={19} />, el: () => <HistoryPage /> },
   { path: "/channels", label: "nav.channels", icon: <Syringe size={19} />, el: () => <ChannelsPage /> },
   { path: "/settings", label: "nav.settings", icon: <Settings size={19} />, el: () => <SettingsPage /> },
