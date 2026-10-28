@@ -26,7 +26,7 @@ class Hardware : public doseph::IHardware {
  public:
   bool isOnline = true;
   std::map<Signal, doseph::Sample> samples;
-  int pumps = 4;
+  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true}), "turbine", "gravity", {"wifi"}, false};
   std::map<int, doseph::RunStatus> runs;
   int started = 0;
   bool out = false;
@@ -39,7 +39,7 @@ class Hardware : public doseph::IHardware {
     if (it == samples.end()) return std::nullopt;
     return it->second;
   }
-  int pumpCount() const override { return pumps; }
+  const doseph::Profile& profile() const override { return prof; }
   bool startRun(int pump, Ms ms, const std::string& jobId, std::string&) override {
     runs[pump] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
     started++;

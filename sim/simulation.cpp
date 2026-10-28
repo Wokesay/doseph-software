@@ -159,10 +159,11 @@ void Simulation::build(bool fresh) {
   const double prefill = demo && fresh ? std::clamp(opts_.prefillHours, 0.0, 1000.0) : 0.0;
   const doseph::Epoch start = opts_.startEpoch > 0 ? opts_.startEpoch : realNow() - static_cast<doseph::Epoch>(prefill * 3600);
   clock_ = std::make_unique<SimClock>(start);
-  world_.reset(4);
+  doseph::Profile profile = exampleProfile(opts_.profile).value_or(*exampleProfile("home"));
+  world_.reset(static_cast<int>(profile.channels.size()));
   // Tap water in a 100 L tank (assumption): EC 0.45 mS/cm, pH 7.6
   world_.fill(100, 0.45, 7.6);
-  hw_ = std::make_unique<SimHardware>(world_);
+  hw_ = std::make_unique<SimHardware>(world_, std::move(profile));
   if (opts_.dataDir.empty()) store_ = std::make_unique<doseph::MemoryStorage>();
   else store_ = std::make_unique<FileStorage>(opts_.dataDir);
   createRobot();

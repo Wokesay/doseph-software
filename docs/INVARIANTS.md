@@ -20,6 +20,7 @@ of its own.
 | R6 After a crash or restart everything is off; nothing resumes | `CLAUDE.md` | ✓ | RAT-007, RAT-028 |
 | R7 Settings only tighten within hard limits | `CLAUDE.md` | ✓ | `Limits::bounded`, `validateConfig` · test_config.cpp |
 | R8 One event loop with an injected clock; no threads, sleeps or wall clock in the core | `CLAUDE.md` | ✓ | `tools/arch_check.sh` |
+| Logic reads capabilities, never a channel number or a line or variant name | SD-108 | ✓ | `tools/arch_check.sh` (no `.line`, `.variant` outside the profile's JSON) |
 | No dose without proven flow | SD-105 | ✓ | `MixCycle`, `Actuators::startRun` · test_cycle.cpp |
 | A dose is written to the dosing journal before its pump starts | SD-106 | ✓ | `Doser`, `DoseJournal` · test_journal.cpp, test_cycle.cpp |
 

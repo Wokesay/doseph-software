@@ -21,6 +21,12 @@ if grep -nE '#include "doseph/(hardware|gateway|cycle|robot|truth|api|plan)\.hpp
   err "the watchdog has a path to actuators"
 fi
 
+# Logic reads capabilities, never a line or variant name (SD-108); only the
+# profile's JSON names them.
+if grep -rnE '\.(line|variant)\b' core/src | grep -v '^core/src/hardware.cpp'; then
+  err "logic reads a line or variant name"
+fi
+
 # R5: a missing value is never 0 (RAT-006).
 if grep -rnE 'value_or\(0(\.0)?\)' core/; then
   err "a missing value becomes 0"

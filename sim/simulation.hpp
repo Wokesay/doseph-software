@@ -39,6 +39,7 @@ class FileStorage : public doseph::IStorage {
 
 struct Options {
   std::string scenario = "demo";  // demo | new
+  std::string profile = "home";   // an example profile: home | pro
   std::string dataDir;            // empty: in memory only
   std::string password;           // the demo's password
   double prefillHours = 24;       // history the demo computes ahead
