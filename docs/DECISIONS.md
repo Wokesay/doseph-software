@@ -580,6 +580,5 @@ several years").
   with the update. A snapshot is saved in the new form.
 - **Space:** about 1.1 MB per series in full, 4.4 MB for pH, EC,
   temperature and flow. Whether the device's flash holds that is the
-  product's question (filed with this SD); the simulator keeps it in a
-  file.
+  product's question (#55); the simulator keeps it in a file.
 
