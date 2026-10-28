@@ -74,6 +74,7 @@ Ctx Robot::ctx() {
   c.follower = peer_ && peer_->role == "follower";
   c.linkOk = c.follower && peerLinkOk(c.now);
   c.leaderPump = c.linkOk && leaderPump_;
+  if (peer_ && peer_->role == "leader") c.remote = this;
   return c;
 }
 
@@ -420,6 +421,7 @@ void Robot::tick() {
     in.maintenance = maintenanceUntilMs_ > 0;
     in.channelCount = hw_.channelCount();
     in.hold = c.hold;
+    if (peer_) in.peer = {true, peer_->role == "leader", peerLinkOk(c.now), deviation_, peer_->name};
     watch_ = evaluate(in);
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
@@ -1202,6 +1204,11 @@ Result Robot::putCanister(const json& j) {
   }
   b->pair = jstr(j, "pair", b->pair);
   b->color = jstr(j, "color", b->color);
+  // On the coupled device's channel, named by its ID; "" back on this device (SD-131)
+  if (j.contains("device")) {
+    if (!j["device"].is_string()) return Result::fail(422, say("api.bad_input"));
+    b->device = j["device"].get<std::string>();
+  }
   if (j.contains("maxMlPerDay")) {
     if (!j["maxMlPerDay"].is_null() && !j["maxMlPerDay"].is_number()) return Result::fail(422, say("api.bad_input"));
     b->maxMlPerDay = j["maxMlPerDay"].is_number() ? j["maxMlPerDay"].get<double>() : kNaN;
@@ -1450,6 +1457,9 @@ Result Robot::importConfig(const json& j) {
 // ---------------------------------------------------------------- channels
 
 Result Robot::startChannelJob(const std::string& type, int channel, double seconds) {
+  // Coupled as the follower: never a run here while the leader may dose; in its maintenance, yes (SD-131)
+  if (peer_ && peer_->role == "follower" && peerLinkOk(clock_.nowMs()) && !leaderMaintenance_)
+    return Result::fail(409, say("coupling.channel_job", {{"name", peer_->name}}));
   if (rt_.stopped) return Result::fail(409, say("act.stopped"));
   if (channel < 1 || channel > hw_.channelCount()) return Result::fail(404, say("act.no_channel", {{"channel", channel}}));
   if (channelJobActive()) return Result::fail(409, say("job.busy"));
@@ -1740,7 +1750,7 @@ Result Robot::pair(const json& j) {
   req.path = "/api/v1/coupling/join";
   req.body = {{"code", code}, {"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}};
   peerOut_.push_back(req);
-  peerPending_[req.id] = {"join", address, auth_.tokens().back().id};
+  peerPending_[req.id] = {"join", address, auth_.tokens().back().id, ""};
   pairStatus_ = {{"state", "pairing"}, {"address", address}, {"error", nullptr}, {"at", clock_.epoch()}};
   return Result{202, {{"pending", true}}};
 }
@@ -1796,12 +1806,35 @@ void Robot::peerResponse(long long id, int status, const json& body) {
   if (it == peerPending_.end()) return;
   const PeerPending pending = it->second;
   peerPending_.erase(it);
+  auto msgOf = [](const json& e, const char* fallback) {
+    return e.is_object() && e.contains("key") ? Msg{jstr(e, "key"), jstr(e, "text"), e.value("args", json::object())} : say(fallback);
+  };
+  if (pending.kind == "run") {
+    // Refused there, or not delivered: the run ended before it began
+    const auto r = remoteRuns_.find(pending.job);
+    if (status != 200 && r != remoteRuns_.end() && r->second.state == "running")
+      r->second = RemoteResult{"failed", 0, 0, msgOf(body.is_object() ? body.value("error", json()) : json(), status == 0 ? "coupling.unreachable" : "coupling.refused")};
+    return;
+  }
   if (pending.kind == "beat") {
     if (status != 200 || !body.is_object() || !peer_) return;
     if (linkLost_) log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.link_back", {{"name", peer_->name}}));
     linkLost_ = false;
     peerHeard_ = clock_.nowMs();
     peerState_ = body;
+    // What the follower's channels move, for the plan (SD-131)
+    cfg_.peerId = peer_->id;
+    cfg_.peerFlows.clear();
+    for (const auto& ch : body.value("channels", json::array()))
+      if (ch.is_object() && ch.value("flow", json()).is_number()) cfg_.peerFlows[ch.value("channel", 0)] = ch["flow"].get<double>();
+    // The run asked for, as it stands there
+    const json run = body.value("run", json());
+    if (run.is_object())
+      if (auto r = remoteRuns_.find(jstr(run, "job")); r != remoteRuns_.end() && r->second.state == "running") {
+        const std::string st = jstr(run, "state");
+        if (st == "done" || st == "failed" || st == "aborted")
+          r->second = RemoteResult{st, static_cast<Ms>(jnum(run, "ms", 0)), jnum(run, "ml"), msgOf(run.value("error", json()), "dose.run_cancelled")};
+      }
     return;
   }
   if (pending.kind != "join") return;
@@ -1845,7 +1878,7 @@ Result Robot::unpair() {
     req.path = "/api/v1/coupling/leave";
     req.token = was.token;
     peerOut_.push_back(req);
-    peerPending_[req.id] = {"leave", was.address, ""};
+    peerPending_[req.id] = {"leave", was.address, "", ""};
   }
   auth_.revokeToken(was.tokenId);
   peer_.reset();
@@ -1871,6 +1904,33 @@ Result Robot::left(const std::string& token) {
   return Result::ok();
 }
 
+// The follower measures as a check (SD-131): compared only while both pumps move water
+void Robot::watchDeviation(const Ctx& c) {
+  bool compared = false, differ = false;
+  if (peerLinkOk(c.now) && c.flowOk && peerState_.is_object() && peerState_.value("flowOk", false)) {
+    const json theirs = peerState_.value("readings", json::object());
+    for (const auto& [sig, tol] : {std::pair<Signal, double>{Signal::Ph, kPeerDevPh}, {Signal::Ec, kPeerDevEc}}) {
+      const Reading& mine = truth_.get(sig);
+      const json v = theirs.value(signalName(sig), json());
+      if (!mine.usable() || !v.is_number()) continue;
+      compared = true;
+      differ |= std::fabs(*mine.value - v.get<double>()) > tol;
+    }
+  }
+  if (!compared || !differ) deviatesSince_ = -1;
+  if (compared && !differ && deviation_) {
+    deviation_ = false;
+    log_.add(c.epoch, "coupling", "notice", say("ev.coupling.agree", {{"name", peer_->name}}));
+  }
+  if (!compared || !differ) return;
+  if (deviatesSince_ < 0) deviatesSince_ = c.now;
+  if (!deviation_ && c.now - deviatesSince_ >= kPeerDevMs) {
+    deviation_ = true;
+    log_.add(c.epoch, "coupling", "warn", say("ev.coupling.deviation", {{"name", peer_->name}}),
+             say("watch.coupling.deviation", {{"name", peer_->name}, {"ph", kPeerDevPh}, {"ec", kPeerDevEc}}));
+  }
+}
+
 void Robot::watchPeer(Ctx& c) {
   if (!peer_) return;
   if (peer_->role == "follower") {
@@ -1888,6 +1948,15 @@ void Robot::watchPeer(Ctx& c) {
     }
     return;
   }
+  if (!peerLinkOk(c.now)) {
+    // Without the follower its channels are not planned, and a run sent there counts as ended:
+    // it stops itself after 10 s without a call
+    cfg_.peerId.clear();
+    cfg_.peerFlows.clear();
+    for (auto& [job, r] : remoteRuns_)
+      if (r.state == "running") r = RemoteResult{"aborted", 0, kNaN, say("coupling.no_link")};
+  }
+  watchDeviation(c);
   // The leader calls every 2 s, whether or not the last call came back
   if (beatSent_ >= 0 && c.now - beatSent_ < kPeerBeatMs) return;
   beatSent_ = c.now;
@@ -1899,9 +1968,9 @@ void Robot::watchPeer(Ctx& c) {
   req.method = "POST";
   req.path = "/api/v1/peer/beat";
   req.token = peer_->token;
-  req.body = {{"pump", act_.feedPump().value_or(false)}, {"at", c.epoch}};
+  req.body = {{"pump", act_.feedPump().value_or(false)}, {"maintenance", c.maintenanceUntil > 0}, {"at", c.epoch}};
   peerOut_.push_back(req);
-  peerPending_[req.id] = {"beat", peer_->address, ""};
+  peerPending_[req.id] = {"beat", peer_->address, "", ""};
   const bool ok = peerLinkOk(c.now);
   if (!ok && peerHeard_ >= 0 && !linkLost_) {
     linkLost_ = true;
@@ -1918,6 +1987,15 @@ Result Robot::peerBeat(const std::string& token, const json& j) {
   linkLost_ = false;
   peerHeard_ = now;
   leaderPump_ = jbool(j, "pump", false);
+  leaderMaintenance_ = jbool(j, "maintenance", false);
+  // Each channel's calibrated flow, for the leader's plan; none where it is void (SD-108)
+  json channels = json::array();
+  for (int ch = 1; ch <= hw_.channelCount(); ++ch) {
+    const auto it = cfg_.channels.find(ch);
+    const std::string& head = hw_.profile().channels[static_cast<size_t>(ch - 1)].head;
+    const bool ok = it != cfg_.channels.end() && isNum(it->second.flowMlPerMin) && it->second.flowMlPerMin > 0 && !head.empty() && it->second.head == head;
+    channels.push_back({{"channel", ch}, {"flow", ok ? json(it->second.flowMlPerMin) : json(nullptr)}});
+  }
   json readings = json::object();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) {
     const Reading& r = truth_.get(ch);
@@ -1927,6 +2005,7 @@ Result Robot::peerBeat(const std::string& token, const json& j) {
                      {"flowOk", flowOk()},
                      {"feedPump", act_.feedPump().value_or(false)},
                      {"stopped", rt_.stopped},
+                     {"channels", channels},
                      {"run", peerRun_}});
 }
 
@@ -1958,6 +2037,43 @@ Result Robot::peerRun(const std::string& token, const json& j) {
   if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
   peerRun_ = {{"job", job}, {"state", "running"}, {"channel", channel}, {"ms", 0}, {"ml", 0}, {"error", nullptr}};
   return Result::ok({{"job", job}});
+}
+
+bool Robot::linked() const { return peer_ && peer_->role == "leader" && peerLinkOk(clock_.nowMs()); }
+
+void Robot::send(const std::string& job, int channel, Ms ms, const std::string& purpose) {
+  if (!peer_) return;
+  PeerRequest req;
+  req.id = ++peerSeq_;
+  req.address = peer_->address;
+  req.method = "POST";
+  req.path = "/api/v1/peer/run";
+  req.token = peer_->token;
+  req.body = {{"job", job}, {"channel", channel}, {"ms", ms}, {"purpose", purpose}};
+  peerOut_.push_back(req);
+  peerPending_[req.id] = {"run", peer_->address, "", job};
+  remoteRuns_[job] = RemoteResult{"running", 0, kNaN, {}};
+}
+
+std::optional<RemoteResult> Robot::result(const std::string& job) {
+  const auto it = remoteRuns_.find(job);
+  if (it == remoteRuns_.end() || it->second.state == "running") return std::nullopt;
+  RemoteResult r = it->second;
+  remoteRuns_.erase(it);
+  return r;
+}
+
+void Robot::abort(const std::string& job) {
+  remoteRuns_.erase(job);
+  if (!peer_) return;
+  PeerRequest req;
+  req.id = ++peerSeq_;
+  req.address = peer_->address;
+  req.method = "POST";
+  req.path = "/api/v1/peer/abort";
+  req.token = peer_->token;
+  peerOut_.push_back(req);
+  peerPending_[req.id] = {"abort", peer_->address, "", job};
 }
 
 Result Robot::peerAbort(const std::string& token) {

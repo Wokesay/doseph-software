@@ -40,6 +40,10 @@ bool peerAddress(const std::string& s);
 // call (SD-131)
 constexpr Ms kPeerBeatMs = 2 * kSecond;
 constexpr Ms kPeerLinkMs = 10 * kSecond;
+// The follower measures as a check: while both pumps move water, pH or EC that differ by more than
+// this for 10 min raise a warning; the leader keeps dosing by its own readings (SD-131)
+constexpr double kPeerDevPh = 0.3, kPeerDevEc = 0.2;
+constexpr Ms kPeerDevMs = 10 * kMinute;
 
 // A request the platform sends to the other device and answers with peerResponse()
 struct PeerRequest {

@@ -183,6 +183,8 @@ of its own.
 | The peer and its token live apart from the configuration and never in a backup or an answer of the API; ending the coupling revokes the tokens on both sides, and only the peer's own token may end it there | SD-131 | ✓ | `robot.cpp`, `coupling.cpp` · test_coupling.cpp |
 | The follower plans nothing: its feed pump runs while the leader's does, with every guard of a check, and it doses only on the leader's request through its own gateway, one run at a time | SD-131 | ✓ | `cycle.cpp`, `robot.cpp` · test_coupling.cpp |
 | 10 s without the leader's call cut a run it asked for, book it, and refuse new ones until the leader calls again; after a restart the follower waits for a call (R6) | SD-131 | ✓ | `robot.cpp` · test_coupling.cpp |
+| The leader doses a canister on the follower's channel by the follower's calibration and books the result; a run there that does not end in time is booked as run; never more than one channel runs across both, and the follower's own channel jobs wait for the leader's maintenance | SD-131, PD-457 | ✓ | `gateway.cpp`, `robot.cpp`, `cycle.cpp` · test_coupling.cpp |
+| Without the follower its canisters are not planned; the watchdog shows the link and a difference of more than 0.3 pH or 0.2 mS/cm for 10 min between the devices | SD-131 | ✓ | `robot.cpp`, `watchdog.cpp` · test_coupling.cpp |
 
 ## History and messages
 

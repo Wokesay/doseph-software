@@ -10,7 +10,7 @@
 namespace doseph {
 
 void to_json(json& j, const DoseStep& s) {
-  j = {{"canister", s.canister}, {"name", s.name},   {"channel", s.channel},   {"pair", s.pair},
+  j = {{"canister", s.canister}, {"name", s.name},   {"channel", s.channel}, {"device", s.device},   {"pair", s.pair},
        {"color", s.color},   {"mlPerL", numOrNull(s.mlPerL)},       {"ml", numOrNull(s.ml)},
        {"flowMlPerMin", numOrNull(s.flowMlPerMin)}, {"runs", s.runs}};
 }
@@ -87,11 +87,12 @@ EcDose planEcDose(const Config& cfg, const RecipeCfg& recipe, double volumeL, do
     ds.canister = b->id;
     ds.name = b->name;
     ds.channel = b->channel;
+    ds.device = b->device;
     ds.pair = b->pair;
     ds.color = b->color;
     ds.mlPerL = s.mlPerL;
     ds.ml = totalMlPerL * (s.mlPerL / sumMlPerL) * volumeL;
-    ds.flowMlPerMin = cfg.channelFlow(b->channel);
+    ds.flowMlPerMin = cfg.canisterFlow(*b);
     d.steps.push_back(ds);
   }
   // A test dose too small for a pump is made as large as the smallest round

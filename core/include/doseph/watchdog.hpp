@@ -26,6 +26,12 @@ struct WatchInput {
   bool maintenance = false;  // someone works at tank or device: the targets are not judged
   int channelCount = 0;
   std::string hold{};  // what holds every pump below the robot, as Ctx::hold (SD-110)
+  // Coupled (SD-131): the other device's name, which side this one is, whether the link is up, and
+  // whether the readings of both devices differ
+  struct Peer {
+    bool coupled = false, leader = false, linkOk = false, deviation = false;
+    std::string name;
+  } peer{};
 };
 
 struct Assessment {

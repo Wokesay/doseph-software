@@ -3,6 +3,7 @@
 
 #include <cmath>
 
+#include "doseph/coupling.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
 
@@ -46,6 +47,16 @@ WatchResult evaluate(const WatchInput& in) {
     if (r->quality == Quality::Ok) add(std::string("probe.") + ch, label, "ok", say("watch.reading_ok"));
     else if (r->quality == Quality::Uncalibrated && !inForce) add(std::string("probe.") + ch, label, "neutral", r->reason);
     else add(std::string("probe.") + ch, label, "problem", r->reason);
+  }
+  // Coupled (SD-131): the link, and the check of the readings against the other device's
+  if (in.peer.coupled) {
+    const Msg label = say("watch.coupling");
+    if (!in.peer.linkOk)
+      add("coupling.link", label, "problem", say(in.peer.leader ? "watch.coupling.follower_lost" : "watch.coupling.leader_lost", {{"name", in.peer.name}}));
+    else if (in.peer.deviation)
+      add("coupling.deviation", label, "problem", say("watch.coupling.deviation", {{"name", in.peer.name}, {"ph", kPeerDevPh}, {"ec", kPeerDevEc}}));
+    else
+      add("coupling.link", label, "ok", say("watch.coupling.ok", {{"name", in.peer.name}}));
   }
   if (const Reading* f = find(in, "flow")) {
     const Msg label = say("watch.flow");
@@ -96,8 +107,10 @@ WatchResult evaluate(const WatchInput& in) {
       else needed.push_back(down);
     }
     for (const CanisterCfg* b : needed) {
-      if (b->channel <= 0 || b->channel > in.channelCount) add("canister." + b->id, say("watch.channels"), "problem", say("watch.no_channel", {{"name", b->name}}));
-      else if (!isNum(in.cfg.channelFlow(b->channel))) add("canister." + b->id, say("watch.channels"), "problem", say("watch.channel_uncalibrated", {{"name", b->name}, {"channel", b->channel}}));
+      if (b->channel <= 0 || (b->device.empty() && b->channel > in.channelCount)) add("canister." + b->id, say("watch.channels"), "problem", say("watch.no_channel", {{"name", b->name}}));
+      else if (!b->device.empty() && b->device != in.cfg.peerId)
+        add("canister." + b->id, say("watch.channels"), "problem", say("watch.canister_peer", {{"name", b->name}}));
+      else if (!isNum(in.cfg.canisterFlow(*b))) add("canister." + b->id, say("watch.channels"), "problem", say("watch.channel_uncalibrated", {{"name", b->name}, {"channel", b->channel}}));
     }
   }
   // Canister levels counted from use, where known (SD-119, RAT-071)

@@ -29,6 +29,8 @@ struct CanisterCfg {
   std::string color = "#4c9a52";
   double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
   double maxMlPerDay = kNaN;      // the user's daily amount, below the channel's cap (SD-113); NaN: none
+  // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
+  std::string device = "";
 };
 
 // The level of a canister, counted from use (SD-119): below these it is low
@@ -233,6 +235,12 @@ struct Config {
   // The pH− canister on a channel; there is one at most (SD-108)
   const CanisterCfg* phDown() const;
   double channelFlow(int channel) const;  // NaN when not calibrated
+  // A canister's calibrated flow on whichever device it is: on the coupled one as it said last,
+  // while its link is up (SD-131); NaN when unknown
+  double canisterFlow(const CanisterCfg& b) const;
+  // Not stored: the coupled device and its channels' flows as it said last, while its link is up
+  std::string peerId;
+  std::map<int, double> peerFlows;
 };
 
 void to_json(json& j, const Config& c);

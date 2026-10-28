@@ -131,7 +131,11 @@ export type RobotState = {
   sim?: { speed: number; scenario: string };
 };
 
-export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; channel: number; pair: string; color: string; capacityMl: number | null; maxMlPerDay: number | null };
+export type Canister = {
+  id: string; name: string; role: "nutrient" | "ph_down"; channel: number; pair: string; color: string; capacityMl: number | null; maxMlPerDay: number | null;
+  // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
+  device: string;
+};
 /** A canister's level counted from use (SD-119): unknown until entered; may fall below zero. */
 export type Stock = { ml: number | null; status: "unknown" | "ok" | "low" | "empty" };
 /** A recipe: ml per litre of each part, its EC target and pH range; a fixed part is never scaled (RAT-085). */
