@@ -10,7 +10,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     // Small tanks: four channels, flow estimated from the outlet level, return by gravity (assumptions)
     p.line = "home";
     p.variant = "Home (example)";
-    p.channels.assign(4, {"brushed", "S", true, true});
+    p.channels.assign(4, {"brushed", "S", true, true, 40});
     p.flow = "outlet_level";
     p.returnBy = "gravity";
     p.network = {"wifi"};
@@ -19,7 +19,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     // Larger tanks: six channels, a flow meter, a return pump, LAN as well (assumptions)
     p.line = "pro";
     p.variant = "Pro (example)";
-    p.channels.assign(6, {"brushless", "M", true, false});
+    p.channels.assign(6, {"brushless", "M", true, false, 20});
     p.flow = "turbine";
     p.returnBy = "pump";
     p.network = {"wifi", "lan"};

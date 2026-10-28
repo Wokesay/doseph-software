@@ -340,3 +340,13 @@ TEST_CASE("Scenario return pump dry or blocked: it runs a minute without pause; 
   r.ok("POST", "latches/hw.high_level/ack", json::object());
   r.waitUntil("the check starts anew", [&] { return r.phase() == "flush"; }, 3 * 60);
 }
+
+TEST_CASE("Scenario daily amount: a canister's ml per day holds its doses back with the reason; the state shows each channel's day (SD-113)") {
+  Run r(device("home"));
+  r.ok("POST", "canisters", {{"id", "part_b"}, {"maxMlPerDay", 1}});
+  r.waitUntil("the check waits for part B's day", [&] { return r.line() == "cycle.wait.daily"; }, 2 * 3600, 2000);
+  CHECK(r.state()["cycle"]["line"]["args"]["reason"]["key"] == "act.daily_ml");
+  const json day = r.state()["channels"][2]["day"];  // channel 3: part B
+  CHECK(day["capS"] == 40 * 60);                     // the example head's value
+  CHECK(day["usedS"] == 0);
+}

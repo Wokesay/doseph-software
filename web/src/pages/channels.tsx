@@ -12,7 +12,7 @@ import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
 
 function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void }) {
-  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, ...p.canister });
+  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, maxMlPerDay: null, ...p.canister });
   // A new canister: how much is in it now; empty leaves the level unknown (SD-119)
   const [stockMl, setStockMl] = useState<number | null>(null);
   const channels = info.value?.channelCount ?? 0;
@@ -68,6 +68,9 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
         </Field>
         <Field label={t("channels.capacity")} hint={t("channels.capacityHint")}>
           <NumberInput value={b.capacityMl} onValue={(v) => setB({ ...b, capacityMl: v })} unit="ml" min={10} max={25000} step={50} name="capacity" />
+        </Field>
+        <Field label={t("channels.maxPerDay")} hint={t("channels.maxPerDayHint")}>
+          <NumberInput value={b.maxMlPerDay} onValue={(v) => setB({ ...b, maxMlPerDay: v })} unit="ml" min={0.1} max={25000} step={10} name="maxMlPerDay" />
         </Field>
         {!b.id && (
           <Field label={t("channels.levelNow")} hint={t("channels.levelNowHint")}>
@@ -327,6 +330,9 @@ function ChannelsCard() {
                   <Pill tone="bad">{t("channels.locked")}</Pill>
                 </span>
               )}
+              <div class="muted small" data-testid={`day-${p.channel}`}>
+                {t("channels.day", { used: num(p.day.usedS / 60, 1), cap: num(p.day.capS / 60, 0) })}
+              </div>
               <div class="small" data-testid={`head-${p.channel}`}>
                 {!p.head ? (
                   <Pill tone={p.canister ? "bad" : "neutral"}>{t("channels.noHead")}</Pill>

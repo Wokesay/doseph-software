@@ -26,6 +26,7 @@ struct CanisterCfg {
   std::string pair;               // pair group, e.g. "AB": its parts keep their ratio (RAT-054)
   std::string color = "#4c9a52";
   double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
+  double maxMlPerDay = kNaN;      // the user's daily amount, below the channel's cap (SD-113); NaN: none
 };
 
 // The level of a canister, counted from use (SD-119): below these it is low
@@ -86,6 +87,7 @@ struct ControlCfg {
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
 constexpr double kHardMaxRunS = 60.0;   // longer doses in partial runs (RAT-055)
 constexpr int kHardMaxPartialRuns = 6;  // partial runs per canister and round
+constexpr double kDailyMaxMin = 60;     // a channel's run time into the tank per rolling 24 h, never more (SD-113)
 // A recipe's start effect, mS/cm per ml/L of the recipe (RAT-055). A recipe's
 // EC may imply an effect from a quarter to four times of it (RAT-056).
 constexpr double kEcStartEffect = 0.275;
@@ -178,6 +180,9 @@ struct RuntimeState {
   // Channel → how long its line was pulled back after its last dose, ms: its next run fills it
   // first, unbooked (SD-111)
   std::map<int, Ms> pulledBackMs;
+  // Channel → its runs into the tank of the last 24 h, [epoch, ms], for the daily cap (SD-113)
+  std::map<int, std::vector<std::pair<Epoch, Ms>>> dayRuns;
+  Ms dayRunMs(int channel, Epoch since) const;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

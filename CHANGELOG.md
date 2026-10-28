@@ -7,6 +7,15 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A daily amount per channel that cannot be switched off (SD-113): a
+  channel's run time into the tank, doses and line fills, per rolling
+  24 hours stays within its head's value from the device's profile and
+  never passes 60 minutes in code. A run that would pass it is refused
+  with the reason, and the check waits for it instead of trying. A user
+  may set ml per day per canister below it. The count survives a restart.
+  The channels page shows each channel's run time in the last 24 hours
+  against its cap; the example profiles give 40 min (S) and 20 min (M),
+  assumptions.
 - A return pump that runs a minute without a pause is dry or blocked
   (SD-109): the robot holds it off, latches it with an alarm and holds
   every pump until a person releases it; a restart holds it off again.

@@ -54,6 +54,10 @@ class Actuators {
 
   // Whether a run may start now, and if not why; startRun checks the same
   bool allowed(const Ctx& c, int channel, Ms ms, const std::string& purpose, Msg& err) const;
+  // Why `ms` more on the channel would pass its daily amount, if they would (SD-113): its run time in
+  // a rolling 24 h against the head's value and the code's ceiling, and the canister's ml per day
+  std::optional<Msg> dailyCap(const Ctx& c, int channel, Ms ms) const;
+  double dailyCapMin(int channel) const;  // the channel's run time per 24 h: the head's value, never over 60 min
   bool startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err);
   RunStatus runStatus(int channel) const { return hw_.runStatus(channel); }
   // What the channel's drop sensor has counted; nullopt without one

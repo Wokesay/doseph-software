@@ -381,6 +381,53 @@ TEST_CASE("Doser: a Stop during the pull back keeps what it pulled back and the 
   CHECK(rt.pulledBackMs.at(2) == 80);
 }
 
+TEST_CASE("Gateway: a channel's run time into the tank per rolling 24 h stays within its head's value, never over 60 min; the user's ml per day below it (SD-113)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  hw.prof.channels[1].dailyMaxMin = 2;
+  Config cfg;
+  cfg.channels[2] = {60, 1, "S"};
+  cfg.canisters = {{"a", "Part A", "nutrient", 2, "", "#00c"}};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  c.epoch = 100000;
+  Actuators act(hw);
+  Msg err;
+  auto run = [&](Ms ms, const char* purpose, const std::string& id) {
+    const bool ok = act.startRun(c, 2, ms, purpose, id, err);
+    if (ok) {
+      hw.runs[2].state = RunStatus::State::Done;
+      act.clearRun(2);
+    }
+    return ok;
+  };
+  CHECK(run(60000, "ec", "j1"));
+  CHECK(run(60000, "ph", "j2"));
+  CHECK_FALSE(run(1000, "ec", "j3"));
+  CHECK(err.key == "act.daily_cap");
+  CHECK(run(30000, "calibration", "j4"));  // into a cup: not counted
+  // A line fill drips into the tank: counted (SD-111)
+  CHECK_FALSE(run(1000, "fill", "j5"));
+  // A day later the runs have rolled out
+  c.epoch += 24 * 3600 + 1;
+  CHECK(run(60000, "ec", "j6"));
+  CHECK(rt.dayRuns.at(2).size() == 1);  // the old ones are dropped
+  // A head's value above the code's ceiling, or none: 60 min
+  hw.prof.channels[1].dailyMaxMin = 600;
+  CHECK(act.dailyCapMin(2) == 60);
+  hw.prof.channels[1].dailyMaxMin = kNaN;
+  CHECK(act.dailyCapMin(2) == 60);
+  // The user's 70 ml per day at 60 ml/min: 60 ml used, 10 s more
+  cfg.canisters[0].maxMlPerDay = 70;
+  CHECK(run(10000, "ec", "j7"));
+  CHECK_FALSE(run(1000, "ec", "j8"));
+  CHECK(err.key == "act.daily_ml");
+}
+
 TEST_CASE("Dosing journal: a run recorded before the terms changed still names its canister (SD-107)") {
   MemoryStorage store;
   json old = json::array({{{"order", "ec-1"}, {"run", 1}, {"purpose", "ec"}, {"bottle", "a"}, {"name", "Part A"}, {"pump", 2}, {"ml", 12.5}, {"ms", 15000}, {"at", 0}, {"ended", false}}});

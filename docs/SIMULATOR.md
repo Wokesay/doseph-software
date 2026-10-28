@@ -43,6 +43,7 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Network | Wi-Fi | Wi-Fi, LAN |
 | Suction pump, low end | 10 L/min | – |
 | Pull back | the pumps run backwards | they cannot |
+| Run time per 24 h (SD-113) | 40 min per head | 20 min per head |
 
 The twin has one pump per channel. A pump head can be changed for another
 size or taken off (`channelHead`): a larger head moves more (S 1, M 2.5,
