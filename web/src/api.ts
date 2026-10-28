@@ -18,7 +18,7 @@ export type Reading = {
 };
 
 /** The steps of one check, in order (SD-105); off, stopped and wait stand outside it. */
-export type Phase = "off" | "stopped" | "pump_on" | "prove_flow" | "flush" | "measure" | "dose" | "mix" | "remeasure" | "hold" | "wait";
+export type Phase = "off" | "stopped" | "suction_on" | "prove_flow" | "flush" | "measure" | "dose" | "mix" | "remeasure" | "hold" | "wait";
 
 export type CycleSettings = {
   recipe: string | null;
@@ -52,8 +52,8 @@ export type Watchdog = {
   headline: Msg; items: Assessment[]; stale: boolean;
 };
 
-export type PumpJob = {
-  id: string; type: "calibration" | "prime"; pump: number;
+export type ChannelJob = {
+  id: string; type: "calibration" | "prime"; channel: number;
   state: "running" | "waiting_result" | "done" | "failed";
   seconds: number; actualS: number; ml: number | null; message: Msg; at: number;
 };
@@ -62,7 +62,7 @@ export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawP
 
 export type RobotState = {
   now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
-  circulation: boolean | null; flowOk: boolean;
+  suctionPump: boolean | null; flowOk: boolean;
   readings: Record<Signal, Reading>;
   cycle: Cycle;
   watchdog: Watchdog;
@@ -71,11 +71,11 @@ export type RobotState = {
   newTank: boolean;
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
-  pumps: { pump: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
+  channels: { channel: number; canister: string | null; flowMlPerMin: number | null; at: number | null }[];
   stock: Record<string, Stock>;
   // What a pair still misses after a round cut short; the next nutrient round doses it first (SD-114)
   catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
-  pumpJob: PumpJob | null;
+  channelJob: ChannelJob | null;
   probe: ProbeSession | null;
   // Maintenance mode until then (epoch seconds); null when off
   maintenanceUntil: number | null;
@@ -84,7 +84,7 @@ export type RobotState = {
 };
 
 export type Circulation = "cycle" | "always" | "external";
-export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; pump: number; pair: string; color: string; capacityMl: number | null };
+export type Canister = { id: string; name: string; role: "nutrient" | "ph_down"; channel: number; pair: string; color: string; capacityMl: number | null };
 /** A canister's level counted from use (SD-119): unknown until entered; may fall below zero. */
 export type Stock = { ml: number | null; status: "unknown" | "ok" | "low" | "empty" };
 /** A recipe: ml per litre of each part, its EC target and pH range; a fixed part is never scaled (RAT-085). */
@@ -99,14 +99,14 @@ export type Config = {
   canisters: Canister[];
   recipes: Recipe[];
   active: { recipe: string; from: number; until: number };
-  pumps: Record<string, { flowMlPerMin: number | null; at: number }>;
+  channels: Record<string, { flowMlPerMin: number | null; at: number }>;
   probes: { ph: { points?: [number, number][]; at?: number } | null; ec: { factor?: number; reference?: number; tempC?: number; at?: number } | null };
 };
 
 export type Info = {
   product: string; version: string; api: number; schemaVersion: number;
   platform: { kind: string; simulated?: boolean; scenario?: string };
-  hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; pumpCount: number;
+  hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; channelCount: number;
   // Why neither sign-in nor a first password works: the password file is unreadable or gone
   passwordProblem?: Msg | null;
   // What the device has (SD-108); `example`: the simulator's profile, its numbers are assumptions

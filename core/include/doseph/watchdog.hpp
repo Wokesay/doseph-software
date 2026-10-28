@@ -24,7 +24,7 @@ struct WatchInput {
   Epoch bootEpoch = 0;
   bool stopped = false;
   bool maintenance = false;  // someone works at tank or device: the targets are not judged
-  int pumpCount = 0;
+  int channelCount = 0;
 };
 
 struct Assessment {

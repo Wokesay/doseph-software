@@ -73,7 +73,7 @@ WatchResult evaluate(const WatchInput& in) {
   // Latches hold until a person releases them (RAT-062, RAT-063)
   for (const auto& [id, l] : in.rt.latches) add("latch." + id, say("watch.latch"), "problem", say("latch." + id, l.is_object() ? l : json::object()));
 
-  // The recipe in force, the volume and the pumps it needs (RAT-015)
+  // The recipe in force, the volume and the channels it needs (RAT-015)
   if (!recipe) add("recipe", say("watch.recipe"), "neutral", say("watch.no_recipe"));
   else if (ended) add("recipe", say("watch.recipe"), "problem", say("watch.recipe_ended", {{"name", recipe->name}, {"until", in.cfg.active.until}}));
   else add("recipe", say("watch.recipe"), "ok", say("watch.recipe_ok", {{"name", recipe->name}}));
@@ -84,12 +84,12 @@ WatchResult evaluate(const WatchInput& in) {
       if (const CanisterCfg* b = in.cfg.canister(s.canister)) needed.push_back(b);
     if (isNum(phTarget(*recipe))) {
       const CanisterCfg* down = in.cfg.phDown();
-      if (!down) add("canister.ph_down", say("watch.pumps"), "problem", say("watch.no_ph_down"));
+      if (!down) add("canister.ph_down", say("watch.channels"), "problem", say("watch.no_ph_down"));
       else needed.push_back(down);
     }
     for (const CanisterCfg* b : needed) {
-      if (b->pump <= 0 || b->pump > in.pumpCount) add("canister." + b->id, say("watch.pumps"), "problem", say("watch.no_pump", {{"name", b->name}}));
-      else if (!isNum(in.cfg.pumpFlow(b->pump))) add("canister." + b->id, say("watch.pumps"), "problem", say("watch.pump_uncalibrated", {{"name", b->name}, {"pump", b->pump}}));
+      if (b->channel <= 0 || b->channel > in.channelCount) add("canister." + b->id, say("watch.channels"), "problem", say("watch.no_channel", {{"name", b->name}}));
+      else if (!isNum(in.cfg.channelFlow(b->channel))) add("canister." + b->id, say("watch.channels"), "problem", say("watch.channel_uncalibrated", {{"name", b->name}, {"channel", b->channel}}));
     }
   }
   // Canister levels counted from use, where known (SD-119, RAT-071)

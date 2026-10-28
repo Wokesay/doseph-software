@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Pumps & probes: which canister sits on which pump, calibrating and priming
-// the dosing pumps, calibrating the pH and EC probes.
+// Channels & probes: which canister sits on which channel, calibrating and
+// priming the channels, calibrating the pH and EC probes.
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, Gauge, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
 import { del, post, type Canister, type Stock } from "../api";
@@ -12,21 +12,21 @@ import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
 
 function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void }) {
-  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", pump: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, ...p.canister });
+  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, ...p.canister });
   // A new canister: how much is in it now; empty leaves the level unknown (SD-119)
   const [stockMl, setStockMl] = useState<number | null>(null);
-  const pumps = info.value?.pumpCount ?? 0;
-  const used = (n: number) => canisters.value.find((x) => x.pump === n && x.id !== b.id);
+  const channels = info.value?.channelCount ?? 0;
+  const used = (n: number) => canisters.value.find((x) => x.channel === n && x.id !== b.id);
   const save = async () => {
     await post("/canisters", { ...b, name: (b.name ?? "").trim(), pair: b.role === "nutrient" ? (b.pair ?? "").trim() : "", ...(b.id ? {} : { stockMl }) });
     await refreshConfig();
     await refreshState();
-    toast(t("pumps.canisterSaved"));
+    toast(t("channels.canisterSaved"));
     p.onClose();
   };
   return (
     <Modal
-      title={b.id ? t("pumps.editCanister") : t("pumps.newCanister")}
+      title={b.id ? t("channels.editCanister") : t("channels.newCanister")}
       onClose={p.onClose}
       footer={
         <>
@@ -40,45 +40,45 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
       }
     >
       <div class="form-grid">
-        <Field label={t("pumps.content")}>
+        <Field label={t("channels.content")}>
           <input class="input" value={b.name ?? ""} maxLength={40} onInput={(e) => setB({ ...b, name: (e.target as HTMLInputElement).value })} name="name" />
         </Field>
-        <Field label={t("pumps.role")} group>
+        <Field label={t("channels.role")} group>
           <Seg<Canister["role"]>
             value={b.role ?? "nutrient"}
             onChange={(role) => setB({ ...b, role })}
             options={[
-              ["nutrient", t("pumps.role.nutrient")],
+              ["nutrient", t("channels.role.nutrient")],
               ["ph_down", "pH−"],
             ]}
           />
         </Field>
-        <Field label={t("pumps.pump")}>
-          <select class="select input" value={String(b.pump ?? 0)} onChange={(e) => setB({ ...b, pump: Number((e.target as HTMLSelectElement).value) })} name="pump">
-            <option value="0">{t("pumps.noPump")}</option>
-            {Array.from({ length: pumps }, (_, i) => i + 1).map((n) => (
+        <Field label={t("channels.channel")}>
+          <select class="select input" value={String(b.channel ?? 0)} onChange={(e) => setB({ ...b, channel: Number((e.target as HTMLSelectElement).value) })} name="channel">
+            <option value="0">{t("channels.noChannel")}</option>
+            {Array.from({ length: channels }, (_, i) => i + 1).map((n) => (
               <option value={String(n)} disabled={!!used(n)}>
-                {used(n) ? t("pumps.pumpTaken", { pump: n, name: used(n)!.name }) : t("pumps.pumpN", { pump: n })}
+                {used(n) ? t("channels.channelTaken", { channel: n, name: used(n)!.name }) : t("channels.channelN", { channel: n })}
               </option>
             ))}
           </select>
         </Field>
-        <Field label={t("pumps.capacity")} hint={t("pumps.capacityHint")}>
+        <Field label={t("channels.capacity")} hint={t("channels.capacityHint")}>
           <NumberInput value={b.capacityMl} onValue={(v) => setB({ ...b, capacityMl: v })} unit="ml" min={10} max={25000} step={50} name="capacity" />
         </Field>
         {!b.id && (
-          <Field label={t("pumps.levelNow")} hint={t("pumps.levelNowHint")}>
+          <Field label={t("channels.levelNow")} hint={t("channels.levelNowHint")}>
             <NumberInput value={stockMl} onValue={setStockMl} unit="ml" min={0} max={25000} step={50} name="stock" />
           </Field>
         )}
         {b.role === "nutrient" && (
-          <Field label={<Term topic="pair" />} hint={t("pumps.pairHint")}>
+          <Field label={<Term topic="pair" />} hint={t("channels.pairHint")}>
             <input class="input" value={b.pair ?? ""} maxLength={8} onInput={(e) => setB({ ...b, pair: (e.target as HTMLInputElement).value })} name="pair" />
           </Field>
         )}
       </div>
-      <Field label={t("pumps.color")} group>
-        <div class="row" role="radiogroup" aria-label={t("pumps.color")}>
+      <Field label={t("channels.color")} group>
+        <div class="row" role="radiogroup" aria-label={t("channels.color")}>
           {COLORS.map((c) => (
             <button
               type="button"
@@ -91,7 +91,7 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
           ))}
         </div>
       </Field>
-      <p class="muted small">{t("pumps.colorNote")}</p>
+      <p class="muted small">{t("channels.colorNote")}</p>
     </Modal>
   );
 }
@@ -101,7 +101,7 @@ function LevelDialog(p: { canister: Canister; onClose: () => void }) {
   const [ml, setMl] = useState<number | null>(null);
   return (
     <Modal
-      title={t("pumps.levelOf", { name: p.canister.name })}
+      title={t("channels.levelOf", { name: p.canister.name })}
       onClose={p.onClose}
       footer={
         <>
@@ -114,7 +114,7 @@ function LevelDialog(p: { canister: Canister; onClose: () => void }) {
             onClick={async () => {
               await post(`/canisters/${encodeURIComponent(p.canister.id)}/stock`, { ml });
               await refreshState();
-              toast(t("pumps.levelSaved"));
+              toast(t("channels.levelSaved"));
               p.onClose();
             }}
           >
@@ -123,7 +123,7 @@ function LevelDialog(p: { canister: Canister; onClose: () => void }) {
         </>
       }
     >
-      <Field label={t("pumps.levelNow")}>
+      <Field label={t("channels.levelNow")}>
         <NumberInput value={ml} onValue={setMl} unit="ml" min={0} max={25000} step={10} name="level" />
       </Field>
     </Modal>
@@ -133,10 +133,10 @@ function LevelDialog(p: { canister: Canister; onClose: () => void }) {
 /** The level as counted, with a bar where the size is known (SD-119). */
 function Level(p: { canister: Canister; stock: Stock | undefined }) {
   const s = p.stock;
-  if (!s || s.status === "unknown" || s.ml === null) return <span class="muted small">{t("pumps.levelUnknown")}</span>;
+  if (!s || s.status === "unknown" || s.ml === null) return <span class="muted small">{t("channels.levelUnknown")}</span>;
   const tone = s.status === "empty" ? "bad" : s.status === "low" ? "warn" : "ok";
   const cap = p.canister.capacityMl;
-  const text = cap ? t("pumps.levelOfSize", { ml: num(Math.max(0, s.ml), 0), size: num(cap, 0) }) : t("pumps.levelMl", { ml: num(Math.max(0, s.ml), 0) });
+  const text = cap ? t("channels.levelOfSize", { ml: num(Math.max(0, s.ml), 0), size: num(cap, 0) }) : t("channels.levelMl", { ml: num(Math.max(0, s.ml), 0) });
   return (
     <span class="row" style="gap:8px" data-testid={`level-${p.canister.id}`}>
       {cap ? (
@@ -145,7 +145,7 @@ function Level(p: { canister: Canister; stock: Stock | undefined }) {
         </span>
       ) : null}
       <span class="small">{text}</span>
-      {s.status !== "ok" && <Pill tone={tone}>{t(s.status === "empty" ? "pumps.levelEmpty" : "pumps.levelLow")}</Pill>}
+      {s.status !== "ok" && <Pill tone={tone}>{t(s.status === "empty" ? "channels.levelEmpty" : "channels.levelLow")}</Pill>}
     </span>
   );
 }
@@ -157,21 +157,21 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
   const refilled = async (b: Canister) => {
     await post(`/canisters/${encodeURIComponent(b.id)}/stock`, { full: true });
     await refreshState();
-    toast(t("pumps.refilledDone", { name: b.name }));
+    toast(t("channels.refilledDone", { name: b.name }));
   };
   const remove = async (b: Canister) => {
-    if (!confirm(t("pumps.deleteAsk", { name: b.name }))) return;
+    if (!confirm(t("channels.deleteAsk", { name: b.name }))) return;
     await del(`/canisters/${encodeURIComponent(b.id)}`);
     await refreshConfig();
-    toast(t("pumps.canisterDeleted"), "info");
+    toast(t("channels.canisterDeleted"), "info");
   };
   return (
     <Card
-      title={t("pumps.canisters")}
+      title={t("channels.canisters")}
       icon={<Beaker size={18} />}
       actions={
         <button class="btn sm" onClick={() => p.onEdit({})} data-testid="new-canister">
-          <Plus size={15} /> {t("pumps.newCanister")}
+          <Plus size={15} /> {t("channels.newCanister")}
         </button>
       }
     >
@@ -183,20 +183,20 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
               <div class="grow">
                 <div class="title">{b.name}</div>
                 <div class="muted small">
-                  {b.role === "ph_down" ? "pH−" : t("pumps.role.nutrient")}
-                  {b.pair && ` · ${t("pumps.pairName", { pair: b.pair })}`}
+                  {b.role === "ph_down" ? "pH−" : t("channels.role.nutrient")}
+                  {b.pair && ` · ${t("channels.pairName", { pair: b.pair })}`}
                   {" · "}
-                  {b.pump ? t("pumps.pumpN", { pump: b.pump }) : t("pumps.noPump")}
+                  {b.channel ? t("channels.channelN", { channel: b.channel }) : t("channels.noChannel")}
                 </div>
                 <Level canister={b} stock={stock[b.id]} />
               </div>
               <div class="row-actions">
                 {b.capacityMl ? (
-                  <Button size="sm" onClick={() => refilled(b)} title={t("pumps.refilledHint")} data-testid={`refilled-${b.id}`}>
-                    <RefreshCw size={15} /> {t("pumps.refilled")}
+                  <Button size="sm" onClick={() => refilled(b)} title={t("channels.refilledHint")} data-testid={`refilled-${b.id}`}>
+                    <RefreshCw size={15} /> {t("channels.refilled")}
                   </Button>
                 ) : null}
-                <button class="btn sm" onClick={() => setLevelOf(b)} aria-label={`${t("pumps.enterLevel")}: ${b.name}`} title={t("pumps.enterLevel")}>
+                <button class="btn sm" onClick={() => setLevelOf(b)} aria-label={`${t("channels.enterLevel")}: ${b.name}`} title={t("channels.enterLevel")}>
                   <Ruler size={15} />
                 </button>
                 <button class="btn sm" onClick={() => p.onEdit(b)} aria-label={`${t("common.edit")}: ${b.name}`}>
@@ -210,41 +210,41 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
           ))}
         </div>
       ) : (
-        <Empty title={t("pumps.noCanisters")} text={t("pumps.noCanistersText")} />
+        <Empty title={t("channels.noCanisters")} text={t("channels.noCanistersText")} />
       )}
-      {list.length > 0 && <p class="muted small">{t("pumps.levelNote")}</p>}
+      {list.length > 0 && <p class="muted small">{t("channels.levelNote")}</p>}
       {levelOf && <LevelDialog canister={levelOf} onClose={() => setLevelOf(null)} />}
     </Card>
   );
 }
 
-/** Calibrating or priming one pump: start, the run, the amount in the cup, the result. */
-function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose: () => void }) {
+/** Calibrating or priming one channel: start, the run, the amount in the cup, the result. */
+function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; onClose: () => void }) {
   const st = state.value!;
   // Only the job this dialog started: a finished one from before is not this one's
   const [started, setStarted] = useState<string | null>(null);
-  const job = st.pumpJob && st.pumpJob.id === started ? st.pumpJob : null;
+  const job = st.channelJob && st.channelJob.id === started ? st.channelJob : null;
   const [seconds, setSeconds] = useState<number | null>(p.type === "calibration" ? 30 : 5);
   const [ml, setMl] = useState<number | null>(null);
   const max = config.value!.limits.maxRunS;
   const start = async () => {
-    const r = await post<{ id: string }>(`/pumps/${p.pump}/${p.type === "calibration" ? "calibrate" : "prime"}`, { seconds });
+    const r = await post<{ id: string }>(`/channels/${p.channel}/${p.type === "calibration" ? "calibrate" : "prime"}`, { seconds });
     setStarted(r.id);
     await refreshState();
   };
   const cancel = async () => {
-    if (job) await post("/pumps/cancel").catch(() => {});
+    if (job) await post("/channels/cancel").catch(() => {});
     await refreshState();
     p.onClose();
   };
   const result = async () => {
-    await post("/pumps/result", { ml });
+    await post("/channels/result", { ml });
     await Promise.all([refreshState(), refreshConfig()]);
   };
   const bad = seconds === null || seconds < 1 || seconds > max;
   return (
     <Modal
-      title={t(p.type === "calibration" ? "pumps.calibrateN" : "pumps.primeN", { pump: p.pump })}
+      title={t(p.type === "calibration" ? "channels.calibrateN" : "channels.primeN", { channel: p.channel })}
       onClose={cancel}
       footer={
         job?.state === "done" ? (
@@ -260,20 +260,20 @@ function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose
     >
       {!job && (
         <div class="stack">
-          <p>{t(p.type === "calibration" ? "pumps.calibrateIntro" : "pumps.primeIntro")}</p>
-          <Field label={t("pumps.seconds")} error={bad ? t("pumps.secondsRange", { max }) : null}>
+          <p>{t(p.type === "calibration" ? "channels.calibrateIntro" : "channels.primeIntro")}</p>
+          <Field label={t("channels.seconds")} error={bad ? t("channels.secondsRange", { max }) : null}>
             <NumberInput value={seconds} onValue={setSeconds} unit="s" name="seconds" />
           </Field>
           <div>
-            <Button variant="primary" onClick={start} disabled={bad} data-testid="pump-start">
-              {t("pumps.start")}
+            <Button variant="primary" onClick={start} disabled={bad} data-testid="job-start">
+              {t("channels.start")}
             </Button>
           </div>
         </div>
       )}
       {job?.state === "running" && (
-        <div class="stack-sm" data-testid="pump-running">
-          <p>{t("pumps.running", { s: num(job.seconds, 0) })}</p>
+        <div class="stack-sm" data-testid="job-running">
+          <p>{t("channels.running", { s: num(job.seconds, 0) })}</p>
           <div class="progress">
             <span style="width:100%;opacity:0.5" />
           </div>
@@ -282,11 +282,11 @@ function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose
       {job?.state === "waiting_result" && (
         <div class="stack">
           <p>{msg(job.message)}</p>
-          <Field label={t("pumps.mlInCup")}>
+          <Field label={t("channels.mlInCup")}>
             <NumberInput value={ml} onValue={setMl} unit="ml" name="ml" />
           </Field>
           <div>
-            <Button variant="primary" onClick={result} disabled={ml === null || ml <= 0} data-testid="pump-result">
+            <Button variant="primary" onClick={result} disabled={ml === null || ml <= 0} data-testid="job-result">
               {t("common.save")}
             </Button>
           </div>
@@ -294,7 +294,7 @@ function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose
       )}
       {job?.state === "done" && (
         <Banner tone="ok">
-          <span data-testid="pump-done">{msg(job.message)}</span>
+          <span data-testid="job-done">{msg(job.message)}</span>
         </Banner>
       )}
       {job?.state === "failed" && <Banner tone="bad">{msg(job.message)}</Banner>}
@@ -302,32 +302,32 @@ function PumpJobDialog(p: { pump: number; type: "calibration" | "prime"; onClose
   );
 }
 
-function PumpsCard() {
+function ChannelsCard() {
   const st = state.value!;
-  const [dialog, setDialog] = useState<{ pump: number; type: "calibration" | "prime" } | null>(null);
+  const [dialog, setDialog] = useState<{ channel: number; type: "calibration" | "prime" } | null>(null);
   const name = (id: string | null) => canisters.value.find((b) => b.id === id)?.name;
   return (
-    <Card title={t("pumps.pumps")} icon={<Syringe size={18} />}>
+    <Card title={t("channels.channels")} icon={<Syringe size={18} />}>
       <div class="list">
-        {st.pumps.map((p) => (
-          <div class="item wrap-row" data-testid={`pump-${p.pump}`}>
+        {st.channels.map((p) => (
+          <div class="item wrap-row" data-testid={`channel-${p.channel}`}>
             <div class="grow">
               <div class="title">
-                {t("pumps.pumpN", { pump: p.pump })} · {name(p.canister) ?? <span class="muted">{t("pumps.empty")}</span>}
+                {t("channels.channelN", { channel: p.channel })} · {name(p.canister) ?? <span class="muted">{t("channels.empty")}</span>}
               </div>
               <div class="small">
                 {p.flowMlPerMin != null ? (
-                  <span class="muted">{t("pumps.flow", { flow: num(p.flowMlPerMin, 1), date: p.at ? dateTime(p.at) : "–" })}</span>
+                  <span class="muted">{t("channels.flow", { flow: num(p.flowMlPerMin, 1), date: p.at ? dateTime(p.at) : "–" })}</span>
                 ) : (
-                  <Pill tone={p.canister ? "warn" : "neutral"}>{t("pumps.notCalibrated")}</Pill>
+                  <Pill tone={p.canister ? "warn" : "neutral"}>{t("channels.notCalibrated")}</Pill>
                 )}
               </div>
             </div>
             <div class="row-actions">
-              <button class="btn sm" onClick={() => setDialog({ pump: p.pump, type: "prime" })} disabled={st.stopped}>
+              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped}>
                 {t("term.prime")}
               </button>
-              <button class="btn sm" onClick={() => setDialog({ pump: p.pump, type: "calibration" })} disabled={st.stopped} data-testid={`calibrate-${p.pump}`}>
+              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "calibration" })} disabled={st.stopped} data-testid={`calibrate-${p.channel}`}>
                 {t("term.calibratePump")}
               </button>
             </div>
@@ -337,7 +337,7 @@ function PumpsCard() {
       <p class="muted small" style="margin-top:8px">
         <Term topic="calibratePump" />
       </p>
-      {dialog && <PumpJobDialog {...dialog} onClose={() => setDialog(null)} />}
+      {dialog && <ChannelJobDialog {...dialog} onClose={() => setDialog(null)} />}
     </Card>
   );
 }
@@ -363,14 +363,14 @@ function ProbeDialog(p: { kind: "ph" | "ec"; onClose: () => void }) {
   const save = async () => {
     await call({ action: "save" });
     await refreshConfig();
-    toast(t("pumps.probeSaved"));
+    toast(t("channels.probeSaved"));
     p.onClose();
   };
   const raw = p.kind === "ph" ? s?.rawPh : s?.rawEc;
   const ready = p.kind === "ph" ? points.length === 2 : points.length === 1;
   return (
     <Modal
-      title={t(p.kind === "ph" ? "pumps.calibratePh" : "pumps.calibrateEc")}
+      title={t(p.kind === "ph" ? "channels.calibratePh" : "channels.calibrateEc")}
       onClose={close}
       footer={
         <>
@@ -387,17 +387,17 @@ function ProbeDialog(p: { kind: "ph" | "ec"; onClose: () => void }) {
     >
       {!s ? (
         <div class="stack">
-          <p>{t(p.kind === "ph" ? "pumps.phIntro" : "pumps.ecIntro")}</p>
+          <p>{t(p.kind === "ph" ? "channels.phIntro" : "channels.ecIntro")}</p>
           <div>
             <Button variant="primary" onClick={() => call({ action: "start" })} data-testid="probe-start">
-              {t("pumps.start")}
+              {t("channels.start")}
             </Button>
           </div>
         </div>
       ) : (
         <div class="stack">
           <div class="kv">
-            <span>{t("pumps.raw")}</span>
+            <span>{t("channels.raw")}</span>
             <span data-testid="probe-raw">{num(raw ?? null, p.kind === "ph" ? 2 : 3)}</span>
             {p.kind === "ec" && (
               <>
@@ -407,21 +407,21 @@ function ProbeDialog(p: { kind: "ph" | "ec"; onClose: () => void }) {
             )}
             {points.map(([r, v], i) => (
               <>
-                <span>{t("pumps.point", { n: i + 1 })}</span>
+                <span>{t("channels.point", { n: i + 1 })}</span>
                 <span>
                   {num(v, p.kind === "ph" ? 2 : 3)} ← {num(r, p.kind === "ph" ? 2 : 3)}
                 </span>
               </>
             ))}
           </div>
-          <p class="muted small">{t(p.kind === "ph" ? (points.length ? "pumps.phNext" : "pumps.phFirst") : "pumps.ecStep")}</p>
+          <p class="muted small">{t(p.kind === "ph" ? (points.length ? "channels.phNext" : "channels.phFirst") : "channels.ecStep")}</p>
           {!ready && (
             <div class="row" style="align-items:flex-end">
-              <Field label={t(p.kind === "ph" ? "pumps.buffer" : "pumps.reference")}>
+              <Field label={t(p.kind === "ph" ? "channels.buffer" : "channels.reference")}>
                 <NumberInput value={ref} onValue={setRef} unit={p.kind === "ec" ? "mS/cm" : undefined} name="reference" />
               </Field>
               <Button onClick={() => call({ action: "point", reference: ref })} disabled={ref === null} data-testid="probe-point">
-                {t("pumps.takePoint")}
+                {t("channels.takePoint")}
               </Button>
             </div>
           )}
@@ -441,10 +441,10 @@ function ProbesCard() {
       <div class="item wrap-row" data-testid={`probe-${k}`}>
         <div class="grow">
           <div class="title">{label}</div>
-          <div class="small">{at ? <span class="muted">{t("pumps.calibratedAt", { date: dateTime(at) })}</span> : <Pill tone="warn">{t("widgets.quality.uncalibrated")}</Pill>}</div>
+          <div class="small">{at ? <span class="muted">{t("channels.calibratedAt", { date: dateTime(at) })}</span> : <Pill tone="warn">{t("widgets.quality.uncalibrated")}</Pill>}</div>
         </div>
         <button class="btn sm" onClick={() => setKind(k)} data-testid={`calibrate-${k}`}>
-          {t("pumps.calibrate")}
+          {t("channels.calibrate")}
         </button>
       </div>
     );
@@ -452,23 +452,23 @@ function ProbesCard() {
   return (
     <Card title={<Term topic="calibrateProbe" />} icon={<Gauge size={18} />}>
       <div class="list">
-        {row("ph", t("pumps.phProbe"))}
-        {row("ec", t("pumps.ecProbe"))}
+        {row("ph", t("channels.phProbe"))}
+        {row("ec", t("channels.ecProbe"))}
       </div>
       <p class="muted small" style="margin-top:8px">
-        {t("pumps.probeNote")}
+        {t("channels.probeNote")}
       </p>
       {kind && <ProbeDialog kind={kind} onClose={() => setKind(null)} />}
     </Card>
   );
 }
 
-export function PumpsPage() {
+export function ChannelsPage() {
   const [edit, setEdit] = useState<Partial<Canister> | null>(null);
   return (
     <div class="stack">
       <CanistersCard onEdit={setEdit} />
-      <PumpsCard />
+      <ChannelsCard />
       <ProbesCard />
       {edit && <CanisterEditor canister={edit} onClose={() => setEdit(null)} />}
     </div>

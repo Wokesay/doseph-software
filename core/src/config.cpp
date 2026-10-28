@@ -62,9 +62,9 @@ const CanisterCfg* Config::canister(const std::string& id) const {
   return nullptr;
 }
 
-const CanisterCfg* Config::canisterOnPump(int pump) const {
+const CanisterCfg* Config::canisterOnChannel(int channel) const {
   for (const auto& b : canisters)
-    if (pump > 0 && b.pump == pump) return &b;
+    if (channel > 0 && b.channel == channel) return &b;
   return nullptr;
 }
 
@@ -76,13 +76,13 @@ const RecipeCfg* Config::recipe(const std::string& id) const {
 
 const CanisterCfg* Config::phDown() const {
   for (const auto& b : canisters)
-    if (b.role == "ph_down" && b.pump > 0) return &b;
+    if (b.role == "ph_down" && b.channel > 0) return &b;
   return nullptr;
 }
 
-double Config::pumpFlow(int pump) const {
-  auto it = pumps.find(pump);
-  return it == pumps.end() ? kNaN : it->second.flowMlPerMin;
+double Config::channelFlow(int channel) const {
+  auto it = channels.find(channel);
+  return it == channels.end() ? kNaN : it->second.flowMlPerMin;
 }
 
 double phTarget(const RecipeCfg& r) {
@@ -123,7 +123,7 @@ void to_json(json& j, const Config& c) {
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
-    canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"pump", b.pump}, {"pair", b.pair}, {"color", b.color},
+    canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"channel", b.channel}, {"pair", b.pair}, {"color", b.color},
                          {"capacityMl", numOrNull(b.capacityMl)}});
   j["canisters"] = canisters;
   json recipes = json::array();
@@ -139,9 +139,9 @@ void to_json(json& j, const Config& c) {
   }
   j["recipes"] = recipes;
   j["active"] = {{"recipe", c.active.recipe}, {"from", c.active.from}, {"until", c.active.until}};
-  json pumps = json::object();
-  for (const auto& [n, p] : c.pumps) pumps[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}};
-  j["pumps"] = pumps;
+  json channels = json::object();
+  for (const auto& [n, p] : c.channels) channels[std::to_string(n)] = {{"flowMlPerMin", numOrNull(p.flowMlPerMin)}, {"at", p.at}};
+  j["channels"] = channels;
   j["probes"] = {{"ph", c.phCal}, {"ec", c.ecCal}};
 }
 
@@ -171,6 +171,20 @@ json migrateConfig(json j) {
               st.erase("bottle");
             }
     v = 2;
+  }
+  if (v == 2) {
+    // A dosing pump is a channel (SD-107): the canister's pump and the pumps' calibrations
+    if (j.contains("canisters") && j["canisters"].is_array())
+      for (auto& b : j["canisters"])
+        if (b.is_object() && b.contains("pump")) {
+          b["channel"] = b["pump"];
+          b.erase("pump");
+        }
+    if (j.contains("pumps")) {
+      j["channels"] = j["pumps"];
+      j.erase("pumps");
+    }
+    v = 3;
   }
   j["schemaVersion"] = v;
   return j;
@@ -213,7 +227,7 @@ Config configFromJson(const json& in) {
     x.id = jstr(b, "id");
     x.name = jstr(b, "name");
     x.role = jstr(b, "role", x.role);
-    x.pump = intOr(b, "pump", 0);
+    x.channel = intOr(b, "channel", 0);
     x.pair = jstr(b, "pair");
     x.color = jstr(b, "color", x.color);
     x.capacityMl = numOrNaN(b, "capacityMl");
@@ -247,16 +261,16 @@ Config configFromJson(const json& in) {
   c.active.recipe = jstr(a, "recipe");
   c.active.from = epochOr(a, "from");
   c.active.until = epochOr(a, "until");
-  for (const auto& [key, v] : objectAt(j, "pumps").items()) {
+  for (const auto& [key, v] : objectAt(j, "channels").items()) {
     int n = 0;
     try {
       n = std::stoi(key);
     } catch (...) {
-      throw std::invalid_argument("pump number");
+      throw std::invalid_argument("channel number");
     }
-    if (std::to_string(n) != key) throw std::invalid_argument("pump number");
-    if (!v.is_object()) throw std::invalid_argument("pump calibration is not an object");
-    c.pumps[n] = PumpCal{numOrNaN(v, "flowMlPerMin"), epochOr(v, "at")};
+    if (std::to_string(n) != key) throw std::invalid_argument("channel number");
+    if (!v.is_object()) throw std::invalid_argument("channel calibration is not an object");
+    c.channels[n] = ChannelCal{numOrNaN(v, "flowMlPerMin"), epochOr(v, "at")};
   }
   const json& p = objectAt(j, "probes");
   if (p.contains("ph")) c.phCal = p["ph"];
@@ -264,7 +278,7 @@ Config configFromJson(const json& in) {
   return c;
 }
 
-std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
+std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   std::vector<Msg> out;
   auto err = [&](Msg m) { out.push_back(std::move(m)); };
 
@@ -298,14 +312,14 @@ std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
   if (!inRange(t.holdMin, kHoldMinMin, kHoldMaxMin)) err(say("cfg.tank.hold", {{"min", kHoldMinMin}, {"max", kHoldMaxMin}}));
 
   std::set<std::string> ids;
-  std::set<int> pumps;
+  std::set<int> channels;
   std::map<std::string, int> pairCount;
   for (const auto& b : c.canisters) {
     if (b.id.empty() || b.id.size() > 40 || !ids.insert(b.id).second) err(say("cfg.canister.id"));
     if (b.name.empty() || b.name.size() > 40) err(say("cfg.canister.name"));
     if (b.role != "nutrient" && b.role != "ph_down") err(say("cfg.canister.role", {{"name", b.name}}));
-    if (b.pump < 0 || b.pump > std::min(pumpCount, kMaxPumps)) err(say("cfg.canister.pump", {{"name", b.name}, {"max", pumpCount}}));
-    else if (b.pump > 0 && !pumps.insert(b.pump).second) err(say("cfg.canister.pump_twice", {{"name", b.name}, {"pump", b.pump}}));
+    if (b.channel < 0 || b.channel > std::min(channelCount, kMaxChannels)) err(say("cfg.canister.channel", {{"name", b.name}, {"max", channelCount}}));
+    else if (b.channel > 0 && !channels.insert(b.channel).second) err(say("cfg.canister.channel_twice", {{"name", b.name}, {"channel", b.channel}}));
     if (!b.pair.empty() && b.role != "nutrient") err(say("cfg.canister.pair_role", {{"name", b.name}}));
     if (b.pair.size() > 8) err(say("cfg.canister.pair_name", {{"name", b.name}}));
     if (!std::isnan(b.capacityMl) && !inRange(b.capacityMl, kCapacityMinMl, kCapacityMaxMl))
@@ -365,10 +379,10 @@ std::vector<Msg> validateConfig(const Config& c, int pumpCount) {
     if (!c.recipe(c.active.recipe)) err(say("cfg.active.recipe"));
     if (c.active.until != 0 && c.active.until <= c.active.from) err(say("cfg.active.until"));
   }
-  for (const auto& [n, p] : c.pumps) {
-    if (n < 1 || n > std::min(pumpCount, kMaxPumps)) err(say("cfg.pump.number", {{"pump", n}}));
+  for (const auto& [n, p] : c.channels) {
+    if (n < 1 || n > std::min(channelCount, kMaxChannels)) err(say("cfg.channel.number", {{"channel", n}}));
     // A calibration result that is missing, zero, negative or senseless is refused (RAT-003)
-    if (!isNum(p.flowMlPerMin) || p.flowMlPerMin <= 0 || p.flowMlPerMin > 2000) err(say("cfg.pump.flow", {{"pump", n}}));
+    if (!isNum(p.flowMlPerMin) || p.flowMlPerMin <= 0 || p.flowMlPerMin > 2000) err(say("cfg.channel.flow", {{"channel", n}}));
   }
   return out;
 }

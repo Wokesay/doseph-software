@@ -53,7 +53,7 @@ of its own.
 | Start effects err on the side of the smaller dose | RAT-081 | ✓ | `plan.hpp` · test_plan.cpp |
 | A recipe gives ratio and order; a fixed part goes in per litre and is never scaled by EC | RAT-085 | ✓ | `config.hpp`, `plan.hpp`, `config.cpp`, `plan.cpp`, `robot.cpp`, `api.ts` · test_config.cpp, test_plan.cpp, test_api.cpp |
 
-## Gateway, pumps and canisters
+## Gateway, channels and canisters
 
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|

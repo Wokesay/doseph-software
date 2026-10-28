@@ -12,7 +12,7 @@ const char* phaseName(Phase p) {
   switch (p) {
     case Phase::Off: return "off";
     case Phase::Stopped: return "stopped";
-    case Phase::PumpOn: return "pump_on";
+    case Phase::SuctionOn: return "suction_on";
     case Phase::ProveFlow: return "prove_flow";
     case Phase::Flush: return "flush";
     case Phase::Measure: return "measure";
@@ -84,7 +84,7 @@ void MixCycle::enter(const Ctx& c, Phase p) {
   since_ = c.now;
   sinceEpoch_ = c.epoch;
   switch (p) {
-    case Phase::PumpOn:
+    case Phase::SuctionOn:
       notes_.clear();
       ecRounds_ = phDoses_ = 0;
       evaluateAt_ = 0;
@@ -109,19 +109,19 @@ void MixCycle::enter(const Ctx& c, Phase p) {
   }
 }
 
-void MixCycle::circulation(Ctx& c, Actuators& act, bool on) {
+void MixCycle::suctionPump(Ctx& c, Actuators& act, bool on) {
   if (c.cfg.tank.circulation == "external") return;
-  auto st = act.circulation();
+  auto st = act.suctionPump();
   if (st && *st == on) return;
   Msg err;
-  if (!act.setCirculation(c, on, err) && on) line_ = say("cycle.circ_failed", {{"reason", err}});
+  if (!act.setSuctionPump(c, on, err) && on) line_ = say("cycle.suction_failed", {{"reason", err}});
 }
 
 void MixCycle::wait(Ctx& c, Actuators& act, Msg why, Ms retry) {
   enter(c, Phase::Wait);
   line_ = std::move(why);
   retryAt_ = retry > 0 ? c.now + retry : 0;
-  if (c.cfg.tank.circulation == "cycle") circulation(c, act, false);
+  if (c.cfg.tank.circulation == "cycle") suctionPump(c, act, false);
 }
 
 void MixCycle::holdNow(Ctx& c, Actuators& act) {
@@ -136,7 +136,7 @@ void MixCycle::holdNow(Ctx& c, Actuators& act) {
               say("ev.cycle.held.text", {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}}),
               {{"ph", numOrNull(measured_.ph)}, {"ec", numOrNull(measured_.ec)}});
   anyDosed_ = false;
-  if (s.circulation == "cycle") circulation(c, act, false);
+  if (s.circulation == "cycle") suctionPump(c, act, false);
 }
 
 void MixCycle::stop(Ctx& c, Actuators& act, Doser& doser) {
@@ -170,8 +170,8 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
     enter(c, Phase::Off);
     line_ = s.off;
   } else {
-    enter(c, Phase::PumpOn);
-    line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.pump_on");
+    enter(c, Phase::SuctionOn);
+    line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.suction_on");
   }
 }
 
@@ -286,8 +286,8 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   } else if (ec < aim - s.ecTol) {
     if (ecRounds_ >= c.cfg.control.maxEcRounds) {
       notes_.push_back(say("cycle.note.ec_max", {{"n", ecRounds_}}));
-    } else if (c.pumpJob) {
-      wait(c, act, say("cycle.wait.pump_job"), kMinute);
+    } else if (c.channelJob) {
+      wait(c, act, say("cycle.wait.channel_job"), kMinute);
       return;
     } else {
       startEc(c, act, s, ec, aim);
@@ -318,8 +318,8 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
       enter(c, Phase::Measure);
       line_ = say("cycle.ph_rest", {{"left", mmss(evaluateAt_ - c.now)}});
       return;
-    } else if (c.pumpJob) {
-      wait(c, act, say("cycle.wait.pump_job"), kMinute);
+    } else if (c.channelJob) {
+      wait(c, act, say("cycle.wait.channel_job"), kMinute);
       return;
     } else {
       startPh(c, act, s, ph);
@@ -382,10 +382,10 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   DoseStep step;
   step.canister = down->id;
   step.name = down->name;
-  step.pump = down->pump;
+  step.channel = down->channel;
   step.color = down->color;
   step.ml = plan.ml;
-  step.flowMlPerMin = c.cfg.pumpFlow(down->pump);
+  step.flowMlPerMin = c.cfg.channelFlow(down->channel);
   Msg err;
   const Limits lim = c.cfg.limits.bounded();
   step.runs = splitRuns(plan.ml, step.flowMlPerMin, c.cfg.limits, lim.maxPartialRuns, err);
@@ -513,12 +513,12 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
     DoseStep d;
     d.canister = b->id;
     d.name = b->name;
-    d.pump = b->pump;
+    d.channel = b->channel;
     d.pair = b->pair;
     d.color = b->color;
     d.mlPerL = rs.mlPerL;
     d.ml = parts[rs.canister].get<double>();
-    d.flowMlPerMin = c.cfg.pumpFlow(b->pump);
+    d.flowMlPerMin = c.cfg.channelFlow(b->channel);
     steps.push_back(d);
   }
   if (fits && steps.size() != parts.size()) fits = false;  // a part the recipe no longer has
@@ -529,7 +529,7 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
   const Limits lim = c.cfg.limits.bounded();
   double total = 0;
   for (auto& d : steps) {
-    if (d.pump <= 0 || !isNum(d.flowMlPerMin)) {
+    if (d.channel <= 0 || !isNum(d.flowMlPerMin)) {
       wait(c, act, say("cycle.wait.catchup_part", {{"name", d.name}}));
       return true;
     }
@@ -687,13 +687,13 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     return;
   }
-  // Maintenance: someone works at tank or device. The cycle holds and the pump is off until it ends.
+  // Maintenance: someone works at tank or device. The cycle holds and the suction pump is off until it ends.
   if (c.maintenanceUntil > 0) {
     if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.maintenance")) {
       restart(c, act, doser);
       wait(c, act, say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}}), 0);
     }
-    circulation(c, act, false);
+    suctionPump(c, act, false);
     return;
   }
   if (!s.off.key.empty()) {
@@ -703,11 +703,11 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         c.log.add(c.epoch, "control", "notice", say("ev.cycle.recipe_ended"), s.off);
     }
     line_ = s.off;
-    if (s.circulation == "always") circulation(c, act, true);
-    else if (s.circulation == "cycle") circulation(c, act, false);
+    if (s.circulation == "always") suctionPump(c, act, true);
+    else if (s.circulation == "cycle") suctionPump(c, act, false);
     return;
   }
-  if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
+  if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::SuctionOn);
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
   const Reading& flow = c.truth.get(Signal::Flow);
   auto noteFlow = [&] {
@@ -720,15 +720,15 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   };
 
   switch (phase_) {
-    case Phase::PumpOn:
+    case Phase::SuctionOn:
       announceChamber();
-      circulation(c, act, true);
+      suctionPump(c, act, true);
       enter(c, Phase::ProveFlow);
-      line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.pump_on");
+      line_ = say(s.circulation == "external" ? "cycle.wait_flow_external" : "cycle.suction_on");
       break;
     case Phase::ProveFlow:
       announceChamber();
-      if (s.circulation == "always" || s.circulation == "cycle") circulation(c, act, true);
+      if (s.circulation == "always" || s.circulation == "cycle") suctionPump(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
         if (flowSince_ == 0) flowSince_ = c.now;
@@ -743,7 +743,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
             c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
             noFlowLogged_ = true;
           }
-          if (s.circulation != "external") circulation(c, act, false);  // a pump without flow may run dry
+          if (s.circulation != "external") suctionPump(c, act, false);  // a pump without flow may run dry
           wait(c, act, why);
         }
       }
@@ -840,7 +840,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         noFlowSince_ = 0;
       } else {
         if (noFlowSince_ == 0) noFlowSince_ = c.now;
-        circulation(c, act, true);
+        suctionPump(c, act, true);
         if (c.now - noFlowSince_ > kNoFlowMixMaxMs) {
           // What went in still needs mixing: the next cycle mixes first, the round learns nothing
           mixPendingMs_ = std::max(mixPendingMs_, mixTargetMs_);
@@ -848,7 +848,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
           mixingFirst_ = false;
           const Msg why = say("cycle.wait.no_flow");
           c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.no_flow"), why);
-          if (s.circulation != "external") circulation(c, act, false);
+          if (s.circulation != "external") suctionPump(c, act, false);
           wait(c, act, why);
           break;
         }
@@ -866,13 +866,13 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       break;
     }
     case Phase::Hold:
-      if (s.circulation == "always") circulation(c, act, true);
-      else if (s.circulation == "cycle") circulation(c, act, false);
-      if (c.now >= retryAt_) enter(c, Phase::PumpOn);
+      if (s.circulation == "always") suctionPump(c, act, true);
+      else if (s.circulation == "cycle") suctionPump(c, act, false);
+      if (c.now >= retryAt_) enter(c, Phase::SuctionOn);
       break;
     case Phase::Wait:
-      if (s.circulation == "always") circulation(c, act, true);
-      if (retryAt_ > 0 && c.now >= retryAt_) enter(c, Phase::PumpOn);
+      if (s.circulation == "always") suctionPump(c, act, true);
+      if (retryAt_ > 0 && c.now >= retryAt_) enter(c, Phase::SuctionOn);
       break;
     case Phase::Off:
     case Phase::Stopped:
@@ -892,8 +892,8 @@ json MixCycle::checks(const Ctx& c) const {
     const Reading& x = c.truth.get(ch);
     return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
   };
-  // A pump that can dose: on a pump, with a calibration (RAT-015)
-  auto ready = [&](const CanisterCfg* b) { return b && b->pump > 0 && isNum(c.cfg.pumpFlow(b->pump)); };
+  // A canister that can dose: on a channel, with a calibration (RAT-015)
+  auto ready = [&](const CanisterCfg* b) { return b && b->channel > 0 && isNum(c.cfg.channelFlow(b->channel)); };
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));
@@ -904,9 +904,9 @@ json MixCycle::checks(const Ctx& c) const {
   const bool volumeLatch = c.rt.latches.count("tank.volume") > 0;
   all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
   all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
-  const bool busy = c.pumpJob || c.probeCalibrating || c.maintenanceUntil > 0;
+  const bool busy = c.channelJob || c.probeCalibrating || c.maintenanceUntil > 0;
   all.push_back(item(!busy, c.maintenanceUntil > 0 ? say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}})
-                            : say(c.probeCalibrating ? "check.probe_job" : c.pumpJob ? "check.pump_job" : "check.no_job")));
+                            : say(c.probeCalibrating ? "check.probe_job" : c.channelJob ? "check.channel_job" : "check.no_job")));
 
   json ec = json::array();
   if (r) {

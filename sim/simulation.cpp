@@ -183,20 +183,20 @@ void Simulation::configureDemo() {
     r.markPasswordSet();
   }
   r.setSystem({{"name", "Doseph demo"}});
-  // The canisters on the pumps as the twin has them, each pump calibrated near its true flow
+  // The canisters on the channels as the twin has them, each channel calibrated near its pump's true flow
   const char* names[] = {"pH−", "Part A", "Part B", "CalMag"};
   const char* roles[] = {"ph_down", "nutrient", "nutrient", "nutrient"};
   const char* pairs[] = {"", "AB", "AB", ""};
   const char* colors[] = {"#c0392b", "#2e86c1", "#8e44ad", "#d4ac0d"};
   const char* ids[] = {"ph_down", "part_a", "part_b", "calmag"};
   for (int i = 0; i < 4; ++i)
-    r.putCanister({{"id", ids[i]}, {"name", names[i]}, {"role", roles[i]}, {"pump", i + 1}, {"pair", pairs[i]}, {"color", colors[i]}});
+    r.putCanister({{"id", ids[i]}, {"name", names[i]}, {"role", roles[i]}, {"channel", i + 1}, {"pair", pairs[i]}, {"color", colors[i]}});
   for (int i = 0; i < 4; ++i) {
     const double seconds = 30;
     r.startCalibration(i + 1, seconds);
     step(32 * doseph::kSecond, 500);
     r.calibrationResult(world_.pumps[static_cast<size_t>(i)].cupMl);
-    r.cancelPumpJob();  // closed, as the app does
+    r.cancelChannelJob();  // closed, as the app does
   }
   // Their sizes, freshly filled: 1 L of each nutrient, 0.5 L of pH− (an assumption)
   for (int i = 0; i < 4; ++i) {
@@ -288,10 +288,10 @@ json Simulation::control(const std::string& action, const json& b) {
     }
   } else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
   else if (action == "external") world_.external = doseph::jbool(b, "on", false);
-  else if (action == "pumpLpm") world_.pumpLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
+  else if (action == "suctionLpm") world_.suctionLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
   else if (action == "probeFault") world_.probeFault = doseph::jstr(b, "fault");
-  else if (action == "pumpFault") {
-    const int n = static_cast<int>(num("pump", 0));
+  else if (action == "channelFault") {
+    const int n = static_cast<int>(num("channel", 0));
     if (n >= 1 && n <= static_cast<int>(world_.pumps.size())) {
       world_.pumps[static_cast<size_t>(n - 1)].blocked = doseph::jbool(b, "blocked", false);
       world_.pumps[static_cast<size_t>(n - 1)].empty = doseph::jbool(b, "empty", false);

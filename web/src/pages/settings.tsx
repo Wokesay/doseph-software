@@ -301,8 +301,8 @@ export function SettingsPage() {
           <div class="kv">
             <span>{t("settings.version")}</span>
             <span data-testid="version">{info.value?.version}</span>
-            <span>{t("settings.pumps")}</span>
-            <span>{info.value?.pumpCount}</span>
+            <span>{t("settings.channels")}</span>
+            <span>{info.value?.channelCount}</span>
           </div>
           <Banner tone="info">{t("settings.localOnly")}</Banner>
           <div>

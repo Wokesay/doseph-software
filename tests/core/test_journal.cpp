@@ -15,7 +15,7 @@ JournalRun run(const std::string& order, int n, const std::string& purpose = "ec
   r.purpose = purpose;
   r.canister = "a";
   r.name = "Part A";
-  r.pump = 2;
+  r.channel = 2;
   r.ml = 12.5;
   r.ms = 15000;
   return r;
@@ -80,7 +80,7 @@ TEST_CASE("Doser: a run whose journal record cannot be written does not start (S
   fake::FailingStorage store;
   fake::Hardware hw;
   Config cfg;
-  cfg.pumps[2] = {50, 1};
+  cfg.channels[2] = {50, 1};
   RuntimeState rt;
   SensorTruth truth;
   EventLog log;
@@ -93,7 +93,7 @@ TEST_CASE("Doser: a run whose journal record cannot be written does not start (S
   o.purpose = "ec";
   o.step.canister = "a";
   o.step.name = "Part A";
-  o.step.pump = 2;
+  o.step.channel = 2;
   o.step.flowMlPerMin = 50;
   o.step.runs = {6000};
   store.fail = true;
@@ -112,7 +112,7 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   MemoryStorage store;
   fake::Hardware hw;
   Config cfg;
-  cfg.pumps[2] = {50, 1};
+  cfg.channels[2] = {50, 1};
   RuntimeState rt;
   SensorTruth truth;
   EventLog log;
@@ -155,5 +155,6 @@ TEST_CASE("Dosing journal: a run recorded before the terms changed still names i
   j.load();
   REQUIRE(j.runs().size() == 1);
   CHECK(j.runs()[0].canister == "a");
+  CHECK(j.runs()[0].channel == 2);  // "pump" before SD-107
   CHECK(j.closeOpen().size() == 1);
 }

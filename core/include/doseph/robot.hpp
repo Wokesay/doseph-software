@@ -26,10 +26,10 @@ struct Result {
   static Result fail(int st, const Msg& m, json extra = json::object());
 };
 
-// A pump calibration or priming run, into a cup or the tube (RAT-070).
-struct PumpJob {
+// A channel's calibration or priming run, into a cup or the line (RAT-070).
+struct ChannelJob {
   std::string id, type;  // calibration | prime
-  int pump = 0;
+  int channel = 0;
   std::string state = "running";  // running | waiting_result | done | failed
   Ms ms = 0, actualMs = 0;
   double ml = kNaN;  // calibration: what the user measured in the cup
@@ -103,16 +103,16 @@ class Robot {
   Result importConfig(const json& j);
 
   // ---- Operation
-  Result prime(int pump, double seconds);
-  Result startCalibration(int pump, double seconds);
+  Result prime(int channel, double seconds);
+  Result startCalibration(int channel, double seconds);
   Result calibrationResult(double ml);
-  Result cancelPumpJob();
+  Result cancelChannelJob();
   Result probe(const json& j);
   Result ackLatch(const std::string& id, const json& body);
   Result stop(const Msg& who);
   Result resume();
   // Maintenance mode for `minutes` (at most kMaxMaintenanceMin; 0 ends it): the
-  // cycle holds, the pump is off, jumps of the probes are taken as the work
+  // cycle holds, the suction pump is off, jumps of the probes are taken as the work
   // and the watchdog does not judge the targets. Locks stay. In memory only:
   // a restart ends it.
   Result maintenance(double minutes);
@@ -129,9 +129,9 @@ class Robot {
   void saveEvents();
   void sampleHistory(Epoch epoch);
   void snapshot(Epoch epoch);
-  void pumpJobDone(const DoseProgress& p);
-  Result startPumpJob(const std::string& type, int pump, double seconds);
-  bool pumpJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
+  void channelJobDone(const DoseProgress& p);
+  Result startChannelJob(const std::string& type, int channel, double seconds);
+  bool channelJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
   void restartCycle();
 
   mutable std::recursive_mutex mtx_;
@@ -152,7 +152,7 @@ class Robot {
   History history_;
   EventLog log_;
   WatchResult watch_;
-  std::optional<PumpJob> job_;
+  std::optional<ChannelJob> job_;
   // A probe calibration: the kind, its points and when the last step was
   // taken. It holds the cycle until it is saved or cancelled; it explains
   // jumps for 30 min after its last step (RAT-042).

@@ -24,7 +24,7 @@ Config sample() {
   r.phLow = 5.8;
   r.phHigh = 6.2;
   c.recipes = {r};
-  c.pumps[2] = {50.0, 1};
+  c.channels[2] = {50.0, 1};
   return c;
 }
 
@@ -45,11 +45,31 @@ TEST_CASE("Configuration: there and back through JSON; a missing number stays mi
   CHECK(std::isnan(back.tank.waitEcMin));
   CHECK(std::isnan(back.recipes[0].phLow));
   CHECK(back.tank.volumeL == 100);
-  CHECK(back.pumpFlow(2) == 50.0);
-  CHECK(std::isnan(back.pumpFlow(3)));
+  CHECK(back.channelFlow(2) == 50.0);
+  CHECK(std::isnan(back.channelFlow(3)));
   CHECK(validateConfig(back, 4).empty());
   CHECK_THROWS(configFromJson(json{{"tank", {{"volumeL", "a hundred"}}}}));
   CHECK_THROWS(configFromJson(json{{"schemaVersion", 99}}));
+}
+
+TEST_CASE("Configuration: a file of schema 2 names pumps; read, they are channels with their calibrations (SD-107)") {
+  json v2 = {{"schemaVersion", 2},
+             {"canisters", json::array({{{"id", "down"}, {"name", "pH−"}, {"role", "ph_down"}, {"pump", 1}},
+                                        {{"id", "a"}, {"name", "Part A"}, {"role", "nutrient"}, {"pump", 3}}})},
+             {"pumps", {{"1", {{"flowMlPerMin", 48.5}, {"at", 100}}}, {"3", {{"flowMlPerMin", 51.0}, {"at", 200}}}}}};
+  const json m = migrateConfig(v2);
+  CHECK(m["schemaVersion"] == kSchemaVersion);
+  CHECK_FALSE(m.contains("pumps"));
+  CHECK(m["canisters"][1]["channel"] == 3);
+  CHECK_FALSE(m["canisters"][1].contains("pump"));
+  const Config c = configFromJson(v2);
+  REQUIRE(c.canisterOnChannel(3));
+  CHECK(c.canisterOnChannel(3)->id == "a");
+  CHECK(c.channelFlow(1) == 48.5);
+  CHECK(c.channelFlow(3) == 51.0);
+  CHECK(std::isnan(c.channelFlow(2)));
+  CHECK(json(c)["channels"]["3"]["flowMlPerMin"] == 51.0);
+  CHECK(validateConfig(c, 4).empty());
 }
 
 TEST_CASE("Configuration: a file of schema 1 names bottles; read, they are canisters with a role (SD-107)") {
@@ -73,6 +93,7 @@ TEST_CASE("Configuration: a file of schema 1 names bottles; read, they are canis
   CHECK(c.canisters[0].role == "ph_down");
   CHECK(c.canisters[1].role == "nutrient");
   CHECK(c.canisters[2].pair == "AB");
+  CHECK(c.canisters[1].channel == 2);  // a pump of schema 1 is a channel
   CHECK(c.recipes[0].steps[1].canister == "a");
   CHECK(c.phDown() == &c.canisters[0]);
   CHECK(validateConfig(c, 4).empty());
@@ -132,13 +153,13 @@ TEST_CASE("Configuration: an EC target far from what the amounts give is refused
   CHECK(has(validateConfig(c, 4), "cfg.recipe.ec_range"));
 }
 
-TEST_CASE("Configuration: one canister per pump, a pump the device has; the mixing wait within its bounds") {
+TEST_CASE("Configuration: one canister per channel, a channel the device has; the mixing wait within its bounds") {
   Config c = sample();
-  c.canisters[3].pump = 2;
-  CHECK(has(validateConfig(c, 4), "cfg.canister.pump_twice"));
+  c.canisters[3].channel = 2;
+  CHECK(has(validateConfig(c, 4), "cfg.canister.channel_twice"));
   c = sample();
-  c.canisters[3].pump = 5;
-  CHECK(has(validateConfig(c, 4), "cfg.canister.pump"));
+  c.canisters[3].channel = 5;
+  CHECK(has(validateConfig(c, 4), "cfg.canister.channel"));
   c = sample();
   c.tank.waitEcMin = 1;  // below 2 min (RAT-052)
   CHECK(has(validateConfig(c, 4), "cfg.tank.wait"));
@@ -146,8 +167,8 @@ TEST_CASE("Configuration: one canister per pump, a pump the device has; the mixi
   c.tank.holdMin = 5;
   CHECK(has(validateConfig(c, 4), "cfg.tank.hold"));
   c = sample();
-  c.pumps[3] = {0, 1};  // a calibration of 0 is no calibration (RAT-003)
-  CHECK(has(validateConfig(c, 4), "cfg.pump.flow"));
+  c.channels[3] = {0, 1};  // a calibration of 0 is no calibration (RAT-003)
+  CHECK(has(validateConfig(c, 4), "cfg.channel.flow"));
 }
 
 TEST_CASE("Configuration: the recipe in force exists; its end comes after its start") {

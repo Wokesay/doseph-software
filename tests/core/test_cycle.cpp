@@ -51,7 +51,7 @@ bool dosing(sim::Simulation& s) { return !st(s)["dosing"].is_null(); }
 
 }  // namespace
 
-TEST_CASE("Cycle: pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)") {
+TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)") {
   sim::Simulation s(demo());
   // A fresh fill below the recipe: EC 0.45, pH 7.6
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 10));
@@ -92,7 +92,7 @@ TEST_CASE("Cycle: pump on, flow proven, flushed, measured; a test dose first, EC
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 61 * 60));
 }
 
-TEST_CASE("Cycle: no flow, no dose; the pump that runs without flow goes off (SD-105)") {
+TEST_CASE("Cycle: no flow, no dose; the suction pump that runs without flow goes off (SD-105)") {
   sim::Simulation s(demo());
   s.world().flowFault = "blocked";
   const double ec = s.world().tank.ec;
@@ -196,7 +196,7 @@ TEST_CASE("Cycle: a person may confirm the volume the test dose doubted; then it
   REQUIRE(runUntil(s, [&] { return phase(s) == "prove_flow"; }, 60));
 }
 
-TEST_CASE("Cycle: a restart while a pump doses is reported; the next check mixes first and learns nothing (SD-106, R6, RAT-007)") {
+TEST_CASE("Cycle: a restart while a channel doses is reported; the next check mixes first and learns nothing (SD-106, R6, RAT-007)") {
   sim::Simulation s(demo());
   REQUIRE(runUntil(s, [&] { return dosing(s); }, 20 * 60));
   s.step(3 * kSecond);
@@ -313,15 +313,15 @@ TEST_CASE("Pumps: a calibration runs into the cup and is worked out from the act
   REQUIRE(s.robot().startCalibration(2, 30).status == 200);
   CHECK(s.robot().startCalibration(3, 30).status == 409);  // one at a time
   s.step(32 * kSecond, 500);
-  json job = st(s)["pumpJob"];
+  json job = st(s)["channelJob"];
   CHECK(job["state"] == "waiting_result");
   const double cup = s.world().pumps[1].cupMl;
   CHECK(s.robot().calibrationResult(0).status == 422);
   CHECK(s.robot().calibrationResult(1200).status == 422);
-  const double before = s.robot().config().pumpFlow(2);
+  const double before = s.robot().config().channelFlow(2);
   REQUIRE(s.robot().calibrationResult(cup).status == 200);
-  CHECK(s.robot().config().pumpFlow(2) == doctest::Approx(s.world().pumps[1].trueFlow).epsilon(0.02));
-  CHECK(before == doctest::Approx(s.robot().config().pumpFlow(2)).epsilon(0.02));
+  CHECK(s.robot().config().channelFlow(2) == doctest::Approx(s.world().pumps[1].trueFlow).epsilon(0.02));
+  CHECK(before == doctest::Approx(s.robot().config().channelFlow(2)).epsilon(0.02));
   // The cup is no dose: nothing went into the tank, nothing waits to be mixed
   CHECK(s.storage().read("journal.json").value_or("[]").find("\"purpose\":\"calibration\"") != std::string::npos);
   s.reboot();
@@ -353,21 +353,21 @@ TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the
   CHECK(item("ph", "check.rest_left")["ok"] == false);  // pH rests after a nutrient dose (RAT-046)
   // A part on no pump: the round cannot be planned, and the list names it (RAT-015)
   json b = s.robot().configJson()["canisters"][2];
-  b["pump"] = 0;
+  b["channel"] = 0;
   REQUIRE(s.robot().putCanister(b).status == 200);
   CHECK(item("ec", "check.part_not_ready")["args"]["name"] == b["name"]);
   // A pump calibration and the Stop
-  b["pump"] = 3;
+  b["channel"] = 3;
   REQUIRE(s.robot().putCanister(b).status == 200);
   REQUIRE(s.robot().startCalibration(4, 10).status == 200);
-  CHECK(item("all", "check.pump_job")["ok"] == false);
+  CHECK(item("all", "check.channel_job")["ok"] == false);
   REQUIRE(s.robot().stop(say("stop.app")).status == 200);
   CHECK(item("all", "check.stopped")["ok"] == false);
   REQUIRE(s.robot().resume().status == 200);
   CHECK(item("all", "check.not_stopped")["ok"] == true);
 }
 
-TEST_CASE("Maintenance: the cycle holds and the pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)") {
+TEST_CASE("Maintenance: the cycle holds and the suction pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)") {
   sim::Simulation s(demo());
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 3 * 60));
   CHECK(s.robot().maintenance(-1).status == 422);
@@ -467,12 +467,12 @@ TEST_CASE("Canisters: the level is counted run by run; low and used up are probl
   REQUIRE(r.setStock("part_b", {{"ml", 2}}).status == 200);
   REQUIRE(r.prime(3, 10).status == 200);
   s.step(12 * kSecond, 500);
-  const double fill = r.config().pumpFlow(3) * 10 / 60;
+  const double fill = r.config().channelFlow(3) * 10 / 60;
   CHECK(r.runtime().stockMl.at("part_b") == doctest::Approx(2 - fill).epsilon(0.05));
-  REQUIRE(r.cancelPumpJob().status == 200);
+  REQUIRE(r.cancelChannelJob().status == 200);
   REQUIRE(r.prime(3, 2).status == 200);
   s.step(4 * kSecond, 500);
-  REQUIRE(r.cancelPumpJob().status == 200);
+  REQUIRE(r.cancelChannelJob().status == 200);
   int below = 0;
   for (const auto& k : eventKeys(s)) below += k == "ev.stock.below_zero";
   CHECK(below == 1);
@@ -506,9 +506,9 @@ namespace {
 // A nutrient round cut short: part A's pump blocks, so part B (first in the recipe) goes in alone;
 // then a Stop ends the round and the robot works out what the pair misses
 void cutPair(sim::Simulation& s) {
-  s.control("pumpFault", {{"pump", 2}, {"blocked", true}});
+  s.control("channelFault", {{"channel", 2}, {"blocked", true}});
   REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.dose_incomplete"); }, 3 * 3600));
-  s.control("pumpFault", {{"pump", 2}, {"blocked", false}});
+  s.control("channelFault", {{"channel", 2}, {"blocked", false}});
   REQUIRE(s.robot().stop(say("stop.app")).status == 200);
   REQUIRE(hasEvent(s, "ev.cycle.pair_short"));
 }
@@ -589,11 +589,11 @@ TEST_CASE("Pairs: a catch-up is dropped with a note when a person ends it, a new
     REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.cycle.catchup_dropped"); }, 3 * 3600));
     CHECK(st(s)["catchUp"].is_null());
   }
-  SUBCASE("a missing part on no pump holds the other part") {
+  SUBCASE("a missing part on no channel holds the other part") {
     sim::Simulation s(demo());
     cutPair(s);
     const double b = dosedOf(s, "part_b");
-    REQUIRE(s.robot().putCanister({{"id", "part_a"}, {"pump", 0}}).status == 200);
+    REQUIRE(s.robot().putCanister({{"id", "part_a"}, {"channel", 0}}).status == 200);
     REQUIRE(s.robot().resume().status == 200);
     REQUIRE(runUntil(s, [&] { return st(s)["cycle"]["line"]["key"] == "cycle.wait.catchup_part"; }, 3 * 3600));
     CHECK(st(s)["cycle"]["line"]["args"]["name"] == "Part A");

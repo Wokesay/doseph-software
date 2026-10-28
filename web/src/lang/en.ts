@@ -6,7 +6,7 @@ import { en as status } from "./status";
 import { en as recipe } from "./recipe";
 import { en as tank } from "./tank";
 import { en as history } from "./history";
-import { en as pumps } from "./pumps";
+import { en as channels } from "./channels";
 import { en as settings } from "./settings";
 import { en as sim } from "./sim";
 
@@ -50,26 +50,26 @@ const base: Record<keyof typeof deBase, string> = {
   "nav.recipe": "Recipe",
   "nav.tank": "Tank",
   "nav.history": "History",
-  "nav.pumps": "Pumps & probes",
+  "nav.channels": "Channels & probes",
   "nav.settings": "Settings",
   "nav.label": "Menu",
 
   "term.volume": "Tank volume",
   "help.volume": "This many litres of nutrient solution are in the tank. The robot works out every dose for it; the first dose of a new tank is a small test dose that checks the value.",
   "term.turnover": "Turnover time",
-  "help.turnover": "How long the circulation pump takes to pump the tank once through the device: tank volume divided by flow.",
+  "help.turnover": "How long the suction pump takes to pump the tank once through the device: tank volume divided by flow.",
   "term.waitTime": "Mixing wait",
   "help.waitTime": "How long the robot circulates after a dose before it measures again. The clock runs only while water flows. The suggestion allows 2 turnovers for EC and 3 for pH; you set the time.",
   "term.holdTime": "Pause between checks",
   "help.holdTime": "Once the tank is on target, the robot rests this long and then checks again. It does not mix all the time.",
-  "term.circulation": "Circulation pump",
-  "help.circulation": "\"Only for checks\": the robot switches the pump on for each check and off afterwards. \"Always on\": it runs all the time. \"Own control\": you switch it yourself, the robot waits for flow.",
+  "term.circulation": "Circulation",
+  "help.circulation": "\"Only for checks\": the robot switches the suction pump on for each check and off afterwards. \"Always on\": it runs all the time. \"Own control\": a pump of your own delivers and you switch it yourself; the robot waits for flow.",
   "term.testDose": "Test dose",
   "help.testDose": "The first dose of a new tank is small. If it acts much more or much less than expected for the entered volume, the robot stops and asks about the volume.",
   "term.tolerance": "Tolerance",
   "help.tolerance": "Leeway around the target within which the robot does nothing. Too narrow means constant correcting.",
   "term.canister": "Canister",
-  "help.canister": "A canister of nutrient or pH−, with a dosing pump on it. The robot can't see what is inside – you tell it.",
+  "help.canister": "A canister of nutrient or pH−, on a dosing channel. The robot can't see what is inside – you tell it.",
   "term.pair": "Pair (A/B)",
   "help.pair": "Two parts that only work together. The robot always doses them in a fixed ratio, also in smaller doses.",
   "term.fixed": "Fixed amount",
@@ -91,8 +91,8 @@ const base: Record<keyof typeof deBase, string> = {
   "shell.stopAsk": "Stop everything?",
   "shell.stopAll": "Stop everything",
   "shell.stopped": "Stopped: everything off",
-  "shell.stoppedBar": "Stopped – dosing pumps and circulation pump are off and stay off until you resume.",
-  "shell.stopText": "Dosing pumps and circulation pump go off at once. A running dose is cancelled, the robot rests until you choose \"Resume\".",
+  "shell.stoppedBar": "Stopped – dosing channels and suction pump are off and stay off until you resume.",
+  "shell.stopText": "Dosing channels and suction pump go off at once. A running dose is cancelled, the robot rests until you choose \"Resume\".",
   "shell.stopNote": "Measuring goes on.",
   "shell.stopSending": "Sending …",
   "shell.stopRetry": "Send again",
@@ -111,4 +111,4 @@ const base: Record<keyof typeof deBase, string> = {
 };
 
 // The base texts plus the texts of each area.
-export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...pumps, ...settings, ...sim };
+export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim };

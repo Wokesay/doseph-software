@@ -54,7 +54,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Nutrients shift pH, and the base pair adds most of the EC and pulls pH down by itself, so a pH step taken before it aims at a solution that does not exist yet. The tank then reaches irrigation at an unknown, usually too low pH, and without a pH-up channel nothing can bring it back.
 - **Evidence:** Observed on the reference installation (2026): with acid added before the base pair and no measurement afterwards, the final pH was unknown. With acid last, it adds only a few hundredths of a mS/cm (about 20 ml per 100 L), less than the 0.05 EC tolerance. Precipitation, the usual argument against a late pH step, did not apply: the water was reverse-osmosis water with almost no carbonate hardness, and a buffer went in before any nutrient.
 - **Implemented in:** `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/cycle.cpp`
-- **Tests:** `tests/core/test_config.cpp` "Configuration: pH correction is never part of a recipe (RAT-004)"; `tests/core/test_cycle.cpp` "Cycle: pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
+- **Tests:** `tests/core/test_config.cpp` "Configuration: pH correction is never part of a recipe (RAT-004)"; `tests/core/test_cycle.cpp` "Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
 ### RAT-005 – The start-up grace period applies to the watchdog only
 
@@ -74,11 +74,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-007 – After a restart everything is off; timed actuators have an independent cut-off
 
-- **Rule:** After a crash or restart every pump is off and the circulation pump is off; nothing resumes on its own (R6). A dosing run is limited to 60 s and the device driver cuts a pump off on its own after 90 s.
+- **Rule:** After a crash or restart every dosing channel is off and the suction pump is off; nothing resumes on its own (R6). A dosing run is limited to 60 s and the device driver cuts a pump off on its own after 90 s.
 - **Why:** Timers held in volatile memory are lost on a restart or update, and the "off" they were waiting for never comes. Each timed actuator therefore also has a cut-off that works on its own, set above its longest valid run so it never ends a valid one.
 - **Evidence:** Observed on the reference installation (2026): many timed sequences kept their off command only in volatile memory, so a restart could leave a pump, valve, heater or dimmer in its last state. Independent cut-offs, such as 90 s for dosing pumps, closed that gap.
 - **Implemented in:** `core/include/doseph/journal.hpp`, `core/src/robot.cpp`, `sim/world.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a restart while a pump doses is reported; the next check mixes first and learns nothing (SD-106, R6, RAT-007)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a restart while a channel doses is reported; the next check mixes first and learns nothing (SD-106, R6, RAT-007)"
 
 ### RAT-008 – A tolerance is never 0
 
@@ -142,7 +142,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** When a run time or an amount is computed from a stand-in value, a fault turns into a dose that nobody notices. Missing data must therefore fail a watchdog check, not silence it. Comparisons do not catch NaN, since every comparison with NaN is false (NaN < 1 and NaN ≤ 0 alike), so guards test for a finite number explicitly. A counter quietly restarted at 0 later looks like a real one, so an unknown stock stays unbooked. A canister assumed full looks like a real count too: its low-stock and below-zero warnings then come late by whatever was missing, or not at all, and a mix check passes that the canister cannot cover.
 - **Evidence:** Observed on the reference installation (2026): default values meant for missing readings did not take effect when a sensor was offline, and many of them were 0 anyway; a check for "volume ≤ 0" let a missing (NaN) volume pass.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/gateway.cpp`, `core/src/watchdog.cpp`
-- **Tests:** `tests/core/test_plan.cpp` "EC round: a canister on no pump, or an uncalibrated pump, refuses the round (RAT-015)"; `tests/core/test_watchdog.cpp` "Watchdog: a reading that is not delivered is a problem, never neutral; not calibrated only while a recipe needs it (RAT-015, RAT-021)"; `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated pump are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
+- **Tests:** `tests/core/test_plan.cpp` "EC round: a canister on no channel, or an uncalibrated channel, refuses the round (RAT-015)"; `tests/core/test_watchdog.cpp` "Watchdog: a reading that is not delivered is a problem, never neutral; not calibrated only while a recipe needs it (RAT-015, RAT-021)"; `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated channel are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
 
 ### RAT-016 – History leaves gaps empty
 
@@ -307,7 +307,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-036 – Stop is an active, idempotent shutdown
 
-- **Rule:** Stop is active and idempotent: it switches every dosing pump and the circulation pump off, books what ran and holds until Resume. While stopped nothing runs, not even a calibration into a cup.
+- **Rule:** Stop is active and idempotent: it switches every dosing channel and the suction pump off, books what ran and holds until Resume. While stopped nothing runs, not even a calibration into a cup.
 - **Why:** If control loops merely stop issuing new commands, a stop freezes the last state and devices keep running unnoticed.
 - **Evidence:** Observed on the reference installation (2026): a stop that only halted new commands left light, fans and the circulation pump running for hours.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/cycle.hpp`, `core/include/doseph/gateway.hpp`, `core/src/robot.cpp`
@@ -360,7 +360,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** The jump lock exists to catch a misbehaving sensor. A step that follows a known action is not a fault; treating it as one blocks dosing and trains users to ignore alarms.
 - **Evidence:** Observed on the reference installation (2026): taking the probes out for a buffer test made EC fall from 1.19 to 0.0 mS/cm and come back at 1.21 about 2.5 min later. The jump lock did what it should, but its alarm only reported a planned intervention.
 - **Implemented in:** `core/include/doseph/robot.hpp`, `core/include/doseph/truth.hpp`, `core/src/cycle.cpp`, `core/src/robot.cpp`, `core/src/truth.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"; `tests/core/test_cycle.cpp` "Maintenance: the cycle holds and the pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)"; `web/e2e/robot.spec.ts` "maintenance holds the robot until it is ended (RAT-042)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: a probe calibration holds the cycle; a dose running is cut and mixed first (RAT-042)"; `tests/core/test_truth.cpp` "Sensor truth: a jump locks for 15 min of calm and survives a restart; an announced change explains it (RAT-039, RAT-042, RAT-044)"; `tests/core/test_cycle.cpp` "Maintenance: the cycle holds and the suction pump is off, probe jumps count as the work, the targets are not judged; it ends by hand, by time or with a restart (RAT-042)"; `web/e2e/robot.spec.ts` "maintenance holds the robot until it is ended (RAT-042)"
 
 ### RAT-043 – No pH correction on an old reading
 
@@ -442,7 +442,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Evidence:** Measured on the reference installation (2026; 20.4 L, circulation running): after nutrient doses EC reached tolerance after a median of 32 s (t63 median 26 s). After a pH-lowering dose the reading stayed flat for 99 s, about 80 s of that after the circulation pump had restarted, then fell steeply and reached tolerance after 194 s. Cutting the pH wait to about 45 s, in line with a faster sensor filter, would have let four doses in before the first one showed.
 - **Changed:** The grow controller's fixed waits became the user's waits with a suggestion from volume and flow (SD-105).
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/src/cycle.cpp`, `sim/world.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: suction pump on, flow proven, flushed, measured; a test dose first, EC before pH, mixed in with flow, measured again, then it holds (SD-105, RAT-004, RAT-052)"
 
 ### RAT-053 – EC keeps a reserve for the pH-lowering dose that follows
 
@@ -458,7 +458,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** No two pumps deliver exactly the same flow. A time limit applied to each pump on its own turns the recipe ratio into the ratio of the flow rates. EC cannot show this, because it measures the total of all ions, not how they are split between the parts.
 - **Evidence:** Measured on the reference installation (2026): the two pumps delivered about 52.8 and 39.6 ml/min. Capping each at 60 s gave A:B = 1.33:1 instead of 1:1 for larger doses in a 100–150 L tank; rounding A to whole millilitres turned a 9 ml dose into 5:4 (1.25:1).
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/plan.cpp`, `sim/world.cpp`, `core/src/cycle.cpp`
-- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"; `tests/core/test_plan.cpp` "EC round over the partial-run limit: made smaller by one factor for all parts, never refused or capped per pump (RAT-054)"; `tests/core/test_cycle.cpp` "Pairs: a round cut short with a part missing catches it up first, alone, and learns nothing from it (SD-114, RAT-054, RAT-057)"
+- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: 0.8 × gap, the pair scaled together, its ratio kept at every cap (RAT-054, RAT-055)"; `tests/core/test_plan.cpp` "EC round over the partial-run limit: made smaller by one factor for all parts, never refused or capped per channel (RAT-054)"; `tests/core/test_cycle.cpp` "Pairs: a round cut short with a part missing catches it up first, alone, and learns nothing from it (SD-114, RAT-054, RAT-057)"
 
 ### RAT-055 – Dose from the measured effect; large doses in equal partial runs
 
@@ -604,7 +604,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Expected states shown as permanent individual lines bury the real problems and train users to ignore the overview.
 - **Evidence:** Observed on the reference installation (2026): expected states such as "pump off – tank empty" stood as permanent single lines, and one waiting state was listed once per sensor, which filled the overview; folding normal states into one green count left only the deviations as single lines.
 - **Implemented in:** `core/src/watchdog.cpp`
-- **Tests:** `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated pump are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
+- **Tests:** `tests/core/test_watchdog.cpp` "Watchdog: latches, an ended recipe and an uncalibrated channel are problems; the headline names the first and counts the rest (RAT-015, RAT-072)"
 
 ### RAT-073 – Stale assessment is red; neutral when nothing can be judged
 
@@ -708,7 +708,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** Manufacturer charts scale the base nutrients to a target EC in a fixed ratio, but give additives such as a cleanser a fixed rate per volume. Scaled with an EC correction, an additive is overdosed in every round; driven by EC, its step can take a tank that is already at EC as done and skip itself.
 - **Evidence:** Found in a review of pair dosing (the fixed addition is one of its safeguards); the scaling to a target EC in a fixed ratio follows the manufacturers' charts. Observed on the reference installation (2026, see RAT-011): a Ca/Mg step controlled to EC took its target as met and skipped itself, so the fresh water got none.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/config.cpp`, `core/src/plan.cpp`, `core/src/robot.cpp`, `web/src/api.ts`
-- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: a fixed addition is neither dosed nor scaled; the round goes to the other parts in their ratio (RAT-085)"; `tests/core/test_plan.cpp` "EC effect after an edit: scaled up by parts no longer scaled, kept only at or above the new start (RAT-085)"; `tests/core/test_api.cpp` "API: a backup is not restored while a pump runs; what the robot learned stays only where the file keeps it (RAT-085)"
+- **Tests:** `tests/core/test_config.cpp` "Configuration: a pair keeps all its parts; none of them is fixed (RAT-054, RAT-085)"; `tests/core/test_plan.cpp` "EC round: a fixed addition is neither dosed nor scaled; the round goes to the other parts in their ratio (RAT-085)"; `tests/core/test_plan.cpp` "EC effect after an edit: scaled up by parts no longer scaled, kept only at or above the new start (RAT-085)"; `tests/core/test_api.cpp` "API: a backup is not restored while a channel runs; what the robot learned stays only where the file keeps it (RAT-085)"
 
 ### RAT-086 – Watering stops only on water clearly not fit for it
 

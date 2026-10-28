@@ -145,7 +145,7 @@ TEST_CASE("Sensor truth: a pH fall names the robot's own dose as one possible ca
   CHECK(ph.reason.key == "truth.jump_ph_fall");
 }
 
-TEST_CASE("Sensor truth: flow has no jump check; it jumps whenever the circulation pump starts or stops") {
+TEST_CASE("Sensor truth: flow has no jump check; it jumps whenever the suction pump starts or stops") {
   Bench b;
   for (int i = 0; i < 5; ++i) {
     b.now += 2 * kSecond;

@@ -51,7 +51,7 @@ Ctx Robot::ctx() {
   c.flowOk = flowOk();
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();
-  c.pumpJob = pumpJobActive();
+  c.channelJob = channelJobActive();
   return c;
 }
 
@@ -94,7 +94,7 @@ void Robot::boot() {
   if (auto s = store_.read(kConfigFile)) {
     try {
       Config c = configFromJson(json::parse(*s));
-      if (validateConfig(c, hw_.pumpCount()).empty()) cfg_ = c;
+      if (validateConfig(c, hw_.channelCount()).empty()) cfg_ = c;
       else stateUnknown = true;
     } catch (...) {
       stateUnknown = true;
@@ -144,7 +144,7 @@ void Robot::boot() {
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
                say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});
     else
-      log_.add(bootEpoch_, "dose", "notice", say("ev.boot.cut_cup", {{"pump", r.pump}}), say("ev.boot.cut_cup.text"));
+      log_.add(bootEpoch_, "dose", "notice", say("ev.boot.cut_cup", {{"channel", r.channel}}), say("ev.boot.cut_cup.text"));
   }
   pairAfterRestart(rt_, journal_.runs());
   if (journal_.anyIntoTank()) {
@@ -189,10 +189,10 @@ void Robot::tick() {
   act_.enforce(c);
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
-    if (job_ && p->orderId == job_->id) pumpJobDone(*p);
+    if (job_ && p->orderId == job_->id) channelJobDone(*p);
     else cycle_.doseFinished(c, *p);
   }
-  c.pumpJob = pumpJobActive();
+  c.channelJob = channelJobActive();
   cycle_.tick(c, act_, doser_);
 
   if (epoch - lastSample_ >= kSampleS) {
@@ -213,7 +213,7 @@ void Robot::tick() {
     in.bootEpoch = bootEpoch_;
     in.stopped = rt_.stopped;
     in.maintenance = maintenanceUntilMs_ > 0;
-    in.pumpCount = hw_.pumpCount();
+    in.channelCount = hw_.channelCount();
     watch_ = evaluate(in);
   }
   saveState();
@@ -286,7 +286,7 @@ json Robot::info() const {
           {"passwordProblem", authKept_ ? json(say("auth.kept")) : credentialsLost() ? json(say("auth.lost")) : json(nullptr)},
           {"name", cfg_.system.name},
           {"language", cfg_.system.language},
-          {"pumpCount", hw_.pumpCount()},
+          {"channelCount", hw_.channelCount()},
           {"profile", profileJson(hw_.profile())}};
 }
 
@@ -306,7 +306,7 @@ json Robot::diagnostics() {
           {"watchdog", st["watchdog"]},
           {"latches", st["latches"]},
           {"jumpLocks", st["jumpLocks"]},
-          {"pumps", st["pumps"]},
+          {"channels", st["channels"]},
           {"maintenanceUntil", st["maintenanceUntil"]},
           {"events", evs},
           // what the package leaves out, as keys; the app names them in the page's language
@@ -344,18 +344,18 @@ json Robot::state() {
               {"mlDone", doser_.progress().mlDone},
               {"run", doser_.progress().run + 1},
               {"runs", a->step.runs.size()}};
-  json pumps = json::array();
-  for (int n = 1; n <= hw_.pumpCount(); ++n) {
-    const CanisterCfg* b = cfg_.canisterOnPump(n);
-    auto it = cfg_.pumps.find(n);
-    pumps.push_back({{"pump", n},
+  json channels = json::array();
+  for (int n = 1; n <= hw_.channelCount(); ++n) {
+    const CanisterCfg* b = cfg_.canisterOnChannel(n);
+    auto it = cfg_.channels.find(n);
+    channels.push_back({{"channel", n},
                      {"canister", b ? json(b->id) : json(nullptr)},
-                     {"flowMlPerMin", it == cfg_.pumps.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
-                     {"at", it == cfg_.pumps.end() ? json(nullptr) : json(it->second.at)}});
+                     {"flowMlPerMin", it == cfg_.channels.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
+                     {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)}});
   }
   json job = nullptr;
   if (job_)
-    job = {{"id", job_->id}, {"type", job_->type}, {"pump", job_->pump}, {"state", job_->state},
+    job = {{"id", job_->id}, {"type", job_->type}, {"channel", job_->channel}, {"state", job_->state},
            {"seconds", job_->ms / 1000.0}, {"actualS", job_->actualMs / 1000.0}, {"ml", numOrNull(job_->ml)},
            {"message", job_->message}, {"at", job_->at}};
   json probe = nullptr;
@@ -379,8 +379,8 @@ json Robot::state() {
           {"clock", clock_.source()},
           {"stopped", rt_.stopped},
           {"online", hw_.online()},
-          {"circulation", [&] {
-             auto st = act_.circulation();
+          {"suctionPump", [&] {
+             auto st = act_.suctionPump();
              return st ? json(*st) : json(nullptr);
            }()},
           {"flowOk", c.flowOk},
@@ -392,7 +392,7 @@ json Robot::state() {
           {"newTank", rt_.newTank},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
-          {"pumps", pumps},
+          {"channels", channels},
           {"stock", stock},
           {"catchUp", [&] {
              if (!rt_.catchUp.is_object()) return json(nullptr);
@@ -404,7 +404,7 @@ json Robot::state() {
              }
              return json{{"recipe", rt_.catchUp.value("recipe", "")}, {"parts", parts}};
            }()},
-          {"pumpJob", job},
+          {"channelJob", job},
           {"probe", probe},
           {"maintenanceUntil", c.maintenanceUntil > 0 ? json(c.maintenanceUntil) : json(nullptr)},
           {"eventId", log_.lastId()}};
@@ -469,7 +469,7 @@ json Robot::events(Epoch from, Epoch to, const std::string& type, size_t limit) 
 // ---------------------------------------------------------------- settings
 
 Result Robot::saveConfig(Config next, const std::optional<Msg>& what) {
-  auto errs = validateConfig(next, hw_.pumpCount());
+  auto errs = validateConfig(next, hw_.channelCount());
   if (!errs.empty()) return Result::fail(422, errs.front(), {{"errors", errs}});
   next.revision = cfg_.revision + 1;
   if (!store_.write(kConfigFile, json(next).dump())) return Result::fail(500, say("store.failed"));
@@ -574,9 +574,9 @@ Result Robot::putCanister(const json& j) {
   }
   b->name = utf8Prefix(jstr(j, "name", b->name), 60);
   b->role = jstr(j, "role", b->role);
-  if (j.contains("pump")) {
-    if (!j["pump"].is_number_integer()) return Result::fail(422, say("cfg.canister.pump", {{"name", b->name}, {"max", hw_.pumpCount()}}));
-    b->pump = j["pump"].get<int>();
+  if (j.contains("channel")) {
+    if (!j["channel"].is_number_integer()) return Result::fail(422, say("cfg.canister.channel", {{"name", b->name}, {"max", hw_.channelCount()}}));
+    b->channel = j["channel"].get<int>();
   }
   b->pair = jstr(j, "pair", b->pair);
   b->color = jstr(j, "color", b->color);
@@ -760,14 +760,14 @@ Result Robot::importConfig(const json& j) {
   } catch (const std::exception& e) {
     return Result::fail(422, say("config.import", {{"reason", e.what()}}));
   }
-  auto errs = validateConfig(next, hw_.pumpCount());
+  auto errs = validateConfig(next, hw_.channelCount());
   // A calibration in a file is checked as if it were made now: a broken one is refused, not taken (RAT-025)
   if (!next.phCal.is_null())
     if (auto e = SensorTruth::checkPh(next.phCal)) errs.push_back(say("cfg.calibration.ph", {{"reason", *e}}));
   if (!next.ecCal.is_null())
     if (auto e = SensorTruth::checkEc(next.ecCal)) errs.push_back(say("cfg.calibration.ec", {{"reason", *e}}));
   if (!errs.empty()) return Result::fail(422, errs.front(), {{"errors", errs}});
-  if (pumpJobActive() || probe_ || doser_.busy() || cycle_.dosing()) return Result::fail(409, say("config.busy"));
+  if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing()) return Result::fail(409, say("config.busy"));
   // The lock against a second first setup never comes from a file
   next.system.passwordSet = cfg_.system.passwordSet || auth_.hasPassword();
   const Config before = cfg_;
@@ -808,31 +808,31 @@ Result Robot::importConfig(const json& j) {
   return r;
 }
 
-// ---------------------------------------------------------------- pumps
+// ---------------------------------------------------------------- channels
 
-Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {
+Result Robot::startChannelJob(const std::string& type, int channel, double seconds) {
   if (rt_.stopped) return Result::fail(409, say("act.stopped"));
-  if (pump < 1 || pump > hw_.pumpCount()) return Result::fail(404, say("act.no_pump", {{"pump", pump}}));
-  if (pumpJobActive()) return Result::fail(409, say("job.busy"));
+  if (channel < 1 || channel > hw_.channelCount()) return Result::fail(404, say("act.no_channel", {{"channel", channel}}));
+  if (channelJobActive()) return Result::fail(409, say("job.busy"));
   if (doser_.busy() || cycle_.dosing()) return Result::fail(409, say("job.cycle_dosing"));
   const Limits lim = cfg_.limits.bounded();
   if (!isNum(seconds) || seconds < 1 || seconds > lim.maxRunS) return Result::fail(422, say("job.seconds", {{"max", lim.maxRunS}}));
-  const CanisterCfg* b = cfg_.canisterOnPump(pump);
-  PumpJob job;
+  const CanisterCfg* b = cfg_.canisterOnChannel(channel);
+  ChannelJob job;
   job.id = (type == "calibration" ? "cal-" : "prime-") + std::to_string(++idSeq_);
   job.type = type;
-  job.pump = pump;
+  job.channel = channel;
   job.ms = static_cast<Ms>(std::llround(seconds * 1000));
   job.at = clock_.epoch();
   DoseOrder o;
   o.id = job.id;
   o.purpose = type;
-  o.step.pump = pump;
+  o.step.channel = channel;
   o.step.canister = b ? b->id : "";
-  o.step.name = b ? b->name : say("pump.n", {{"pump", pump}}).text;
+  o.step.name = b ? b->name : say("channel.n", {{"channel", channel}}).text;
   o.step.runs = {job.ms};
   // A line fill is booked like a dose, from the pump's flow; a calibration from the cup (SD-119)
-  if (type == "prime") o.step.flowMlPerMin = cfg_.pumpFlow(pump);
+  if (type == "prime") o.step.flowMlPerMin = cfg_.channelFlow(channel);
   Ctx c = ctx();
   Msg err;
   if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
@@ -840,17 +840,17 @@ Result Robot::startPumpJob(const std::string& type, int pump, double seconds) {
   return Result::ok({{"id", job.id}});
 }
 
-Result Robot::prime(int pump, double seconds) {
+Result Robot::prime(int channel, double seconds) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return startPumpJob("prime", pump, seconds);
+  return startChannelJob("prime", channel, seconds);
 }
 
-Result Robot::startCalibration(int pump, double seconds) {
+Result Robot::startCalibration(int channel, double seconds) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return startPumpJob("calibration", pump, seconds);
+  return startChannelJob("calibration", channel, seconds);
 }
 
-void Robot::pumpJobDone(const DoseProgress& p) {
+void Robot::channelJobDone(const DoseProgress& p) {
   job_->actualMs = p.msDone;
   if (p.state != DoseProgress::State::Done) {
     job_->state = "failed";
@@ -875,30 +875,30 @@ Result Robot::calibrationResult(double ml) {
   // From the actual run time the driver reported, not the requested one (RAT-070)
   const double flow = ml / static_cast<double>(job_->actualMs) * 60000.0;
   Config next = cfg_;
-  next.pumps[job_->pump] = PumpCal{std::round(flow * 100) / 100, clock_.epoch()};
+  next.channels[job_->channel] = ChannelCal{std::round(flow * 100) / 100, clock_.epoch()};
   Result r = saveConfig(next, std::nullopt);
   if (r.status != 200) return r;
   job_->ml = ml;
   job_->state = "done";
   // What went into the cup came out of the canister (SD-119)
-  if (const CanisterCfg* b = cfg_.canisterOnPump(job_->pump)) {
+  if (const CanisterCfg* b = cfg_.canisterOnChannel(job_->channel)) {
     Ctx c = ctx();
     takeStock(c, b->id, b->name, ml);
     saveState(true);
   }
-  job_->message = say("job.calibrated", {{"pump", job_->pump}, {"flow", flow}});
-  log_.add(clock_.epoch(), "calibration", "info", say("ev.pump.calibrated", {{"pump", job_->pump}}),
-           say("ev.pump.calibrated.text", {{"flow", flow}, {"ml", ml}, {"s", job_->actualMs / 1000.0}}));
+  job_->message = say("job.calibrated", {{"channel", job_->channel}, {"flow", flow}});
+  log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.calibrated", {{"channel", job_->channel}}),
+           say("ev.channel.calibrated.text", {{"flow", flow}, {"ml", ml}, {"s", job_->actualMs / 1000.0}}));
   return Result::ok({{"flowMlPerMin", flow}});
 }
 
-Result Robot::cancelPumpJob() {
+Result Robot::cancelChannelJob() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!job_) return Result::fail(404, say("api.not_found"));
   if (job_->state == "running") {
     Ctx c = ctx();
     doser_.abort(c, act_, say("abort.user"));
-    if (auto p = doser_.takeFinished()) pumpJobDone(*p);
+    if (auto p = doser_.takeFinished()) channelJobDone(*p);
   }
   job_.reset();
   return Result::ok();
@@ -1011,7 +1011,7 @@ Result Robot::stop(const Msg& who) {
   Ctx c = ctx();
   if (job_ && job_->state == "running") {
     doser_.abort(c, act_, say("abort.stop"));
-    if (auto p = doser_.takeFinished()) pumpJobDone(*p);
+    if (auto p = doser_.takeFinished()) channelJobDone(*p);
   }
   cycle_.stop(c, act_, doser_);
   if (auto p = doser_.takeFinished()) cycle_.doseFinished(c, *p);

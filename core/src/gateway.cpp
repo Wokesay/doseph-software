@@ -23,19 +23,19 @@ bool intoTank(const std::string& purpose) { return purpose == "ec" || purpose ==
 
 // ---------------------------------------------------------------- Actuators
 
-bool Actuators::startRun(const Ctx& c, int pump, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
+bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
   auto fail = [&](Msg m) {
     err = std::move(m);
     return false;
   };
   if (c.stopped) return fail(say("act.stopped"));
-  if (runningPump_ != 0) return fail(say("act.busy"));  // one run at a time (RAT-018)
-  if (pump < 1 || pump > hw_.pumpCount()) return fail(say("act.no_pump", {{"pump", pump}}));
+  if (runningChannel_ != 0) return fail(say("act.busy"));  // one run at a time (RAT-018)
+  if (channel < 1 || channel > hw_.channelCount()) return fail(say("act.no_channel", {{"channel", channel}}));
   const Limits lim = c.cfg.limits.bounded();  // fixed limits; settings only tighten (R7)
   if (ms <= 0 || ms > static_cast<Ms>(lim.maxRunS * 1000)) return fail(say("act.too_long", {{"s", lim.maxRunS}}));
   if (intoTank(purpose)) {
     // No dose without a measured calibration (RAT-015), no run under the minimum (RAT-050)
-    const double flow = c.cfg.pumpFlow(pump);
+    const double flow = c.cfg.channelFlow(channel);
     if (!(isNum(flow) && flow > 0)) return fail(say("act.uncalibrated"));
     if (ms < static_cast<Ms>(lim.minRunS * 1000)) return fail(say("act.too_short", {{"s", lim.minRunS}}));
     // No dose without flow through the device: it would not reach the tank (SD-105)
@@ -44,27 +44,27 @@ bool Actuators::startRun(const Ctx& c, int pump, Ms ms, const std::string& purpo
     return fail(say("act.purpose"));
   }
   std::string e;
-  if (!hw_.startRun(pump, ms, jobId, e)) return fail(say("act.hw", {{"error", e}}));
-  runningPump_ = pump;
+  if (!hw_.startRun(channel, ms, jobId, e)) return fail(say("act.hw", {{"error", e}}));
+  runningChannel_ = channel;
   runningPurpose_ = purpose;
   cutLogged_ = false;
   return true;
 }
 
-void Actuators::clearRun(int pump) {
-  if (runningPump_ == pump) {
-    runningPump_ = 0;
+void Actuators::clearRun(int channel) {
+  if (runningChannel_ == channel) {
+    runningChannel_ = 0;
     runningPurpose_.clear();
   }
 }
 
-bool Actuators::setCirculation(const Ctx& c, bool on, Msg& err) {
+bool Actuators::setSuctionPump(const Ctx& c, bool on, Msg& err) {
   if (on && c.stopped) {
     err = say("act.stopped");
     return false;
   }
   std::string e;
-  if (!hw_.setCirculation(on, e)) {
+  if (!hw_.setSuctionPump(on, e)) {
     err = say("act.hw", {{"error", e}});
     return false;
   }
@@ -74,11 +74,11 @@ bool Actuators::setCirculation(const Ctx& c, bool on, Msg& err) {
 void Actuators::stopAll() {
   hw_.stopAllPumps();
   std::string e;
-  hw_.setCirculation(false, e);  // also when its state is unknown: the command costs nothing
+  hw_.setSuctionPump(false, e);  // also when its state is unknown: the command costs nothing
 }
 
 void Actuators::enforce(const Ctx& c) {
-  if (runningPump_ == 0) return;
+  if (runningChannel_ == 0) return;
   // A Stop ends every run; a dose without flow stops: what it pumps would stay in the device (SD-105)
   if (c.stopped || (intoTank(runningPurpose_) && !c.flowOk)) {
     hw_.stopAllPumps();
@@ -107,7 +107,7 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
   jr.purpose = o.purpose;
   jr.canister = o.step.canister;
   jr.name = o.step.name;
-  jr.pump = o.step.pump;
+  jr.channel = o.step.channel;
   jr.ml = isNum(o.step.flowMlPerMin) ? o.step.flowMlPerMin * static_cast<double>(ms) / 60000.0 : kNaN;
   jr.ms = ms;
   jr.at = c.epoch;
@@ -116,7 +116,7 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
     return false;
   }
   Msg e;
-  if (!act.startRun(c, o.step.pump, ms, o.purpose, busJob(), e)) {
+  if (!act.startRun(c, o.step.channel, ms, o.purpose, busJob(), e)) {
     c.journal.end(o.id, run, 0, 0);  // nothing ran
     progress_.error = e;
     return false;
@@ -189,7 +189,7 @@ void Doser::logOrder(const Ctx& c) {
   c.log.add(c.epoch, "dose", ok ? "info" : "warn", say(ok ? "ev.dose" : "ev.dose_incomplete", {{"name", o.step.name}, {"ml", progress_.mlDone}}),
             purposeLabel(o.purpose),
             {{"canister", o.step.canister},
-             {"pump", o.step.pump},
+             {"channel", o.step.channel},
              {"ml", progress_.mlDone},
              {"mlPlanned", numOrNull(o.step.ml)},
              {"ms", progress_.msDone},
@@ -202,7 +202,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
   if (!active_) return;
   const auto& o = *active_;
   if (running_) {
-    RunStatus st = act.runStatus(o.step.pump);
+    RunStatus st = act.runStatus(o.step.channel);
     const bool mine = st.jobId == busJob();
     // A failure without a job ID: the pump driver disconnected or not answering
     const bool lost = !mine && st.state == RunStatus::State::Failed && st.jobId.empty();
@@ -210,13 +210,13 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       const Ms deadline = runStartedAt_ + runRequestedMs_ + std::max<Ms>(5 * kSecond, runRequestedMs_ / 5);
       if (c.now <= deadline) return;
       act.stopPumps();
-      act.clearRun(o.step.pump);
+      act.clearRun(o.step.channel);
       running_ = false;
       book(c, mine && st.actualMs > 0 ? st.actualMs : runRequestedMs_);
       fail(c, say("dose.no_response", {{"name", o.step.name}}));
       return;
     }
-    act.clearRun(o.step.pump);
+    act.clearRun(o.step.channel);
     running_ = false;
     if (lost) {
       act.stopPumps();
@@ -260,11 +260,11 @@ void Doser::abort(const Ctx& c, Actuators& act, const Msg& reason) {
   if (!active_) return;
   act.stopPumps();
   if (running_) {
-    RunStatus st = act.runStatus(active_->step.pump);
+    RunStatus st = act.runStatus(active_->step.channel);
     const Ms ran = st.jobId == busJob() ? st.actualMs : std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_);
     book(c, std::max<Ms>(0, ran));
   }
-  act.clearRun(active_->step.pump);
+  act.clearRun(active_->step.channel);
   running_ = false;
   progress_.state = DoseProgress::State::Aborted;
   progress_.error = say("dose.aborted", {{"name", active_->step.name}, {"reason", reason}});

@@ -94,6 +94,15 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- Doseph's terms reach the API, the configuration and the app (SD-107):
+  a dosing pump is a **channel** ("Channels & probes", `channel` on a
+  canister, `channels` in the configuration and the state,
+  `POST /api/v1/channels/…` to calibrate and prime, `channelCount` in
+  the info), and the robot's own pump is the **suction pump** (the
+  cycle's step `suction_on`, `suctionPump` in the state). Saved settings
+  and backups of schema 2 are migrated to schema 3 when they are read;
+  dosing journals written before keep their channel. Messages that named
+  a pump number name the channel.
 - The sensor truth calls pH, EC, temperature and flow signals, so
   "channel" names a dosing channel only (SD-107). The messages
   `truth.implausible` and `truth.jump` carry the signal as `signal`.

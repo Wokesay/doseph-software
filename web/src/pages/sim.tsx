@@ -11,8 +11,8 @@ import { Button, Field, NumberInput, Seg } from "../ui";
 
 type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
-  pumps: { pump: number; liquid: string; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
-  output: boolean; external: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
+  channels: { channel: number; liquid: string; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
+  output: boolean; external: boolean; suctionLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
 };
 
@@ -76,7 +76,7 @@ export function SimPanel() {
             <span>{num(w.tank.temp, 1)} °C</span>
           </div>
           <div class="small muted">
-            {t("sim.circulation", { state: w.output || w.external ? t("common.on") : t("common.off") })} · {w.flowing ? t("sim.flowing", { lpm: num(w.pumpLpm, 1) }) : t("sim.notFlowing")}
+            {t("sim.suctionPump", { state: w.output || w.external ? t("common.on") : t("common.off") })} · {w.flowing ? t("sim.flowing", { lpm: num(w.suctionLpm, 1) }) : t("sim.notFlowing")}
           </div>
         </div>
       )}
@@ -99,8 +99,8 @@ export function SimPanel() {
       <div class="stack-sm">
         <div class="section-title">{t("sim.flow")}</div>
         <div class="row">
-          <NumberInput value={lpm} onValue={setLpm} unit="L/min" ariaLabel={t("sim.pumpLpm")} />
-          <Button size="sm" onClick={() => act("pumpLpm", { lpm })}>
+          <NumberInput value={lpm} onValue={setLpm} unit="L/min" ariaLabel={t("sim.suctionLpm")} />
+          <Button size="sm" onClick={() => act("suctionLpm", { lpm })}>
             {t("sim.set")}
           </Button>
         </div>
@@ -153,18 +153,18 @@ export function SimPanel() {
       </div>
       {w && (
         <div class="stack-sm">
-          <div class="section-title">{t("sim.pumps")}</div>
+          <div class="section-title">{t("sim.channels")}</div>
           <div class="list">
-            {w.pumps.map((p) => (
+            {w.channels.map((p) => (
               <div class="item small">
                 <span class="grow">
-                  {t("sim.pumpLiquid", { n: p.pump, liquid: w.liquids[p.liquid] ?? p.liquid ?? "–" })} <span class="faint">{t("sim.trueFlow", { flow: num(p.trueFlow, 1) })}</span>
+                  {t("sim.channelLiquid", { n: p.channel, liquid: w.liquids[p.liquid] ?? p.liquid ?? "–" })} <span class="faint">{t("sim.trueFlow", { flow: num(p.trueFlow, 1) })}</span>
                   {p.cupMl > 0 && <span class="faint"> · {t("sim.cup", { ml: num(p.cupMl, 1) })}</span>}
                 </span>
-                <Button size="sm" onClick={() => act("pumpFault", { pump: p.pump, blocked: !p.blocked, empty: p.empty })}>
+                <Button size="sm" onClick={() => act("channelFault", { channel: p.channel, blocked: !p.blocked, empty: p.empty })}>
                   {p.blocked ? t("sim.unblock") : t("sim.block")}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => act("pumpFault", { pump: p.pump, blocked: p.blocked, empty: !p.empty })}>
+                <Button size="sm" variant="ghost" onClick={() => act("channelFault", { channel: p.channel, blocked: p.blocked, empty: !p.empty })}>
                   {p.empty ? t("sim.refill") : t("sim.empty")}
                 </Button>
               </div>

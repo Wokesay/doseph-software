@@ -4,7 +4,7 @@
 export const de = {
   "login.mismatch": "Die Passwörter stimmen nicht überein.",
   "login.welcome": "Willkommen",
-  "login.firstText": "Lege zuerst ein eigenes Passwort fest. Es schützt Pumpen und Einstellungen in deinem Netz.",
+  "login.firstText": "Lege zuerst ein eigenes Passwort fest. Es schützt Kanäle, Pumpen und Einstellungen in deinem Netz.",
   "login.newPassword": "Neues Passwort",
   "login.minLength": "Mindestens 8 Zeichen",
   "login.repeatPassword": "Passwort wiederholen",
@@ -20,7 +20,7 @@ export const de = {
 export const en: Record<keyof typeof de, string> = {
   "login.mismatch": "The passwords do not match.",
   "login.welcome": "Welcome",
-  "login.firstText": "First set your own password. It protects pumps and settings on your network.",
+  "login.firstText": "First set your own password. It protects channels, pumps and settings on your network.",
   "login.newPassword": "New password",
   "login.minLength": "At least 8 characters",
   "login.repeatPassword": "Repeat password",

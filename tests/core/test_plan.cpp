@@ -17,7 +17,7 @@ struct Fix {
                    {"b", "Part B", "nutrient", 2, "AB", "#0c0"},
                    {"cm", "CalMag", "nutrient", 3, "", "#cc0"},
                    {"down", "pH−", "ph_down", 4, "", "#c00"}};
-    for (int n = 1; n <= 4; ++n) cfg.pumps[n] = {50.0, 1};
+    for (int n = 1; n <= 4; ++n) cfg.channels[n] = {50.0, 1};
     cfg.recipes.push_back(RecipeCfg{"r", "Test", "", {{"a", 1.0}, {"b", 1.0}}});
   }
   RecipeCfg& recipe() { return cfg.recipes[0]; }
@@ -61,10 +61,10 @@ TEST_CASE("EC round: 0.8 × gap, the pair scaled together, its ratio kept at eve
   CHECK(c.steps[0].ml / c.steps[1].ml == doctest::Approx(1.0));
 }
 
-TEST_CASE("EC round over the partial-run limit: made smaller by one factor for all parts, never refused or capped per pump (RAT-054)") {
+TEST_CASE("EC round over the partial-run limit: made smaller by one factor for all parts, never refused or capped per channel (RAT-054)") {
   Fix f;
   f.recipe() = {"r", "Test", "", {{"a", 2.0}, {"b", 1.0}}};
-  f.cfg.pumps[1] = {6.0, 1};  // a small pump: part A alone needs more than 6 runs of 60 s
+  f.cfg.channels[1] = {6.0, 1};  // a small pump: part A alone needs more than 6 runs of 60 s
   const auto d = planEcDose(f.cfg, f.recipe(), 100, 1.0, 0.275, 0.275, 1.0);
   REQUIRE(d.ok);
   CHECK(d.limited);
@@ -111,14 +111,14 @@ TEST_CASE("EC round: a fixed addition is neither dosed nor scaled; the round goe
   CHECK(n.reason.key == "ec.recipe_no_scaled");
 }
 
-TEST_CASE("EC round: a canister on no pump, or an uncalibrated pump, refuses the round (RAT-015)") {
+TEST_CASE("EC round: a canister on no channel, or an uncalibrated channel, refuses the round (RAT-015)") {
   Fix f;
-  f.cfg.canisters[1].pump = 0;
+  f.cfg.canisters[1].channel = 0;
   auto d = planEcDose(f.cfg, f.recipe(), 20, 1.0, 0.275, 0.275, 1.0);
   CHECK_FALSE(d.ok);
-  CHECK(d.reason.key == "dose.no_pump");
+  CHECK(d.reason.key == "dose.no_channel");
   Fix g;
-  g.cfg.pumps.erase(2);
+  g.cfg.channels.erase(2);
   auto e = planEcDose(g.cfg, g.recipe(), 20, 1.0, 0.275, 0.275, 1.0);
   CHECK_FALSE(e.ok);
   CHECK(e.reason.key == "dose.part");

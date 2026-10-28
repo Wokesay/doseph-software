@@ -23,7 +23,7 @@ void World::reset(int n) {
   tank = Tank{};
   chamber = Chamber{};
   output = external = false;
-  pumpLpm = 12.0;
+  suctionLpm = 12.0;
   flowFault.clear();
   probeFault.clear();
   phBuffer.reset();
@@ -156,7 +156,7 @@ void World::step(Ms dt) {
   tank.temp = 20.5 + 1.5 * std::sin(2 * kPi * static_cast<double>(now_ % 86400000) / 86400000.0);
   // Mixing: with circulation one turnover is about t63 (assumption; RAT-052 measured t63 26 s at 20.4 L);
   // without it slow
-  const double tau = flowing() ? std::max(20.0, tank.volumeL / pumpLpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
+  const double tau = flowing() ? std::max(20.0, tank.volumeL / suctionLpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
   const double k = 1.0 - std::exp(-dts / tau);
   tank.ec += tank.pendingEc * k;
   tank.pendingEc *= (1.0 - k);
@@ -213,14 +213,14 @@ double World::rawTemp() const { return std::round((chamber.temp + noise(0.02)) *
 
 double World::rawFlow() const {
   if (flowFault == "sensor" || !flowing()) return 0.0;
-  return std::round(pumpLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
+  return std::round(suctionLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
 }
 
 json World::toJson() const {
   json ps = json::array();
   for (size_t i = 0; i < pumps.size(); ++i) {
     const Pump& p = pumps[i];
-    ps.push_back({{"pump", i + 1}, {"liquid", p.liquid}, {"trueFlow", p.trueFlow}, {"blocked", p.blocked}, {"empty", p.empty},
+    ps.push_back({{"channel", i + 1}, {"liquid", p.liquid}, {"trueFlow", p.trueFlow}, {"blocked", p.blocked}, {"empty", p.empty},
                   {"state", p.state}, {"cupMl", std::round(p.cupMl * 100.0) / 100.0}});
   }
   json liq = json::object();
@@ -228,10 +228,10 @@ json World::toJson() const {
   return {{"tank", {{"volumeL", tank.volumeL}, {"ec", tank.ec}, {"ph", tank.ph}, {"temp", tank.temp},
                     {"pendingEc", tank.pendingEc}, {"pendingPh", tank.pendingPh}}},
           {"chamber", {{"ec", chamber.ec}, {"ph", chamber.ph}, {"temp", chamber.temp}}},
-          {"pumps", ps},
+          {"channels", ps},
           {"output", output},
           {"external", external},
-          {"pumpLpm", pumpLpm},
+          {"suctionLpm", suctionLpm},
           {"flowing", flowing()},
           {"flowFault", flowFault},
           {"probeFault", probeFault},

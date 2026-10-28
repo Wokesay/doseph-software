@@ -70,7 +70,7 @@ TEST_CASE("Simulator: the example profiles Home and Pro are marked as assumption
     CHECK(info["profile"]["line"] == name);
     CHECK(info["profile"]["example"] == true);
     CHECK(info["profile"]["channels"].size() == p->channels.size());
-    CHECK(info["pumpCount"] == static_cast<int>(p->channels.size()));
+    CHECK(info["channelCount"] == static_cast<int>(p->channels.size()));
     CHECK(s.world().pumps.size() == p->channels.size());
     CHECK(s.robot().diagnostics()["info"]["profile"] == info["profile"]);
   }

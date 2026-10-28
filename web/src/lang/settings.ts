@@ -43,7 +43,7 @@ export const de = {
   "settings.report.security": "Eine Sicherheitslücke bitte nicht so melden, sondern vertraulich:",
   "settings.about": "Über",
   "settings.version": "Version",
-  "settings.pumps": "Dosierpumpen",
+  "settings.channels": "Dosierkanäle",
   "settings.localOnly": "Der Roboter arbeitet nur in deinem Heimnetz – ohne Cloud, ohne Konto, ohne App aus dem Store.",
   "settings.signOut": "Abmelden",
 } as const;
@@ -91,7 +91,7 @@ export const en: Record<keyof typeof de, string> = {
   "settings.report.security": "Please do not report a vulnerability this way, but privately:",
   "settings.about": "About",
   "settings.version": "Version",
-  "settings.pumps": "Dosing pumps",
+  "settings.channels": "Dosing channels",
   "settings.localOnly": "The robot works on your home network only – no cloud, no account, no app from a store.",
   "settings.signOut": "Sign out",
 };

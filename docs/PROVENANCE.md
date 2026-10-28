@@ -28,7 +28,7 @@ working in Claude Code sessions.
 | `core/src/cycle.cpp` (the mixing cycle) | EC and pH control | rewritten as one state machine (SD-105) |
 | `core/data/templates.json` | the templates of the catalog | recipe templates only |
 | `sim/` | the simulator | a twin of the robot: tank, cell, flow, pumps, probes |
-| `web/` | the web app | stripped to the robot: status, recipe, tank, history, pumps & probes, settings |
+| `web/` | the web app | stripped to the robot: status, recipe, tank, history, channels & probes, settings |
 | `tests/core/` | the tests | rewritten where the code was; kept where it was carried over |
 | `docs/RATIONALE.md` | the rationale register | the same RAT IDs; grow-only rules marked dropped |
 | `tools/i18n_keys.test.mjs`, `tools/arch_check.sh`, `cmake/` | the checks and build files | adapted |
