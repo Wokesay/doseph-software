@@ -42,11 +42,12 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Return | `gravity` | `pump` |
 | Network | Wi-Fi | Wi-Fi, LAN |
 | Suction pump, low end | 10 L/min | – |
+| Pull back | the pumps run backwards | they cannot |
 
 The twin has one pump per channel. Without a flow meter (`outlet_level`)
 the device reports the flow as the low end of the suction pump's delivery
 while the outlet's level sensor reports water, and 0 otherwise, so a
-turnover errs long (SD-109). The drop sensors follow in #10, step 3.3.
+turnover errs long (SD-109).
 
 The download of a prototype has the web app built in: it needs no
 `--web`, and started without arguments (a double-click) it takes the next
@@ -66,6 +67,7 @@ http://localhost:5173 (the API is passed through).
 | Water path | the measuring chamber holds 0.15 L up to its weir, which keeps the probes wet; above it the water returns by gravity or by a return pump that runs from 0.25 L to 0.18 L; faults: return blocked, return pump failed. At 0.35 L the high-level sensor trips |
 | Hardware release | a leak, high level or the stop button switch the suction pump and every dosing pump off below the robot, and no run starts; the state shows it as `hardware` |
 | Dosing channels | four, each pump with its own true flow (42–53 ml/min), may be blocked or empty; calibration and priming go into a cup |
+| Outlets | a drop sensor at each outlet counts drops of 0.05 ml; a line pulled back (at most 2 ml) fills first on the next run; faults: outlet blocked (the pump runs, nothing drips), a canister above the device that siphons 0.6 ml/min while its pump stands |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |
 | Probes | pH and EC with their own errors, measured noise (RAT-082); faults: offline, frozen, jump, dry EC; calibration solutions |
 
@@ -74,4 +76,5 @@ switches the faults; `POST /api/v1/sim/<action>` does the same for tests.
 The water path's faults are there for tests so far, and come to the panel
 with #10, step 3.5: `flowFault` with `{"fault": "dry"}`, `returnFault`
 with `{"fault": "blocked"}` or `{"fault": "failed"}`, `leak` with
-`{"on": true}` and `stopButton` with `{"pressed": true}`.
+`{"on": true}`, `stopButton` with `{"pressed": true}`, and on
+`channelFault` the keys `outletBlocked` and `siphon`.

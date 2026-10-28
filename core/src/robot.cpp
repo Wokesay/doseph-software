@@ -351,7 +351,13 @@ json Robot::state() {
     channels.push_back({{"channel", n},
                      {"canister", b ? json(b->id) : json(nullptr)},
                      {"flowMlPerMin", it == cfg_.channels.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
-                     {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)}});
+                     {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)},
+                     // What its drop sensor saw (SD-111): null without one
+                     {"drops", [&] {
+                        const auto d = hw_.drops(n);
+                        if (!d) return json(nullptr);
+                        return json{{"count", d->count}, {"lastAgoS", d->lastMs < 0 ? json(nullptr) : json((c.now - d->lastMs) / 1000)}};
+                      }()}});
   }
   json job = nullptr;
   if (job_)

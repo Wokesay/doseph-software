@@ -6,6 +6,7 @@
 // particular hardware: what the device is, is the product side's.
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <map>
 #include <optional>
@@ -32,6 +33,14 @@ struct Pump {
   double trueFlow = 50; // ml/min, the real one
   bool blocked = false; // the motor stalls: the run fails
   bool empty = false;   // the canister is empty: it runs, nothing comes
+  bool outletBlocked = false;  // the outlet or line is blocked: it runs, nothing drips
+  bool siphon = false;         // the canister stands above the device: it drips while the pump stands
+  // The line and the drop sensor at the outlet (SD-111)
+  double lineMl = 0;           // pulled back from the tip; a forward run refills it before it drips
+  std::uint64_t drops = 0;
+  Ms lastDropMs = -1;
+  double dropAcc = 0;          // what came out since the last whole drop, ml
+  bool backwards = false;      // the run in progress pulls back
   // Run state
   std::string jobId;
   Ms requested = 0, elapsed = 0;
@@ -105,7 +114,7 @@ class World {
 
   // Pumps 1..n
   std::vector<Pump> pumps;
-  bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err);
+  bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards = false);
   doseph::RunStatus runStatus(int pump) const;
   void stopAllPumps();
 
@@ -123,6 +132,7 @@ class World {
 
  private:
   void step(Ms dt);
+  void outOfTip(Pump& p, double ml);  // what leaves a channel's tip: drops, and the tank
   double noise(double sigma) const;
   Ms now_ = 0;
   Ms lastSample_ = -100000;

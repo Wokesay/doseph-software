@@ -64,6 +64,7 @@ class Simulation {
   doseph::Robot& robot() { return *robot_; }
   doseph::Api& api() { return *api_; }
   World& world() { return world_; }
+  SimHardware& hardware() { return *hw_; }
   SimClock& clock() { return *clock_; }
   doseph::IStorage& storage() { return *store_; }
   std::recursive_mutex& mutex() { return mtx_; }

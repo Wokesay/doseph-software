@@ -39,9 +39,14 @@ class SimHardware : public doseph::IHardware {
   const doseph::Profile& profile() const override { return profile_; }
   doseph::Release release() const override { return {w_.released(), w_.leak, w_.highLevel(), w_.stopButton}; }
   doseph::WaterPath waterPath() const override;
-  bool startRun(int channel, doseph::Ms ms, const std::string& jobId, std::string& err) override {
-    return w_.startRun(channel, ms, jobId, err);
+  bool startRun(int channel, doseph::Ms ms, const std::string& jobId, std::string& err, bool backwards) override {
+    if (backwards && (channel < 1 || channel > channelCount() || !profile_.channels[static_cast<size_t>(channel - 1)].reverse)) {
+      err = "this pump cannot run backwards";
+      return false;
+    }
+    return w_.startRun(channel, ms, jobId, err, backwards);
   }
+  std::optional<doseph::Drops> drops(int channel) const override;
   doseph::RunStatus runStatus(int channel) const override { return w_.runStatus(channel); }
   void stopAllPumps() override { w_.stopAllPumps(); }
   bool setSuctionPump(bool on, std::string& err) override;

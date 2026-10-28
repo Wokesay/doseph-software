@@ -10,7 +10,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     // Small tanks: four channels, flow estimated from the outlet level, return by gravity (assumptions)
     p.line = "home";
     p.variant = "Home (example)";
-    p.channels.assign(4, {"brushed", "S", true});
+    p.channels.assign(4, {"brushed", "S", true, true});
     p.flow = "outlet_level";
     p.returnBy = "gravity";
     p.network = {"wifi"};
@@ -19,7 +19,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     // Larger tanks: six channels, a flow meter, a return pump, LAN as well (assumptions)
     p.line = "pro";
     p.variant = "Pro (example)";
-    p.channels.assign(6, {"brushless", "M", true});
+    p.channels.assign(6, {"brushless", "M", true, false});
     p.flow = "turbine";
     p.returnBy = "pump";
     p.network = {"wifi", "lan"};
@@ -45,6 +45,12 @@ std::optional<doseph::Sample> SimHardware::sample(doseph::Signal c) const {
       return doseph::Sample(w_.rawFlow(), ts);
   }
   return std::nullopt;
+}
+
+std::optional<doseph::Drops> SimHardware::drops(int channel) const {
+  if (channel < 1 || channel > channelCount() || !profile_.channels[static_cast<size_t>(channel - 1)].dropSensor) return std::nullopt;
+  const Pump& p = w_.pumps[static_cast<size_t>(channel - 1)];
+  return doseph::Drops{p.drops, p.lastDropMs};
 }
 
 doseph::WaterPath SimHardware::waterPath() const {

@@ -7,6 +7,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The twin's outlets have drop sensors (SD-111): each channel counts its
+  drops; a blocked outlet or an empty canister gives none while the pump
+  runs; a canister above the device siphons and drips without a running
+  pump; a pump that can runs backwards to pull its line back, and the
+  next run fills the line before it drips. The hardware interface
+  reports each channel's drops and whether its pump can run backwards;
+  the state shows the drops per channel.
 - The twin has the new water path (SD-109, SD-110): the suction pump
   primes before water flows; the measuring chamber keeps its water at
   the weir; the water returns by gravity or by a return pump; a blocked

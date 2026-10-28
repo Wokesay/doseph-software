@@ -297,8 +297,11 @@ json Simulation::control(const std::string& action, const json& b) {
   else if (action == "channelFault") {
     const int n = static_cast<int>(num("channel", 0));
     if (n >= 1 && n <= static_cast<int>(world_.pumps.size())) {
-      world_.pumps[static_cast<size_t>(n - 1)].blocked = doseph::jbool(b, "blocked", false);
-      world_.pumps[static_cast<size_t>(n - 1)].empty = doseph::jbool(b, "empty", false);
+      Pump& p = world_.pumps[static_cast<size_t>(n - 1)];
+      p.blocked = doseph::jbool(b, "blocked", false);
+      p.empty = doseph::jbool(b, "empty", false);
+      p.outletBlocked = doseph::jbool(b, "outletBlocked", false);
+      p.siphon = doseph::jbool(b, "siphon", false);
     }
   } else if (action == "buffer") {
     const std::string kind = doseph::jstr(b, "kind");

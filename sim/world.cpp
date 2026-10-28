@@ -17,6 +17,9 @@ constexpr double kPi = 3.14159265358979323846;
 // holds 0.15 L up to the weir and 0.35 L up to the high-level sensor
 constexpr Ms kPrimeMs = 8000;
 constexpr double kWeirL = 0.15, kReturnOnL = 0.25, kReturnOffL = 0.18, kHighL = 0.35, kChamberMaxL = 0.40;
+// The outlets (assumptions, SD-111): a drop is 0.05 ml; a line pulls back at most 2 ml;
+// a canister above the device siphons 0.6 ml/min
+constexpr double kDropMl = 0.05, kLineMaxMl = 2.0, kSiphonMlPerMin = 0.6;
 }  // namespace
 
 World::World() : rng_(42) { reset(); }
@@ -73,6 +76,26 @@ void World::fill(double volumeL, double ec, double ph) {
   phTrail_.clear();
 }
 
+void World::outOfTip(Pump& p, double ml) {
+  if (ml <= 0) return;
+  // The drop sensor counts each drop that falls through the air gap
+  p.dropAcc += ml;
+  while (p.dropAcc >= kDropMl) {
+    p.dropAcc -= kDropMl;
+    p.drops++;
+    p.lastDropMs = now_;
+  }
+  // The drop goes into the mixing chamber and with the return into the tank, not mixed in yet
+  if (tank.volumeL > 0.1 && liquids.count(p.liquid)) {
+    const Liquid& l = liquids[p.liquid];
+    const double mlPerL = ml / tank.volumeL;
+    const double buffer = 1.6 / (0.6 + std::max(0.0, tank.ec + tank.pendingEc));  // a stronger solution buffers more (assumption)
+    tank.pendingEc += l.ecPerMlL * mlPerL;
+    tank.pendingPh += l.phPerMlL * mlPerL * buffer;
+    tank.volumeL += ml / 1000.0;
+  }
+}
+
 bool World::primed() const { return external || primedMs_ >= kPrimeMs; }
 
 bool World::flowing() const {
@@ -81,7 +104,7 @@ bool World::flowing() const {
 
 bool World::highLevel() const { return chamberL >= kHighL; }
 
-bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err) {
+bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards) {
   if (pump < 1 || pump > static_cast<int>(pumps.size())) {
     err = "no such pump";
     return false;
@@ -101,6 +124,7 @@ bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err
     return false;
   }
   p.jobId = jobId;
+  p.backwards = backwards;
   p.requested = ms;
   p.elapsed = 0;
   p.state = 1;
@@ -182,15 +206,14 @@ void World::step(Ms dt) {
     const Ms eff = std::min(dt, p.requested - (p.elapsed - dt));
     const double ml = p.trueFlow * static_cast<double>(std::max<Ms>(0, eff)) / 60000.0;
     const bool intoCup = p.jobId.rfind("cal-", 0) == 0 || p.jobId.rfind("prime-", 0) == 0;
-    if (intoCup) {
-      p.cupMl += p.empty ? 0 : ml;
-    } else if (!p.empty && tank.volumeL > 0.1 && ml > 0 && liquids.count(p.liquid)) {
-      const Liquid& l = liquids[p.liquid];
-      const double mlPerL = ml / tank.volumeL;
-      const double buffer = 1.6 / (0.6 + std::max(0.0, tank.ec + tank.pendingEc));  // a stronger solution buffers more (assumption)
-      tank.pendingEc += l.ecPerMlL * mlPerL;
-      tank.pendingPh += l.phPerMlL * mlPerL * buffer;
-      tank.volumeL += ml / 1000.0;
+    if (p.backwards) {
+      p.lineMl = std::min(kLineMaxMl, p.lineMl + ml);  // pulled back towards the canister
+    } else if (intoCup) {
+      p.cupMl += p.empty ? 0 : ml;  // the outlet is off the device, over the cup: the sensor sees nothing
+    } else if (!p.empty && !p.outletBlocked) {
+      const double refill = std::min(ml, p.lineMl);  // a line pulled back fills first
+      p.lineMl -= refill;
+      outOfTip(p, ml - refill);
     }
     if (p.elapsed >= p.requested) {
       p.elapsed = p.requested;
@@ -198,6 +221,9 @@ void World::step(Ms dt) {
       running_ = 0;
     }
   }
+  // A canister above the device siphons while its pump stands (PD-455)
+  for (auto& p : pumps)
+    if (p.siphon && p.state != 1 && !p.empty && !p.outletBlocked) outOfTip(p, kSiphonMlPerMin * dts / 60.0);
   // Water temperature: a daily curve (assumption)
   tank.temp = 20.5 + 1.5 * std::sin(2 * kPi * static_cast<double>(now_ % 86400000) / 86400000.0);
   // Mixing: with circulation one turnover is about t63 (assumption; RAT-052 measured t63 26 s at 20.4 L);
@@ -267,6 +293,8 @@ json World::toJson() const {
   for (size_t i = 0; i < pumps.size(); ++i) {
     const Pump& p = pumps[i];
     ps.push_back({{"channel", i + 1}, {"liquid", p.liquid}, {"trueFlow", p.trueFlow}, {"blocked", p.blocked}, {"empty", p.empty},
+                  {"outletBlocked", p.outletBlocked}, {"siphon", p.siphon}, {"drops", p.drops},
+                  {"lineMl", std::round(p.lineMl * 100.0) / 100.0},
                   {"state", p.state}, {"cupMl", std::round(p.cupMl * 100.0) / 100.0}});
   }
   json liq = json::object();
