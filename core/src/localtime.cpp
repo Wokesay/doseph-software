@@ -11,40 +11,40 @@ namespace {
 #include "tzdb.inc"
 
 // Days since 1970-01-01 of a civil date, and back (proleptic Gregorian)
-long daysFromCivil(long y, int m, int d) {
+Epoch daysFromCivil(Epoch y, int m, int d) {
   y -= m <= 2;
-  const long era = (y >= 0 ? y : y - 399) / 400;
-  const long yoe = y - era * 400;
-  const long doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
-  const long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  const Epoch era = (y >= 0 ? y : y - 399) / 400;
+  const Epoch yoe = y - era * 400;
+  const Epoch doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+  const Epoch doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
   return era * 146097 + doe - 719468;
 }
 
-void civilFromDays(long z, int& y, int& m, int& d) {
+void civilFromDays(Epoch z, int& y, int& m, int& d) {
   z += 719468;
-  const long era = (z >= 0 ? z : z - 146096) / 146097;
-  const long doe = z - era * 146097;
-  const long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-  const long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  const long mp = (5 * doy + 2) / 153;
+  const Epoch era = (z >= 0 ? z : z - 146096) / 146097;
+  const Epoch doe = z - era * 146097;
+  const Epoch yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  const Epoch doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  const Epoch mp = (5 * doy + 2) / 153;
   d = static_cast<int>(doy - (153 * mp + 2) / 5 + 1);
   m = static_cast<int>(mp < 10 ? mp + 3 : mp - 9);
   y = static_cast<int>(yoe + era * 400 + (m <= 2));
 }
 
-long floorDiv(long a, long b) { return a / b - ((a % b != 0) && ((a < 0) != (b < 0))); }
+Epoch floorDiv(Epoch a, Epoch b) { return a / b - ((a % b != 0) && ((a < 0) != (b < 0))); }
 
-int weekdayOf(long days) { return static_cast<int>(((days % 7) + 11) % 7); }  // 1970-01-01 was a Thursday
+int weekdayOf(Epoch days) { return static_cast<int>(((days % 7) + 11) % 7); }  // 1970-01-01 was a Thursday
 
-bool leap(long y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
+bool leap(Epoch y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
 
 // The day (since 1970) a transition falls on in a year
-long dayOf(long y, const TzRule::When& w) {
+Epoch dayOf(Epoch y, const TzRule::When& w) {
   if (w.kind == 'J') return daysFromCivil(y, 1, 1) + w.day - 1 + (leap(y) && w.day >= 60 ? 1 : 0);
   if (w.kind == 'D') return daysFromCivil(y, 1, 1) + w.day;
-  const long first = daysFromCivil(y, w.month, 1);
-  long d = first + (w.weekday - weekdayOf(first) + 7) % 7 + (w.week - 1) * 7;
-  const long next = w.month == 12 ? daysFromCivil(y + 1, 1, 1) : daysFromCivil(y, w.month + 1, 1);
+  const Epoch first = daysFromCivil(y, w.month, 1);
+  Epoch d = first + (w.weekday - weekdayOf(first) + 7) % 7 + (w.week - 1) * 7;
+  const Epoch next = w.month == 12 ? daysFromCivil(y + 1, 1, 1) : daysFromCivil(y, w.month + 1, 1);
   while (d >= next) d -= 7;  // week 5 is the last of the month
   return d;
 }
@@ -167,7 +167,7 @@ LocalTime localTime(Epoch utc, const std::string& zone) {
   lt.known = rule.has_value();
   lt.offsetS = rule ? utcOffsetAt(*rule, utc) : 0;
   const Epoch local = utc + lt.offsetS;
-  const long days = floorDiv(local, 86400);
+  const Epoch days = floorDiv(local, 86400);
   civilFromDays(days, lt.year, lt.month, lt.day);
   lt.weekday = weekdayOf(days);
   lt.minuteOfDay = static_cast<int>((local - days * 86400) / 60);
@@ -176,7 +176,7 @@ LocalTime localTime(Epoch utc, const std::string& zone) {
 
 Epoch nextLocalMinute(Epoch from, const std::string& zone, int minuteOfDay) {
   const LocalTime now = localTime(from, zone);
-  long day = daysFromCivil(now.year, now.month, now.day);
+  Epoch day = daysFromCivil(now.year, now.month, now.day);
   for (int i = 0; i < 3; ++i, ++day) {
     const Epoch local = day * 86400 + static_cast<Epoch>(minuteOfDay) * 60;
     // The offset at that moment, which a change of time in between may have moved
