@@ -141,6 +141,7 @@ of its own.
 |---|---|---|---|
 | The history keeps gaps as gaps, also as CSV; pH, EC and temperature only with flow | RAT-016 | ✓ | `robot.cpp`, `api.cpp` · test_api.cpp, robot.spec.ts |
 | A message stays short enough to become a notification | RAT-045 | ✓ | `messages.cpp` · i18n_keys.test.mjs |
+| Four levels: 10 s for a day, 1 min for a week, 15 min for a year, 1 h for five years; a snapshot from before the hourly level is read and that level worked out from its 15-min one | SD-126 | ✓ | `history.hpp`, `history.cpp` · test_history.cpp |
 
 ## Simulator
 

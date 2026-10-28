@@ -3,6 +3,7 @@
 //   L0: 10 s, mean, 24 h
 //   L1: 1 min, min/mean/max, 7 days
 //   L2: 15 min, min/mean/max, 1 year
+//   L3: 1 h, min/mean/max, 5 years (SD-126)
 // Values as float; gaps are NaN and appear in the API as null.
 // On the device the same structure lies in a flash partition of its own
 // (append, erase only on wrap-around); in the simulator in RAM with a file dump.
@@ -36,7 +37,9 @@ class Series {
   void add(Epoch t, double v);
   SeriesPoints query(Epoch from, Epoch to, size_t maxPoints) const;
   void dump(std::string& out) const;
-  bool load(const char*& p, const char* end);
+  // `tiers`: how many levels the file holds; a file from before the hourly level (3) gets it
+  // worked out from its 15-min level
+  bool load(const char*& p, const char* end, size_t tiers);
 
   struct Tier {
     int stepS = 0;
@@ -51,7 +54,9 @@ class Series {
 
  private:
   void commit(Tier& tr, std::int64_t slot);
-  std::array<Tier, 3> tiers_;
+  // Fills a coarser level from the slots of a finer one
+  void derive(size_t from, size_t to);
+  std::array<Tier, 4> tiers_;
 };
 
 class History {
