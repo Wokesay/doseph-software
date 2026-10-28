@@ -7,6 +7,10 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Scenario tests of the new water path (#10, step 3.4): the core against
+  the twin through the API, for priming, no flow, doses and their drops,
+  a blocked outlet, high level and the return pump
+  (`tests/core/test_scenarios.cpp`, harness in `tests/core/harness.hpp`).
 - The twin's outlets have drop sensors (SD-111): each channel counts its
   drops; a blocked outlet or an empty canister gives none while the pump
   runs; a canister above the device siphons and drips without a running
