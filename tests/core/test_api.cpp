@@ -100,8 +100,8 @@ TEST_CASE("API: the state has the fields the web app reads (contract)") {
     REQUIRE(st["cycle"]["checks"][g].is_array());
     for (const auto& i : st["cycle"]["checks"][g]) CHECK((i["ok"].is_boolean() && i["key"].is_string() && i["text"].is_string()));
   }
-  for (const char* k : {"recipe", "ecTarget", "phTarget", "volumeL", "flowLpm", "turnoverMin", "waitEcMin", "waitPhMin",
-                        "suggestEcMin", "suggestPhMin", "holdMin"})
+  for (const char* k : {"recipe", "ecTarget", "phTarget", "volumeL", "flowLpm", "turnoverMin", "mixMin", "mixOwnMin",
+                        "mixUserMin", "mixWhy", "stableS", "holdMin"})
     CHECK_MESSAGE(st["cycle"]["settings"].contains(k), k);
   CHECK(st["watchdog"].contains("stale"));
   CHECK(st["channels"].size() == 4);
@@ -118,7 +118,7 @@ TEST_CASE("API: tank, canisters, recipes and the recipe in force; refusals say w
   REQUIRE(c.login("demo-password"));
   CHECK(c.call("PUT", "tank", {{"volumeL", 0}}).status == 422);
   CHECK(c.call("PUT", "tank", {{"volumeL", "lots"}}).status == 422);
-  CHECK(c.call("PUT", "tank", {{"volumeL", 80}, {"waitPhMin", 20}}).status == 200);
+  CHECK(c.call("PUT", "tank", {{"volumeL", 80}, {"mixMinMin", 20}}).status == 200);
   CHECK(c.get("config")["tank"]["volumeL"] == 80);
   CHECK(c.get("state")["newTank"] == true);  // another volume: checked again
   auto b = c.call("POST", "canisters", {{"name", "Bloom PK"}, {"role", "nutrient"}, {"channel", 2}});

@@ -63,7 +63,7 @@ export const deBase = {
   "term.turnover": "Umlaufzeit",
   "help.turnover": "So lange braucht die Ansaugpumpe, um den Tank einmal durch das Gerät zu pumpen: Tankvolumen geteilt durch Durchfluss.",
   "term.waitTime": "Mischzeit",
-  "help.waitTime": "So lange wird nach einer Gabe umgewälzt, bevor der Roboter wieder misst. Die Uhr läuft nur, solange Wasser fließt. Der Vorschlag rechnet mit 2 Umläufen für EC und 3 für pH; du legst die Zeit fest.",
+  "help.waitTime": "So lange wird nach einer Gabe umgewälzt, bevor der Roboter wieder misst: eine Umwälzung, mindestens 2 Minuten, für EC und pH gleich, dann bis die Werte stabil sind. Die Uhr läuft nur, solange Wasser fließt. Du kannst sie verlängern, nie verkürzen.",
   "term.holdTime": "Pause zwischen Prüfungen",
   "help.holdTime": "Ist der Tank im Ziel, ruht der Roboter so lange und prüft dann erneut. Er mischt nicht ständig.",
   "term.circulation": "Durchfluss",

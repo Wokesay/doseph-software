@@ -357,7 +357,7 @@ export const msgDe: Record<string, string> = {
   "cfg.control.ec_rounds": "Nährstoffrunden je Prüfung: {min} bis {max}",
   "cfg.control.ph_doses": "pH-Gaben je Prüfung: {min} bis {max}",
   "cfg.tank.volume": "Das Tankvolumen muss zwischen {min} und {max} L liegen",
-  "cfg.tank.wait": "Die Mischzeit muss zwischen {min} und {max} min liegen",
+  "cfg.tank.mix_min": "Die Mindest-Mischzeit nach einer Gabe muss zwischen {min} und {max} min liegen",
   "cfg.tank.hold": "Die Pause zwischen Prüfungen muss zwischen {min} und {max} min liegen",
   "cfg.canister.id": "Jeder Kanister braucht eine eigene ID",
   "cfg.canister.name": "Ein Kanister braucht einen Namen mit höchstens 40 Zeichen",

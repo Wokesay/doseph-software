@@ -170,7 +170,7 @@ export const phMiddle = (r: { ph?: [number, number] | null } | undefined) => (r?
 // The bounds the robot accepts (config.hpp); the page checks them before it sends
 export const LIMITS = {
   volumeL: [1, 100000] as [number, number],
-  waitMin: [2, 600] as [number, number],
+  mixMinMin: [0, 600] as [number, number],
   holdMin: [10, 1440] as [number, number],
   days: [1, 366] as [number, number],
 };

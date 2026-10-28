@@ -36,13 +36,17 @@ bool has(const std::vector<Msg>& errs, const std::string& key) {
 
 TEST_CASE("Configuration: there and back through JSON; a missing number stays missing (R5, RAT-006)") {
   Config c = sample();
-  c.tank.waitEcMin = kNaN;
+  c.tank.mixMinMin = kNaN;
   c.recipes[0].phLow = c.recipes[0].phHigh = kNaN;
   json j = c;
-  CHECK(j["tank"]["waitEcMin"].is_null());
+  CHECK(j["tank"]["mixMinMin"].is_null());
   CHECK(j["recipes"][0]["ph"].is_null());
   Config back = configFromJson(j);
-  CHECK(std::isnan(back.tank.waitEcMin));
+  CHECK(std::isnan(back.tank.mixMinMin));
+  // The two waits from before SD-112: the longer one is the user's least wait
+  CHECK(configFromJson(json{{"tank", {{"waitEcMin", 20}, {"waitPhMin", 45}}}}).tank.mixMinMin == 45);
+  CHECK(configFromJson(json{{"tank", {{"waitEcMin", 20}, {"waitPhMin", nullptr}}}}).tank.mixMinMin == 20);
+  CHECK(std::isnan(configFromJson(json{{"tank", json::object()}}).tank.mixMinMin));
   CHECK(std::isnan(back.recipes[0].phLow));
   CHECK(back.tank.volumeL == 100);
   CHECK(back.channelFlow(2) == 50.0);
@@ -168,9 +172,11 @@ TEST_CASE("Configuration: one canister per channel, a channel the device has; th
   c.canisters[3].channel = 5;
   CHECK(has(validateConfig(c, 4), "cfg.canister.channel"));
   c = sample();
-  c.tank.waitEcMin = 1;  // below 2 min (RAT-052)
-  CHECK(has(validateConfig(c, 4), "cfg.tank.wait"));
-  c.tank.waitEcMin = 30;
+  c.tank.mixMinMin = 0;  // no more than the robot's own wait (SD-112)
+  CHECK(validateConfig(c, 4).empty());
+  c.tank.mixMinMin = 601;
+  CHECK(has(validateConfig(c, 4), "cfg.tank.mix_min"));
+  c.tank.mixMinMin = 30;
   c.tank.holdMin = 5;
   CHECK(has(validateConfig(c, 4), "cfg.tank.hold"));
   c = sample();

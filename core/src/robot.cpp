@@ -165,7 +165,7 @@ void Robot::boot() {
     // Doses not mixed in and measured yet: the first cycle mixes first and learns nothing (SD-106)
     Ctx c = ctx();
     const CycleSettings s = cycleSettings(c);
-    const double m = std::max({kWaitMinMin, isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0});
+    const double m = s.mixMin;
     cycle_.mixFirst(static_cast<Ms>(m * 60) * kSecond);
     log_.add(bootEpoch_, "control", "notice", say("ev.boot.mix_first"), say("ev.boot.mix_first.text", {{"min", m}}));
   } else {
@@ -579,7 +579,7 @@ Result Robot::saveConfig(Config next, const std::optional<Msg>& what) {
 void Robot::mixFirstNow() {
   Ctx c = ctx();
   const CycleSettings s = cycleSettings(c);
-  const double m = std::max({kWaitMinMin, isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0});
+  const double m = s.mixMin;
   cycle_.mixFirst(static_cast<Ms>(m * 60) * kSecond);
   restartCycle();
 }
@@ -609,7 +609,7 @@ Result Robot::putTank(const json& j) {
     else return false;
     return true;
   };
-  if (!num("volumeL", next.tank.volumeL) || !num("waitEcMin", next.tank.waitEcMin) || !num("waitPhMin", next.tank.waitPhMin) ||
+  if (!num("volumeL", next.tank.volumeL) || !num("mixMinMin", next.tank.mixMinMin) ||
       !num("holdMin", next.tank.holdMin))
     return Result::fail(422, say("api.bad_input"));
   const bool volumeChanged = !(std::isnan(next.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) && next.tank.volumeL != cfg_.tank.volumeL;

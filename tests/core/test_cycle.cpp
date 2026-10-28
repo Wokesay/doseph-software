@@ -68,7 +68,7 @@ TEST_CASE("Cycle: suction pump on, flow proven, flushed, measured; a test dose f
   // A small test dose: about 0.1 mS/cm in 100 L at the largest effect
   CHECK(c["line"]["args"]["ml"].get<double>() < 0.1 / 0.275 * 100 * 1.01);
   REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 5 * 60));
-  CHECK(st(s)["cycle"]["progress"]["totalS"] == 20 * 60);  // the suggestion: 2 turnovers of 100 L at the estimated 10 L/min
+  CHECK(st(s)["cycle"]["progress"]["totalS"] == 10 * 60);  // one turnover of 100 L at the estimated 10 L/min (SD-112)
   REQUIRE(runUntil(s, [&] { return phase(s) == "hold"; }, 8 * 3600));
   json h = st(s);
   CHECK_FALSE(h["newTank"].get<bool>());  // the test dose found the volume fitting
@@ -142,19 +142,28 @@ TEST_CASE("Cycle: a dose that loses its flow stops at once; what went in mixes w
   CHECK(st(s)["effects"]["ecByRecipe"].empty());
 }
 
-TEST_CASE("Cycle: the mixing clock runs only with flow; the wait is the user's, else the suggestion (SD-105)") {
+TEST_CASE("Cycle: the mixing clock runs only with flow; the wait is one turnover, at least 2 min, which the user may only lengthen; then stable over a fifth of a turnover (SD-105, SD-112, RAT-052, RAT-058)") {
   sim::Simulation s(demo());
-  CHECK(st(s)["cycle"]["settings"]["suggestEcMin"].is_null());  // no flow measured yet: no suggestion (R5)
+  CHECK(st(s)["cycle"]["settings"]["mixOwnMin"].is_null());  // no flow measured yet: no turnover (R5)
+  CHECK(st(s)["cycle"]["settings"]["mixWhy"] == "minimum");
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 5 * 60));
   // Without a flow meter the flow is the low end of the suction pump's delivery, so a turnover errs long (SD-109)
-  CHECK(st(s)["cycle"]["settings"]["flowLpm"].get<double>() == doctest::Approx(10).epsilon(0.001));
-  CHECK(st(s)["cycle"]["settings"]["turnoverMin"].get<double>() == doctest::Approx(10).epsilon(0.001));
-  CHECK(st(s)["cycle"]["settings"]["suggestEcMin"] == 20);
-  CHECK(st(s)["cycle"]["settings"]["suggestPhMin"] == 30);
-  s.robot().putTank({{"waitEcMin", 5}});
-  CHECK(st(s)["cycle"]["settings"]["waitEcMin"] == 5);
+  json set = st(s)["cycle"]["settings"];
+  CHECK(set["flowLpm"].get<double>() == doctest::Approx(10).epsilon(0.001));
+  CHECK(set["turnoverMin"].get<double>() == doctest::Approx(10).epsilon(0.001));
+  CHECK(set["mixOwnMin"] == 10);
+  CHECK(set["mixMin"] == 10);
+  CHECK(set["mixWhy"] == "turnover");
+  CHECK(set["stableS"] == 120);  // a fifth of 10 min
+  // A shorter wait of the user's does not apply; a longer one does
+  s.robot().putTank({{"mixMinMin", 5}});
+  CHECK(st(s)["cycle"]["settings"]["mixMin"] == 10);
+  s.robot().putTank({{"mixMinMin", 15}});
+  set = st(s)["cycle"]["settings"];
+  CHECK(set["mixMin"] == 15);
+  CHECK(set["mixWhy"] == "user");
   REQUIRE(runUntil(s, [&] { return phase(s) == "mix"; }, 30 * 60));
-  CHECK(st(s)["cycle"]["progress"]["totalS"] == 5 * 60);
+  CHECK(st(s)["cycle"]["progress"]["totalS"] == 15 * 60);
   s.step(kMinute);
   s.world().flowFault = "sensor";  // water flows, but no flow is proven
   s.step(2 * kSecond);
@@ -162,21 +171,21 @@ TEST_CASE("Cycle: the mixing clock runs only with flow; the wait is the user's, 
   s.step(2 * kMinute);
   CHECK(st(s)["cycle"]["progress"]["doneS"] == done);
   s.world().flowFault.clear();
-  REQUIRE(runUntil(s, [&] { return phase(s) == "remeasure"; }, 6 * 60));
-  // Back to the suggestion: null
-  s.robot().putTank({{"waitEcMin", nullptr}});
-  CHECK(st(s)["cycle"]["settings"]["waitEcMin"] == 20);
+  REQUIRE(runUntil(s, [&] { return phase(s) == "remeasure"; }, 16 * 60));
+  s.robot().putTank({{"mixMinMin", nullptr}});
+  CHECK(st(s)["cycle"]["settings"]["mixMin"] == 10);
 }
 
-TEST_CASE("Cycle: with a flow meter the measured flow gives the turnover (SD-109)") {
+TEST_CASE("Cycle: with a flow meter the measured flow gives the turnover (SD-109, SD-112)") {
   sim::Options o = demo();
   o.profile = "pro";
   sim::Simulation s(o);
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 5 * 60));
-  CHECK(st(s)["cycle"]["settings"]["flowLpm"].get<double>() == doctest::Approx(12).epsilon(0.02));
-  CHECK(st(s)["cycle"]["settings"]["turnoverMin"].get<double>() == doctest::Approx(8.33).epsilon(0.02));
-  CHECK(st(s)["cycle"]["settings"]["suggestEcMin"] == 17);
-  CHECK(st(s)["cycle"]["settings"]["suggestPhMin"] == 25);
+  const json set = st(s)["cycle"]["settings"];
+  CHECK(set["flowLpm"].get<double>() == doctest::Approx(12).epsilon(0.02));
+  CHECK(set["turnoverMin"].get<double>() == doctest::Approx(8.33).epsilon(0.02));
+  CHECK(set["mixOwnMin"] == 9);
+  CHECK(set["stableS"] == 100);
 }
 
 TEST_CASE("Cycle: a test dose that does not fit the entered volume stops all dosing until a person corrects or confirms it (SD-105)") {
@@ -226,7 +235,7 @@ TEST_CASE("Cycle: a restart while a channel doses is reported; the next check mi
   json p = st(s)["cycle"]["progress"];
   CHECK(p["first"] == true);
   CHECK(st(s)["cycle"]["line"]["key"] == "cycle.mix_first");
-  CHECK(p["totalS"] == 30 * 60);  // the longer of the two waits
+  CHECK(p["totalS"] == 10 * 60);  // the mixing wait: one turnover (SD-112)
   REQUIRE(runUntil(s, [&] { return phase(s) == "measure"; }, 30 * 60));
   CHECK(st(s)["newTank"] == true);  // the cut test dose checked nothing
   // A second restart reports the cut dose no more
@@ -678,7 +687,7 @@ TEST_CASE("Cycle: pH waits below the EC floor and after a nutrient dose, and is 
     Robot& r = s.robot();
     // Once the test dose found the volume, the shortest wait after nutrients: a pH dose could follow soon
     REQUIRE(runUntil(s, [&] { return hasEvent(s, "ev.cycle.test_ok"); }, 4 * 3600));
-    REQUIRE(r.putTank({{"waitEcMin", 2}}).status == 200);
+    REQUIRE(r.putTank({{"mixMinMin", 0}}).status == 200);
     // Right after a nutrient dose the checklist says pH rests
     REQUIRE(runUntil(s, [&] { const json c = st(s)["cycle"]; return phase(s) == "mix" && c["round"].is_object() && c["round"]["kind"] == "ec"; }, 2 * 3600));
     bool rests = false;

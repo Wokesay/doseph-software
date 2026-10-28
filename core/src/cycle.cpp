@@ -57,12 +57,17 @@ CycleSettings cycleSettings(const Ctx& c) {
   s.holdMs = minutes(isNum(cfg.tank.holdMin) ? std::clamp(cfg.tank.holdMin, kHoldMinMin, kHoldMaxMin) : 60.0);
   s.flowLpm = c.rt.flowLpm;
   if (isNum(s.volumeL) && isNum(s.flowLpm) && s.flowLpm > 0) s.turnoverMin = s.volumeL / s.flowLpm;
-  // The suggestion: about two turnovers for EC, three for pH (SD-105, RAT-052, RAT-058); the user's value wins
-  s.suggestEcMin = suggestedWaitMin(s.volumeL, s.flowLpm, 2.0);
-  s.suggestPhMin = suggestedWaitMin(s.volumeL, s.flowLpm, 3.0);
-  auto own = [](double v) { return isNum(v) ? std::clamp(v, kWaitMinMin, kWaitMaxMin) : kNaN; };
-  s.waitEcMin = isNum(cfg.tank.waitEcMin) ? own(cfg.tank.waitEcMin) : s.suggestEcMin;
-  s.waitPhMin = isNum(cfg.tank.waitPhMin) ? own(cfg.tank.waitPhMin) : s.suggestPhMin;
+  // The mixing wait (SD-112): one turnover, at least 2 min, then stable; the user may only lengthen it
+  s.mixOwnMin = suggestedWaitMin(s.volumeL, s.flowLpm, 1.0);
+  s.mixUserMin = isNum(cfg.tank.mixMinMin) ? std::clamp(cfg.tank.mixMinMin, 0.0, kWaitMaxMin) : kNaN;
+  s.mixMin = isNum(s.mixOwnMin) ? s.mixOwnMin : kWaitMinMin;
+  s.mixWhy = isNum(s.mixOwnMin) ? "turnover" : "minimum";
+  if (isNum(s.mixUserMin) && s.mixUserMin > s.mixMin) {
+    s.mixMin = s.mixUserMin;
+    s.mixWhy = "user";
+  }
+  if (isNum(s.turnoverMin))
+    s.stableMs = std::clamp<Ms>(minutes(s.turnoverMin / 5), kStableWindowMs, kStableWindowMaxMs);
   s.ecTol = std::max(0.05, isNum(cfg.control.ecTolerance) ? cfg.control.ecTolerance : 0.1);  // never 0 (RAT-008)
   s.phTol = std::max(0.05, isNum(cfg.control.phTolerance) ? cfg.control.phTolerance : 0.15);
   const RecipeCfg* r = cfg.active.recipe.empty() ? nullptr : cfg.recipe(cfg.active.recipe);
@@ -154,8 +159,7 @@ void MixCycle::restart(Ctx& c, Actuators& act, Doser& doser) {
   if (phase_ == Phase::Dose && doser.busy()) doser.abort(c, act, say("abort.interrupted"));
   if (open) {
     const CycleSettings s = cycleSettings(c);
-    const double m = std::max(isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0);
-    mixFirst(minutes(std::max(m, kWaitMinMin)));
+    mixFirst(minutes(s.mixMin));
   }
   kind_ = Kind::None;
   queue_.clear();
@@ -211,8 +215,10 @@ bool MixCycle::measuring(Ctx& c, Actuators& act) {
     line_ = say("cycle.measure_wait_ec");
     return false;
   }
+  // Steady over 60 s or a fifth of a turnover, at most 10 min (SD-112)
+  const Ms stable = cycleSettings(c).stableMs;
   window_.push_back({c.now, ph.usable() ? *ph.value : kNaN, *ec.value, t.usable() ? *t.value : kNaN});
-  while (window_.size() >= 2 && window_[1].at <= c.now - kStableWindowMs) window_.pop_front();
+  while (window_.size() >= 2 && window_[1].at <= c.now - stable) window_.pop_front();
   double phMin = kNaN, phMax = kNaN, ecMin = kNaN, ecMax = kNaN, phSum = 0, ecSum = 0, tSum = 0;
   int tN = 0;
   bool phAll = true;
@@ -234,15 +240,15 @@ bool MixCycle::measuring(Ctx& c, Actuators& act) {
   }
   const Ms spanned = c.now - window_.front().at;
   const bool steady = ecMax - ecMin <= kStableEc && (!phAll || phMax - phMin <= kStablePh);
-  if (spanned < kStableWindowMs || !steady) {
-    if (c.now - since_ > kMeasureMaxMs) {
+  if (spanned < stable || !steady) {
+    if (c.now - since_ > stable + kMeasureMaxMs) {
       c.log.add(c.epoch, "control", "warn", say("ev.cycle.unsteady"),
                 say("ev.cycle.unsteady.text", {{"ec", ecMax - ecMin}, {"ph", phAll ? json(phMax - phMin) : json(nullptr)}}));
       wait(c, act, say("cycle.wait.unsteady"));
       return false;
     }
     line_ = say(phase_ == Phase::Remeasure ? "cycle.remeasure" : "cycle.measure",
-                {{"left", mmss(std::max<Ms>(0, kStableWindowMs - spanned))}, {"moving", !steady}});
+                {{"left", mmss(std::max<Ms>(0, stable - spanned))}, {"moving", !steady}});
     return false;
   }
   const double n = static_cast<double>(window_.size());
@@ -789,7 +795,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         }
         if (kind_ != Kind::None) {
           enter(c, Phase::Remeasure);  // flow came back during a round: measure its result
-          line_ = say("cycle.remeasure", {{"left", mmss(kStableWindowMs)}});
+          line_ = say("cycle.remeasure", {{"left", mmss(s.stableMs)}});
         } else if (mixPendingMs_ > 0) {
           // Doses not mixed in yet (a restart, a Stop): mix first, learn nothing (SD-106)
           mixingFirst_ = true;
@@ -800,7 +806,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
           line_ = say("cycle.mix_first", {{"left", mmss(mixTargetMs_)}});
         } else {
           enter(c, Phase::Measure);
-          line_ = say("cycle.measure", {{"left", mmss(kStableWindowMs)}});
+          line_ = say("cycle.measure", {{"left", mmss(s.stableMs)}});
         }
       }
       break;
@@ -843,8 +849,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       if (mlRound_ > 0) {
         mixedMs_ = 0;
-        const double m = kind_ == Kind::Ec ? s.waitEcMin : s.waitPhMin;
-        mixTargetMs_ = minutes(isNum(m) ? m : kWaitMinMin);
+        mixTargetMs_ = minutes(s.mixMin);  // pH waits like EC (SD-112)
         enter(c, Phase::Mix);
         line_ = say("cycle.mix", {{"left", mmss(mixTargetMs_)}});
       } else {
@@ -1008,10 +1013,11 @@ json MixCycle::status(const Ctx& c) const {
                    {"volumeL", numOrNull(s.volumeL)},
                    {"flowLpm", numOrNull(s.flowLpm)},
                    {"turnoverMin", numOrNull(s.turnoverMin)},
-                   {"waitEcMin", numOrNull(s.waitEcMin)},
-                   {"waitPhMin", numOrNull(s.waitPhMin)},
-                   {"suggestEcMin", numOrNull(s.suggestEcMin)},
-                   {"suggestPhMin", numOrNull(s.suggestPhMin)},
+                   {"mixMin", numOrNull(s.mixMin)},
+                   {"mixOwnMin", numOrNull(s.mixOwnMin)},
+                   {"mixUserMin", numOrNull(s.mixUserMin)},
+                   {"mixWhy", s.mixWhy},
+                   {"stableS", s.stableMs / kSecond},
                    {"holdMin", s.holdMs / kMinute}};
   return j;
 }
