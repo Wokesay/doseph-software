@@ -176,6 +176,9 @@ struct RuntimeState {
   // What a pair still misses after a round that stopped part way:
   // {recipe, parts: {canister: ml}}; null when nothing is missing (SD-114)
   json catchUp = nullptr;
+  // Channel → how long its line was pulled back after its last dose, ms: its next run fills it
+  // first, unbooked (SD-111)
+  std::map<int, Ms> pulledBackMs;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

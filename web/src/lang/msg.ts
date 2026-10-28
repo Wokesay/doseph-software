@@ -119,6 +119,7 @@ export const msgDe: Record<string, string> = {
   "act.no_head": "Kanal {channel} hat keinen Pumpenkopf",
   "act.head_changed": "der Pumpenkopf wurde seit dem Einmessen gewechselt",
   "act.channel_locked": "Kanal {channel} ist gesperrt: Gib ihn frei, sobald die Ursache behoben ist",
+  "act.no_reverse": "Die Pumpe von Kanal {channel} kann nicht rückwärts laufen",
   "act.no_flow": "kein Durchfluss durch das Gerät – ohne Durchfluss wird nicht dosiert",
   "act.purpose": "unbekannte Art von Lauf",
   "act.hw": "das Gerät lehnte ab: {error}",

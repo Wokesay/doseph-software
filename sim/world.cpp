@@ -209,7 +209,10 @@ void World::step(Ms dt) {
     if (p.backwards) {
       p.lineMl = std::min(kLineMaxMl, p.lineMl + ml);  // pulled back towards the canister
     } else if (intoCup) {
-      p.cupMl += p.empty ? 0 : ml;  // the outlet is off the device, over the cup: the sensor sees nothing
+      // The outlet is off the device, over the cup: the sensor sees nothing; a line pulled back fills first
+      const double refill = p.empty ? 0 : std::min(ml, p.lineMl);
+      p.lineMl -= refill;
+      p.cupMl += p.empty ? 0 : ml - refill;
     } else if (!p.empty && !p.outletBlocked) {
       const double refill = std::min(ml, p.lineMl);  // a line pulled back fills first
       p.lineMl -= refill;

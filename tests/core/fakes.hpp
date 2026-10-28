@@ -49,8 +49,10 @@ class Hardware : public doseph::IHardware {
     if (it == dropsSeen.end()) return std::nullopt;
     return it->second;
   }
-  bool startRun(int channel, Ms ms, const std::string& jobId, std::string&, bool) override {
+  bool backwards = false;  // the last run started ran backwards
+  bool startRun(int channel, Ms ms, const std::string& jobId, std::string&, bool back) override {
     runs[channel] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
+    backwards = back;
     started++;
     return true;
   }
