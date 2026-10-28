@@ -15,6 +15,8 @@ const RANGES: [string, TextKey, number][] = [
   ["24h", "history.range24h", 24 * 3600],
   ["7d", "history.range7d", 7 * 86400],
   ["30d", "history.range30d", 30 * 86400],
+  ["1y", "history.range1y", 365 * 86400],
+  ["5y", "history.range5y", 5 * 365 * 86400],  // the hourly level (SD-126)
 ];
 
 const FILTERS: [string, TextKey][] = [

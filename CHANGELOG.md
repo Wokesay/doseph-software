@@ -7,6 +7,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The history keeps five years at one hour (SD-126, #10 step 5): a
+  fourth level with min, mean and max per hour after 10 s for a day,
+  1 min for a week and 15 min for a year. The history page offers 1 and 5
+  years; the CSV export reaches as far. A saved history from before is
+  read, and its hourly level is worked out from the last year's 15-min
+  values.
 - Maintenance dates (SD-125, #10 step 5). Each item comes from what the
   device has, with an interval that can be set from 7 to 730 days:
   - calibrate the pH probe (30 days) and the EC probe (90);

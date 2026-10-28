@@ -565,3 +565,21 @@ are the product's (#10, new function 4).
 - **Defects** of a pump, the outlet, the flow or a probe are already
   alarms (SD-109, SD-111, SD-123).
 
+
+## SD-126: The history keeps five years at one hour
+
+2026-10-28. Decided by the owner for #10, step 5 ("compacted, kept for
+several years").
+
+- **A fourth level:** min, mean and max per hour for five years, after
+  10 s for a day, 1 min for a week and 15 min for a year. Asked for a
+  period, the finest level that still covers it answers; the CSV export
+  is the same query.
+- **Older snapshots** with three levels are read; the hourly level is then
+  worked out from the 15-min level of the last year, so nothing is lost
+  with the update. A snapshot is saved in the new form.
+- **Space:** about 1.1 MB per series in full, 4.4 MB for pH, EC,
+  temperature and flow. Whether the device's flash holds that is the
+  product's question (filed with this SD); the simulator keeps it in a
+  file.
+

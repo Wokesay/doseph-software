@@ -8,7 +8,8 @@
 namespace doseph {
 
 namespace {
-constexpr const char* kMagic = "GCH1";
+constexpr const char* kMagic = "DPH2";      // four levels (SD-126)
+constexpr const char* kMagicOld = "GCH1";   // three levels: the hourly one is worked out on loading
 constexpr const char* kTimeTag = "GCT2";  // after the series: each series' newest sample (older files lack it)
 constexpr size_t kMaxIdLen = 255, kMaxPerRecord = 1024;
 
@@ -32,9 +33,9 @@ bool get(const char*& p, const char* end, T& v) {
 }  // namespace
 
 Series::Series() {
-  const int steps[3] = {10, 60, 900};
-  const size_t caps[3] = {8640, 10080, 35040};
-  for (size_t i = 0; i < 3; ++i) {
+  const int steps[4] = {10, 60, 900, 3600};
+  const size_t caps[4] = {8640, 10080, 35040, 43800};
+  for (size_t i = 0; i < 4; ++i) {
     auto& t = tiers_[i];
     t.stepS = steps[i];
     t.cap = caps[i];
@@ -163,8 +164,10 @@ void Series::dump(std::string& out) const {
   }
 }
 
-bool Series::load(const char*& p, const char* end) {
-  for (auto& t : tiers_) {
+bool Series::load(const char*& p, const char* end, size_t tiers) {
+  if (tiers < 3 || tiers > tiers_.size()) return false;
+  for (size_t i = 0; i < tiers; ++i) {
+    auto& t = tiers_[i];
     if (!get(p, end, t.head) || !get(p, end, t.cur) || !get(p, end, t.sum) || !get(p, end, t.cmin) ||
         !get(p, end, t.cmax) || !get(p, end, t.n))
       return false;
@@ -179,7 +182,43 @@ bool Series::load(const char*& p, const char* end) {
       p += t.cap * sizeof(float);
     }
   }
+  if (tiers == 3) derive(2, 3);
   return true;
+}
+
+void Series::derive(size_t from, size_t to) {
+  const Tier& f = tiers_[from];
+  Tier& d = tiers_[to];
+  if (f.cur < 0) return;
+  const std::int64_t first = std::max<std::int64_t>(0, f.cur - static_cast<std::int64_t>(f.cap) + 1);
+  const std::int64_t ratio = d.stepS / f.stepS;
+  d.cur = f.cur / ratio;
+  for (std::int64_t h = first / ratio; h <= d.cur; ++h) {
+    double sum = 0, mn = 0, mx = 0;
+    int n = 0;
+    for (std::int64_t s = std::max(first, h * ratio); s < (h + 1) * ratio && s <= f.cur; ++s) {
+      double a, lo, hi;
+      if (s == f.cur) {  // the slot being filled
+        if (!f.n) continue;
+        a = f.sum / f.n, lo = f.cmin, hi = f.cmax;
+      } else if (s > f.head) {
+        continue;
+      } else {
+        const size_t idx = static_cast<size_t>(s % static_cast<std::int64_t>(f.cap));
+        a = f.avg[idx], lo = f.minmax ? f.mn[idx] : a, hi = f.minmax ? f.mx[idx] : a;
+      }
+      if (!std::isfinite(a)) continue;
+      mn = n ? std::min(mn, lo) : lo;
+      mx = n ? std::max(mx, hi) : hi;
+      sum += a;
+      n++;
+    }
+    d.sum = sum;
+    d.n = n;
+    d.cmin = mn;
+    d.cmax = mx;
+    if (h < d.cur) commit(d, h);  // the current hour stays in the accumulator
+  }
 }
 
 void History::add(const std::string& id, Epoch t, double v) {
@@ -282,7 +321,11 @@ std::string History::dump() const {
 bool History::load(const std::string& data) {
   const char* p = data.data();
   const char* end = p + data.size();
-  if (data.size() < 8 || std::memcmp(p, kMagic, 4) != 0) return false;
+  if (data.size() < 8) return false;
+  size_t tiers = 0;
+  if (std::memcmp(p, kMagic, 4) == 0) tiers = 4;
+  else if (std::memcmp(p, kMagicOld, 4) == 0) tiers = 3;
+  else return false;
   p += 4;
   std::uint32_t n = 0;
   if (!get(p, end, n)) return false;
@@ -292,7 +335,7 @@ bool History::load(const std::string& data) {
     if (!get(p, end, len) || static_cast<std::uint32_t>(end - p) < len) return false;
     std::string id(p, len);
     p += len;
-    if (!loaded[id].load(p, end)) return false;
+    if (!loaded[id].load(p, end, tiers)) return false;
   }
   std::map<std::string, Epoch> newest;
   if (p < end) {  // a snapshot cut inside its times is no snapshot: its journal would count twice

@@ -2,7 +2,9 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstring>
 #include <set>
+#include <string>
 
 #include "doseph/messages.hpp"
 #include "doseph/events.hpp"
@@ -39,6 +41,73 @@ TEST_CASE("History: older periods come from coarser levels") {
   Epoch now = t0 + 3 * 24 * 3600;
   CHECK(h.query("t", now - 3600, now, 0).stepS == 10);
   CHECK(h.query("t", now - 2 * 24 * 3600, now, 0).stepS == 60);
+}
+
+namespace {
+
+// A snapshot as it was before the hourly level: "GCH1", the three finer levels of each series
+std::string withoutHourly(const std::string& dump) {
+  const char* p = dump.data();
+  std::string out = "GCH1";
+  p += 4;
+  std::uint32_t n = 0;
+  std::memcpy(&n, p, 4);
+  out.append(p, 4);
+  p += 4;
+  const size_t header = 8 + 8 + 8 + 8 + 8 + 4;
+  const size_t sizes[4] = {header + 8640 * 4, header + 10080 * 12, header + 35040 * 12, header + 43800 * 12};
+  for (std::uint32_t i = 0; i < n; ++i) {
+    std::uint32_t len = 0;
+    std::memcpy(&len, p, 4);
+    const size_t keep = 4 + len + sizes[0] + sizes[1] + sizes[2];
+    out.append(p, keep);
+    p += keep + sizes[3];
+  }
+  out.append(p, static_cast<size_t>(dump.data() + dump.size() - p));
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("History: five years at one hour; a year at 15 min; the period asked for picks the level (SD-126)") {
+  History h;
+  const Epoch t0 = 1790000000 - 1790000000 % 3600;
+  const int hours = 2 * 365 * 24;  // two years, one sample an hour
+  for (int i = 0; i < hours; ++i) h.add("ph", t0 + i * 3600, 6.0 + (i % 24) * 0.01);
+  const Epoch now = t0 + hours * 3600;
+  auto old = h.query("ph", now - 700 * 86400, now - 400 * 86400, 0);
+  CHECK(old.stepS == 3600);
+  REQUIRE(old.t.size() == 300 * 24 + 1);
+  CHECK(old.avg[0] == doctest::Approx(6.0));  // 700 days back is midnight of the samples' cycle
+  CHECK(old.max[1] == doctest::Approx(6.01));
+  CHECK(std::isfinite(old.avg[old.t.size() / 2]));
+  CHECK(h.query("ph", now - 200 * 86400, now, 0).stepS == 900);
+}
+
+TEST_CASE("History: a snapshot from before the hourly level is read, and the hourly level is worked out from its 15-min level (SD-126)") {
+  History h;
+  const Epoch t0 = 1790000000 - 1790000000 % 3600;
+  for (int i = 0; i < 200 * 24; ++i) h.add("ec", t0 + i * 3600, 1.0 + (i % 5) * 0.1);
+  const Epoch now = t0 + 200 * 24 * 3600;
+  History k;
+  REQUIRE(k.load(withoutHourly(h.dump())));
+  // Asked for more than a year back, the hourly level answers, with the same values
+  auto a = h.query("ec", now - 2 * 365 * 86400, now, 0);
+  auto b = k.query("ec", now - 2 * 365 * 86400, now, 0);
+  CHECK(b.stepS == 3600);
+  REQUIRE(a.t.size() == b.t.size());
+  int held = 0, same = 0;
+  for (size_t i = 0; i < a.t.size(); ++i) {
+    if (!std::isfinite(a.avg[i])) continue;
+    held++;
+    same += a.t[i] == b.t[i] && std::isfinite(b.avg[i]) && std::fabs(a.avg[i] - b.avg[i]) < 1e-6;
+  }
+  CHECK(held == 200 * 24);
+  CHECK(same >= held - 1);  // the hour being filled may differ in its last sample
+  // Saved again, it is the new form
+  History m;
+  REQUIRE(m.load(k.dump()));
+  CHECK(k.dump().compare(0, 4, "DPH2") == 0);
 }
 
 TEST_CASE("History: saving and loading") {
