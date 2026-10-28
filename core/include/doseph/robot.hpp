@@ -13,6 +13,7 @@
 #include "doseph/alarms.hpp"
 #include "doseph/auth.hpp"
 #include "doseph/push.hpp"
+#include "doseph/service.hpp"
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
 #include "doseph/history.hpp"
@@ -88,6 +89,10 @@ class Robot {
   Result setSystem(const json& j);
   // Quiet hours, as local minutes of the day {"quietFromMin", "quietToMin"} (SD-123)
   Result putNotify(const json& j);
+  // Maintenance dates (SD-125): the plan, an item done by hand, the intervals {"days": {kind: n | null}}
+  json service() const;
+  Result serviceDone(const std::string& id);
+  Result putService(const json& j);
   Result putTank(const json& j);
   Result putControl(const json& j);
   Result newTank();
@@ -174,6 +179,7 @@ class Robot {
   History history_;
   EventLog log_;
   WatchResult watch_;
+  WatchResult alarmWatch_;  // the watchdog's items and the maintenance items due, for the alarms
   Alarms alarms_;
   PushChannels push_;
   std::vector<Delivery> deliveries_;

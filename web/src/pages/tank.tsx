@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Tank: its volume and a new fill, how long a dose is mixed in, the pause
-// between checks, maintenance and the control's settings. The flow through
-// the device is on the water path page.
-import { useState } from "preact/hooks";
-import { Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
-import { post, put } from "../api";
-import { num, time } from "../format";
-import { t } from "../i18n";
-import { LIMITS, config, refreshConfig, refreshState, state, toast } from "../store";
-import { Banner, Button, Card, Field, Modal, NumberInput, Term } from "../ui";
+// between checks, maintenance and its dates, and the control's settings.
+// The flow through the device is on the water path page.
+import { useEffect, useState } from "preact/hooks";
+import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Waves, Wrench } from "lucide-preact";
+import { get, post, put, type ServicePlan } from "../api";
+import { day, num, time } from "../format";
+import { msg, t } from "../i18n";
+import { LIMITS, config, refreshConfig, refreshState, state, toast, toastError } from "../store";
+import { Banner, Button, Card, Field, Modal, NumberInput, Pill, Term } from "../ui";
 
 async function saveTank(body: Record<string, unknown>) {
   await put("/tank", body);
@@ -192,6 +192,101 @@ function MaintenanceCard() {
   );
 }
 
+const SERVICE_KINDS = ["probe.ph.cal", "probe.ec.cal", "channel.cal", "chamber.clean", "heads.check", "probe.ph.replace"] as const;
+
+// Maintenance dates (SD-125): what is due within a week of the earliest joins its date; a
+// calibration resets its item by itself, the rest is marked done here
+function ServiceCard() {
+  const [plan, setPlan] = useState<ServicePlan | null>(null);
+  const [days, setDays] = useState<Record<string, number | null>>({});
+  const load = () =>
+    get<ServicePlan>("/service")
+      .then(setPlan)
+      .catch(() => {});
+  const rev = config.value!.revision;
+  useEffect(() => {
+    load();
+  }, [rev]);
+  if (!plan) return null;
+  const done = async (id: string) => {
+    try {
+      setPlan(await post<ServicePlan>(`/service/${encodeURIComponent(id)}/done`));
+      await refreshState();
+      toast(t("tank.service.noted"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const saveDays = async () => {
+    try {
+      setPlan(await put<ServicePlan>("/service", { days }));
+      await refreshConfig();
+      setDays({});
+      toast(t("tank.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const next = plan.dates[0];
+  const at = (d: number) => plan.items.filter((i) => i.date === d);
+  const interval = (kind: string) => plan.items.find((i) => i.kind === kind);
+  return (
+    <Card title={t("tank.service")} icon={<CalendarCheck size={18} />}>
+      <div class="stack" data-testid="service">
+        <p class="muted small">{t("tank.service.intro")}</p>
+        {plan.dates.map((d, n) => (
+          <div class="stack-sm">
+            <div class="section-title">{n === 0 ? t("tank.service.next", { date: day(d) }) : day(d)}</div>
+            <div class="list">
+              {at(d).map((i) => (
+                <div class="item wrap-row" data-testid={`service-${i.id}`}>
+                  <div class="grow">
+                    <div class="title">
+                      {i.dueNow && <Pill tone="info">{t("tank.service.due")}</Pill>} {msg(i.label)}
+                    </div>
+                    <div class="muted small">{t("tank.service.every", { n: i.days, last: day(i.last) })}</div>
+                  </div>
+                  {n === 0 && (
+                    <div class="row-actions">
+                      {i.kind.endsWith(".cal") ? (
+                        <a class="btn sm" href={i.kind === "channel.cal" ? "#/channels" : "#/water"}>
+                          {t("tank.service.calibrate")}
+                        </a>
+                      ) : (
+                        <Button size="sm" onClick={() => done(i.id)} data-testid={`service-done-${i.id}`}>
+                          {t("tank.service.done")}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )).slice(0, next ? 3 : 0)}
+        <details>
+          <summary>{t("tank.service.intervals")}</summary>
+          <div class="stack" style="margin-top:12px">
+            <p class="muted small">{t("tank.service.intervalsHint")}</p>
+            <div class="form-grid">
+              {SERVICE_KINDS.filter((k) => interval(k)).map((k) => (
+                <Field label={t(`tank.service.kind.${k}`)} hint={t("tank.service.default", { n: interval(k)!.defaultDays })}>
+                  <NumberInput value={k in days ? days[k] : interval(k)!.days} onValue={(v) => setDays({ ...days, [k]: v })} unit={t("tank.service.dayUnit")} name={`service-${k}`} />
+                </Field>
+              ))}
+            </div>
+            <div>
+              <Button onClick={saveDays} disabled={!Object.keys(days).length} data-testid="save-service">
+                {t("common.save")}
+              </Button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </Card>
+  );
+}
+
 export function TankPage() {
   const rev = config.value!.revision;
   return (
@@ -201,6 +296,7 @@ export function TankPage() {
         <MaintenanceCard />
       </div>
       <WaitCard key={`w${rev}`} />
+      <ServiceCard />
       <ControlCard key={`c${rev}`} />
     </div>
   );

@@ -126,11 +126,17 @@ struct NotifyCfg {
   int quietToMin = 7 * 60;
 };
 
+// Maintenance dates (SD-125): an interval in days per kind of item that is set; the rest keep theirs
+struct ServiceCfg {
+  std::map<std::string, int> days;
+};
+
 struct Config {
   int schemaVersion = kSchemaVersion;
   int revision = 0;
   SystemCfg system;
   NotifyCfg notify;
+  ServiceCfg service;
   TankCfg tank;
   ControlCfg control;
   Limits limits;
@@ -201,6 +207,8 @@ struct RuntimeState {
   // the time of the last morning report
   std::map<std::string, json> alarms;
   Epoch lastReport = 0;
+  // Maintenance items (SD-125): when each was first seen and when it was last done by hand
+  std::map<std::string, Epoch> serviceSince, serviceDone;
   bool stopped = false;                    // a Stop survives a restart (RAT-036)
   bool newTank = true;                     // the next dose is a test dose that checks the volume (SD-105)
   double flowLpm = kNaN;                   // the flow last measured while proven, for the turnover (SD-105)

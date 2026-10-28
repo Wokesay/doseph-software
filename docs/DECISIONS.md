@@ -542,3 +542,26 @@ are the product's (#10, new function 4).
   names only that file. Without curl nothing is sent, and the app says
   why. The device will send with its own TLS.
 
+
+## SD-125: Maintenance dates: fixed items, bundled
+
+2026-10-28. Decided by the owner for #10, step 5 (new function 7).
+
+- **Items, by what the device has:** calibrate the pH probe every 30 days,
+  the EC probe every 90; calibrate each channel that holds a canister
+  every 90; clean the measuring chamber and the suction filter every 30;
+  check the pump heads and their tubes every 180 while any channel is in
+  use; replace the pH probe every 365. The numbers are assumptions; each
+  kind's interval can be set from 7 to 730 days.
+- **Last done:** a calibration resets its item by itself; anything else is
+  marked done in the app. An item with neither counts from when the
+  device first had it, so a new device or channel is not due at once.
+- **Bundled:** the earliest item opens a maintenance date, the local
+  midnight of its day; whatever falls due within a week of it joins that
+  date, so one visit does them all.
+- **Reminded:** on its date an item is a note (SD-123): it comes in the
+  morning report and stands in the app until it is done. It does not turn
+  the watchdog red.
+- **Defects** of a pump, the outlet, the flow or a probe are already
+  alarms (SD-109, SD-111, SD-123).
+
