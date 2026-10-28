@@ -7,6 +7,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The device reports what it has (SD-108): line, variant, its channels
+  with pump type, head and drop sensor, the flow method, the return and
+  the network, in `GET /api/v1/info` as `profile` and in the diagnostics
+  package. The simulator has the example profiles `home` and `pro`
+  (`--profile`); their numbers are assumptions.
 - The mixing robot: one check as a state machine – pump on, prove flow,
   flush, measure until stable, EC before pH, dose in partial doses, mix in
   with flow, measure again and learn, hold; no dose without proven flow; a

@@ -3,10 +3,17 @@
 // would see from its measuring part, its pump driver and its output.
 #pragma once
 
+#include <optional>
+#include <string>
+
 #include "doseph/hardware.hpp"
 #include "world.hpp"
 
 namespace sim {
+
+// The example profiles "home" and "pro" (SD-108). Their numbers are
+// assumptions, not a board's data; nullopt for another name.
+std::optional<doseph::Profile> exampleProfile(const std::string& name);
 
 class SimClock : public doseph::IClock {
  public:
@@ -25,11 +32,11 @@ class SimClock : public doseph::IClock {
 
 class SimHardware : public doseph::IHardware {
  public:
-  explicit SimHardware(World& w) : w_(w) {}
+  SimHardware(World& w, doseph::Profile p) : w_(w), profile_(std::move(p)) {}
   void poll(doseph::Ms now) override { w_.advance(now); }
   bool online() const override { return w_.probeFault != "offline"; }
   std::optional<doseph::Sample> sample(doseph::Signal c) const override;
-  int pumpCount() const override { return static_cast<int>(w_.pumps.size()); }
+  const doseph::Profile& profile() const override { return profile_; }
   bool startRun(int pump, doseph::Ms ms, const std::string& jobId, std::string& err) override {
     return w_.startRun(pump, ms, jobId, err);
   }
@@ -40,6 +47,7 @@ class SimHardware : public doseph::IHardware {
 
  private:
   World& w_;
+  doseph::Profile profile_;
 };
 
 }  // namespace sim

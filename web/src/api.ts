@@ -109,6 +109,14 @@ export type Info = {
   hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; pumpCount: number;
   // Why neither sign-in nor a first password works: the password file is unreadable or gone
   passwordProblem?: Msg | null;
+  // What the device has (SD-108); `example`: the simulator's profile, its numbers are assumptions
+  profile?: Profile;
+};
+
+export type Profile = {
+  line: string; variant: string;
+  channels: { pump: string; head: string | null; dropSensor: boolean }[];
+  flow: string; return: string; network: string[]; example: boolean;
 };
 
 export type RobotEvent = { id: number; ts: number; type: string; severity: "info" | "notice" | "warn" | "alarm"; title: Msg; text: Msg; data: Record<string, any> };

@@ -13,6 +13,14 @@ const char* signalName(Signal c) {
   return "unknown";
 }
 
+json profileJson(const Profile& p) {
+  json channels = json::array();
+  for (const ChannelCaps& c : p.channels)
+    channels.push_back({{"pump", c.pump}, {"head", c.head.empty() ? json(nullptr) : json(c.head)}, {"dropSensor", c.dropSensor}});
+  return {{"line", p.line}, {"variant", p.variant}, {"channels", channels}, {"flow", p.flow},
+          {"return", p.returnBy}, {"network", p.network}, {"example", p.example}};
+}
+
 std::optional<std::string> MemoryStorage::read(const std::string& name) {
   for (const auto& [n, d] : files_)
     if (n == name) return d;

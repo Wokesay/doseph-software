@@ -286,7 +286,8 @@ json Robot::info() const {
           {"passwordProblem", authKept_ ? json(say("auth.kept")) : credentialsLost() ? json(say("auth.lost")) : json(nullptr)},
           {"name", cfg_.system.name},
           {"language", cfg_.system.language},
-          {"pumpCount", hw_.pumpCount()}};
+          {"pumpCount", hw_.pumpCount()},
+          {"profile", profileJson(hw_.profile())}};
 }
 
 json Robot::diagnostics() {

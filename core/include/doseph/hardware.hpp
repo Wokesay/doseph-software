@@ -31,6 +31,26 @@ struct Sample {
   Sample(double raw_, Ms ts_) : raw(raw_), ts(ts_) {}
 };
 
+// What the device has (SD-108). The firmware reports it from its board
+// profile, which stays private; the simulator has example profiles. Logic
+// reads capabilities, never a channel number or a line name.
+struct ChannelCaps {
+  std::string pump;         // pump type: "brushed", "brushless", "stepper"
+  std::string head;         // head size "S", "M", "L"; "" without a head
+  bool dropSensor = false;  // drops at the outlet are seen
+};
+
+struct Profile {
+  std::string line;                   // "home", "pro": shown, never read by logic
+  std::string variant;                // the name the device is sold under
+  std::vector<ChannelCaps> channels;  // dosing channel n is channels[n - 1]
+  std::string flow;                   // flow method: "turbine", "outlet_level"
+  std::string returnBy;               // "gravity", "pump"
+  std::vector<std::string> network;   // "wifi", "lan"
+  bool example = false;               // an example profile: its numbers are assumptions
+};
+json profileJson(const Profile& p);
+
 struct RunStatus {
   enum class State { Idle, Running, Done, Failed } state = State::Idle;
   std::string jobId;
@@ -46,8 +66,9 @@ class IHardware {
   // The measuring part answers; without it no signal has a value.
   virtual bool online() const = 0;
   virtual std::optional<Sample> sample(Signal c) const = 0;
-  // Dosing pumps are numbered 1..pumpCount().
-  virtual int pumpCount() const = 0;
+  virtual const Profile& profile() const = 0;
+  // Dosing pumps are numbered 1..pumpCount(), one per channel of the profile.
+  int pumpCount() const { return static_cast<int>(profile().channels.size()); }
   // A pump run in ms with a job ID: a repeated order with the same ID does
   // not run twice. The driver allows one pump at a time.
   virtual bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err) = 0;

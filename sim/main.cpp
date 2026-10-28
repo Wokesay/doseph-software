@@ -80,6 +80,7 @@ void usage() {
             << "  --port N            HTTP port (8080; without it the next free one up to 8089)\n"
             << "  --host ADDR         address (127.0.0.1)\n"
             << "  --scenario NAME     demo | new (demo)\n"
+            << "  --profile NAME      example device: home | pro (home)\n"
             << "  --data DIR          keep the data in this folder (else in memory only)\n"
             << "  --web DIR           built web app (web/dist; the download has it built in)\n"
             << "  --speed X           time-lapse factor (1)\n"
@@ -114,6 +115,7 @@ int main(int argc, char** argv) {
       }
       else if (a == "--host") host = next();
       else if (a == "--scenario") opts.scenario = next();
+      else if (a == "--profile") opts.profile = next();
       else if (a == "--data") opts.dataDir = next();
       else if (a == "--web") web = next();
       else if (a == "--speed") speed = std::stod(next());
@@ -132,7 +134,7 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  if (opts.scenario != "demo" && opts.scenario != "new") {
+  if ((opts.scenario != "demo" && opts.scenario != "new") || !sim::exampleProfile(opts.profile)) {
     usage();
     return 2;
   }
