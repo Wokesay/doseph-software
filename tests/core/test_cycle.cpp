@@ -249,11 +249,12 @@ TEST_CASE("Cycle: a Stop switches everything off at once, holds across a restart
   CHECK(st(s)["cycle"]["progress"]["first"] == true);
 }
 
-TEST_CASE("Cycle: an empty canister: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
+TEST_CASE("Cycle: canisters without effect: two rounds without effect lock nutrient dosing until a person releases it (RAT-055, RAT-062)") {
   sim::Simulation s(demo());
-  s.world().pumps[1].empty = true;  // Part A
-  s.world().pumps[2].empty = true;  // Part B
-  s.world().pumps[3].empty = true;  // CalMag
+  // Water in the nutrient canisters: it drips, so the drop sensors see nothing wrong (an empty
+  // canister drips nothing and locks its channel at once, SD-111), but EC does not rise
+  const auto liquids = s.world().liquids;
+  for (const char* l : {"grow_a", "grow_b", "calmag"}) s.world().liquids[l].ecPerMlL = 0;
   REQUIRE(runUntil(s, [&] { return st(s)["latches"].contains("ec.no_effect"); }, 4 * 3600));
   CHECK(hasEvent(s, "ev.ec.no_effect"));
   CHECK(st(s)["newTank"] == true);  // no effect: the volume stays unchecked
@@ -267,7 +268,7 @@ TEST_CASE("Cycle: an empty canister: two rounds without effect lock nutrient dos
   }
   CHECK(latchedNote);
   CHECK(gateNote);
-  for (auto& p : s.world().pumps) p.empty = false;
+  s.world().liquids = liquids;
   CHECK(s.robot().ackLatch("ec.no_effect", json::object()).status == 200);
   REQUIRE(runUntil(s, [&] { return dosing(s); }, 15 * 60));
 }

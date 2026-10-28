@@ -318,6 +318,11 @@ function ChannelsCard() {
               <div class="title">
                 {t("channels.channelN", { channel: p.channel })} · {name(p.canister) ?? <span class="muted">{t("channels.empty")}</span>}
               </div>
+              {Object.keys(st.latches).some((id) => id.startsWith(`channel.${p.channel}.`)) && (
+                <span data-testid={`locked-${p.channel}`}>
+                  <Pill tone="bad">{t("channels.locked")}</Pill>
+                </span>
+              )}
               <div class="small" data-testid={`head-${p.channel}`}>
                 {!p.head ? (
                   <Pill tone={p.canister ? "bad" : "neutral"}>{t("channels.noHead")}</Pill>

@@ -41,6 +41,7 @@ export const de = {
   "channels.flow": "{flow} ml/min · eingemessen {date}",
   "channels.notCalibrated": "nicht eingemessen",
   "channels.head": "Pumpenkopf {head}",
+  "channels.locked": "gesperrt – gib ihn unter Status frei, sobald die Ursache behoben ist",
   "channels.phDownTaken": "Es gibt schon einen pH−-Kanister: {name}. Es gibt höchstens einen.",
   "channels.noHead": "kein Pumpenkopf – dosiert nichts",
   "channels.headNote":
@@ -115,6 +116,7 @@ export const en: Record<keyof typeof de, string> = {
   "channels.flow": "{flow} ml/min · calibrated {date}",
   "channels.notCalibrated": "not calibrated",
   "channels.head": "pump head {head}",
+  "channels.locked": "locked – release it under Status once its cause is fixed",
   "channels.phDownTaken": "There already is a pH− canister: {name}. There is one at most.",
   "channels.noHead": "no pump head – doses nothing",
   "channels.headNote":

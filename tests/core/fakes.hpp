@@ -43,7 +43,12 @@ class Hardware : public doseph::IHardware {
   doseph::Release rel;
   doseph::Release release() const override { return rel; }
   doseph::WaterPath waterPath() const override { return {}; }
-  std::optional<doseph::Drops> drops(int) const override { return std::nullopt; }
+  std::map<int, doseph::Drops> dropsSeen;  // the channels with a drop sensor and what it counted
+  std::optional<doseph::Drops> drops(int channel) const override {
+    auto it = dropsSeen.find(channel);
+    if (it == dropsSeen.end()) return std::nullopt;
+    return it->second;
+  }
   bool startRun(int channel, Ms ms, const std::string& jobId, std::string&, bool) override {
     runs[channel] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
     started++;

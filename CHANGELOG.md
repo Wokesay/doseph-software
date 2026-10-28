@@ -7,6 +7,16 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The drop sensor confirms each run into the tank (SD-111): when no drop
+  falls within the wait (four drops' time at the calibrated flow, at
+  least 5 s), the run is cut at once and the channel locked with an
+  alarm naming the likely causes; drops while a pump stands lock its
+  channel too, as a canister above the device siphons, and the check
+  mixes first. A locked channel doses nothing until it is released under
+  Status; the check waits for it with the reason, and the channels page
+  marks it. With drop sensors an empty canister is caught at its first
+  run; two rounds without effect (RAT-055) still lock nutrients whose
+  canister drips but does not work.
 - Channels know their pump head (SD-108): a calibration belongs to the
   head it was measured with. When the device reports another head, or
   none, the calibration is void with an event, and the channel doses

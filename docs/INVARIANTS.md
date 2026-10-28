@@ -68,6 +68,9 @@ of its own.
 | A calibration belongs to the pump head it was measured with: another head, none fitted or none recorded voids it, and the channel doses nothing until it is calibrated again | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
 | A channel without a pump head runs nothing, not even into a cup | SD-108 | ✓ | `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | One pH− canister at most; the rest are nutrients | SD-108 | ✓ | `config.cpp` · test_config.cpp |
+| A run into the tank needs drops: none within four times a drop's time at the calibrated flow, at least 5 s, from its start or the last drop cuts it and locks the channel; a shorter run is judged at its end plus that time; a Stop is not judged | SD-111 | ✓ | `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
+| Drops while the pump stands, past 10 s after its run, lock the channel with an alarm, and the check mixes first and learns nothing | SD-111 | ✓ | `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A locked channel doses nothing into the tank until a person releases it; a calibration or line fill into a cup still runs | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
 
 ## Sensor truth

@@ -199,6 +199,14 @@ void Robot::tick() {
   if (c.hold.empty() && !lastHold_.empty()) restartCycle();
   lastHold_ = c.hold;
   act_.enforce(c);
+  // Drops without a running pump went into the tank: the check mixes first and learns nothing,
+  // as after a cut dose (SD-111)
+  if (act_.takeUnplannedDrops()) {
+    const CycleSettings s = cycleSettings(c);
+    const double m = std::max({kWaitMinMin, isNum(s.waitEcMin) ? s.waitEcMin : 0.0, isNum(s.waitPhMin) ? s.waitPhMin : 0.0});
+    cycle_.mixFirst(static_cast<Ms>(m * 60) * kSecond);
+    restartCycle();
+  }
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
     if (job_ && p->orderId == job_->id) channelJobDone(*p);
@@ -1073,7 +1081,7 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   }
   const json args = it->second.is_object() ? it->second : json::object();
   rt_.latches.erase(it);
-  log_.add(clock_.epoch(), "unblock", "notice", say("ev.latch.released"), say("latch." + id, args));
+  log_.add(clock_.epoch(), "unblock", "notice", say("ev.latch.released"), say("latch." + jstr(args, "key", id), args));
   restartCycle();
   saveState(true);
   return Result::ok();

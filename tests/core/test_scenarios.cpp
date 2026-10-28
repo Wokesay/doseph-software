@@ -74,21 +74,46 @@ TEST_CASE("Scenario dose and drops: every dose drips through its outlet; the dro
   }
 }
 
-TEST_CASE("Scenario blocked outlet: the pump runs but nothing drips and nothing reaches the tank; the core books it until step 4.3 judges the drops (SD-111)") {
+TEST_CASE("Scenario blocked outlet: the pump runs but nothing drips; the run is cut within the wait for a drop and the channel locked until a person releases it (SD-111)") {
   Run r(device("home"));
   r.act("channelFault", {{"channel", 2}, {"outletBlocked", true}});
-  const double tankEc = r.twin()["tank"]["ec"];
-  r.waitUntil("a dose of part A", [&] {
-    const json doses = r.events("dose");
-    for (const auto& e : doses)
-      if (e["data"]["channel"] == 2) return true;
-    return false;
-  }, 2 * 3600, 2000);
+  r.waitUntil("channel 2 is locked", [&] { return r.state()["latches"].contains("channel.2.no_drops"); }, 2 * 3600, 2000);
+  CHECK(r.events("alarm")[0]["title"]["key"] == "ev.channel.no_drops");
   CHECK(r.twin()["channels"][1]["drops"] == 0);
-  CHECK(r.twin()["channels"][1]["outletBlocked"] == true);
-  // Part B dripped and raised EC; part A, behind the blocked outlet, added nothing
-  CHECK(r.twin()["channels"][2]["drops"].get<double>() > 0);
-  CHECK(r.twin()["tank"]["ec"].get<double>() + r.twin()["tank"]["pendingEc"].get<double>() > tankEc);
+  const json cut = r.events("dose")[0];
+  CHECK(cut["title"]["key"] == "ev.dose_incomplete");
+  CHECK(cut["data"]["channel"] == 2);
+  CHECK(cut["data"]["ms"].get<double>() <= 8000);  // 5 s and the ticks around it
+  // Part A waits for its channel, with the reason
+  r.waitUntil("the check waits for channel 2", [&] { return r.line() == "cycle.wait.channel_locked"; }, 2 * 3600, 2000);
+  // Cleared and released, part A drips again
+  r.act("channelFault", {{"channel", 2}, {"outletBlocked", false}});
+  r.ok("POST", "latches/channel.2.no_drops/ack", json::object());
+  r.waitUntil("part A drips", [&] { return r.twin()["channels"][1]["drops"].get<double>() > 0; }, 2 * 3600, 2000);
+  CHECK_FALSE(r.state()["latches"].contains("channel.2.no_drops"));
+}
+
+TEST_CASE("Scenario empty canister: it runs and nothing comes; no drops lock its channel at once (SD-111)") {
+  Run r(device("home"));
+  r.act("channelFault", {{"channel", 3}, {"empty", true}});
+  r.waitUntil("channel 3 is locked", [&] { return r.state()["latches"].contains("channel.3.no_drops"); }, 2 * 3600, 2000);
+  CHECK(r.events("dose")[0]["data"]["ms"].get<double>() <= 8000);
+}
+
+TEST_CASE("Scenario siphon: a canister above the device drips while its pump stands; the channel is locked with an alarm and the check mixes first (SD-111, PD-455)") {
+  Run r(device("home"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  r.act("channelFault", {{"channel", 4}, {"siphon", true}});
+  r.waitUntil("channel 4 is locked", [&] { return r.state()["latches"].contains("channel.4.siphon"); }, 60);
+  CHECK(r.events("alarm")[0]["title"]["key"] == "ev.channel.siphon");
+  CHECK(r.state()["cycle"]["mixPending"] == true);
+  // It goes on dripping: one alarm, not one per drop
+  r.step(2 * kMinute);
+  CHECK(r.events("alarm").size() == 1);
+  r.act("channelFault", {{"channel", 4}, {"siphon", false}});
+  r.ok("POST", "latches/channel.4.siphon/ack", json::object());
+  r.step(2 * kMinute);
+  CHECK(r.state()["latches"].empty());
 }
 
 TEST_CASE("Scenario high level: a blocked return fills the chamber; the hardware release stops every pump, the robot latches it with the reason, and a person releases it once the chamber has drained (SD-110)") {
