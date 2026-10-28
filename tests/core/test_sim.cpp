@@ -75,3 +75,117 @@ TEST_CASE("Simulator: the example profiles Home and Pro are marked as assumption
     CHECK(s.robot().diagnostics()["info"]["profile"] == info["profile"]);
   }
 }
+
+TEST_CASE("Twin: the suction pump primes before water flows; a blocked filter or a suction line out of the water gives no flow (SD-109)") {
+  sim::World w;
+  w.reset(4);
+  w.fill(100, 0.45, 7.6);
+  w.output = true;
+  w.advance(4000);
+  CHECK_FALSE(w.primed());
+  CHECK_FALSE(w.flowing());
+  CHECK(w.rawFlow() == 0.0);
+  w.advance(10000);
+  CHECK(w.flowing());
+  CHECK(w.outletWet());
+  CHECK(w.rawFlow() > 11.0);
+  for (const char* fault : {"blocked", "dry"}) {
+    w.flowFault = fault;
+    w.advance(w.now() + 2000);
+    CHECK_FALSE(w.flowing());
+    CHECK_FALSE(w.outletWet());
+    CHECK(w.rawFlow() == 0.0);
+  }
+  w.flowFault.clear();
+  w.output = false;  // off, the line runs empty: the next start primes again
+  w.advance(w.now() + 1000);
+  w.output = true;
+  w.advance(w.now() + 2000);
+  CHECK_FALSE(w.flowing());
+}
+
+TEST_CASE("Twin: the chamber keeps its water at the weir; a blocked return or a failed return pump fills it to high level, and the hardware release stops every pump (SD-109, SD-110)") {
+  for (const bool byPump : {false, true}) {
+    CAPTURE(byPump);
+    sim::World w;
+    w.reset(4);
+    w.returnByPump = byPump;
+    w.fill(100, 0.45, 7.6);
+    w.output = true;
+    w.advance(5 * 60 * 1000);  // a check: water through the chamber and back
+    CHECK(w.flowing());
+    CHECK_FALSE(w.highLevel());
+    CHECK(w.chamberL >= 0.15);
+    w.output = false;
+    w.advance(w.now() + 60 * 1000);
+    CHECK(w.chamberL == doctest::Approx(0.15));  // the weir keeps the probes wet
+    CHECK_FALSE(w.returnPumpOn);
+    // The return fails while the suction pump runs: the chamber fills up
+    w.returnFault = byPump ? "failed" : "blocked";
+    w.output = true;
+    std::string err;
+    REQUIRE(w.startRun(2, 20000, "dose-1", err));  // a run while the pump primes
+    w.advance(w.now() + 12 * 1000);
+    CHECK(w.highLevel());
+    CHECK_FALSE(w.released());
+    CHECK_FALSE(w.output);  // the suction pump is off, below the robot
+    CHECK(w.runStatus(2).state == doseph::RunStatus::State::Failed);
+    CHECK(w.runStatus(2).error == "hardware release off");
+    CHECK_FALSE(w.startRun(3, 1000, "dose-2", err));
+    CHECK(err == "hardware release off");
+  }
+}
+
+TEST_CASE("Twin: a return pump switches by level while water comes (SD-109)") {
+  sim::World w;
+  w.reset(4);
+  w.returnByPump = true;
+  w.fill(100, 0.45, 7.6);
+  w.output = true;
+  bool on = false, off = false;
+  for (int i = 0; i < 240; ++i) {
+    w.advance(w.now() + 500);
+    if (w.flowing()) (w.returnPumpOn ? on : off) = true;
+    CHECK_FALSE(w.highLevel());
+  }
+  CHECK(on);
+  CHECK(off);
+}
+
+TEST_CASE("Simulator: a leak or the stop button switches the hardware release off; the robot's state says why; flow by method (SD-109, SD-110)") {
+  for (const std::string name : {"home", "pro"}) {
+    CAPTURE(name);
+    sim::Options o;
+    o.scenario = "demo";
+    o.password = "demo-password";
+    o.prefillHours = 0;
+    o.profile = name;
+    sim::Simulation s(o);
+    s.step(2 * 60 * 1000);
+    json hw = s.robot().state()["hardware"];
+    CHECK(hw["release"]["on"] == true);
+    if (name == "home") {
+      // No flow meter: the outlet's level sensor, and the flow estimated from the pump's low end
+      CHECK(hw["outletWet"] == true);
+      CHECK(hw["returnPump"].is_null());
+      CHECK(s.robot().state()["readings"]["flow"]["value"] == 10.0);
+    } else {
+      CHECK(hw["outletWet"].is_null());
+      CHECK(hw["returnPump"].is_boolean());
+      CHECK(s.robot().state()["readings"]["flow"]["value"].get<double>() == doctest::Approx(12).epsilon(0.05));
+    }
+    s.control("leak", {{"on", true}});
+    s.step(2000);
+    hw = s.robot().state()["hardware"];
+    CHECK(hw["release"]["on"] == false);
+    CHECK(hw["release"]["leak"] == true);
+    CHECK_FALSE(s.world().output);
+    s.control("leak", {{"on", false}});
+    s.control("stopButton", {{"pressed", true}});
+    s.step(2000);
+    hw = s.robot().state()["hardware"];
+    CHECK(hw["release"]["on"] == false);
+    CHECK(hw["release"]["stopButton"] == true);
+    CHECK(hw["release"]["leak"] == false);
+  }
+}

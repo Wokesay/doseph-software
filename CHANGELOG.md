@@ -7,6 +7,16 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The twin has the new water path (SD-109, SD-110): the suction pump
+  primes before water flows; the measuring chamber keeps its water at
+  the weir; the water returns by gravity or by a return pump; a blocked
+  return or a failed return pump fills the chamber to high level, and
+  a leak, high level or the stop button switch the hardware release off,
+  which stops every pump below the robot. The state reports the release
+  and the water path as `hardware`. A device without a flow meter
+  reports the flow from the low end of its suction pump's delivery. New
+  simulator actions: `returnFault`, `leak`, `stopButton`, and
+  `flowFault` `dry`.
 - The device reports what it has (SD-108): line, variant, its channels
   with pump type, head and drop sensor, the flow method, the return and
   the network, in `GET /api/v1/info` as `profile` and in the diagnostics

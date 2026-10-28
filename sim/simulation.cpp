@@ -161,6 +161,7 @@ void Simulation::build(bool fresh) {
   clock_ = std::make_unique<SimClock>(start);
   doseph::Profile profile = exampleProfile(opts_.profile).value_or(*exampleProfile("home"));
   world_.reset(static_cast<int>(profile.channels.size()));
+  world_.returnByPump = profile.returnBy == "pump";
   // Tap water in a 100 L tank (assumption): EC 0.45 mS/cm, pH 7.6
   world_.fill(100, 0.45, 7.6);
   hw_ = std::make_unique<SimHardware>(world_, std::move(profile));
@@ -289,6 +290,9 @@ json Simulation::control(const std::string& action, const json& b) {
   } else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
   else if (action == "external") world_.external = doseph::jbool(b, "on", false);
   else if (action == "suctionLpm") world_.suctionLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
+  else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
+  else if (action == "leak") world_.leak = doseph::jbool(b, "on", false);
+  else if (action == "stopButton") world_.stopButton = doseph::jbool(b, "pressed", false);
   else if (action == "probeFault") world_.probeFault = doseph::jstr(b, "fault");
   else if (action == "channelFault") {
     const int n = static_cast<int>(num("channel", 0));

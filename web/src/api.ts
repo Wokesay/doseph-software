@@ -63,6 +63,8 @@ export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawP
 export type RobotState = {
   now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
   suctionPump: boolean | null; flowOk: boolean;
+  // The hardware release and the water path as the device reports them (SD-109, SD-110)
+  hardware: { release: { on: boolean; leak: boolean; highLevel: boolean; stopButton: boolean }; outletWet: boolean | null; returnPump: boolean | null };
   readings: Record<Signal, Reading>;
   cycle: Cycle;
   watchdog: Watchdog;
@@ -116,7 +118,7 @@ export type Info = {
 export type Profile = {
   line: string; variant: string;
   channels: { pump: string; head: string | null; dropSensor: boolean }[];
-  flow: string; return: string; network: string[]; example: boolean;
+  flow: string; return: string; network: string[]; suctionLpmLow: number | null; example: boolean;
 };
 
 export type RobotEvent = { id: number; ts: number; type: string; severity: "info" | "notice" | "warn" | "alarm"; title: Msg; text: Msg; data: Record<string, any> };

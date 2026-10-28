@@ -384,6 +384,15 @@ json Robot::state() {
              return st ? json(*st) : json(nullptr);
            }()},
           {"flowOk", c.flowOk},
+          // What the hardware reports of its release and the water path (SD-109, SD-110)
+          {"hardware", [&] {
+             const Release r = hw_.release();
+             const WaterPath w = hw_.waterPath();
+             auto opt = [](const std::optional<bool>& v) { return v ? json(*v) : json(nullptr); };
+             return json{{"release", {{"on", r.on}, {"leak", r.leak}, {"highLevel", r.highLevel}, {"stopButton", r.stopButton}}},
+                         {"outletWet", opt(w.outletWet)},
+                         {"returnPump", opt(w.returnPump)}};
+           }()},
           {"readings", readings},
           {"cycle", cycle_.status(c)},
           {"watchdog", watch},

@@ -17,7 +17,9 @@ namespace doseph {
 // The signals the device measures in its measuring chamber. Raw values: pH on the
 // raw pH scale (the pH an ideal probe would read, 7 − mV/59.16), EC in mS/cm
 // at the water's own temperature (not compensated), water temperature in °C,
-// flow through the device in L/min.
+// flow through the device in L/min: measured (flow method "turbine"), or
+// estimated from the suction pump's delivery while the outlet reports water
+// ("outlet_level", SD-109).
 enum class Signal { Ph, Ec, Temp, Flow };
 inline constexpr Signal kSignals[] = {Signal::Ph, Signal::Ec, Signal::Temp, Signal::Flow};
 const char* signalName(Signal c);  // "ph", "ec", "temp", "flow"
@@ -47,7 +49,25 @@ struct Profile {
   std::string flow;                   // flow method: "turbine", "outlet_level"
   std::string returnBy;               // "gravity", "pump"
   std::vector<std::string> network;   // "wifi", "lan"
+  double suctionLpmLow = kNaN;        // the low end of the suction pump's delivery, L/min (SD-109)
   bool example = false;               // an example profile: its numbers are assumptions
+};
+
+// The hardware release (SD-110): below the firmware, a leak, high level in
+// the measuring chamber, the stop button and a hung controller switch every
+// pump off. The core reads it and never overrides it.
+struct Release {
+  bool on = true;          // false: no pump runs, none starts
+  bool leak = false;
+  bool highLevel = false;  // the chamber is full up to its high-level sensor
+  bool stopButton = false;
+};
+
+// The water path as the device's sensors see it (SD-109); nullopt where the
+// device has no such sensor.
+struct WaterPath {
+  std::optional<bool> outletWet;   // the outlet's level sensor (flow method "outlet_level")
+  std::optional<bool> returnPump;  // the return pump runs (return by "pump")
 };
 json profileJson(const Profile& p);
 
@@ -67,6 +87,8 @@ class IHardware {
   virtual bool online() const = 0;
   virtual std::optional<Sample> sample(Signal c) const = 0;
   virtual const Profile& profile() const = 0;
+  virtual Release release() const = 0;
+  virtual WaterPath waterPath() const = 0;
   // Dosing channels are numbered 1..channelCount(), as the profile lists them.
   int channelCount() const { return static_cast<int>(profile().channels.size()); }
   // A run of a channel's pump in ms with a job ID: a repeated order with the
