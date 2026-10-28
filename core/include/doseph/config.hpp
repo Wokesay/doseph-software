@@ -162,7 +162,7 @@ double phTarget(const RecipeCfg& r);
 // stay, RAT-044, RAT-063).
 struct RuntimeState {
   std::map<std::string, json> latches;     // latched locks with their reason
-  std::map<std::string, json> jumpLocks;   // channel → {until, from, to, at} (RAT-039, RAT-044)
+  std::map<std::string, json> jumpLocks;   // signal → {until, from, to, at} (RAT-039, RAT-044)
   double phEffect = kNaN;                  // learned effect of pH− (pH per ml/L), only from clean doses
   std::map<std::string, double> ecEffects; // learned EC effect per recipe, mS/cm per ml/L of its scaled parts (RAT-057)
   // Canister → its level in ml, counted from use; missing: unknown, never

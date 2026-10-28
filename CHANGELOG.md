@@ -89,6 +89,9 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- The sensor truth calls pH, EC, temperature and flow signals, so
+  "channel" names a dosing channel only (SD-107). The messages
+  `truth.implausible` and `truth.jump` carry the signal as `signal`.
 - Web app: `lucide-preact` 1.59.0, `vite` 8.3.4, `@playwright/test`
   1.64.1.
 - `README.md` says what the prototype does and how to try it, step by

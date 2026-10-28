@@ -195,9 +195,9 @@ void MixCycle::doseFinished(Ctx& c, const DoseProgress& p) {
 }
 
 bool MixCycle::measuring(Ctx& c, Actuators& act) {
-  const Reading& ph = c.truth.get(Channel::Ph);
-  const Reading& ec = c.truth.get(Channel::Ec);
-  const Reading& t = c.truth.get(Channel::Temp);
+  const Reading& ph = c.truth.get(Signal::Ph);
+  const Reading& ec = c.truth.get(Signal::Ec);
+  const Reading& t = c.truth.get(Signal::Temp);
   if (!ec.usable()) {
     window_.clear();
     // A reason waiting does not cure, at once; one that may pass, after a while
@@ -302,7 +302,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   if (!isNum(s.phTarget)) {
     notes_.push_back(say("cycle.note.no_ph_range", {{"name", r.name}}));
   } else if (!isNum(ph)) {
-    notes_.push_back(say("cycle.note.ph_invalid", {{"reason", c.truth.get(Channel::Ph).reason}}));
+    notes_.push_back(say("cycle.note.ph_invalid", {{"reason", c.truth.get(Signal::Ph).reason}}));
   } else if (phHigh) {
     if (phLatched) {
       notes_.push_back(say("cycle.note.ph_latched"));
@@ -709,14 +709,14 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   }
   if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
-  const Reading& flow = c.truth.get(Channel::Flow);
+  const Reading& flow = c.truth.get(Signal::Flow);
   auto noteFlow = [&] {
     if (!flow.usable()) return;
     flowSum_ += *flow.value;
     flowN_++;
   };
   auto announceChamber = [&] {  // the chamber's water changes from standing to the tank's (RAT-042)
-    for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) c.truth.expectChange(ch, c.now + kAnnounceMs);
+    for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) c.truth.expectChange(ch, c.now + kAnnounceMs);
   };
 
   switch (phase_) {
@@ -794,8 +794,8 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     case Phase::Dose: {
       if (kind_ == Kind::Ec) {
         // An EC round moves EC and pH: announced while it doses and mixes (RAT-042)
-        c.truth.expectChange(Channel::Ec, c.now + kAnnounceMs);
-        c.truth.expectChange(Channel::Ph, c.now + kAnnounceMs);
+        c.truth.expectChange(Signal::Ec, c.now + kAnnounceMs);
+        c.truth.expectChange(Signal::Ph, c.now + kAnnounceMs);
       }
       if (doser.busy()) break;
       if (!queue_.empty() && !doseFailed_) {
@@ -831,8 +831,8 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     }
     case Phase::Mix: {
       if (kind_ == Kind::Ec || mixingFirst_) {
-        c.truth.expectChange(Channel::Ec, c.now + kAnnounceMs);
-        c.truth.expectChange(Channel::Ph, c.now + kAnnounceMs);
+        c.truth.expectChange(Signal::Ec, c.now + kAnnounceMs);
+        c.truth.expectChange(Signal::Ph, c.now + kAnnounceMs);
       }
       // The mixing clock runs only with flow (SD-105)
       if (c.flowOk) {
@@ -888,7 +888,7 @@ json MixCycle::checks(const Ctx& c) const {
     j["ok"] = ok;
     return j;
   };
-  auto reading = [&](Channel ch, const char* good, const char* bad) {
+  auto reading = [&](Signal ch, const char* good, const char* bad) {
     const Reading& x = c.truth.get(ch);
     return item(x.usable(), x.usable() ? say(good) : say(bad, {{"reason", x.reason}}));
   };
@@ -928,7 +928,7 @@ json MixCycle::checks(const Ctx& c) const {
       }
     ec.push_back(item(empty.empty(), empty.empty() ? say("check.stock_ok") : say("check.stock_empty", {{"name", empty}})));
   }
-  ec.push_back(reading(Channel::Ec, "check.ec_ok", "check.ec_bad"));
+  ec.push_back(reading(Signal::Ec, "check.ec_ok", "check.ec_bad"));
   const bool ecLatch = c.rt.latches.count("ec.no_effect") > 0;
   ec.push_back(item(!ecLatch, say(ecLatch ? "cycle.note.ec_latched" : "check.no_latch")));
 
@@ -938,7 +938,7 @@ json MixCycle::checks(const Ctx& c) const {
     ph.push_back(item(isNum(target), isNum(target) ? say("check.ph_target", {{"target", target}})
                                                    : say("cycle.note.no_ph_range", {{"name", r->name}})));
   }
-  ph.push_back(reading(Channel::Ph, "check.ph_ok", "check.ph_bad"));
+  ph.push_back(reading(Signal::Ph, "check.ph_ok", "check.ph_bad"));
   const CanisterCfg* down = c.cfg.phDown();
   ph.push_back(item(ready(down), ready(down) ? say("check.ph_down", {{"name", down->name}}) : say("check.no_ph_down")));
   if (down) {
@@ -946,7 +946,7 @@ json MixCycle::checks(const Ctx& c) const {
     ph.push_back(item(!empty, empty ? say("check.stock_empty", {{"name", down->name}}) : say("check.stock_ok")));
   }
   // pH needs ions to be read: only above the EC floor (RAT-046)
-  const Reading& ecNow = c.truth.get(Channel::Ec);
+  const Reading& ecNow = c.truth.get(Signal::Ec);
   if (ecNow.usable()) {
     const bool gate = *ecNow.value >= c.cfg.control.ecFloor;
     ph.push_back(item(gate, say(gate ? "check.gate_ok" : "check.gate_low", {{"ec", *ecNow.value}, {"floor", c.cfg.control.ecFloor}})));

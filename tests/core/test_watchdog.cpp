@@ -12,7 +12,7 @@ namespace {
 
 Reading ok(const char* ch, double v) {
   Reading r;
-  r.channel = ch;
+  r.signal = ch;
   r.value = v;
   r.quality = Quality::Ok;
   r.reason = say("truth.ok");

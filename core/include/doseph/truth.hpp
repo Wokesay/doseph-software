@@ -21,10 +21,10 @@ inline constexpr Epoch kJumpHoldS = 15 * 60;
 // EC is compensated to 25 °C, linear (RAT-089).
 inline constexpr double kEcTempCoeff = 0.02;
 
-// What the core knows about each channel: unit, plausible band, how old a
+// What the core knows about each signal: unit, plausible band, how old a
 // value may be, the jump threshold and whether its raw value must move.
-struct ChannelDef {
-  Channel channel;
+struct SignalDef {
+  Signal signal;
   const char* unit;
   int decimals;
   double plausMin, plausMax;
@@ -32,21 +32,21 @@ struct ChannelDef {
   double jump;        // NaN: no jump check
   bool expectsNoise;  // standstill check of the raw value (RAT-059)
 };
-const ChannelDef& channelDef(Channel c);
+const SignalDef& signalDef(Signal c);
 
 class SensorTruth {
  public:
-  // Once per tick: reads every channel.
+  // Once per tick: reads every signal.
   void update(const Config& cfg, const IHardware& hw, RuntimeState& rt, Ms now, Epoch epoch);
   // An intervention of the robot or of a person explains a jump until then (RAT-042).
-  void expectChange(Channel c, Ms until);
+  void expectChange(Signal c, Ms until);
 
-  const Reading& get(Channel c) const;
-  const std::map<Channel, Reading>& all() const { return readings_; }
-  // The value of a channel's calibration, without validity: pH from its two
+  const Reading& get(Signal c) const;
+  const std::map<Signal, Reading>& all() const { return readings_; }
+  // The value of a signal's calibration, without validity: pH from its two
   // points, EC × factor, compensated with `tempC` (RAT-089). nullopt when
   // the calibration is missing or invalid.
-  static std::optional<double> calibrate(Channel c, double raw, const Config& cfg, double tempC);
+  static std::optional<double> calibrate(Signal c, double raw, const Config& cfg, double tempC);
   // Checks a calibration before it is stored: the reason, or nothing.
   static std::optional<Msg> checkPh(const json& data);
   static std::optional<Msg> checkEc(const json& data);
@@ -61,8 +61,8 @@ class SensorTruth {
     std::deque<std::pair<Ms, double>> window;  // for the jump check
     Ms explainedUntil = 0;
   };
-  std::map<Channel, Reading> readings_;
-  std::map<Channel, Track> tracks_;
+  std::map<Signal, Reading> readings_;
+  std::map<Signal, Track> tracks_;
 };
 
 }  // namespace doseph

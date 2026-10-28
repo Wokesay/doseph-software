@@ -9,7 +9,7 @@
 
 namespace fake {
 
-using doseph::Channel;
+using doseph::Signal;
 using doseph::Ms;
 
 class Clock : public doseph::IClock {
@@ -25,16 +25,16 @@ class Clock : public doseph::IClock {
 class Hardware : public doseph::IHardware {
  public:
   bool isOnline = true;
-  std::map<Channel, doseph::Sample> samples;
+  std::map<Signal, doseph::Sample> samples;
   int pumps = 4;
   std::map<int, doseph::RunStatus> runs;
   int started = 0;
   bool out = false;
 
-  void set(Channel c, double raw, Ms ts) { samples[c] = doseph::Sample(raw, ts); }
+  void set(Signal c, double raw, Ms ts) { samples[c] = doseph::Sample(raw, ts); }
   void poll(Ms) override {}
   bool online() const override { return isOnline; }
-  std::optional<doseph::Sample> sample(Channel c) const override {
+  std::optional<doseph::Sample> sample(Signal c) const override {
     auto it = samples.find(c);
     if (it == samples.end()) return std::nullopt;
     return it->second;

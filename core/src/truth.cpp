@@ -29,11 +29,11 @@ constexpr Ms kFrozenAfter = 15 * kMinute;  // raw value standing still (RAT-023)
 
 // Plausible bands and jump thresholds (RAT-020, RAT-039); flow has no jump
 // check: it jumps whenever the circulation pump starts or stops.
-constexpr ChannelDef kDefs[] = {
-    {Channel::Ph, "", 2, 3.0, 9.0, 60 * kSecond, 1.0, true},
-    {Channel::Ec, "mS/cm", 2, 0.0, 8.0, 60 * kSecond, 0.5, true},
-    {Channel::Temp, "°C", 1, 0.0, 45.0, 120 * kSecond, 3.0, false},
-    {Channel::Flow, "L/min", 1, 0.0, 500.0, 15 * kSecond, kNaN, false},
+constexpr SignalDef kDefs[] = {
+    {Signal::Ph, "", 2, 3.0, 9.0, 60 * kSecond, 1.0, true},
+    {Signal::Ec, "mS/cm", 2, 0.0, 8.0, 60 * kSecond, 0.5, true},
+    {Signal::Temp, "°C", 1, 0.0, 45.0, 120 * kSecond, 3.0, false},
+    {Signal::Flow, "L/min", 1, 0.0, 500.0, 15 * kSecond, kNaN, false},
 };
 
 const Reading& emptyReading() {
@@ -71,9 +71,9 @@ double ecFactor(const json& calib) {
 
 }  // namespace
 
-const ChannelDef& channelDef(Channel c) {
+const SignalDef& signalDef(Signal c) {
   for (const auto& d : kDefs)
-    if (d.channel == c) return d;
+    if (d.signal == c) return d;
   return kDefs[0];
 }
 
@@ -93,14 +93,14 @@ std::optional<Msg> SensorTruth::checkEc(const json& data) {
   return std::nullopt;
 }
 
-std::optional<double> SensorTruth::calibrate(Channel c, double raw, const Config& cfg, double tempC) {
+std::optional<double> SensorTruth::calibrate(Signal c, double raw, const Config& cfg, double tempC) {
   if (!isNum(raw)) return std::nullopt;
-  if (c == Channel::Ph) {
+  if (c == Signal::Ph) {
     auto line = phLine(cfg.phCal);
     if (!line) return std::nullopt;
     return line->s1 + (raw - line->r1) * line->slope;
   }
-  if (c == Channel::Ec) {
+  if (c == Signal::Ec) {
     const double f = ecFactor(cfg.ecCal);
     if (!isNum(f) || !isNum(tempC)) return std::nullopt;
     return compensate(raw * f, tempC);
@@ -108,23 +108,23 @@ std::optional<double> SensorTruth::calibrate(Channel c, double raw, const Config
   return raw;
 }
 
-void SensorTruth::expectChange(Channel c, Ms until) {
+void SensorTruth::expectChange(Signal c, Ms until) {
   auto& t = tracks_[c];
   t.explainedUntil = std::max(t.explainedUntil, until);
 }
 
-const Reading& SensorTruth::get(Channel c) const {
+const Reading& SensorTruth::get(Signal c) const {
   auto it = readings_.find(c);
   return it == readings_.end() ? emptyReading() : it->second;
 }
 
 void SensorTruth::update(const Config& cfg, const IHardware& hw, RuntimeState& rt, Ms now, Epoch epoch) {
   // Temperature first: EC is compensated with it (RAT-089)
-  for (Channel ch : {Channel::Temp, Channel::Ph, Channel::Ec, Channel::Flow}) {
-    const ChannelDef& def = channelDef(ch);
-    const std::string name = channelName(ch);
+  for (Signal ch : {Signal::Temp, Signal::Ph, Signal::Ec, Signal::Flow}) {
+    const SignalDef& def = signalDef(ch);
+    const std::string name = signalName(ch);
     Reading r;
-    r.channel = name;
+    r.signal = name;
     r.unit = def.unit;
     r.decimals = def.decimals;
     auto& tr = tracks_[ch];
@@ -159,15 +159,15 @@ void SensorTruth::update(const Config& cfg, const IHardware& hw, RuntimeState& r
     // but nothing regulates on it (RAT-025).
     std::optional<double> value;
     Msg uncal;
-    if (ch == Channel::Ph) {
+    if (ch == Signal::Ph) {
       value = calibrate(ch, s->raw, cfg, kNaN);
       if (!value) {
         r.value = s->raw;
         uncal = say("truth.uncalibrated");
       }
-    } else if (ch == Channel::Ec) {
+    } else if (ch == Signal::Ec) {
       const double f = ecFactor(cfg.ecCal);
-      const Reading& t = get(Channel::Temp);
+      const Reading& t = get(Signal::Temp);
       if (!isNum(f)) {
         r.value = s->raw;
         uncal = say("truth.uncalibrated");
@@ -198,12 +198,12 @@ void SensorTruth::update(const Config& cfg, const IHardware& hw, RuntimeState& r
       continue;
     }
     if (*value < def.plausMin || *value > def.plausMax) {
-      done(Quality::Implausible, say("truth.implausible", {{"channel", name}, {"value", shown(*value)}, {"unit", unit},
+      done(Quality::Implausible, say("truth.implausible", {{"signal", name}, {"value", shown(*value)}, {"unit", unit},
                                                            {"min", def.plausMin}, {"max", def.plausMax}}));
       continue;
     }
     // Jump lock: a change above the threshold within 5 min that no announced
-    // intervention explains locks the channel until 15 min of calm (RAT-039,
+    // intervention explains locks the signal until 15 min of calm (RAT-039,
     // RAT-042, RAT-044). It survives a restart in the run-time state.
     if (isNum(def.jump) && s->ts != tr.lastTs) {
       tr.lastTs = s->ts;
@@ -227,9 +227,9 @@ void SensorTruth::update(const Config& cfg, const IHardware& hw, RuntimeState& r
       // The reason names only causes that can be true: the robot lowers pH
       // only, so a fall of pH names its own dose as one possibility (RAT-041)
       const double from = jnum(lock->second, "from"), to = jnum(lock->second, "to");
-      const json args = {{"channel", name}, {"until", until}, {"from", shown(from)}, {"to", shown(to)}, {"unit", unit}};
+      const json args = {{"signal", name}, {"until", until}, {"from", shown(from)}, {"to", shown(to)}, {"unit", unit}};
       const bool fell = isNum(from) && isNum(to) && to < from;
-      done(Quality::Jump, say(ch == Channel::Ph && fell ? "truth.jump_ph_fall" : "truth.jump", args));
+      done(Quality::Jump, say(ch == Signal::Ph && fell ? "truth.jump_ph_fall" : "truth.jump", args));
       continue;
     }
     if (lock != rt.jumpLocks.end()) {

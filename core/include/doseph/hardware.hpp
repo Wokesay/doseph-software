@@ -14,13 +14,13 @@
 
 namespace doseph {
 
-// The channels the device measures in its measuring chamber. Raw values: pH on the
+// The signals the device measures in its measuring chamber. Raw values: pH on the
 // raw pH scale (the pH an ideal probe would read, 7 − mV/59.16), EC in mS/cm
 // at the water's own temperature (not compensated), water temperature in °C,
 // flow through the device in L/min.
-enum class Channel { Ph, Ec, Temp, Flow };
-inline constexpr Channel kChannels[] = {Channel::Ph, Channel::Ec, Channel::Temp, Channel::Flow};
-const char* channelName(Channel c);  // "ph", "ec", "temp", "flow"
+enum class Signal { Ph, Ec, Temp, Flow };
+inline constexpr Signal kSignals[] = {Signal::Ph, Signal::Ec, Signal::Temp, Signal::Flow};
+const char* signalName(Signal c);  // "ph", "ec", "temp", "flow"
 
 // A raw value with the monotonic time it was measured. Calibration and
 // validity are decided by the sensor truth only.
@@ -43,9 +43,9 @@ class IHardware {
  public:
   virtual ~IHardware() = default;
   virtual void poll(Ms now) = 0;
-  // The measuring part answers; without it no channel has a value.
+  // The measuring part answers; without it no signal has a value.
   virtual bool online() const = 0;
-  virtual std::optional<Sample> sample(Channel c) const = 0;
+  virtual std::optional<Sample> sample(Signal c) const = 0;
   // Dosing pumps are numbered 1..pumpCount().
   virtual int pumpCount() const = 0;
   // A pump run in ms with a job ID: a repeated order with the same ID does

@@ -56,7 +56,7 @@ Ctx Robot::ctx() {
 }
 
 bool Robot::flowOk() const {
-  const Reading& f = truth_.get(Channel::Flow);
+  const Reading& f = truth_.get(Signal::Flow);
   return f.usable() && *f.value >= kFlowMinLpm;
 }
 
@@ -175,7 +175,7 @@ void Robot::tick() {
   truth_.update(cfg_, hw_, rt_, now, epoch);
   // A probe calibration explains jumps while someone works on it (RAT-042)
   if (probe_ && now - probe_->lastStep < kProbeIdle)
-    for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) truth_.expectChange(ch, now + 10 * kSecond);
+    for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kSecond);
   // Maintenance explains them too, 10 s ahead and never past its end (RAT-042); once over, it is logged
   if (maintenanceUntilMs_ > 0 && now >= maintenanceUntilMs_) {
     maintenanceUntilMs_ = 0;
@@ -183,7 +183,7 @@ void Robot::tick() {
     restartCycle();
   }
   if (maintenanceUntilMs_ > 0)
-    for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp})
+    for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp})
       truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
   Ctx c = ctx();
   act_.enforce(c);
@@ -202,7 +202,7 @@ void Robot::tick() {
   if (epoch - lastWatch_ >= 5 || lastWatch_ == 0) {
     lastWatch_ = epoch;
     WatchInput in{cfg_, rt_, {}};
-    for (Channel ch : kChannels) in.readings.push_back(truth_.get(ch));
+    for (Signal ch : kSignals) in.readings.push_back(truth_.get(ch));
     const Phase ph = cycle_.phase();
     in.needsFlow = ph == Phase::ProveFlow || ph == Phase::Flush || ph == Phase::Measure || ph == Phase::Remeasure ||
                    ph == Phase::Dose || ph == Phase::Mix;
@@ -226,11 +226,11 @@ void Robot::sampleHistory(Epoch epoch) {
   // a gap stays a gap (RAT-016)
   const bool flow = flowOk();
   std::vector<std::pair<std::string, double>> samples;
-  for (Channel ch : kChannels) {
+  for (Signal ch : kSignals) {
     const Reading& r = truth_.get(ch);
-    if (!r.usable() || (ch != Channel::Flow && !flow)) continue;
-    samples.emplace_back(channelName(ch), *r.value);
-    history_.add(channelName(ch), epoch, *r.value);
+    if (!r.usable() || (ch != Signal::Flow && !flow)) continue;
+    samples.emplace_back(signalName(ch), *r.value);
+    history_.add(signalName(ch), epoch, *r.value);
   }
   if (!samples.empty()) store_.append(kHistoryLog, History::record(epoch, samples));
 }
@@ -321,9 +321,9 @@ json Robot::state() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   Ctx c = ctx();
   json readings = json::object();
-  for (Channel ch : kChannels) {
+  for (Signal ch : kSignals) {
     const Reading& r = truth_.get(ch);
-    readings[channelName(ch)] = {{"value", numOrNull(r.value)},
+    readings[signalName(ch)] = {{"value", numOrNull(r.value)},
                                  {"quality", qualityName(r.quality)},
                                  {"reason", r.reason},
                                  {"ageS", r.ageMs >= 0 ? json(r.ageMs / 1000) : json(nullptr)},
@@ -359,12 +359,12 @@ json Robot::state() {
            {"message", job_->message}, {"at", job_->at}};
   json probe = nullptr;
   if (probe_) {
-    auto raw = [&](Channel ch) {
+    auto raw = [&](Signal ch) {
       auto s = hw_.sample(ch);
       return s ? numOrNull(s->raw) : json(nullptr);
     };
-    probe = {{"kind", probe_->kind}, {"points", probe_->points}, {"rawPh", raw(Channel::Ph)}, {"rawEc", raw(Channel::Ec)},
-             {"temp", numOrNull(truth_.get(Channel::Temp).value)}};
+    probe = {{"kind", probe_->kind}, {"points", probe_->points}, {"rawPh", raw(Signal::Ph)}, {"rawEc", raw(Signal::Ec)},
+             {"temp", numOrNull(truth_.get(Signal::Temp).value)}};
   }
   json ecEffects = json::object();
   for (const auto& [k, v] : rt_.ecEffects) ecEffects[k] = numOrNull(v);
@@ -431,8 +431,8 @@ std::string Robot::historyCsv(const std::vector<std::string>& series, Epoch from
     out += sep;
     out += series[i];
     int d = 3;
-    for (Channel ch : kChannels)
-      if (series[i] == channelName(ch)) d = channelDef(ch).decimals + 1;  // a mean carries one digit more
+    for (Signal ch : kSignals)
+      if (series[i] == signalName(ch)) d = signalDef(ch).decimals + 1;  // a mean carries one digit more
     decimals.push_back(d);
     const SeriesPoints p = history_.query(series[i], from, to, 0);
     for (size_t k = 0; k < p.t.size(); ++k) {
@@ -548,7 +548,7 @@ Result Robot::newTank() {
     dropCatchUp(c, say("catchup.new_tank"));  // a new fill has no missing part (SD-114)
   }
   const Ms now = clock_.nowMs();
-  for (Channel ch : {Channel::Ph, Channel::Ec, Channel::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
+  for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   log_.add(clock_.epoch(), "control", "info", say("ev.tank.new"), say("ev.tank.new.text"));
   restartCycle();
   saveState(true);
@@ -924,7 +924,7 @@ Result Robot::probe(const json& j) {
   }
   if (action == "point") {
     const double ref = jnum(j, "reference");
-    const Channel ch = probe_->kind == "ph" ? Channel::Ph : Channel::Ec;
+    const Signal ch = probe_->kind == "ph" ? Signal::Ph : Signal::Ec;
     auto s = hw_.sample(ch);
     // A point takes a fresh raw reading, never a stand-in (RAT-006)
     if (!hw_.online() || !s || !isNum(s->raw) || now - s->ts > 10 * kSecond) return Result::fail(409, say("probe.no_raw"));
@@ -939,7 +939,7 @@ Result Robot::probe(const json& j) {
     }
     // EC: one reference solution, its value at 25 °C as printed on the canister; the water
     // temperature is needed to compensate (RAT-089)
-    const Reading& t = truth_.get(Channel::Temp);
+    const Reading& t = truth_.get(Signal::Temp);
     if (!isNum(ref) || ref < 0.1 || ref > 20) return Result::fail(422, say("probe.ec_ref"));
     if (!t.usable()) return Result::fail(409, say("probe.no_temp", {{"reason", t.reason}}));
     if (s->raw <= 0) return Result::fail(422, say("probe.ec_zero"));

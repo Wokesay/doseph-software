@@ -73,11 +73,11 @@ of its own.
 | Freshness and a standing raw value are checked separately | RAT-023 | ✓ | `readmodel.hpp`, `truth.hpp`, `truth.cpp` · test_truth.cpp |
 | Control reads only usable values; without a valid calibration, no control value; a backup's calibration is checked as if made now | RAT-025 | ✓ | `common.hpp`, `config.hpp`, `readmodel.hpp`, `truth.hpp`, `truth.cpp` · test_truth.cpp, test_api.cpp |
 | A calibration is refused outside its slope, zero point or factor limits | RAT-026 | ✓ | `truth.cpp` · test_truth.cpp |
-| A channel is stale by the age of its last measurement, never by a change of value | RAT-027 | ✓ | `truth.cpp` · test_truth.cpp |
-| An unexplained jump locks the channel until 15 min of calm; a skipped dose is never silent | RAT-039 | ✓ | `config.hpp`, `readmodel.hpp`, `truth.cpp` · test_truth.cpp |
+| A signal is stale by the age of its last measurement, never by a change of value | RAT-027 | ✓ | `truth.cpp` · test_truth.cpp |
+| An unexplained jump locks the signal until 15 min of calm; a skipped dose is never silent | RAT-039 | ✓ | `config.hpp`, `readmodel.hpp`, `truth.cpp` · test_truth.cpp |
 | An announced intervention explains jumps: a new tank, the cycle's own dose, maintenance mode | RAT-042 | ✓ | `robot.hpp`, `truth.hpp`, `cycle.cpp`, `robot.cpp`, `truth.cpp` · test_cycle.cpp, test_truth.cpp, robot.spec.ts |
 | Jump locks survive a restart; no dose on a reading from before it | RAT-044 | ✓ | `config.hpp`, `readmodel.hpp`, `truth.hpp`, `truth.cpp` · test_truth.cpp |
-| A standing raw value is a fault only for a channel that should be noisy | RAT-059 | ✓ | `readmodel.hpp`, `truth.hpp`, `truth.cpp` · test_truth.cpp |
+| A standing raw value is a fault only for a signal that should be noisy | RAT-059 | ✓ | `readmodel.hpp`, `truth.hpp`, `truth.cpp` · test_truth.cpp |
 | Sensor truth always runs, also while stopped or calibrating | RAT-075 | ◐ | `truth.hpp` · no test of its own |
 | EC is compensated to 25 °C; without a water temperature it is no value for control | RAT-089 | ✓ | `readmodel.hpp`, `truth.hpp`, `robot.cpp`, `truth.cpp` · test_truth.cpp |
 
