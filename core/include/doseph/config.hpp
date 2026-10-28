@@ -30,7 +30,7 @@ struct CanisterCfg {
   double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
   double maxMlPerDay = kNaN;      // the user's daily amount, below the channel's cap (SD-113); NaN: none
   // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
-  std::string device;
+  std::string device = "";
 };
 
 // The level of a canister, counted from use (SD-119): below these it is low
