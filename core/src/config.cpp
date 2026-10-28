@@ -415,6 +415,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["dayRuns"] = day;
   j["ecInBand"] = s.ecInBand;
   j["topUp"] = s.topUp;
+  j["settleMin"] = s.settleMin;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -474,6 +475,9 @@ RuntimeState runtimeFromJson(const json& j) {
     }
   if (j.contains("ecInBand") && j["ecInBand"].is_object()) s.ecInBand = j["ecInBand"];
   s.topUp = jbool(j, "topUp", false);
+  if (j.contains("settleMin") && j["settleMin"].is_array())
+    for (const auto& m : j["settleMin"])
+      if (m.is_number() && isNum(m.get<double>()) && m.get<double>() >= 0 && s.settleMin.size() < 3) s.settleMin.push_back(m.get<double>());
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

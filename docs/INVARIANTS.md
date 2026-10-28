@@ -38,6 +38,7 @@ of its own.
 | After a dose it mixes with flow at least one turnover, at least 2 min, before it measures again; pH waits like EC | RAT-052 | ✓ | `config.hpp`, `cycle.cpp`, `world.cpp` · test_cycle.cpp |
 | An EC round keeps a reserve for the pH− dose that follows | RAT-053 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | The wait after a dose covers the time to tolerance: one turnover, then steady over 60 s or a fifth of a turnover (at most 10 min); the user may only lengthen it | RAT-058 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
+| Above 150 L the wait is the settling learned from clean doses (1.5 × the longest of the last three, 5 to 600 min), 60 min until one is learned | SD-112 | ✓ | `plan.cpp`, `cycle.cpp`, `robot.cpp` · test_plan.cpp, test_scenarios.cpp |
 | A latch only after a dose without effect or a test dose that did not fit; its reason is frozen | RAT-062 | ✓ | `watchdog.cpp` · test_cycle.cpp |
 | The device's suction pump runs for a check and is off in Hold, Wait and Off; no modes | SD-109 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | Flow by the device's method: an outlet level sensor proves it while it reports water and the suction pump runs, a flow meter at 0.5 L/min, each for 10 s | SD-109 | ✓ | `robot.cpp`, `cycle.cpp` · test_cycle.cpp |

@@ -67,6 +67,14 @@ CycleSettings cycleSettings(const Ctx& c) {
   s.mixUserMin = isNum(cfg.tank.mixMinMin) ? std::clamp(cfg.tank.mixMinMin, 0.0, kWaitMaxMin) : kNaN;
   s.mixMin = isNum(s.mixOwnMin) ? s.mixOwnMin : kWaitMinMin;
   s.mixWhy = isNum(s.mixOwnMin) ? "turnover" : "minimum";
+  // A large tank mixes by the customer's pump: its own wait is the settling learned from its doses,
+  // 60 min until one is learned (SD-112)
+  if (isNum(s.volumeL) && s.volumeL > kLargeTankL) {
+    const double learned = learnedSettleMin(c.rt.settleMin);
+    s.mixOwnMin = isNum(learned) ? learned : kSettleDefaultMin;
+    s.mixWhy = isNum(learned) ? "settling" : "settling_default";
+    s.mixMin = s.mixOwnMin;
+  }
   if (isNum(s.mixUserMin) && s.mixUserMin > s.mixMin) {
     s.mixMin = s.mixUserMin;
     s.mixWhy = "user";
@@ -598,6 +606,9 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
 void MixCycle::learn(Ctx& c, Actuators& act) {
   const Kind kind = kind_;
   kind_ = Kind::None;
+  // A clean round's settling time is read from the history by the robot (SD-112, RAT-057)
+  if (clean_ && doseEndAt_ > 0 && (kind == Kind::Ec || kind == Kind::Ph))
+    settled_ = Settled{kind == Kind::Ec ? "ec" : "ph", doseEndAt_, kind == Kind::Ec ? measured_.ec : measured_.ph};
   const double v = volRound_;
   const double mlPerL = isNum(v) && v > 0 ? mlRound_ / v : kNaN;
   auto volumeLatch = [&](double q, const char* which, double observed) {
@@ -878,6 +889,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       if (mlRound_ > 0) {
         mixedMs_ = 0;
+        doseEndAt_ = c.epoch;
         mixTargetMs_ = minutes(s.mixMin);  // pH waits like EC (SD-112)
         enter(c, Phase::Mix);
         line_ = say("cycle.mix", {{"left", mmss(mixTargetMs_)}});

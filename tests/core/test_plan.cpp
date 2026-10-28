@@ -213,3 +213,17 @@ TEST_CASE("The mixing wait the robot suggests: about two turnovers for EC, three
   CHECK(std::isnan(suggestedWaitMin(kNaN, 10, 2)));  // no volume: no suggestion (R5)
   CHECK(std::isnan(suggestedWaitMin(100, 0, 2)));
 }
+
+TEST_CASE("Settling of a large tank: from a dose's end until the readings stay within the band of their final value; the wait learned is 1.5 × the longest of three, 5 to 600 min (SD-112)") {
+  const std::vector<Epoch> t = {90, 100, 110, 120, 130, 140, 150};
+  const std::vector<double> v = {0.9, 1.0, 1.2, 1.35, 1.38, 1.39, 1.40};
+  // Final 1.40, band 0.03: 1.35 at 120 is still out, 1.38 at 130 within; a point before the end is not counted
+  CHECK(settleSeconds(t, v, 100, 1.40, 0.03, 10) == 30);
+  CHECK(settleSeconds(t, v, 100, 1.40, 0.5, 10) == 0);            // within from the start
+  CHECK(std::isnan(settleSeconds(t, v, 200, 1.40, 0.03, 10)));   // no reading after the end (R5)
+  CHECK(std::isnan(settleSeconds(t, v, 100, kNaN, 0.03, 10)));
+  CHECK(learnedSettleMin({10, 20, 15}) == 30);
+  CHECK(learnedSettleMin({1}) == kSettleMinMin);
+  CHECK(learnedSettleMin({500}) == kSettleMaxMin);
+  CHECK(std::isnan(learnedSettleMin({})));
+}

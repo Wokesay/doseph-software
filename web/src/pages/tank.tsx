@@ -106,7 +106,16 @@ function WaitCard() {
   const badLeast = least !== null && !inRange(least, LIMITS.mixMinMin);
   const badHold = hold === null || !inRange(hold, LIMITS.holdMin);
   // The wait in force and why (SD-112): one turnover, the user's minimum, or the shortest while the flow is not known
-  const why = s.mixWhy === "user" ? t("tank.mixWhyUser") : s.mixWhy === "turnover" ? t("tank.mixWhyTurnover") : t("tank.mixWhyMinimum");
+  const why =
+    s.mixWhy === "user"
+      ? t("tank.mixWhyUser")
+      : s.mixWhy === "turnover"
+        ? t("tank.mixWhyTurnover")
+        : s.mixWhy === "settling"
+          ? t("tank.mixWhySettling")
+          : s.mixWhy === "settling_default"
+            ? t("tank.mixWhySettlingDefault")
+            : t("tank.mixWhyMinimum");
   return (
     <Card title={<Term topic="waitTime" />} icon={<Clock size={18} />}>
       <div class="stack">

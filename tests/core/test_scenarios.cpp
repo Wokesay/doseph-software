@@ -393,3 +393,19 @@ TEST_CASE("Scenario top up water: EC above its band with no nutrient in since a 
   for (const auto& e : done) ok |= e["title"]["key"] == "ev.water.ok";
   CHECK(ok);
 }
+
+TEST_CASE("Scenario large tank: above 150 L the wait is 60 min until a clean dose's settling is learned from the history, then 1.5 × the longest of the last three (SD-112)") {
+  Run r(device("home"));
+  r.s.world().tank.volumeL = 200;
+  r.ok("PUT", "tank", {{"volumeL", 200}});
+  json set = r.state()["cycle"]["settings"];
+  CHECK(set["mixWhy"] == "settling_default");
+  CHECK(set["mixMin"] == 60);
+  r.waitUntil("a dose's settling is learned", [&] { return !r.s.robot().runtime().settleMin.empty(); }, 6 * 3600, 2000);
+  const double settled = r.s.robot().runtime().settleMin.back();
+  CHECK(settled > 0);
+  CHECK(settled < 60);
+  set = r.state()["cycle"]["settings"];
+  CHECK(set["mixWhy"] == "settling");
+  CHECK(set["mixOwnMin"].get<double>() == doctest::Approx(std::max(5.0, 1.5 * settled)));
+}

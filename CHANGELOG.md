@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Large tanks wait for their learned settling (SD-112): above 150 L the
+  flow through the device is only a sample stream and the customer's pump
+  mixes, so the robot's own wait is not a turnover but the settling time
+  it learns from its doses. A clean dose's settling time is read from the
+  history: from the end of its dosing until the readings stay within the
+  stability band of their final value. The wait is 1.5 × the longest of
+  the last three, 5 to 600 minutes, and 60 minutes until one is learned;
+  the user may still lengthen it. The tank page says which applies.
 - "Top up water" (SD-115): when EC is above its band at a check and
   nothing was dosed since a check found it within, water is missing. The
   robot raises "top up water" once, as an event, a watchdog item and a

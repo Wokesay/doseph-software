@@ -26,7 +26,7 @@ export type CycleSettings = {
   volumeL: number | null; flowLpm: number | null; turnoverMin: number | null;
   // The waits in force (the user's, else the suggestion) and the suggestions from volume and flow
   // The mixing wait after a dose (SD-112): in force, the robot's own, the user's least; why; the stability window
-  mixMin: number | null; mixOwnMin: number | null; mixUserMin: number | null; mixWhy: "turnover" | "user" | "minimum"; stableS: number;
+  mixMin: number | null; mixOwnMin: number | null; mixUserMin: number | null; mixWhy: "turnover" | "user" | "minimum" | "settling" | "settling_default"; stableS: number;
   holdMin: number;
 };
 

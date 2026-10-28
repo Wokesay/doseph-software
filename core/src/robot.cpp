@@ -219,6 +219,7 @@ void Robot::tick() {
   }
   c.channelJob = channelJobActive();
   cycle_.tick(c, act_, doser_);
+  if (auto st = cycle_.takeSettled()) learnSettling(*st, epoch);
 
   if (epoch - lastSample_ >= kSampleS) {
     lastSample_ = epoch;
@@ -298,6 +299,17 @@ void Robot::checkHeads(Epoch epoch) {
       log_.add(epoch, "calibration", "warn", say("ev.channel.head_changed", {{"channel", n}, {"head", head}}),
                say("ev.channel.head_changed.text"));
   }
+}
+
+// A clean dose's settling time from the history: from the end of its dosing until the readings stay
+// within the stability band of their final value; the last three are kept (SD-112)
+void Robot::learnSettling(const MixCycle::Settled& st, Epoch epoch) {
+  const double band = st.kind == "ec" ? kStableEc : kStablePh;
+  const SeriesPoints pts = history_.query(st.kind, st.end, epoch, static_cast<size_t>((epoch - st.end) / kSampleS + 10));
+  const double s = settleSeconds(pts.t, pts.avg, st.end, st.final, band, pts.stepS);
+  if (!isNum(s)) return;
+  rt_.settleMin.push_back(s / 60.0);
+  while (rt_.settleMin.size() > 3) rt_.settleMin.erase(rt_.settleMin.begin());
 }
 
 void Robot::sampleHistory(Epoch epoch) {
