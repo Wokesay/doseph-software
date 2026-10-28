@@ -171,6 +171,13 @@ export type Profile = {
   flow: string; pumpIn: "tank" | "device"; return: string; network: string[]; pumpLpmLow: number | null; example: boolean;
 };
 
+// MQTT with Home Assistant discovery (PD-461, SD-130): the password is written, never read back
+export type MqttSettings = {
+  enabled: boolean; host: string; port: number; tls: boolean; user: string; passwordSet: boolean;
+  commands: boolean; discovery: string; commandsOn: boolean; topic: string;
+  status: { connected: boolean; error: Msg | null; at: number };
+};
+
 // Commissioning (SD-129): the steps of #10 in their order. "device": done while the robot sees it;
 // "confirm": done once the user confirms it; "later": not there yet
 export type SetupStepId = "password" | "network" | "placement" | "flow" | "probes" | "channels" | "lines" | "test" | "tank" | "push" | "account";

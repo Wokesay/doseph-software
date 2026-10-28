@@ -481,3 +481,28 @@ test("commissioning: the demo robot is set up, so no step is asked for (SD-129)"
   await page.goto("/#/setup");
   await expect(page.getByText("Commissioning is complete.")).toBeVisible();
 });
+
+test("MQTT is off until switched on; without TLS it only sends values; the password is never shown again (PD-461, SD-130)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("mqtt");
+  await expect(card.getByLabel("Take commands")).toBeDisabled();
+  await card.locator('label.toggle[title="On"]').click();
+  await card.locator("input[name=mqtt-host]").fill("broker.lan");
+  await card.locator("input[name=mqtt-user]").fill("doseph");
+  await card.locator("input[name=mqtt-password]").fill("mqtt-secret");
+  await expect(card.getByText("Without TLS anyone on your network can read the values")).toBeVisible();
+  await page.getByTestId("save-mqtt").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await card.locator('label.toggle[title="TLS (encrypted)"]').click();
+  await expect(card.locator("input[name=mqtt-port]")).toHaveValue("8883");
+  await expect(card.getByLabel("Take commands")).toBeEnabled();
+  await card.locator('label.toggle[title="Take commands"]').click();
+  await page.getByTestId("save-mqtt").click();
+  await page.reload();
+  await expect(page.locator("input[name=mqtt-host]")).toHaveValue("broker.lan");
+  await expect(page.locator("input[name=mqtt-password]")).toHaveValue("");
+  await expect(page.getByTestId("mqtt")).toContainText("Set. Leave empty to keep it.");
+  await expect(page.getByTestId("mqtt").getByLabel("Take commands")).toBeChecked();
+  await expect(page.getByTestId("mqtt-status")).toContainText("Topics under doseph/");
+});

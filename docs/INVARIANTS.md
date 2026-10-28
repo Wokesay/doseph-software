@@ -166,6 +166,14 @@ of its own.
 | A run that went through a channel's line to its end counts as that line filled | SD-129 | ✓ | `robot.cpp`, `gateway.cpp` · test_api.cpp |
 | Until the owner confirmed the placement, the cycle is off and nothing runs towards the tank (dose, line fill, refill); into a cup it may; a backup never brings the confirmation | SD-118 | ✓ | `cycle.cpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_api.cpp |
 
+## MQTT and Home Assistant (SD-130)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| MQTT is off by default; values go out also without TLS, commands only over TLS with a user; the password stays in the device's own file and is never read back | SD-130 | ✓ | `mqtt.cpp`, `robot.cpp` · test_mqtt.cpp, robot.spec.ts |
+| A command over MQTT is a call of the account role with the same checks as one from the app; there is none for a limit, a release, a calibration or a single pump; each known command is logged | SD-130 | ✓ | `api.cpp` · test_mqtt.cpp |
+| A value the robot cannot use goes to the broker as null, never 0 (R5) | SD-130 | ✓ | `mqtt.cpp` · test_mqtt.cpp |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

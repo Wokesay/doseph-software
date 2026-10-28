@@ -777,3 +777,52 @@ device in this session. Where updates come from is a product question
   - Apart from that, commissioning only shows the way. Dosing keeps its
     own checks.
   - The simulator's demo is set up as a device in use.
+
+
+## SD-130: MQTT with Home Assistant discovery
+
+2026-10-28. Step 7 of #10 (PD-461: MQTT with Home Assistant discovery,
+read and write, at launch). The owner decided that values go out also
+without TLS, and commands only over TLS with a user.
+
+- **Off by default.**
+  - The settings are the broker's host and port, TLS, a user and
+    password, whether commands are taken, and Home Assistant's discovery
+    prefix.
+  - They live in a file of their own, as the push channels' do (SD-124).
+    A backup, the diagnostics and `GET /config` never carry the password,
+    and the API says only whether it is set.
+  - The owner and an app token change them; every role reads them
+    (SD-129).
+- **Topics** under `doseph/<device ID>`:
+  - `state`, retained JSON: pH, EC, temperature, flow proven, stopped,
+    the cycle's phase, the recipe in force, its EC and pH target, whether
+    an alarm stands, and the canister levels. A value the robot cannot
+    use is null, never 0 (R5).
+  - `availability`: "online", and "offline" as the broker's last will.
+  - `result`: the answer to a command.
+- **Discovery.** Retained configs under
+  `<prefix>/<component>/doseph_<device ID>/<object>/config`:
+  - sensors for pH, EC, temperature, the cycle, the recipe in force and
+    its targets, and one per canister;
+  - binary sensors for flow proven, stopped and alarm;
+  - the device itself with its name, line and version.
+- **Reading** goes to the broker also without TLS. The app warns that
+  anyone on the network can then read along.
+- **Commands** come only over TLS with a user, once the owner switches
+  them on:
+  - Stop;
+  - the recipe in force, by its name;
+  - the EC target of the recipe in force;
+  - its pH target, where the range keeps its width (0.4 without one).
+
+  Each command is a call of the account role (SD-129) through the same
+  API path, so it passes the same checks and locks as one from the app.
+  While a plant leads, its phase is changed in the app. Limits,
+  releases, calibration and single pumps are never commands (PD-459).
+  Each known command is logged with its result. While commands are off,
+  their entities are removed from Home Assistant.
+- **Transport.** The core builds the topics, the payloads and the packets
+  of MQTT 3.1.1, at QoS 0. The platform holds the connection (R8): on
+  the device, the firmware's MQTT client with TLS. The simulator's
+  connection follows in a pull request of its own.

@@ -45,6 +45,15 @@ All notable changes to this software. The format follows
     confirmation.
   - Until all are done, every page shows the next step. The demo counts
     as set up.
+- MQTT with Home Assistant discovery (SD-130, PD-461), off by default.
+  - It sends pH, EC, temperature, flow, Stop, the cycle, the recipe in
+    force with its targets, alarms and canister levels, and Home
+    Assistant finds the device by itself.
+  - Over TLS with a user it also takes commands: Stop, the recipe in
+    force and its EC and pH targets. These are calls of the account
+    role, with the same checks as from the app.
+  - The settings and their password live apart from the configuration.
+  - The simulator does not connect to a broker yet.
 - The device has a random ID of its own (SD-129). It is shown in `/info`,
   in the diagnostics and on the settings page, and never in a backup.
 

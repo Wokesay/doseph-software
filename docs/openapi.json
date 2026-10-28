@@ -4,7 +4,7 @@
     "title": "Doseph API",
     "version": "1",
     "summary": "The REST API of Doseph, the mixing robot for nutrient solution",
-    "description": "The web app on the device and other apps use only this API. Every text is a message with a key (`Msg`). Sign in with the password for a session cookie, or send an access token as `Authorization: Bearer`. `x-roles` names who may call an operation (SD-129): `owner` is a session signed in with the password; `app`, `account` and `peer` are the roles of access tokens. A call outside its role is refused with 403. Writing calls from a browser must come from the same origin. The simulator adds `/sim` calls of its own; the device has none.",
+    "description": "The web app on the device and other apps use only this API. Every text is a message with a key (`Msg`). Sign in with the password for a session cookie, or send an access token as `Authorization: Bearer`. `x-roles` names who may call an operation (SD-129): `owner` is a session signed in with the password; `app`, `account` and `peer` are the roles of access tokens. A call outside its role is refused with 403. Writing calls from a browser must come from the same origin. The simulator adds `/sim` calls of its own; the device has none. Over MQTT (SD-130) the device takes four commands on doseph/<device ID>/{stop,recipe,ec_target,ph_target}/set, as calls of the account role.",
     "license": {
       "name": "AGPL-3.0-or-later",
       "identifier": "AGPL-3.0-or-later"
@@ -1207,6 +1207,84 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/mqtt": {
+      "get": {
+        "operationId": "getMqtt",
+        "summary": "MQTT settings without the password, and the connection",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MqttSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putMqtt",
+        "summary": "Changes the MQTT settings; a password left out stays",
+        "tags": [
+          "settings"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MqttSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MqttSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -3889,6 +3967,59 @@
           "complete": {
             "type": "boolean",
             "description": "Every step is done or skipped, apart from those that come later"
+          }
+        }
+      },
+      "MqttSettings": {
+        "type": "object",
+        "description": "MQTT with Home Assistant discovery (PD-461, SD-130). Off by default. Values go out also without TLS; commands only over TLS with a user. The password is written, never read back.",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "tls": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "passwordSet": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "commands": {
+            "type": "boolean",
+            "description": "Take commands: Stop, the recipe in force, its EC and pH targets. Needs TLS and a user."
+          },
+          "discovery": {
+            "type": "string",
+            "description": "Home Assistant's discovery prefix"
+          },
+          "commandsOn": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "topic": {
+            "type": "string",
+            "readOnly": true,
+            "description": "The device's base topic, doseph/<device ID>"
+          },
+          "status": {
+            "type": "object",
+            "readOnly": true,
+            "description": "The platform's report: connected, its error, when"
           }
         }
       }
