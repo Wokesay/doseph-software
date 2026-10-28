@@ -27,6 +27,11 @@ if grep -rnE '\.(line|variant)\b' core/src | grep -v '^core/src/hardware.cpp'; t
   err "logic reads a line or variant name"
 fi
 
+# Phases provide parameters, never names (RAT-076): no phase name is written into the core.
+if grep -rniE '"(seedling|clone|vegetative|veg|growth|flower|flowering|bloom|ripening|keimling|steckling|wachstum|bl.{1,2}te|reife)"' core/src core/include; then
+  err "a phase name in the core"
+fi
+
 # R5: a missing value is never 0 (RAT-006).
 if grep -rnE 'value_or\(0(\.0)?\)' core/; then
   err "a missing value becomes 0"

@@ -33,11 +33,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-002 – Harvest is recorded only by the user
 
-- **Dropped:** the grow controller only (grow runs and harvest); not part of the mixing robot (SD-105).
 - **Rule:** The robot never declares a harvest itself: a harvest is an event with a time that the user records, and closing the grow run is a step of its own (RAT-077). Each phase says whether it moves on by itself after its planned days or only once the user confirms; the harvest always waits for the user.
 - **Why:** Whether a plant is ripe is judged by looking at it, not by counting days. A harvest set off when the planned flowering days run out acts on a guess and can contradict what the user sees.
 - **Evidence:** Observed on the reference installation (2026): a harvest the plan triggered was replaced by the user's confirmation, with a daily reminder that also counted the days past the plan.
-- **Later:** step 6 (grow phases and harvest, `docs/LATER.md`).
+- **Implemented in:** `core/include/doseph/plants.hpp`, `core/src/plants.cpp`, `core/src/robot.cpp`
+- **Tests:** `tests/core/test_plants.cpp` "Plants: a phase that waits for its confirmation stays after its days and reminds daily; the last phase reminds to record the harvest; a phase begun today and a plant with other targets are said (SD-128, RAT-002)"
 
 ### RAT-003 – One pump job at a time; bad calibration results are rejected
 
@@ -632,19 +632,19 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-076 – Phases provide parameters, never names
 
-- **Dropped:** the grow controller only (grow phases); not part of the mixing robot (SD-105).
 - **Rule:** A phase is a freely named set of parameters. Control, planning and assessment read only the parameters in force, never the phase's name; a check in CI refuses phase names written into the core.
 - **Why:** Logic that keys on names breaks silently when users rename, add or translate phases; phases that only provide parameters keep behaviour explicit and adjustable.
 - **Evidence:** Observed on the reference installation (2026): several control and monitoring paths branched on particular phase names, so behaviour hung on naming, and changing it took a rebuild.
-- **Later:** step 6 (grow phases, `docs/LATER.md`).
+- **Implemented in:** `core/include/doseph/plants.hpp`, `core/src/plants.cpp`, `tools/arch_check.sh`
+- **Tests:** `tests/core/test_plants.cpp` "Plants: renaming a phase changes nothing the robot does; logic reads a phase's parameters, never its name (RAT-076)"
 
 ### RAT-077 – Harvest is an event; "completed" is its own state
 
-- **Dropped:** the grow controller only (harvest); not part of the mixing robot (SD-105).
 - **Rule:** A harvest is an event – a time and a log entry – of a running grow run. Completing the run is a separate, explicit step to the state "completed".
 - **Why:** A harvest held as a state over several days mixes "plants cut" with "run still going" and leaves reports and the next run without a clear end.
 - **Evidence:** Observed on the reference installation (2026): with harvest a state of several days and no state for a finished run, the end of a run could only be read from a timestamp.
-- **Later:** step 6 (grow runs and harvest).
+- **Implemented in:** `core/include/doseph/config.hpp`, `core/src/robot.cpp`
+- **Tests:** `tests/core/test_plants.cpp` "Plants over the API: a plant started from a plant recipe copies its phases, leads and ends the hand choice; the next phase, the harvest and the end are the user's; once none runs, the robot holds (SD-128, RAT-077)"
 
 ### RAT-078 – Tank level: piecewise-linear curve and switch-on hysteresis
 

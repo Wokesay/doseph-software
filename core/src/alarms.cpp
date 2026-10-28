@@ -35,7 +35,7 @@ Level levelOf(const std::string& id) {
       id == "target.ph")
     return Level::Critical;
   if (startsWith(id, "latch.channel.") && endsWith(id, ".siphon")) return Level::Critical;
-  if (startsWith(id, "maint.")) return Level::Info;
+  if (startsWith(id, "maint.") || startsWith(id, "plant.")) return Level::Info;
   return Level::Warning;
 }
 

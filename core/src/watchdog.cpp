@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "doseph/messages.hpp"
+#include "doseph/plants.hpp"
 
 namespace doseph {
 
@@ -30,8 +31,10 @@ WatchResult evaluate(const WatchInput& in) {
   auto add = [&](std::string id, Msg label, std::string status, Msg text) {
     w.items.push_back({std::move(id), std::move(label), std::move(status), std::move(text)});
   };
-  const RecipeCfg* recipe = in.cfg.active.recipe.empty() ? nullptr : in.cfg.recipe(in.cfg.active.recipe);
-  const bool ended = recipe && in.cfg.active.until != 0 && in.epoch >= in.cfg.active.until;
+  // The water plan: the leading plant's phase, else the recipe chosen by hand (SD-128)
+  const WaterPlan plan = waterPlan(in.cfg, in.epoch);
+  const RecipeCfg* recipe = plan.recipe;
+  const bool ended = recipe && plan.ended;
   const bool inForce = recipe && !ended;
 
   // The probes: a reading not delivered is a problem, never neutral (RAT-015); "not
@@ -67,8 +70,8 @@ WatchResult evaluate(const WatchInput& in) {
       return add(id, label, "ok", say("watch.target_ok", {{"value", value}, {"target", want}, {"d", decimals}}));
     add(id, label, "problem", say(value > want ? "watch.target_high" : "watch.target_low", {{"value", value}, {"target", want}, {"band", band}}));
   };
-  checkTarget("target.ec", "watch.target_ec", in.lastEc, recipe ? recipe->ecTarget : kNaN, std::max(0.05, in.cfg.control.ecTolerance), 2);
-  checkTarget("target.ph", "watch.target_ph", in.lastPh, recipe ? phTarget(*recipe) : kNaN, std::max(0.05, in.cfg.control.phTolerance), 2);
+  checkTarget("target.ec", "watch.target_ec", in.lastEc, plan.ecTarget, std::max(0.05, in.cfg.control.ecTolerance), 2);
+  checkTarget("target.ph", "watch.target_ph", in.lastPh, plan.phTarget, std::max(0.05, in.cfg.control.phTolerance), 2);
 
   // Latches hold until a person releases them (RAT-062, RAT-063)
   // A latch's text is its own, or that of its kind where the ID names more (a channel's, SD-111)
@@ -80,14 +83,14 @@ WatchResult evaluate(const WatchInput& in) {
 
   // The recipe in force, the volume and the channels it needs (RAT-015)
   if (!recipe) add("recipe", say("watch.recipe"), "neutral", say("watch.no_recipe"));
-  else if (ended) add("recipe", say("watch.recipe"), "problem", say("watch.recipe_ended", {{"name", recipe->name}, {"until", in.cfg.active.until}}));
+  else if (ended) add("recipe", say("watch.recipe"), "problem", say("watch.recipe_ended", {{"name", recipe->name}, {"until", plan.until}}));
   else add("recipe", say("watch.recipe"), "ok", say("watch.recipe_ok", {{"name", recipe->name}}));
   if (inForce) {
     if (!isNum(in.cfg.tank.volumeL)) add("tank.volume", say("watch.volume"), "problem", say("watch.no_volume"));
     std::vector<const CanisterCfg*> needed;
     for (const auto& s : recipe->steps)
       if (const CanisterCfg* b = in.cfg.canister(s.canister)) needed.push_back(b);
-    if (isNum(phTarget(*recipe))) {
+    if (isNum(plan.phTarget)) {
       const CanisterCfg* down = in.cfg.phDown();
       if (!down) add("canister.ph_down", say("watch.channels"), "problem", say("watch.no_ph_down"));
       else needed.push_back(down);

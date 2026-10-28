@@ -292,6 +292,16 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("GET", {"notifications"})) return jsonResp(200, robot_.notifications());
   if (is("GET", {"push"})) return jsonResp(200, robot_.pushSettings());
   if (is("PUT", {"push"})) return fromResult(robot_.putPush(body));
+  if (is("GET", {"plants"})) return jsonResp(200, robot_.plants());
+  if (is("POST", {"plants"})) return fromResult(robot_.startPlant(body));
+  if (is("PUT", {"plants", "*"})) return fromResult(robot_.putPlant(p[1], body));
+  if (is("DELETE", {"plants", "*"})) return fromResult(robot_.deletePlant(p[1]));
+  if (is("POST", {"plants", "*", "next"})) return fromResult(robot_.plantNext(p[1]));
+  if (is("POST", {"plants", "*", "harvest"})) return fromResult(robot_.plantHarvest(p[1], body));
+  if (is("POST", {"plants", "*", "complete"})) return fromResult(robot_.plantComplete(p[1]));
+  if (is("POST", {"plants", "*", "lead"})) return fromResult(robot_.plantLead(p[1]));
+  if (is("PUT", {"plant-recipes"})) return fromResult(robot_.putPlantRecipe(body));
+  if (is("DELETE", {"plant-recipes", "*"})) return fromResult(robot_.deletePlantRecipe(p[1]));
   if (is("GET", {"service"})) return jsonResp(200, robot_.service());
   if (is("PUT", {"service"})) return fromResult(robot_.putService(body));
   if (is("POST", {"service", "*", "done"})) return fromResult(robot_.serviceDone(p[1]));

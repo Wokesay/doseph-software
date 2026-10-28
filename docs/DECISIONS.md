@@ -644,3 +644,55 @@ the control details in this session.
   Setting the pump's speed waits until a use needs it; the check runs at the
   profile's speed.
 
+
+## SD-128: Plants and their phases set the water
+
+2026-10-28. Step 6 of #10 (plant recipes, phases, calendar, cultivation
+system; PD-451). The owner decided the four questions of this step in
+this session.
+
+- **Plant recipes and plants.**
+  - A plant recipe holds phases. Each phase has a free name (a label only,
+    RAT-076), its days (1–999), and whether it moves on by itself or only
+    once the user confirms. It also has the water it asks for: a recipe,
+    with an EC target and a pH range of its own where they differ from the
+    recipe's (RAT-066).
+  - A plant is started from a plant recipe and copies its phases, so a
+    later change of the recipe does not move it.
+  - Plants and their progress are part of the configuration, so a backup
+    carries them.
+- **The water plan.**
+  - The leading running plant's current phase sets the recipe and the
+    targets. The leading plant is the one chosen, else the earliest
+    started running plant.
+  - Without a running plant, the recipe chosen by hand applies, as before
+    (SD-105).
+  - Starting the first plant ends the hand choice. While a plant runs, a
+    hand choice is refused.
+  - Once the last plant is completed, the robot holds and says so. No old
+    hand choice comes back.
+  - Another running plant on the same tank whose targets differ is said as
+    a note (PD-318).
+- **Phases in days.**
+  - Day 1 is the day the plant started.
+  - A phase that moves on by itself does so at the local midnight after its
+    days, also after the device was off.
+  - A phase that waits for confirmation keeps its targets after its days
+    and reminds daily, counting the days past the plan. So does the last
+    phase, until the harvest is recorded (RAT-002).
+  - "Next phase" starts the next phase today.
+  - A phase that began today is noted, so the morning report says it.
+  - All these notes are info alarms (SD-123).
+- **Harvest and the end** are the user's (RAT-002, RAT-077). The harvest
+  is an event with its time. Completing is a step of its own, after which
+  the next running plant leads.
+- **Cultivation system** per tank: hydro, coco, rock wool or soil. It sets
+  the defaults of new phases and which templates are offered first; control
+  never reads it (RAT-076). It is built in its own change.
+- **Calendar:** a list of the next 8 weeks by day. It shows phase changes,
+  planned ends, harvest reminders and the maintenance dates (SD-125), with
+  today at the top. It is built in its own change; across coupled devices
+  it comes with step 8.
+- **Later:** the end-of-run summary (RAT-064), and phase parameters for
+  light, climate and watering (step 9).
+

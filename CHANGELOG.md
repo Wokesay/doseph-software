@@ -22,6 +22,21 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Plants and their phases set the water (SD-128, #10 step 6).
+  - A plant recipe holds phases, each with a name, its days, whether it
+    moves on by itself or once confirmed, and a recipe with its own EC
+    target and pH range where they differ.
+  - A plant started from it copies the phases.
+  - The leading plant's phase sets the recipe in force; without a running
+    plant the recipe chosen by hand applies.
+  - Phases move on at the local midnight after their days. One waiting
+    for confirmation, and the last one until the harvest is recorded,
+    remind daily in the morning report.
+  - Harvest and completing are the user's.
+  - API: `GET` and `POST /api/v1/plants`, `PUT` and `DELETE
+    /api/v1/plants/<id>`, `POST /api/v1/plants/<id>/next|harvest|complete|lead`,
+    `PUT /api/v1/plant-recipes`, `DELETE /api/v1/plant-recipes/<id>`.
+
 - pH and EC are compared with the feed pump running and standing at the
   end of each check (SD-127, from PD-476). A damaged cable in the water
   can shift them. A difference beyond 0.1 pH or 0.05 mS/cm is checked
