@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "doseph/alarms.hpp"
 #include "doseph/auth.hpp"
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
@@ -84,6 +85,8 @@ class Robot {
 
   // ---- Settings
   Result setSystem(const json& j);
+  // Quiet hours, as local minutes of the day {"quietFromMin", "quietToMin"} (SD-123)
+  Result putNotify(const json& j);
   Result putTank(const json& j);
   Result putControl(const json& j);
   Result newTank();
@@ -110,6 +113,11 @@ class Robot {
   Result cancelChannelJob();
   Result probe(const json& j);
   Result ackLatch(const std::string& id, const json& body);
+  // Pauses the repetition of a raised alarm, or of all ("") (RAT-022, SD-123)
+  Result ackAlarm(const std::string& id);
+  // The notifications of late, newest first, and those not yet delivered (SD-123)
+  json notifications() const;
+  std::vector<Notification> takeNotifications();
   Result stop(const Msg& who);
   Result resume();
   // Maintenance mode for `minutes` (at most kMaxMaintenanceMin; 0 ends it): the
@@ -157,6 +165,7 @@ class Robot {
   History history_;
   EventLog log_;
   WatchResult watch_;
+  Alarms alarms_;
   std::optional<ChannelJob> job_;
   // A probe calibration: the kind, its points and when the last step was
   // taken. It holds the cycle until it is saved or cancelled; it explains

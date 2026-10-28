@@ -112,6 +112,7 @@ void to_json(json& j, const Config& c) {
                  {"language", c.system.language},
                  {"timezone", c.system.timezone},
                  {"passwordSet", c.system.passwordSet}};
+  j["notify"] = {{"quietFromMin", c.notify.quietFromMin}, {"quietToMin", c.notify.quietToMin}};
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
                {"mixMinMin", numOrNull(c.tank.mixMinMin)},
                {"holdMin", numOrNull(c.tank.holdMin)}};
@@ -200,6 +201,9 @@ Config configFromJson(const json& in) {
   c.system.language = jstr(s, "language", c.system.language);
   c.system.timezone = jstr(s, "timezone", c.system.timezone);
   c.system.passwordSet = jbool(s, "passwordSet", false);
+  const json& nt = objectAt(j, "notify");
+  c.notify.quietFromMin = intOr(nt, "quietFromMin", c.notify.quietFromMin);
+  c.notify.quietToMin = intOr(nt, "quietToMin", c.notify.quietToMin);
   const json& t = objectAt(j, "tank");
   c.tank.volumeL = numOrNaN(t, "volumeL");
   // "circulation" from before SD-109 is read over: the device's own suction pump runs for a check
@@ -291,6 +295,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (c.system.name.empty() || c.system.name.size() > 40) err(say("cfg.system.name"));
   if (c.system.language != "en" && c.system.language != "de") err(say("cfg.system.language"));
   if (!isTimeZoneName(c.system.timezone)) err(say("cfg.system.timezone"));
+  auto minute = [](int m) { return m >= 0 && m < 24 * 60; };
+  if (!minute(c.notify.quietFromMin) || !minute(c.notify.quietToMin)) err(say("cfg.notify.quiet"));
 
   // Limits only ever tighten (R7)
   const auto& L = c.limits;
@@ -416,6 +422,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["ecInBand"] = s.ecInBand;
   j["topUp"] = s.topUp;
   j["settleMin"] = s.settleMin;
+  j["alarms"] = s.alarms;
+  j["lastReport"] = s.lastReport;
   j["stopped"] = s.stopped;
   j["newTank"] = s.newTank;
   j["flowLpm"] = numOrNull(s.flowLpm);
@@ -478,6 +486,11 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("settleMin") && j["settleMin"].is_array())
     for (const auto& m : j["settleMin"])
       if (m.is_number() && isNum(m.get<double>()) && m.get<double>() >= 0 && s.settleMin.size() < 3) s.settleMin.push_back(m.get<double>());
+  // An alarm's state that is no object is dropped: at worst it is pushed once more (SD-123)
+  if (j.contains("alarms") && j["alarms"].is_object())
+    for (const auto& [k, v] : j["alarms"].items())
+      if (v.is_object()) s.alarms[k] = v;
+  s.lastReport = j.contains("lastReport") && j["lastReport"].is_number_integer() ? j["lastReport"].get<Epoch>() : 0;
   s.stopped = jbool(j, "stopped", false);
   s.newTank = jbool(j, "newTank", true);
   const double flow = jnum(j, "flowLpm");

@@ -288,6 +288,8 @@ ApiResponse Api::route(const ApiRequest& req) {
   }
 
   if (is("PUT", {"system"})) return fromResult(robot_.setSystem(body));
+  if (is("PUT", {"notify"})) return fromResult(robot_.putNotify(body));
+  if (is("GET", {"notifications"})) return jsonResp(200, robot_.notifications());
   if (is("PUT", {"tank"})) return fromResult(robot_.putTank(body));
   if (is("POST", {"tank", "new"})) return fromResult(robot_.newTank());
   if (is("PUT", {"control"})) return fromResult(robot_.putControl(body));
@@ -305,6 +307,8 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("POST", {"channels", "cancel"})) return fromResult(robot_.cancelChannelJob());
   if (is("POST", {"probe"})) return fromResult(robot_.probe(body));
   if (is("POST", {"latches", "*", "ack"})) return fromResult(robot_.ackLatch(p[1], body));
+  if (is("POST", {"alarms", "ack"})) return fromResult(robot_.ackAlarm(""));
+  if (is("POST", {"alarms", "*", "ack"})) return fromResult(robot_.ackAlarm(p[1]));
   if (is("POST", {"stop"})) return fromResult(robot_.stop(say("stop.app")));
   if (is("POST", {"maintenance"})) return fromResult(robot_.maintenance(jnum(body, "minutes")));
   if (is("POST", {"resume"})) return fromResult(robot_.resume());

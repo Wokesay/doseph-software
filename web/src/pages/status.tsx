@@ -2,8 +2,8 @@
 // Status: where the mixing cycle stands, the readings with their trend,
 // locks to release, the monitoring and the latest events.
 import { useEffect, useState } from "preact/hooks";
-import { Activity, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
-import { del, get, post, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
+import { Activity, BellRing, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
+import { del, get, post, type Alarm, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
 import { dateTime, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast, toastError } from "../store";
@@ -261,6 +261,53 @@ async function release(id: string, confirm: boolean) {
   }
 }
 
+const LEVEL_TONE: Record<Alarm["level"], Tone> = { critical: "bad", warning: "warn", info: "info" };
+
+// The alarms raised (SD-123): acknowledging pauses a critical alarm's reminders, the alarm stays (RAT-022)
+function AlarmsCard() {
+  const st = state.value!;
+  if (!st.alarms.length) return null;
+  const ack = async (id: string) => {
+    try {
+      await post(`/alarms/${encodeURIComponent(id)}/ack`);
+      await refreshState();
+      toast(t("status.alarmAcked"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Card title={t("status.alarms")} icon={<BellRing size={18} />}>
+      <div class="list">
+        {st.alarms.map((a) => (
+          <div class="item wrap-row" data-testid={`alarm-${a.id}`}>
+            <div class="grow">
+              <div class="title">
+                <Pill tone={LEVEL_TONE[a.level]}>{t(`status.level.${a.level}`)}</Pill> {msg(a.label)}
+              </div>
+              <div class="small">{msg(a.text)}</div>
+              <div class="muted small">
+                {t("status.alarmSince", { time: dateTime(a.since) })}
+                {a.ackUntil > st.now && ` · ${t("status.alarmPaused", { time: time(a.ackUntil) })}`}
+              </div>
+            </div>
+            {a.level === "critical" && a.ackUntil <= st.now && (
+              <div class="row-actions">
+                <Button size="sm" onClick={() => ack(a.id)} data-testid={`ack-${a.id}`}>
+                  {t("status.alarmAck")}
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p class="muted small" style="margin-top:8px">
+        {t("status.alarmAckNote")}
+      </p>
+    </Card>
+  );
+}
+
 function WatchCard() {
   const wd = state.value!.watchdog;
   return (
@@ -291,6 +338,7 @@ export function StatusPage() {
   return (
     <div class="stack">
       <CycleCard />
+      <AlarmsCard />
       <Locks />
       <Readings />
       <div class="grid-2">

@@ -469,3 +469,35 @@ TEST_CASE("Acceptance 100 L: tap water to the recipe and held there; pH within Â
 TEST_CASE("Acceptance 100 L with the Pro example: a flow meter, a return pump and larger pump heads hold the recipe the same way (#10, step 4.9, SD-121)") {
   acceptance("pro", 100);
 }
+
+TEST_CASE("Scenario alarms: a leak is a critical alarm, pushed at once and repeated; acknowledging pauses the reminders and keeps the alarm; quiet hours are set and checked (SD-123, RAT-022)") {
+  Run r(device("home"));
+  r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
+  r.act("leak", {{"on", true}});
+  r.waitUntil("the leak is an alarm", [&] { return !r.state()["alarms"].empty(); }, 30);
+  json a = r.state()["alarms"][0];
+  CHECK(a["id"] == "latch.hw.leak");
+  CHECK(a["level"] == "critical");
+  json sent = r.ok("GET", "notifications")["notifications"];
+  REQUIRE(sent.size() == 1);
+  CHECK(sent[0]["kind"] == "alarm");
+  CHECK(sent[0]["items"][0] == "latch.hw.leak");
+  r.step(5 * kMinute + 10 * kSecond);
+  CHECK(r.ok("GET", "notifications")["notifications"].size() == 2);  // the first reminder
+  r.ok("POST", "alarms/latch.hw.leak/ack", json::object());
+  a = r.state()["alarms"][0];
+  CHECK(a["ackUntil"].get<doseph::Epoch>() > r.state()["now"].get<doseph::Epoch>());
+  r.step(15 * kMinute);
+  CHECK(r.ok("GET", "notifications")["notifications"].size() == 2);  // paused
+  CHECK(r.call("POST", "alarms/latch.flow.dry/ack", json::object()).status == 404);
+  // Quiet hours as local minutes of the day; a time outside the day is refused
+  r.ok("PUT", "notify", {{"quietFromMin", 21 * 60}, {"quietToMin", 6 * 60 + 30}});
+  CHECK(r.ok("GET", "config")["notify"]["quietToMin"] == 6 * 60 + 30);
+  CHECK(r.call("PUT", "notify", {{"quietFromMin", 24 * 60}}).status == 422);
+  CHECK(r.call("PUT", "notify", {{"quietFromMin", "22:00"}}).status == 422);
+  // The leak is fixed and released: the alarm ends
+  r.act("leak", {{"on", false}});
+  r.ok("POST", "latches/hw.leak/ack", json::object());
+  r.step(10 * kSecond);
+  CHECK(r.state()["alarms"].empty());
+}

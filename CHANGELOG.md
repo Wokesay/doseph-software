@@ -7,6 +7,23 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Alarms with three levels, quiet hours and a morning report (SD-123,
+  RAT-022, #10 step 5): every watchdog problem becomes an alarm, a latch
+  at once and anything else once it has stood 5 min; a target out of
+  range only while the check holds or waits.
+  - Critical alarms (leak, high level, a canister dripping on its own,
+    dry run, return pump held off, pH out of range) are pushed at once,
+    at night too, and repeated after 5, 15 and 60 min.
+  - Warnings are pushed once by day; at night they wait for the morning
+    report when the quiet hours (22:00–07:00, set in the app) end.
+  - Notes come only in the morning report.
+  - Acknowledging pauses the reminders for 12 h at most; the alarm stays.
+  - The status page lists the alarms with their level and "Acknowledge";
+    the settings set the quiet hours and list what was notified.
+  - API: `state.alarms`, `POST /api/v1/alarms/<id>/ack` (or
+    `/alarms/ack` for all), `GET /api/v1/notifications`,
+    `PUT /api/v1/notify`. Delivery through ntfy, Telegram or e-mail
+    follows.
 - Local time in the device's own time zone (#10, step 5): the core works
   out the offset from UTC from the rules of the IANA time zone database,
   embedded as a table (`core/src/tzdb.inc`, made by `tools/gen_tzdb.mjs`),
