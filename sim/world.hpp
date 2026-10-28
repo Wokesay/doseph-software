@@ -38,7 +38,7 @@ struct Pump {
   bool outletBlocked = false;  // the outlet or line is blocked: it runs, nothing drips
   bool siphon = false;         // the canister stands above the device: it drips while the pump stands
   // The line and the drop sensor at the outlet (SD-111)
-  double lineMl = 0;           // pulled back from the tip; a forward run refills it before it drips
+  double lineMl = 0;           // air in the line before the tip; a forward run fills it before it drips
   std::uint64_t drops = 0;
   Ms lastDropMs = -1;
   double dropAcc = 0;          // what came out since the last whole drop, ml
@@ -121,6 +121,8 @@ class World {
   bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards = false);
   doseph::RunStatus runStatus(int pump) const;
   void stopAllPumps();
+  // A new canister, or a line taken off: the whole line is air and fills before it drips (SD-111)
+  void emptyLine(int pump);
 
   void fill(double volumeL, double ec, double ph);
   json toJson() const;

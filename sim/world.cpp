@@ -20,6 +20,7 @@ constexpr double kWeirL = 0.15, kReturnOnL = 0.25, kReturnOffL = 0.18, kHighL = 
 // The outlets (assumptions, SD-111): a drop is 0.05 ml; a line pulls back at most 2 ml;
 // a canister above the device siphons 0.6 ml/min
 constexpr double kDropMl = 0.05, kLineMaxMl = 2.0, kSiphonMlPerMin = 0.6;
+constexpr double kLineFullMl = 6.0;  // a line from the canister to the tip holds this much (assumption)
 }  // namespace
 
 World::World() : rng_(42) { reset(); }
@@ -147,6 +148,10 @@ doseph::RunStatus World::runStatus(int pump) const {
              : p.state == 3 ? doseph::RunStatus::State::Failed
                             : doseph::RunStatus::State::Idle;
   return st;
+}
+
+void World::emptyLine(int pump) {
+  if (pump >= 1 && pump <= static_cast<int>(pumps.size())) pumps[static_cast<size_t>(pump - 1)].lineMl = kLineFullMl;
 }
 
 void World::stopAllPumps() {

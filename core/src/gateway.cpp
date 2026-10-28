@@ -14,6 +14,7 @@ Msg purposeLabel(const std::string& p) {
   if (p == "ph") return say("purpose.ph");
   if (p == "calibration") return say("purpose.calibration");
   if (p == "prime") return say("purpose.prime");
+  if (p == "fill") return say("purpose.fill");
   return say("purpose.other");
 }
 
@@ -61,7 +62,7 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
     if (channelLocked(c.rt, channel)) return fail(say("act.channel_locked", {{"channel", channel}}));
   } else if (purpose == "pullback") {
     if (!canPullBack(channel)) return fail(say("act.no_reverse", {{"channel", channel}}));
-  } else if (purpose != "calibration" && purpose != "prime" && purpose != "refill") {
+  } else if (purpose != "calibration" && purpose != "prime" && purpose != "fill" && purpose != "refill") {
     return fail(say("act.purpose"));
   }
   return true;
@@ -260,6 +261,11 @@ bool Doser::pullBack(const Ctx& c, Actuators& act) {
   return true;
 }
 
+bool Doser::dripped(Actuators& act) const {
+  const auto d = act.drops(active_->step.channel);
+  return d && d->count > fillFrom_;
+}
+
 void Doser::finish(const Ctx& c, DoseProgress::State state) {
   progress_.state = state;
   logOrder(c);
@@ -310,6 +316,9 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   progress_.orderId = active_->id;
   running_ = false;
   pauseUntil_ = 0;
+  filled_ = false;
+  const auto d = act.drops(order.step.channel);
+  fillFrom_ = d ? d->count : 0;
   if (!launch(c, act)) {
     err = progress_.error;
     active_.reset();
@@ -342,6 +351,14 @@ void takeStock(const Ctx& c, const std::string& canister, const std::string& nam
 
 void Doser::logOrder(const Ctx& c) {
   const auto& o = *active_;
+  // A line fill drips into the tank: it is logged with the doses (SD-111)
+  if (o.purpose == "fill") {
+    const bool ok = progress_.state == DoseProgress::State::Done;
+    c.log.add(c.epoch, "dose", ok ? "info" : "warn", say(ok ? "ev.fill" : "ev.fill_incomplete", {{"name", o.step.name}, {"channel", o.step.channel}}),
+              ok ? say("ev.fill.text", {{"channel", o.step.channel}, {"s", progress_.msDone / 1000.0}}) : progress_.error,
+              {{"canister", o.step.canister}, {"channel", o.step.channel}, {"ms", progress_.msDone}, {"purpose", o.purpose}, {"order", o.id}});
+    return;
+  }
   if (!intoTank(o.purpose)) return;  // calibration and priming are no dose (RAT-070)
   if (progress_.state == DoseProgress::State::Aborted && progress_.msDone <= 0) return;  // nothing ran
   const bool ok = progress_.state == DoseProgress::State::Done;
@@ -360,6 +377,11 @@ void Doser::logOrder(const Ctx& c) {
 void Doser::tick(const Ctx& c, Actuators& act) {
   if (!active_) return;
   const auto& o = *active_;
+  // A line fill stops at its first drops (SD-111)
+  if (running_ && leg_ == Leg::Dose && o.purpose == "fill" && !filled_ && dripped(act)) {
+    act.stopPumps();
+    filled_ = true;
+  }
   if (running_) {
     RunStatus st = act.runStatus(o.step.channel);
     const bool mine = st.jobId == job_;
@@ -385,6 +407,12 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       legEnded(c, act, mine && st.state == RunStatus::State::Done, mine ? st.actualMs : 0, mine ? st.error : "");
       return;
     }
+    if (filled_ && mine) {
+      book(c, std::max<Ms>(0, st.actualMs));
+      progress_.run++;
+      finish(c, DoseProgress::State::Done);
+      return;
+    }
     if (lost) {
       act.stopPumps();
       book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
@@ -397,6 +425,12 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       progress_.run++;
       if (progress_.run >= o.step.runs.size()) {
         if (pullBack(c, act)) return;  // the order ends after it
+        if (o.purpose == "fill" && !dripped(act)) {
+          // Every run ran and nothing dripped: the line is not full (SD-111)
+          progress_.error = say("dose.fill_no_drops", {{"name", o.step.name}, {"s", progress_.msDone / 1000.0}});
+          finish(c, DoseProgress::State::Failed);
+          return;
+        }
         finish(c, DoseProgress::State::Done);
         return;
       }
@@ -410,6 +444,10 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     logOrder(c);
     finished_ = progress_;
     active_.reset();
+    return;
+  }
+  if (o.purpose == "fill" && dripped(act)) {
+    finish(c, DoseProgress::State::Done);  // it dripped between two runs
     return;
   }
   if (c.now < pauseUntil_) return;
