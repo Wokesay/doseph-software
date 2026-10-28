@@ -86,6 +86,13 @@ class Robot {
   Result left(const std::string& token);
   // Whether a credential is the token this device made for its peer
   bool isPeerToken(const std::string& token) const;
+  // On the follower, called by the leader every 2 s (SD-131): whether its feed pump runs; answers
+  // with what this device measures, whether its pump moves water, and its run
+  Result peerBeat(const std::string& token, const json& j);
+  // On the follower: a run on one of its channels, on the leader's request; refused without the
+  // link, while another runs, or by its own gateway
+  Result peerRun(const std::string& token, const json& j);
+  Result peerAbort(const std::string& token);
   // What the platform sends to the other device, and the answers it gets
   std::vector<PeerRequest> takePeerRequests();
   void peerResponse(long long id, int status, const json& body);
@@ -254,6 +261,16 @@ class Robot {
   std::map<long long, PeerPending> peerPending_;
   long long peerSeq_ = 0;
   json pairStatus_ = nullptr;  // the last pairing from here: {state, address, error, at}
+  // The link (SD-131). On the follower: when the leader last called, whether its pump runs, the
+  // run asked for. On the leader: when the follower last answered, what it said, the last call.
+  Ms peerHeard_ = -1;
+  bool leaderPump_ = false;
+  bool linkLost_ = false;
+  json peerRun_ = nullptr;
+  json peerState_ = nullptr;
+  Ms beatSent_ = -1;
+  bool peerLinkOk(Ms now) const { return peerHeard_ >= 0 && now - peerHeard_ <= kPeerLinkMs; }
+  void watchPeer(Ctx& c);
   bool savePeer();
   MqttSettings mqtt_;
   int mqttRevision_ = 0;

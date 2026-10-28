@@ -43,6 +43,11 @@ struct Ctx {
   // What holds every pump below the robot (SD-110): "leak", "high_level" (both latched until a
   // person releases them), "stop_button", "release" (off without a known input); "": nothing
   std::string hold{};
+  // Coupled as the follower (SD-131): the leader plans. This device runs its feed pump while the
+  // leader's runs, to measure and to let the leader's runs through, and doses only on its request.
+  bool follower = false;
+  bool linkOk = false;      // the leader was heard within 10 s
+  bool leaderPump = false;  // … and its feed pump runs
 };
 
 // A channel's own lock (SD-111): "channel.<n>.no_drops" (it ran and nothing dripped) or

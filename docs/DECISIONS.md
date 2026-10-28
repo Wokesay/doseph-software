@@ -869,13 +869,28 @@ decided the three questions of this step in this session.
   - The leader also tells the follower, which ends it too.
   - Only the coupled device's own token may end it there. An account
     token, or a peer token made by hand, may not.
-- **The link and dosing** come with the next pull requests of this
-  step:
-  - The leader calls the follower every 2 s.
-  - After 10 s without that call, the follower cuts a running run, books
-    what ran, and takes no new run until the link is back.
-  - A run lasts at most 60 s, and never more than one channel runs
-    across both devices. Each device keeps its own hardware lock.
+- **The link.**
+  - The leader calls the follower's `POST /peer/beat` every 2 s, saying
+    whether its feed pump runs.
+  - The answer has the follower's readings, its flow and pump, and the
+    run the leader asked for. The leader shows whether the follower was
+    heard within 10 s.
+- **The follower.**
+  - It has no recipe of its own. Its feed pump runs while the leader's
+    does, through its own check with every guard: the start window, the
+    tries without flow, the dry run and the cable check. The pump is off
+    otherwise.
+  - It doses only on the leader's request (`POST /peer/run`): one run on
+    one channel, for EC or pH. Its own gateway decides, as for its own
+    doses: flow, placement, calibration, locks, daily amount, drops.
+    Only one run goes on there at a time.
+  - After 10 s without a call, it cuts a running run, books what ran, and
+    takes no new run until the leader calls again. Losing and regaining
+    the link are events. After a restart it waits for a call (R6).
+  - Only the token made for the leader opens these calls.
+- **Dosing across both** comes with the next pull request. The leader
+  plans for canisters on either device, and never more than one channel
+  runs across both. Each device keeps its own hardware lock.
 - **The check.** The follower measures as well. While both pumps run,
   readings that differ by more than 0.3 pH or 0.2 mS/cm for 10 minutes
   raise a warning. The leader keeps dosing by its own readings.

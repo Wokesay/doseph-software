@@ -36,6 +36,11 @@ std::optional<Peer> peerFromJson(const json& j);
 // brackets of IPv6
 bool peerAddress(const std::string& s);
 
+// The leader calls the follower this often; the follower stops dosing after this long without a
+// call (SD-131)
+constexpr Ms kPeerBeatMs = 2 * kSecond;
+constexpr Ms kPeerLinkMs = 10 * kSecond;
+
 // A request the platform sends to the other device and answers with peerResponse()
 struct PeerRequest {
   long long id = 0;

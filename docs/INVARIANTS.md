@@ -181,6 +181,8 @@ of its own.
 |---|---|---|---|
 | Two devices pair only with the code the second one shows: 10 minutes, voided by the fifth wrong try; each then holds a peer token for the other; never with itself, at most one peer | SD-131 | ✓ | `robot.cpp`, `api.cpp` · test_coupling.cpp, robot.spec.ts |
 | The peer and its token live apart from the configuration and never in a backup or an answer of the API; ending the coupling revokes the tokens on both sides, and only the peer's own token may end it there | SD-131 | ✓ | `robot.cpp`, `coupling.cpp` · test_coupling.cpp |
+| The follower plans nothing: its feed pump runs while the leader's does, with every guard of a check, and it doses only on the leader's request through its own gateway, one run at a time | SD-131 | ✓ | `cycle.cpp`, `robot.cpp` · test_coupling.cpp |
+| 10 s without the leader's call cut a run it asked for, book it, and refuse new ones until the leader calls again; after a restart the follower waits for a call (R6) | SD-131 | ✓ | `robot.cpp` · test_coupling.cpp |
 
 ## History and messages
 

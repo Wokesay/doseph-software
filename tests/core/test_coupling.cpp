@@ -182,3 +182,102 @@ TEST_CASE("Coupling: ended on the leader, the follower is told and both take the
   CHECK(call(a, at, "DELETE", "coupling").status == 200);
   CHECK(call(a, at, "DELETE", "coupling").status == 404);
 }
+
+namespace {
+
+// Both devices step together; the leader's calls reach the follower while the link is there
+void together(sim::Simulation& a, sim::Simulation& b, Ms ms, bool link = true) {
+  for (Ms t = 0; t < ms; t += 500) {
+    a.step(500);
+    b.step(500);
+    if (link) carry(a, b);
+    else lose(a);
+  }
+}
+
+// The follower alone, called as the leader would every second, with its pump on or off
+void beats(sim::Simulation& b, const std::string& leaderToken, Ms ms, bool pump) {
+  for (Ms t = 0; t < ms; t += 1000) {
+    REQUIRE(call(b, leaderToken, "POST", "peer/beat", {{"pump", pump}}).status == 200);
+    b.step(1000);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Coupling: the follower runs its feed pump while the leader's runs, with every guard of a check, and doses nothing by itself; its readings reach the leader (SD-131)") {
+  sim::Simulation a(demo()), b(demo());
+  const std::string at = login(a), bt = login(b);
+  couple(a, at, b, bt);
+  const json stockBefore = get(b, bt, "state")["stock"];
+  b.step(5 * kSecond);
+  json st = get(b, bt, "state");
+  CHECK(st["cycle"]["line"]["key"] == "cycle.follow.no_link");
+  CHECK(st["feedPump"] != true);
+  // The leader checks: its pump runs, and so does the follower's
+  bool followed = false;
+  for (int i = 0; i < 120 && !followed; ++i) {
+    together(a, b, 1000);
+    followed = a.robot().state()["feedPump"] == true && b.robot().state()["feedPump"] == true;
+  }
+  CHECK(followed);
+  together(a, b, 30 * kSecond);
+  const json link = get(a, at, "coupling")["link"];
+  CHECK(link["ok"] == true);
+  CHECK(link["peer"]["readings"]["ph"].is_number());
+  // Through the leader's whole check and its hold, the follower doses nothing of its own
+  together(a, b, 20 * kMinute);
+  st = get(b, bt, "state");
+  CHECK(st["stock"] == stockBefore);
+  if (a.robot().state()["feedPump"] != true) CHECK(st["cycle"]["line"]["key"] == "cycle.follow.idle");
+}
+
+TEST_CASE("Coupling: the follower doses on the leader's request through its own gateway; 10 s without a call stop the run, book it and refuse new ones until the link is back (SD-131)") {
+  sim::Simulation a(demo()), b(demo());
+  const std::string at = login(a), bt = login(b);
+  couple(a, at, b, bt);
+  const std::string lt = peerToken(a);  // what the leader sends
+  // Only the leader's token may ask; and only while it calls
+  CHECK(call(b, bt, "POST", "peer/run", {{"job", "x"}, {"channel", 2}, {"ms", 2000}, {"purpose", "ec"}}).status == 403);
+  CHECK(call(b, lt, "POST", "peer/run", {{"job", "x"}, {"channel", 2}, {"ms", 2000}, {"purpose", "ec"}}).status == 409);
+  // The leader's pump runs: the follower's runs too and proves its flow
+  beats(b, lt, 30 * kSecond, true);
+  REQUIRE(b.robot().state()["flowOk"] == true);
+  CHECK(call(b, lt, "POST", "peer/run", {{"job", "x"}, {"channel", 2}, {"ms", 2000}, {"purpose", "calibration"}}).status == 422);
+  const double before = get(b, bt, "state")["stock"]["part_a"]["ml"];
+  auto r = call(b, lt, "POST", "peer/run", {{"job", "j1"}, {"channel", 2}, {"ms", 60000}, {"purpose", "ec"}});
+  REQUIRE(r.status == 200);
+  CHECK(call(b, lt, "POST", "peer/run", {{"job", "j2"}, {"channel", 3}, {"ms", 2000}, {"purpose", "ec"}}).status == 409);  // one at a time
+  beats(b, lt, 5 * kSecond, true);
+  json beat = json::parse(call(b, lt, "POST", "peer/beat", {{"pump", true}}).body);
+  CHECK(beat["run"]["job"] == "j1");
+  CHECK(beat["run"]["state"] == "running");
+  // The link drops: 10 s later the run stops and is booked
+  b.step(12 * kSecond);
+  const json lost = get(b, bt, "coupling")["link"];
+  CHECK(lost["ok"] == false);
+  CHECK(lost["run"]["state"] == "aborted");
+  const double ran = lost["run"]["ms"];
+  CHECK(ran > 10000);
+  CHECK(ran < 25000);
+  CHECK(get(b, bt, "state")["stock"]["part_a"]["ml"].get<double>() < before);
+  CHECK(get(b, bt, "state")["cycle"]["line"]["key"] == "cycle.follow.no_link");
+  CHECK(get(b, bt, "state")["feedPump"] != true);
+  // Back: a new run is taken and done; its result comes with the next call
+  beats(b, lt, 30 * kSecond, true);
+  REQUIRE(call(b, lt, "POST", "peer/run", {{"job", "j3"}, {"channel", 2}, {"ms", 2000}, {"purpose", "ec"}}).status == 200);
+  beats(b, lt, 15 * kSecond, true);
+  beat = json::parse(call(b, lt, "POST", "peer/beat", {{"pump", true}}).body);
+  CHECK(beat["run"]["job"] == "j3");
+  CHECK(beat["run"]["state"] == "done");
+  int lostEv = 0, backEv = 0;
+  for (const auto& e : b.robot().events(0, b.robot().now() + 1, "coupling", 50)) {
+    lostEv += e["title"]["key"] == "ev.coupling.link_lost";
+    backEv += e["title"]["key"] == "ev.coupling.link_back";
+  }
+  CHECK(lostEv == 1);
+  CHECK(backEv == 1);
+  // A restart forgets the link: nothing runs until the leader calls again (R6)
+  b.reboot();
+  CHECK(call(b, lt, "POST", "peer/run", {{"job", "j4"}, {"channel", 2}, {"ms", 2000}, {"purpose", "ec"}}).status == 409);
+}

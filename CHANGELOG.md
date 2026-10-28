@@ -28,7 +28,11 @@ All notable changes to this software. The format follows
   - Each device then holds a token for the other. Either side ends the
     coupling.
   - The peer and its token are never in a backup.
-  - Dosing together follows.
+  - The leader calls the second device every 2 s. That device's feed pump
+    runs while the leader's does, and it doses only on the leader's
+    request, through its own gateway.
+  - After 10 s without a call it stops the run and takes no new one.
+  - The leader dosing on the second device's channels follows.
 - Access tokens with three roles (SD-129), for the app, the account and a
   coupled device. They are made in the settings with a name and a role,
   shown once, kept as a hash and revoked one by one.
