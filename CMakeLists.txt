@@ -115,7 +115,8 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_watchdog.cpp
     tests/core/test_cycle.cpp
     tests/core/test_api.cpp
-    tests/core/test_sim.cpp)
+    tests/core/test_sim.cpp
+    tests/core/test_scenarios.cpp)
   target_link_libraries(doseph_tests PRIVATE doseph_sim)
   if(NOT MSVC)
     target_compile_options(doseph_tests PRIVATE -Wall -Wextra)

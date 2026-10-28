@@ -131,6 +131,11 @@ detects what is there; the user does not pick it from a list.
 
 ## The scenario harness (step 3)
 
+Rebuilt in step 3.4 as `tests/core/harness.hpp`, with the scenarios of the
+new water path in `tests/core/test_scenarios.cpp`. What the grow
+controller's harness had beyond that – plugs, clock steps, a controller
+that restarts alone – comes back with the steps that need it.
+
 Scenario tests run the real core against the twin in simulated time and
 drive it only through the API, as the web app does. They test sequences
 end to end; unit tests test the parts.
