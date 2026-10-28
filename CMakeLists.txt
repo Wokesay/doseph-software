@@ -55,6 +55,7 @@ add_library(doseph_core
   core/src/common.cpp
   core/src/hardware.cpp
   core/src/clock.cpp
+  core/src/localtime.cpp
   core/src/config.cpp
   core/src/truth.cpp
   core/src/history.cpp
@@ -107,6 +108,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/main.cpp
     tests/core/test_auth.cpp
     tests/core/test_history.cpp
+    tests/core/test_localtime.cpp
     tests/core/test_messages.cpp
     tests/core/test_config.cpp
     tests/core/test_truth.cpp

@@ -7,6 +7,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Local time in the device's own time zone (#10, step 5): the core works
+  out the offset from UTC from the rules of the IANA time zone database,
+  embedded as a table (`core/src/tzdb.inc`, made by `tools/gen_tzdb.mjs`),
+  the same in the simulator and later on the device. Quiet hours, the
+  morning report and maintenance dates build on it.
 - Step 4's acceptance in the twin (#10, step 4.9): from tap water to the
   demo recipe and held there for 12 h at 50 and 100 L (Home example) and
   100 L (Pro example): pH within ± 0.2, EC within ± 0.1, an overshoot of
