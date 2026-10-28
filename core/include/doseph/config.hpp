@@ -107,6 +107,8 @@ struct Limits {
 struct ChannelCal {
   double flowMlPerMin = kNaN;  // measured into a cup (RAT-070); missing: the channel doses nothing (RAT-015)
   Epoch at = 0;
+  // The pump head it was measured with (SD-108); another head, or none recorded, makes it void
+  std::string head{};
 };
 
 struct SystemCfg {
@@ -134,7 +136,7 @@ struct Config {
   const CanisterCfg* canister(const std::string& id) const;
   const CanisterCfg* canisterOnChannel(int channel) const;
   const RecipeCfg* recipe(const std::string& id) const;
-  // The pH− canister on a channel, the first one listed
+  // The pH− canister on a channel; there is one at most (SD-108)
   const CanisterCfg* phDown() const;
   double channelFlow(int channel) const;  // NaN when not calibrated
 };

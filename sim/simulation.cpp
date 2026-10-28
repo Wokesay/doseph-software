@@ -161,6 +161,7 @@ void Simulation::build(bool fresh) {
   clock_ = std::make_unique<SimClock>(start);
   doseph::Profile profile = exampleProfile(opts_.profile).value_or(*exampleProfile("home"));
   world_.reset(static_cast<int>(profile.channels.size()));
+  for (size_t i = 0; i < profile.channels.size(); ++i) world_.pumps[i].head = world_.pumps[i].flowHead = profile.channels[i].head;
   world_.returnByPump = profile.returnBy == "pump";
   // Tap water in a 100 L tank (assumption): EC 0.45 mS/cm, pH 7.6
   world_.fill(100, 0.45, 7.6);
@@ -303,6 +304,13 @@ json Simulation::control(const std::string& action, const json& b) {
       p.outletBlocked = doseph::jbool(b, "outletBlocked", false);
       p.siphon = doseph::jbool(b, "siphon", false);
     }
+  } else if (action == "channelHead") {
+    // A head fitted, removed or changed for another size (SD-108)
+    const int n = static_cast<int>(num("channel", 0));
+    const std::string head = doseph::jstr(b, "head");
+    if (n < 1 || n > static_cast<int>(world_.pumps.size()) || !(head.empty() || head == "S" || head == "M" || head == "L"))
+      return {{"error", doseph::say("api.bad_input")}};
+    hw_->setHead(n, head);
   } else if (action == "buffer") {
     const std::string kind = doseph::jstr(b, "kind");
     const double v = num("value", doseph::kNaN);

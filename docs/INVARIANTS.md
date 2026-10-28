@@ -65,6 +65,9 @@ of its own.
 | The hardware release holds every pump: a run or the suction pump is refused with the input that holds it, and the cycle waits with it | SD-110 | ✓ | `gateway.hpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp`, `watchdog.cpp` · test_scenarios.cpp |
 | A leak or high level latches; a person releases the latch only once the device no longer reports the cause, and a restart never releases it | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
 | The stop button on the device is the Stop of the app: it holds across a restart until Resume in the app | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
+| A calibration belongs to the pump head it was measured with: another head, none fitted or none recorded voids it, and the channel doses nothing until it is calibrated again | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A channel without a pump head runs nothing, not even into a cup | SD-108 | ✓ | `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
+| One pH− canister at most; the rest are nutrients | SD-108 | ✓ | `config.cpp` · test_config.cpp |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
 
 ## Sensor truth

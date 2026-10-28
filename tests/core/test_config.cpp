@@ -24,7 +24,7 @@ Config sample() {
   r.phLow = 5.8;
   r.phHigh = 6.2;
   c.recipes = {r};
-  c.channels[2] = {50.0, 1};
+  c.channels[2] = {50.0, 1, "S"};
   return c;
 }
 
@@ -46,8 +46,12 @@ TEST_CASE("Configuration: there and back through JSON; a missing number stays mi
   CHECK(std::isnan(back.recipes[0].phLow));
   CHECK(back.tank.volumeL == 100);
   CHECK(back.channelFlow(2) == 50.0);
+  CHECK(back.channels.at(2).head == "S");
   CHECK(std::isnan(back.channelFlow(3)));
   CHECK(validateConfig(back, 4).empty());
+  // A calibration from before SD-108 names no head: read, it has none, and the robot voids it
+  j["channels"]["2"].erase("head");
+  CHECK(configFromJson(j).channels.at(2).head.empty());
   CHECK_THROWS(configFromJson(json{{"tank", {{"volumeL", "a hundred"}}}}));
   CHECK_THROWS(configFromJson(json{{"schemaVersion", 99}}));
 }
@@ -169,6 +173,15 @@ TEST_CASE("Configuration: one canister per channel, a channel the device has; th
   c = sample();
   c.channels[3] = {0, 1};  // a calibration of 0 is no calibration (RAT-003)
   CHECK(has(validateConfig(c, 4), "cfg.channel.flow"));
+}
+
+TEST_CASE("Configuration: one pH− canister at most, on a channel or not; the rest are nutrients (SD-108)") {
+  Config c = sample();
+  CHECK(validateConfig(c, 4).empty());
+  c.canisters.push_back({"down2", "pH− 2", "ph_down", 0, "", "#c00"});
+  CHECK(has(validateConfig(c, 4), "cfg.canister.ph_down_twice"));
+  c.canisters.back().role = "nutrient";
+  CHECK(validateConfig(c, 4).empty());
 }
 
 TEST_CASE("Configuration: the recipe in force exists; its end comes after its start") {

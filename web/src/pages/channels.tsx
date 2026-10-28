@@ -17,6 +17,8 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
   const [stockMl, setStockMl] = useState<number | null>(null);
   const channels = info.value?.channelCount ?? 0;
   const used = (n: number) => canisters.value.find((x) => x.channel === n && x.id !== b.id);
+  // One pH− canister at most (SD-108)
+  const otherPhDown = b.role === "ph_down" ? canisters.value.find((x) => x.role === "ph_down" && x.id !== b.id) : undefined;
   const save = async () => {
     await post("/canisters", { ...b, name: (b.name ?? "").trim(), pair: b.role === "nutrient" ? (b.pair ?? "").trim() : "", ...(b.id ? {} : { stockMl }) });
     await refreshConfig();
@@ -33,7 +35,7 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
           <button class="btn" onClick={p.onClose}>
             {t("common.cancel")}
           </button>
-          <Button variant="primary" onClick={save} disabled={!(b.name ?? "").trim()} data-testid="save-canister">
+          <Button variant="primary" onClick={save} disabled={!(b.name ?? "").trim() || !!otherPhDown} data-testid="save-canister">
             {t("common.save")}
           </Button>
         </>
@@ -52,6 +54,7 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
               ["ph_down", "pH−"],
             ]}
           />
+          {otherPhDown && <p class="small warn-text">{t("channels.phDownTaken", { name: otherPhDown.name })}</p>}
         </Field>
         <Field label={t("channels.channel")}>
           <select class="select input" value={String(b.channel ?? 0)} onChange={(e) => setB({ ...b, channel: Number((e.target as HTMLSelectElement).value) })} name="channel">
@@ -315,19 +318,30 @@ function ChannelsCard() {
               <div class="title">
                 {t("channels.channelN", { channel: p.channel })} · {name(p.canister) ?? <span class="muted">{t("channels.empty")}</span>}
               </div>
-              <div class="small">
-                {p.flowMlPerMin != null ? (
-                  <span class="muted">{t("channels.flow", { flow: num(p.flowMlPerMin, 1), date: p.at ? dateTime(p.at) : "–" })}</span>
+              <div class="small" data-testid={`head-${p.channel}`}>
+                {!p.head ? (
+                  <Pill tone={p.canister ? "bad" : "neutral"}>{t("channels.noHead")}</Pill>
+                ) : p.flowMlPerMin != null ? (
+                  <span class="muted">
+                    {t("channels.head", { head: p.head })} · {t("channels.flow", { flow: num(p.flowMlPerMin, 1), date: p.at ? dateTime(p.at) : "–" })}
+                  </span>
                 ) : (
-                  <Pill tone={p.canister ? "warn" : "neutral"}>{t("channels.notCalibrated")}</Pill>
+                  <>
+                    <span class="muted">{t("channels.head", { head: p.head })}</span> <Pill tone={p.canister ? "warn" : "neutral"}>{t("channels.notCalibrated")}</Pill>
+                  </>
                 )}
               </div>
             </div>
             <div class="row-actions">
-              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped}>
+              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped || !p.head}>
                 {t("term.prime")}
               </button>
-              <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "calibration" })} disabled={st.stopped} data-testid={`calibrate-${p.channel}`}>
+              <button
+                class="btn sm"
+                onClick={() => setDialog({ channel: p.channel, type: "calibration" })}
+                disabled={st.stopped || !p.head}
+                data-testid={`calibrate-${p.channel}`}
+              >
                 {t("term.calibratePump")}
               </button>
             </div>
@@ -337,6 +351,7 @@ function ChannelsCard() {
       <p class="muted small" style="margin-top:8px">
         <Term topic="calibratePump" />
       </p>
+      <p class="muted small">{t("channels.headNote")}</p>
       {dialog && <ChannelJobDialog {...dialog} onClose={() => setDialog(null)} />}
     </Card>
   );

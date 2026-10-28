@@ -73,7 +73,8 @@ export type RobotState = {
   newTank: boolean;
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
-  channels: { channel: number; canister: string | null; flowMlPerMin: number | null; at: number | null; drops: { count: number; lastAgoS: number | null } | null }[];
+  // `head`: the pump head fitted, null without one (SD-108)
+  channels: { channel: number; canister: string | null; head: string | null; flowMlPerMin: number | null; at: number | null; drops: { count: number; lastAgoS: number | null } | null }[];
   stock: Record<string, Stock>;
   // What a pair still misses after a round cut short; the next nutrient round doses it first (SD-114)
   catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
@@ -101,7 +102,7 @@ export type Config = {
   canisters: Canister[];
   recipes: Recipe[];
   active: { recipe: string; from: number; until: number };
-  channels: Record<string, { flowMlPerMin: number | null; at: number }>;
+  channels: Record<string, { flowMlPerMin: number | null; at: number; head: string }>;
   probes: { ph: { points?: [number, number][]; at?: number } | null; ec: { factor?: number; reference?: number; tempC?: number; at?: number } | null };
 };
 

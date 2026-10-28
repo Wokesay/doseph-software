@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Scenarios of the new water path (#10, step 3): priming, flow, dose, drops,
-// blocked outlet, high level, return pump. They run the core against the
+// blocked outlet, high level, return pump; and of the device's parts (#10,
+// step 4): the pump heads. They run the core against the
 // twin through the API. Where the core does not react yet, they say which
 // step brings it (#10, step 4).
 #include <cmath>
@@ -178,4 +179,41 @@ TEST_CASE("Scenario return pump: it runs while water comes back and stops below 
   r.waitUntil("high level", [&] { return r.state()["hardware"]["release"]["highLevel"] == true; }, 60);
   CHECK(r.state()["hardware"]["release"]["on"] == false);
   CHECK(r.twin()["output"] == false);
+}
+
+TEST_CASE("Scenario pump head: a changed head voids the channel's calibration until it is calibrated again; without a head the channel runs nothing (SD-108)") {
+  Run r(device("home"));
+  const auto channel2 = [&] { return r.state()["channels"][1]; };
+  const auto headEvents = [&](const std::string& key) {
+    int n = 0;
+    const json events = r.events("calibration");
+    for (const auto& e : events) n += e["title"]["key"] == key;
+    return n;
+  };
+  REQUIRE(channel2()["head"] == "S");
+  REQUIRE(channel2()["flowMlPerMin"].is_number());
+  const double small = r.twin()["channels"][1]["trueFlow"];
+  r.act("channelHead", {{"channel", 2}, {"head", "M"}});
+  r.step(5 * kSecond);
+  CHECK(channel2()["head"] == "M");
+  CHECK(channel2()["flowMlPerMin"].is_null());
+  CHECK(headEvents("ev.channel.head_changed") == 1);  // once, not every tick
+  // Calibrated again, the channel doses with the new head's flow
+  r.ok("POST", "channels/2/calibrate", {{"seconds", 10}});
+  r.waitUntil("the run into the cup", [&] { return r.state()["channelJob"]["state"] == "waiting_result"; }, 30);
+  r.ok("POST", "channels/result", {{"ml", r.twin()["channels"][1]["cupMl"]}});
+  r.ok("POST", "channels/cancel", json::object());
+  CHECK(channel2()["flowMlPerMin"].get<double>() == doctest::Approx(2.5 * small).epsilon(0.02));
+  r.step(5 * kSecond);
+  CHECK(channel2()["flowMlPerMin"].is_number());
+  CHECK(r.s.control("channelHead", {{"channel", 2}, {"head", "XL"}}).contains("error"));  // no such head
+  // Taken off: the calibration is void, and nothing runs on the channel
+  r.act("channelHead", {{"channel", 2}, {"head", ""}});
+  r.step(5 * kSecond);
+  CHECK(channel2()["head"].is_null());
+  CHECK(channel2()["flowMlPerMin"].is_null());
+  CHECK(headEvents("ev.channel.head_removed") == 1);
+  const auto prime = r.call("POST", "channels/2/prime", {{"seconds", 3}});
+  CHECK(prime.status == 409);
+  CHECK(prime.body.find("act.no_head") != std::string::npos);
 }

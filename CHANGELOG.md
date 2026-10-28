@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Channels know their pump head (SD-108): a calibration belongs to the
+  head it was measured with. When the device reports another head, or
+  none, the calibration is void with an event, and the channel doses
+  nothing until it is calibrated again; a channel without a head runs
+  nothing. There is one pH− canister at most. The channels page shows
+  each channel's head and, before a head is changed, that the canisters
+  must stand no higher than the device. The simulator changes or takes
+  off a head (`channelHead`), and a larger head moves more.
 - The robot reacts to the hardware release (SD-110): a leak or high level
   in the measuring chamber switches everything off, raises an alarm and
   latches; the lock can be released in the app only once the device no

@@ -193,6 +193,7 @@ void Robot::tick() {
     for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp})
       truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
   watchRelease(epoch);
+  checkHeads(epoch);
   Ctx c = ctx();
   // The release is back: the check starts anew, nothing resumes on its own (R6)
   if (c.hold.empty() && !lastHold_.empty()) restartCycle();
@@ -248,6 +249,30 @@ void Robot::watchRelease(Epoch epoch) {
   if (r.highLevel) latch("hw.high_level", "ev.hw.high_level");
   if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
   stopButtonSeen_ = r.stopButton;
+}
+
+// A calibration belongs to the pump head it was measured with (SD-108): another head, none fitted
+// or none recorded makes it void, and the channel doses nothing until it is calibrated again
+void Robot::checkHeads(Epoch epoch) {
+  const auto voided = [&](int n, const ChannelCal& cal) {
+    return n >= 1 && n <= hw_.channelCount() && (cal.head.empty() || cal.head != hw_.profile().channels[static_cast<size_t>(n - 1)].head);
+  };
+  std::vector<int> gone;
+  for (const auto& [n, cal] : cfg_.channels)
+    if (voided(n, cal)) gone.push_back(n);
+  if (gone.empty()) return;
+  Config next = cfg_;
+  for (int n : gone) next.channels.erase(n);
+  // Kept while the store fails: the gateway refuses the void calibration meanwhile
+  if (saveConfig(next, std::nullopt).status != 200) return;
+  for (int n : gone) {
+    const std::string& head = hw_.profile().channels[static_cast<size_t>(n - 1)].head;
+    if (head.empty())
+      log_.add(epoch, "calibration", "warn", say("ev.channel.head_removed", {{"channel", n}}), say("ev.channel.head_removed.text"));
+    else
+      log_.add(epoch, "calibration", "warn", say("ev.channel.head_changed", {{"channel", n}, {"head", head}}),
+               say("ev.channel.head_changed.text"));
+  }
 }
 
 void Robot::sampleHistory(Epoch epoch) {
@@ -377,8 +402,10 @@ json Robot::state() {
   for (int n = 1; n <= hw_.channelCount(); ++n) {
     const CanisterCfg* b = cfg_.canisterOnChannel(n);
     auto it = cfg_.channels.find(n);
+    const std::string& head = hw_.profile().channels[static_cast<size_t>(n - 1)].head;
     channels.push_back({{"channel", n},
                      {"canister", b ? json(b->id) : json(nullptr)},
+                     {"head", head.empty() ? json(nullptr) : json(head)},  // the pump head fitted (SD-108)
                      {"flowMlPerMin", it == cfg_.channels.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
                      {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)},
                      // What its drop sensor saw (SD-111): null without one
@@ -866,6 +893,7 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
   job.id = (type == "calibration" ? "cal-" : "prime-") + std::to_string(++idSeq_);
   job.type = type;
   job.channel = channel;
+  job.head = hw_.profile().channels[static_cast<size_t>(channel - 1)].head;
   job.ms = static_cast<Ms>(std::llround(seconds * 1000));
   job.at = clock_.epoch();
   DoseOrder o;
@@ -919,7 +947,8 @@ Result Robot::calibrationResult(double ml) {
   // From the actual run time the driver reported, not the requested one (RAT-070)
   const double flow = ml / static_cast<double>(job_->actualMs) * 60000.0;
   Config next = cfg_;
-  next.channels[job_->channel] = ChannelCal{std::round(flow * 100) / 100, clock_.epoch()};
+  // With the head it measured: if the head changed meanwhile, the next tick voids it (SD-108)
+  next.channels[job_->channel] = ChannelCal{std::round(flow * 100) / 100, clock_.epoch(), job_->head};
   Result r = saveConfig(next, std::nullopt);
   if (r.status != 200) return r;
   job_->ml = ml;
