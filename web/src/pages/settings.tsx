@@ -3,8 +3,8 @@
 // and what was notified, the password, access tokens, backup and restore,
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, Copy, DatabaseBackup, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
-import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
+import { Bell, Bug, Copy, DatabaseBackup, House, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
@@ -343,6 +343,76 @@ function PasswordCard() {
   );
 }
 
+// MQTT with Home Assistant discovery (PD-461, SD-130): off by default. Values go out also without
+// TLS; commands (Stop, the recipe in force, its targets) only over TLS with a user.
+function MqttCard() {
+  const [m, setM] = useState<MqttSettings | null>(null);
+  const [password, setPassword] = useState("");
+  const load = () => get<MqttSettings>("/mqtt").then(setM).catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
+  if (!m) return null;
+  const set = (patch: Partial<MqttSettings>) => setM({ ...m, ...patch });
+  const canCommand = m.tls && m.user.trim() !== "";
+  const save = async () => {
+    const body: Record<string, unknown> = { enabled: m.enabled, host: m.host.trim(), port: m.port, tls: m.tls, user: m.user, commands: m.commands && canCommand, discovery: m.discovery };
+    if (password) body.password = password;
+    try {
+      setM(await put<MqttSettings>("/mqtt", body));
+      setPassword("");
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Card title={t("settings.mqtt")} icon={<House size={18} />}>
+      <div class="stack" data-testid="mqtt">
+        <p class="muted small">{t("settings.mqtt.intro")}</p>
+        <Toggle checked={m.enabled} onChange={(v) => set({ enabled: v })} label={t("settings.mqtt.enabled")} />
+        <div class="form-grid">
+          <Field label={t("settings.mqtt.host")}>
+            <input class="input" name="mqtt-host" value={m.host} placeholder="homeassistant.local" autoCapitalize="off" spellcheck={false} onInput={(e) => set({ host: (e.target as HTMLInputElement).value })} />
+          </Field>
+          <Field label={t("settings.mqtt.port")}>
+            <input class="input" name="mqtt-port" inputMode="numeric" value={String(m.port)} onInput={(e) => set({ port: Number((e.target as HTMLInputElement).value) || 0 })} />
+          </Field>
+          <Field label={t("settings.push.user")}>
+            <input class="input" name="mqtt-user" value={m.user} autoCapitalize="off" spellcheck={false} onInput={(e) => set({ user: (e.target as HTMLInputElement).value })} />
+          </Field>
+          <Field label={t("settings.push.password")} hint={m.passwordSet ? t("settings.push.secretSet") : undefined}>
+            <input class="input" type="password" name="mqtt-password" autoComplete="new-password" value={password} placeholder={m.passwordSet ? "••••••••" : ""} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
+          </Field>
+        </div>
+        <Toggle checked={m.tls} onChange={(v) => set({ tls: v, port: v && m.port === 1883 ? 8883 : !v && m.port === 8883 ? 1883 : m.port })} label={t("settings.mqtt.tls")} />
+        {m.enabled && !m.tls && <Banner tone="warn">{t("settings.mqtt.plain")}</Banner>}
+        <Toggle checked={m.commands && canCommand} onChange={(v) => set({ commands: v })} label={t("settings.mqtt.commands")} disabled={!canCommand} />
+        <p class="muted small">{canCommand ? t("settings.mqtt.commandsHint") : t("settings.mqtt.commandsNeed")}</p>
+        {m.enabled && (
+          <p class="small" data-testid="mqtt-status">
+            {m.status.connected ? (
+              <Pill tone="ok">{t("settings.mqtt.connected")}</Pill>
+            ) : m.status.error ? (
+              <>
+                <Pill tone="bad">{t("settings.mqtt.failed")}</Pill> <span class="muted">{msg(m.status.error)}</span>
+              </>
+            ) : (
+              <Pill>{t("settings.mqtt.waiting")}</Pill>
+            )}{" "}
+            <span class="muted">{t("settings.mqtt.topic", { topic: m.topic })}</span>
+          </p>
+        )}
+        <div>
+          <Button variant="primary" onClick={save} data-testid="save-mqtt">
+            {t("common.save")}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // Access tokens (SD-129): for an app, the account and a coupled device. Each has a role that says
 // what it may do; the token is shown once, the robot keeps only its hash.
 function TokensCard() {
@@ -615,6 +685,7 @@ export function SettingsPage() {
       </div>
       <NotifyCard key={`n${rev}`} />
       <PushCard />
+      <MqttCard />
       <PasswordCard />
       <TokensCard />
       <BackupCard />

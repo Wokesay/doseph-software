@@ -20,6 +20,7 @@ struct ApiRequest {
   std::string body;
   std::string token;   // the session or access token, from sessionToken()
   std::string client;  // the peer's address as clientKey() gives it, never from a header; "" when unknown
+  std::string via;     // "mqtt" for a command over MQTT; "" over HTTP
 };
 
 // Origin checks for the transport, without platform headers.
@@ -56,9 +57,14 @@ class Api {
   // Who the request comes from (SD-129): the owner with a session, else an access token's role
   std::optional<Role> access(const ApiRequest& req);
   bool authorized(const ApiRequest& req) { return access(req).has_value(); }
+  // A command over MQTT (SD-130) on one of mqttCommandTopics(): a call of the account role
+  // (SD-129) with the same checks as one from the app, taken only while commands are on. A known
+  // command is logged with its result; the platform sends the body back on <base>/result.
+  ApiResponse mqttCommand(const std::string& topic, const std::string& payload);
 
  private:
-  ApiResponse route(const ApiRequest& req);
+  // `as`: the role of a call the device makes for itself (MQTT); otherwise the request's own
+  ApiResponse route(const ApiRequest& req, std::optional<Role> as = std::nullopt);
   Robot& robot_;
   const IClock& clock_;
 };

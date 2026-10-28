@@ -39,6 +39,8 @@ keeping the details confidential until disclosure.
 - Access tokens for an app, the account or a coupled device, each with
   a fixed role that limits what it may call. A token is shown once and
   kept as a hash; the owner revokes it in the settings (SD-129).
+- MQTT is off by default. Commands over MQTT need TLS and a user, and
+  only reach what an account token may do (SD-130).
 - Host and origin checks against DNS rebinding and cross-site requests;
   the session in an `HttpOnly`, `SameSite=Strict` cookie.
 - Only the gateway switches pumps; no dose without proven flow; a crash

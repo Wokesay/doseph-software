@@ -3,11 +3,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <string_view>
 
 #include "doseph/messages.hpp"
+#include "doseph/plants.hpp"
 
 namespace doseph {
 
@@ -164,7 +167,75 @@ ApiResponse Api::handle(const ApiRequest& req) {
   }
 }
 
-ApiResponse Api::route(const ApiRequest& req) {
+ApiResponse Api::mqttCommand(const std::string& topic, const std::string& payload) {
+  ApiRequest req;
+  req.via = "mqtt";
+  std::string what;
+  {
+    std::lock_guard<std::recursive_mutex> l(robot_.mutex());
+    if (!mqttCommands(robot_.mqtt())) return fail(403, say("mqtt.commands_off"));
+    const std::string base = mqttBase(robot_.deviceId()) + "/";
+    if (topic.rfind(base, 0) != 0 || topic.size() < base.size() + 5 || topic.compare(topic.size() - 4, 4, "/set") != 0)
+      return fail(404, say("api.not_found"));
+    what = topic.substr(base.size(), topic.size() - base.size() - 4);
+    const Config& cfg = robot_.config();
+    auto refused = [&](int status, const Msg& m) {
+      robot_.logEvent("control", "warn", say("ev.mqtt.refused", {{"command", what}}), m);
+      return fail(status, m);
+    };
+    if (what == "stop") {
+      req.method = "POST";
+      req.path = "/api/v1/stop";
+    } else if (what == "recipe") {
+      // Home Assistant sends the option's text: the recipe's name
+      const RecipeCfg* r = nullptr;
+      for (const auto& x : cfg.recipes)
+        if (!r && (x.name == payload || x.id == payload)) r = &x;
+      if (!r) return refused(422, say("mqtt.no_recipe"));
+      req.method = "PUT";
+      req.path = "/api/v1/active";
+      req.body = json{{"recipe", r->id}}.dump();
+    } else if (what == "ec_target" || what == "ph_target") {
+      char* end = nullptr;
+      const double v = std::strtod(payload.c_str(), &end);
+      if (payload.empty() || end != payload.c_str() + payload.size() || !std::isfinite(v)) return refused(422, say("mqtt.number"));
+      // The targets of the recipe in force; a plant's phase is changed in the app (SD-128)
+      const WaterPlan w = waterPlan(cfg, robot_.now());
+      if (w.source == "plant" && w.plant) return refused(409, say("plant.leads", {{"name", w.plant->name}}));
+      if (!w.recipe) return refused(409, say("cycle.off.no_recipe"));
+      json r;
+      const json all = robot_.configJson();
+      for (const auto& x : all["recipes"])
+        if (x["id"] == w.recipe->id) r = x;
+      if (what == "ec_target") {
+        r["ecTarget"] = v;
+      } else {
+        // The new centre keeps the range's width, 0.4 without one
+        const double width = isNum(w.recipe->phLow) && isNum(w.recipe->phHigh) ? w.recipe->phHigh - w.recipe->phLow : 0.4;
+        r["ph"] = {std::round((v - width / 2) * 100) / 100, std::round((v + width / 2) * 100) / 100};
+      }
+      req.method = "POST";
+      req.path = "/api/v1/recipes";
+      req.body = r.dump();
+    } else {
+      return fail(404, say("api.not_found"));
+    }
+  }
+  ApiResponse resp;
+  try {
+    resp = route(req, Role::Account);
+  } catch (const std::exception&) {
+    resp = fail(400, say("api.bad_input"));
+  }
+  const json body = json::parse(resp.body, nullptr, false);
+  if (resp.status == 200) robot_.logEvent("control", "info", say("ev.mqtt.command", {{"command", what}}));
+  else if (body.is_object() && body.contains("error") && body["error"].is_object())
+    robot_.logEvent("control", "warn", say("ev.mqtt.refused", {{"command", what}}),
+                    Msg{jstr(body["error"], "key"), jstr(body["error"], "text"), body["error"].value("args", json::object())});
+  return resp;
+}
+
+ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   auto p = split(req.path);
   if (p.size() < 2 || p[0] != "api" || p[1] != "v1") return fail(404, say("api.not_found"));
   p.erase(p.begin(), p.begin() + 2);
@@ -245,7 +316,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   }
 
   // ---- signed in only, within the role (SD-129)
-  const auto role = access(req);
+  const auto role = as ? as : access(req);
   if (!role) return fail(401, say("auth.required"));
   if (!permitted(*role, m, p)) return fail(403, say("auth.role", {{"role", say(std::string("auth.role.") + roleName(*role))}}));
 
@@ -315,6 +386,8 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("PUT", {"system"})) return fromResult(robot_.setSystem(body));
   if (is("PUT", {"notify"})) return fromResult(robot_.putNotify(body));
   if (is("GET", {"notifications"})) return jsonResp(200, robot_.notifications());
+  if (is("GET", {"mqtt"})) return jsonResp(200, robot_.mqttSettings());
+  if (is("PUT", {"mqtt"})) return fromResult(robot_.putMqtt(body));
   if (is("GET", {"push"})) return jsonResp(200, robot_.pushSettings());
   if (is("PUT", {"push"})) return fromResult(robot_.putPush(body));
   if (is("GET", {"commissioning"})) return jsonResp(200, robot_.setup());
@@ -353,7 +426,7 @@ ApiResponse Api::route(const ApiRequest& req) {
   if (is("POST", {"latches", "*", "ack"})) return fromResult(robot_.ackLatch(p[1], body));
   if (is("POST", {"alarms", "ack"})) return fromResult(robot_.ackAlarm(""));
   if (is("POST", {"alarms", "*", "ack"})) return fromResult(robot_.ackAlarm(p[1]));
-  if (is("POST", {"stop"})) return fromResult(robot_.stop(say("stop.app")));
+  if (is("POST", {"stop"})) return fromResult(robot_.stop(say(req.via == "mqtt" ? "stop.mqtt" : "stop.app")));
   if (is("POST", {"maintenance"})) return fromResult(robot_.maintenance(jnum(body, "minutes")));
   if (is("POST", {"resume"})) return fromResult(robot_.resume());
   return fail(404, say("api.not_found"));

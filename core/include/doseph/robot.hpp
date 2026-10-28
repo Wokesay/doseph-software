@@ -12,6 +12,7 @@
 
 #include "doseph/alarms.hpp"
 #include "doseph/auth.hpp"
+#include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
 #include "doseph/service.hpp"
 #include "doseph/clock.hpp"
@@ -152,6 +153,18 @@ class Robot {
   // ---- Push channels (SD-124)
   // Their settings without secrets, and how each fared last
   json pushSettings() const;
+  // MQTT with Home Assistant discovery (PD-461, SD-130): its settings without the password, and
+  // the platform's report of the connection
+  json mqttSettings() const;
+  Result putMqtt(const json& j);
+  const MqttSettings& mqtt() const { return mqtt_; }
+  // Counts each change of the settings: the platform connects anew when it moves
+  int mqttRevision() const { return mqttRevision_; }
+  void setMqttStatus(bool connected, const Msg& error);
+  // What goes to the broker: the discovery configs and the state
+  std::vector<MqttMessage> mqttDiscoveryMessages();
+  MqttMessage mqttStateMessage();
+
   Result putPush(const json& j);
   // A test message to every channel set up, or to one
   Result testPush(const std::string& channel);
@@ -212,6 +225,9 @@ class Robot {
   WatchResult alarmWatch_;  // the watchdog's items and the maintenance items due, for the alarms
   Alarms alarms_;
   PushChannels push_;
+  MqttSettings mqtt_;
+  int mqttRevision_ = 0;
+  json mqttStatus_ = {{"connected", false}, {"error", nullptr}, {"at", 0}};
   std::vector<Delivery> deliveries_;
   long long deliveryId_ = 1;
   json pushStatus_ = json::object();  // channel → {at, ok, error}, in memory

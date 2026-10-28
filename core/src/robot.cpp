@@ -21,6 +21,7 @@ constexpr const char* kConfigFile = "config.json";
 constexpr const char* kStateFile = "state.json";
 constexpr const char* kAuthFile = "auth.json";
 constexpr const char* kDeviceFile = "device.json";  // the device's identity, never in a backup (SD-129)
+constexpr const char* kMqttFile = "mqtt.json";  // MQTT with its password, apart from the configuration (SD-130)
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
@@ -256,6 +257,11 @@ void Robot::boot() {
     } catch (...) {
       push_ = PushChannels{};
     }
+  }
+  // MQTT settings that cannot be read are off: nothing goes to a broker no one checked (SD-130)
+  if (auto s = store_.read(kMqttFile)) {
+    const json j = json::parse(*s, nullptr, false);
+    mqtt_ = mqttFromJson(j);
   }
   if (auto s = store_.read(kStateFile)) {
     try {
@@ -1659,6 +1665,43 @@ Result Robot::putPush(const json& j) {
   push_ = next;
   log_.add(clock_.epoch(), "config", "info", changed("cfg.what.push"));
   return Result::ok(pushSettings());
+}
+
+json Robot::mqttSettings() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  json j = mqttToJson(mqtt_, false);
+  j["commandsOn"] = mqttCommands(mqtt_);
+  j["status"] = mqttStatus_;
+  j["topic"] = mqttBase(deviceId_);
+  return j;
+}
+
+Result Robot::putMqtt(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  MqttSettings next = mqtt_;
+  const std::vector<Msg> errors = applyMqtt(next, j);
+  if (!errors.empty()) return Result::fail(422, errors.front(), {{"errors", errors}});
+  if (!store_.write(kMqttFile, mqttToJson(next, true).dump())) return Result::fail(500, say("store.failed"));
+  mqtt_ = next;
+  mqttRevision_++;
+  mqttStatus_ = {{"connected", false}, {"error", nullptr}, {"at", 0}};
+  log_.add(clock_.epoch(), "config", "info", changed("cfg.what.mqtt"));
+  return Result::ok(mqttSettings());
+}
+
+void Robot::setMqttStatus(bool connected, const Msg& error) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  mqttStatus_ = {{"connected", connected}, {"error", error.key.empty() ? json(nullptr) : json(error)}, {"at", clock_.epoch()}};
+}
+
+std::vector<MqttMessage> Robot::mqttDiscoveryMessages() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return mqttDiscovery(deviceId_, info(), cfg_, mqtt_);
+}
+
+MqttMessage Robot::mqttStateMessage() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return mqttState(deviceId_, state(), cfg_);
 }
 
 Result Robot::testPush(const std::string& channel) {
