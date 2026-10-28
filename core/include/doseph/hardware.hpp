@@ -5,6 +5,7 @@
 // this interface names only what the control needs.
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -40,6 +41,14 @@ struct ChannelCaps {
   std::string pump;         // pump type: "brushed", "brushless", "stepper"
   std::string head;         // head size "S", "M", "L"; "" without a head
   bool dropSensor = false;  // drops at the outlet are seen
+  bool reverse = false;     // the pump can run backwards, to pull the line back (SD-111)
+};
+
+// What a channel's drop sensor has seen (SD-111): the drops counted since the
+// device started, and when the last one fell (monotonic ms; -1: none yet).
+struct Drops {
+  std::uint64_t count = 0;
+  Ms lastMs = -1;
 };
 
 struct Profile {
@@ -93,8 +102,11 @@ class IHardware {
   int channelCount() const { return static_cast<int>(profile().channels.size()); }
   // A run of a channel's pump in ms with a job ID: a repeated order with the
   // same ID does not run twice. The driver allows one channel at a time.
-  virtual bool startRun(int channel, Ms ms, const std::string& jobId, std::string& err) = 0;
+  // `backwards` pulls the line back, where the pump can (ChannelCaps::reverse).
+  virtual bool startRun(int channel, Ms ms, const std::string& jobId, std::string& err, bool backwards) = 0;
   virtual RunStatus runStatus(int channel) const = 0;
+  // The channel's drop sensor; nullopt for a channel without one
+  virtual std::optional<Drops> drops(int channel) const = 0;
   virtual void stopAllPumps() = 0;
   // The output that switches the suction pump, where the device switches it.
   virtual bool setSuctionPump(bool on, std::string& err) = 0;

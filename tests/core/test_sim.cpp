@@ -189,3 +189,79 @@ TEST_CASE("Simulator: a leak or the stop button switches the hardware release of
     CHECK(hw["release"]["leak"] == false);
   }
 }
+
+namespace {
+sim::World twinWithWater() {
+  sim::World w;
+  w.reset(4);
+  w.fill(100, 0.45, 7.6);
+  return w;
+}
+}  // namespace
+
+TEST_CASE("Twin: the drop sensor counts each drop of a dose; a blocked outlet, an empty canister or a run into the cup gives none (SD-111)") {
+  sim::World w = twinWithWater();
+  std::string err;
+  REQUIRE(w.startRun(2, 6000, "dose-1", err));
+  w.advance(w.now() + 7000);
+  const double ml = w.pumps[1].trueFlow * 6.0 / 60.0;
+  CHECK(w.pumps[1].drops == static_cast<std::uint64_t>(ml / 0.05));
+  CHECK(w.pumps[1].lastDropMs > 0);
+  CHECK(w.tank.pendingEc > 0.0);
+  for (const char* fault : {"outlet", "empty", "cup"}) {
+    CAPTURE(fault);
+    sim::World v = twinWithWater();
+    v.pumps[1].outletBlocked = std::string(fault) == "outlet";
+    v.pumps[1].empty = std::string(fault) == "empty";
+    REQUIRE(v.startRun(2, 6000, std::string(fault) == "cup" ? "cal-1" : "dose-1", err));
+    v.advance(v.now() + 7000);
+    CHECK(v.runStatus(2).state == doseph::RunStatus::State::Done);  // the pump ran
+    CHECK(v.pumps[1].drops == 0);
+    CHECK(v.tank.pendingEc == 0.0);  // nothing went into the tank
+  }
+}
+
+TEST_CASE("Twin: a line pulled back fills first, so the next run drips later and less (SD-111)") {
+  sim::World w = twinWithWater();
+  std::string err;
+  REQUIRE(w.startRun(2, 1000, "back-1", err, true));
+  w.advance(w.now() + 1500);
+  const double back = w.pumps[1].trueFlow / 60.0;
+  CHECK(w.pumps[1].lineMl == doctest::Approx(back).epsilon(0.01));
+  CHECK(w.pumps[1].drops == 0);  // backwards nothing drips
+  REQUIRE(w.startRun(2, 3000, "dose-1", err));
+  w.advance(w.now() + 500);
+  CHECK(w.pumps[1].drops == 0);  // the line fills first
+  w.advance(w.now() + 3000);
+  CHECK(w.pumps[1].lineMl == 0.0);
+  CHECK(w.pumps[1].drops == static_cast<std::uint64_t>((w.pumps[1].trueFlow * 3.0 / 60.0 - back) / 0.05 + 1e-9));
+}
+
+TEST_CASE("Twin: a canister above the device siphons: drops without a running pump, into the tank (SD-111, PD-455)") {
+  sim::World w = twinWithWater();
+  w.pumps[1].siphon = true;
+  w.advance(w.now() + 60 * 1000);
+  CHECK(w.pumps[1].drops >= 11);  // 0.6 ml in a minute, 0.05 ml a drop
+  CHECK(w.pumps[1].drops <= 12);
+  CHECK(w.pumps[1].state == 0);
+  CHECK(w.tank.pendingEc > 0.0);  // it went into the tank
+}
+
+TEST_CASE("Simulator: the robot's state shows each channel's drops; only a pump that can runs backwards (SD-108, SD-111)") {
+  for (const std::string name : {"home", "pro"}) {
+    CAPTURE(name);
+    sim::Options o;
+    o.scenario = "demo";
+    o.password = "demo-password";
+    o.prefillHours = 0;
+    o.profile = name;
+    sim::Simulation s(o);
+    const json chs = s.robot().state()["channels"];
+    REQUIRE(chs.size() == sim::exampleProfile(name)->channels.size());
+    for (const auto& ch : chs) CHECK(ch["drops"].is_object());  // every outlet has a sensor in both examples
+    CHECK(s.robot().info()["profile"]["channels"][0]["reverse"] == (name == "home"));
+    std::string err;
+    CHECK(s.hardware().startRun(1, 500, "back-x", err, true) == (name == "home"));
+    if (name == "pro") CHECK(err == "this pump cannot run backwards");
+  }
+}

@@ -26,7 +26,7 @@ class Hardware : public doseph::IHardware {
  public:
   bool isOnline = true;
   std::map<Signal, doseph::Sample> samples;
-  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true}), "turbine", "gravity", {"wifi"}, false};
+  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true, true}), "turbine", "gravity", {"wifi"}, doseph::kNaN, false};
   std::map<int, doseph::RunStatus> runs;
   int started = 0;
   bool out = false;
@@ -43,7 +43,8 @@ class Hardware : public doseph::IHardware {
   doseph::Release rel;
   doseph::Release release() const override { return rel; }
   doseph::WaterPath waterPath() const override { return {}; }
-  bool startRun(int channel, Ms ms, const std::string& jobId, std::string&) override {
+  std::optional<doseph::Drops> drops(int) const override { return std::nullopt; }
+  bool startRun(int channel, Ms ms, const std::string& jobId, std::string&, bool) override {
     runs[channel] = {doseph::RunStatus::State::Running, jobId, ms, 0, ""};
     started++;
     return true;

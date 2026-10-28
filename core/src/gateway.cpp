@@ -44,7 +44,7 @@ bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& pu
     return fail(say("act.purpose"));
   }
   std::string e;
-  if (!hw_.startRun(channel, ms, jobId, e)) return fail(say("act.hw", {{"error", e}}));
+  if (!hw_.startRun(channel, ms, jobId, e, false)) return fail(say("act.hw", {{"error", e}}));
   runningChannel_ = channel;
   runningPurpose_ = purpose;
   cutLogged_ = false;
