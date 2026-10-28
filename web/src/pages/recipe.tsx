@@ -6,7 +6,7 @@ import { CalendarClock, FlaskConical, Pencil, Plus, Trash2 } from "lucide-preact
 import { del, get, post, put, type Recipe, type RecipeTemplate } from "../api";
 import { dateTime, num } from "../format";
 import { lang, t } from "../i18n";
-import { LIMITS, canisters, config, phMiddle, recipes, refreshConfig, refreshState, toast } from "../store";
+import { LIMITS, activeRecipe, canisters, config, phMiddle, recipes, refreshConfig, refreshState, state, toast } from "../store";
 import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Seg, Term, Toggle } from "../ui";
 
 type Span = "days" | "until" | "open";
@@ -27,6 +27,7 @@ function ActiveCard() {
   const [days, setDays] = useState<number | null>(a.until && a.from ? Math.round((a.until - a.from) / 86400) : 28);
   const [until, setUntil] = useState(localInput((a.until || Date.now() / 1000 + 28 * 86400) | 0));
   const current = list.find((r) => r.id === a.recipe);
+  const plant = state.value?.plan.plant;
   const daysBad = span === "days" && (days === null || days < LIMITS.days[0] || days > LIMITS.days[1]);
   const apply = async () => {
     const body: Record<string, unknown> = { recipe };
@@ -41,6 +42,20 @@ function ActiveCard() {
     await Promise.all([refreshConfig(), refreshState()]);
     toast(t("recipe.cleared"), "info");
   };
+  // While a plant runs, its phase sets the water (SD-128)
+  if (plant)
+    return (
+      <Card title={t("recipe.inForce")} icon={<CalendarClock size={18} />}>
+        <div class="stack">
+          <p data-testid="active-recipe">{t("recipe.byPlant", { name: plant.name, phase: plant.phase, recipe: activeRecipe.value?.name ?? "–" })}</p>
+          <div>
+            <a class="btn sm" href="#/plants">
+              {t("recipe.toPlants")}
+            </a>
+          </div>
+        </div>
+      </Card>
+    );
   return (
     <Card title={t("recipe.inForce")} icon={<CalendarClock size={18} />}>
       <div class="stack">
@@ -206,7 +221,7 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
 
 function RecipeList(p: { onEdit: (d: Draft) => void }) {
   const list = recipes.value;
-  const active = config.value!.active.recipe;
+  const active = state.value?.plan.recipe ?? "";
   const name = (id: string) => canisters.value.find((b) => b.id === id)?.name ?? id;
   const remove = async (r: Recipe) => {
     if (!confirm(t("recipe.deleteAsk", { name: r.name }))) return;

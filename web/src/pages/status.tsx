@@ -4,7 +4,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { Activity, BellRing, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
 import { del, get, post, type Alarm, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
-import { dateTime, duration, num, time } from "../format";
+import { dateTime, day, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, CheckRow, Pill, Term, type Tone } from "../ui";
@@ -187,10 +187,17 @@ function RecipeCard() {
   const st = state.value!;
   const s = st.cycle.settings;
   const r = activeRecipe.value;
+  const plant = st.plan.plant;
   return (
-    <Card title={t("nav.recipe")} icon={<FlaskConical size={18} />} actions={<a href="#/recipe">{t("status.change")}</a>}>
+    <Card title={t("nav.recipe")} icon={<FlaskConical size={18} />} actions={<a href={plant ? "#/plants" : "#/recipe"}>{t("status.change")}</a>}>
       {r ? (
         <div class="kv">
+          {plant && (
+            <>
+              <span>{t("status.plant")}</span>
+              <span data-testid="plan-plant">{t("status.plantPhase", { name: plant.name, phase: plant.phase })}</span>
+            </>
+          )}
           <span>{t("status.recipe")}</span>
           <span data-testid="recipe-name">{r.name}</span>
           <span>{t("status.ecTarget")}</span>
@@ -199,7 +206,7 @@ function RecipeCard() {
           <span>{s.phTarget != null ? `${num(s.phTarget, 2)} ± ${num(s.phTolerance, 2)}` : "–"}</span>
           <span>{t("status.until")}</span>
           <span>
-            <ActiveUntil />
+            {plant ? t(plant.confirm ? "status.phaseConfirm" : "status.phaseEnd", { date: day(plant.phaseEnd) }) : <ActiveUntil />}
           </span>
         </div>
       ) : (

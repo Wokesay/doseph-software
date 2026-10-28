@@ -22,6 +22,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A plants page (SD-128). It shows which plant sets the water, each plant
+  with its day, phase and what is due (next phase, harvest, complete, set
+  the water), a start dialog, and an editor for plant recipes. A calendar
+  lists the next 8 weeks: phase changes, planned ends and the maintenance
+  dates (`GET /api/v1/calendar`). The status and recipe pages name the
+  plant and phase that set the water.
 - Plants and their phases set the water (SD-128, #10 step 6).
   - A plant recipe holds phases, each with a name, its days, whether it
     moves on by itself or once confirmed, and a recipe with its own EC

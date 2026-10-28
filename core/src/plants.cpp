@@ -120,6 +120,46 @@ std::vector<PlantNote> plantNotes(const Config& cfg, Epoch now, const std::strin
   return out;
 }
 
+json plantDates(const Config& cfg, Epoch now, Epoch until, const std::string& zone) {
+  json out = json::array();
+  const Epoch today = localMidnight(now, zone);
+  for (const auto& p : cfg.plants) {
+    if (!p.running() || p.phase < 0 || p.phase >= static_cast<int>(p.phases.size())) continue;
+    Epoch start = p.phaseStart;
+    for (size_t i = static_cast<size_t>(p.phase); i < p.phases.size(); ++i) {
+      const Epoch end = localDaysLater(start, p.phases[i].days, zone);
+      const bool last = i + 1 == p.phases.size();
+      if (last && p.harvestAt != 0) break;  // harvested: nothing left to plan
+      const Epoch at = std::max(end, today);
+      if (at > until) break;
+      out.push_back({{"date", at},
+                     {"kind", last ? "harvest" : p.phases[i].confirm ? "confirm" : "phase"},
+                     {"plant", p.id},
+                     {"name", p.name},
+                     {"phase", last ? p.phases[i].name : p.phases[i + 1].name},
+                     {"overdue", end < today}});
+      start = at;  // a later phase begins once this one ends, today at the earliest
+    }
+  }
+  return out;
+}
+
+json waterPlanJson(const Config& cfg, Epoch now, const std::string& zone) {
+  const WaterPlan w = waterPlan(cfg, now);
+  json j = {{"source", w.source},
+            {"recipe", w.recipe ? json(w.recipe->id) : json(nullptr)},
+            {"ecTarget", numOrNull(w.ecTarget)},
+            {"phTarget", numOrNull(w.phTarget)},
+            {"until", w.until},
+            {"ended", w.ended},
+            {"plant", nullptr}};
+  if (w.plant) {
+    const PhaseCfg& ph = w.plant->phases[static_cast<size_t>(w.plant->phase)];
+    j["plant"] = {{"id", w.plant->id}, {"name", w.plant->name}, {"phase", ph.name}, {"phaseEnd", phaseEnd(*w.plant, zone)}, {"confirm", ph.confirm}};
+  }
+  return j;
+}
+
 json plantsJson(const Config& cfg, Epoch now, const std::string& zone) {
   const PlantCfg* lead = leadingPlant(cfg);
   const Epoch today = localMidnight(now, zone);

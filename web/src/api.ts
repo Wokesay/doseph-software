@@ -64,6 +64,25 @@ export type PushSettings = {
 export type ServiceItem = { id: string; kind: string; channel: number; days: number; defaultDays: number; last: number; due: number; date: number; dueNow: boolean; label: Msg };
 export type ServicePlan = { dates: number[]; items: ServiceItem[] };
 
+// Plants and their phases (SD-128)
+export type PlantPhase = { name: string; days: number; confirm: boolean; recipe: string; ecTarget: number | null; ph: [number, number] | null };
+export type PlantRecipe = { id: string; name: string; note: string; phases: PlantPhase[] };
+export type Plant = {
+  id: string; name: string; from: string; phases: PlantPhase[]; start: number; phase: number; phaseStart: number;
+  harvestAt: number; completedAt: number; running: boolean; leading: boolean; day: number;
+  phaseDay?: number; phaseEnd?: number; daysOver?: number; ecTarget?: number | null; phTarget?: number | null;
+};
+export type Plants = { plantRecipes: PlantRecipe[]; plants: Plant[]; lead: string | null; plan: { source: string; recipe: string | null; plant: string | null } };
+export type WaterPlan = {
+  source: "plant" | "hand" | ""; recipe: string | null; ecTarget: number | null; phTarget: number | null; until: number; ended: boolean;
+  plant: { id: string; name: string; phase: string; phaseEnd: number; confirm: boolean } | null;
+};
+export type CalendarEntry = {
+  date: number; kind: "phase" | "confirm" | "harvest" | "maintenance"; overdue: boolean;
+  plant?: string; name?: string; phase?: string; items?: Msg[];
+};
+export type Calendar = { today: number; until: number; entries: CalendarEntry[] };
+
 export type Assessment = { id: string; label: Msg; status: "ok" | "problem" | "neutral"; text: Msg };
 export type Watchdog = {
   evaluatedAt: number; overall: "ok" | "problem" | "neutral"; ok: number; problems: number; neutral: number;
@@ -83,6 +102,8 @@ export type RobotState = {
   now: number; uptimeS: number; clock: string; stopped: boolean; online: boolean;
   feedPump: boolean | null; flowOk: boolean;
   pump: { amps: number | null; normalA: number | null };
+  // The water plan: the leading plant's phase, or the recipe chosen by hand (SD-128)
+  plan: WaterPlan;
   // The hardware release and the water path as the device reports them (SD-109, SD-110)
   hardware: { release: { on: boolean; leak: boolean; highLevel: boolean; stopButton: boolean; noFlow: boolean }; outletWet: boolean | null; returnPump: boolean | null };
   readings: Record<Signal, Reading>;

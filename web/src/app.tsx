@@ -2,7 +2,7 @@
 // Shell: navigation, header with the Stop, page choice, sign-in.
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, MoreHorizontal, OctagonX, Route, Settings, Syringe, Waves } from "lucide-preact";
+import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, MoreHorizontal, OctagonX, Route, Settings, Sprout, Syringe, Waves } from "lucide-preact";
 import { ApiError, post } from "./api";
 import { msg, t, type TextKey } from "./i18n";
 import { authed, config, info, lastUpdate, refreshState, simulated, stale, state, toast, toastError } from "./store";
@@ -10,6 +10,7 @@ import { Banner, ErrorBoundary, Modal, Pill, TestingNotice, Toasts, route } from
 import { Login } from "./pages/login";
 import { StatusPage } from "./pages/status";
 import { RecipePage } from "./pages/recipe";
+import { PlantsPage } from "./pages/plants";
 import { TankPage } from "./pages/tank";
 import { WaterPage } from "./pages/water";
 import { HistoryPage } from "./pages/history";
@@ -21,6 +22,7 @@ type NavItem = { path: string; label: TextKey; icon: ComponentChildren; el: () =
 const NAV: NavItem[] = [
   { path: "/", label: "nav.status", icon: <LayoutDashboard size={19} />, el: () => <StatusPage /> },
   { path: "/recipe", label: "nav.recipe", icon: <FlaskConical size={19} />, el: () => <RecipePage /> },
+  { path: "/plants", label: "nav.plants", icon: <Sprout size={19} />, el: () => <PlantsPage /> },
   { path: "/tank", label: "nav.tank", icon: <Waves size={19} />, el: () => <TankPage /> },
   { path: "/water", label: "nav.water", icon: <Route size={19} />, el: () => <WaterPage /> },
   { path: "/history", label: "nav.history", icon: <History size={19} />, el: () => <HistoryPage /> },

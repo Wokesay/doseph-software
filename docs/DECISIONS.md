@@ -691,8 +691,8 @@ this session.
   never reads it (RAT-076). It is built in its own change.
 - **Calendar:** a list of the next 8 weeks by day. It shows phase changes,
   planned ends, harvest reminders and the maintenance dates (SD-125), with
-  today at the top. It is built in its own change; across coupled devices
-  it comes with step 8.
+  today at the top. What is past its plan stands at today, marked overdue.
+  Across coupled devices it comes with step 8.
 - **Later:** the end-of-run summary (RAT-064), and phase parameters for
   light, climate and watering (step 9).
 

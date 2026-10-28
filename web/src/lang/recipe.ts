@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Texts of the recipe page.
 export const de = {
+  "recipe.byPlant": "{name} bestimmt das Wasser: in der Phase {phase} gilt {recipe}.",
+  "recipe.toPlants": "Zu den Pflanzen",
   "recipe.inForce": "Rezept in Kraft",
   "recipe.activeUntil": "{name} gilt seit {from} bis {until}.",
   "recipe.activeOpen": "{name} gilt seit {from}, ohne Ende.",
@@ -46,6 +48,8 @@ export const de = {
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
+  "recipe.byPlant": "{name} sets the water: in its phase {phase}, {recipe} is in force.",
+  "recipe.toPlants": "To the plants",
   "recipe.inForce": "Recipe in force",
   "recipe.activeUntil": "{name} is in force since {from} until {until}.",
   "recipe.activeOpen": "{name} is in force since {from}, without an end.",
