@@ -274,7 +274,7 @@ function RoomCard(p: { r: ClimateRoom; s: Status | undefined; onEdit: () => void
           </Button>
         </Banner>
       )}
-      <div class="form-grid" data-testid={`room-air-${p.r.id}`}>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr));gap:12px" data-testid={`room-air-${p.r.id}`}>
         <Air label={t("climate.temp")} value={unit(s?.air.tempC, "°C")} target={tg?.tempC != null ? t("climate.target", { value: unit(tg.tempC, "°C") }) : null} testid={`room-temp-${p.r.id}`} />
         <Air
           label={t("climate.rh")}
