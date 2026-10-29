@@ -608,3 +608,42 @@ test("coupling: this device shows a code for the leader; a pairing that cannot r
   await expect(card.getByTestId("pairing-state")).toHaveText("A device can't be coupled with itself", { timeout: 15_000 });
   await expect(card.getByTestId("coupled")).toHaveCount(0);
 });
+
+test("watering: a circuit on the twin's pump is added and given its output; where the water is not fit, it waters anyway after a confirmation that names why, and a shot is ended by hand (SD-134, RAT-086)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("devices");
+  await card.locator("input[name=device-address]").fill("shelly-pump.local");
+  await card.locator("input[name=device-name]").fill("Pumps");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d1")).toContainText("reachable", { timeout: 15000 });
+  // A new tank starts the count of litres
+  const call = (path: string, body: unknown = {}) =>
+    page.evaluate(async ([p, b]) => (await fetch(`/api/v1/${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).status, [path, body] as const);
+  expect(await call("tank/new")).toBe(200);
+  await page.goto("/#/watering");
+  await expect(page.getByTestId("circuits")).toContainText("No circuit yet");
+  await page.getByTestId("add-circuit").click();
+  const form = page.getByTestId("circuit-form");
+  await form.locator("input[name=circuit-name]").fill("Tent");
+  await form.locator("input[name=circuit-rate]").fill("2");
+  await page.getByTestId("save-circuit").click();
+  await form.locator("select[name='role-device-water.w1']").selectOption("d1");
+  await page.getByTestId("save-role-water.w1").click();
+  await page.keyboard.press("Escape");
+  const circuit = page.getByTestId("circuit-w1");
+  await expect(circuit).toContainText("Pumps, output 0", { timeout: 10000 });
+  await expect(page.getByTestId("circuit-schedule-w1")).toContainText("by hand only");
+  // The new tank is being mixed in, and a probe is in a buffer: the water cannot be judged, and a
+  // person may water anyway, told why
+  expect(await call("probe", { action: "start", kind: "ph" })).toBe(200);
+  await page.getByTestId("circuit-anyway-w1").click({ timeout: 20000 });
+  await expect(page.getByTestId("anyway-reason")).toHaveText(/mixed in and measured|being calibrated/);
+  await page.getByTestId("confirm-anyway").click();
+  await expect(page.getByTestId("circuit-state-w1")).toContainText("watering", { timeout: 15000 });
+  await page.getByTestId("circuit-stop-w1").click();
+  await expect(page.getByTestId("circuit-last-w1")).toContainText("Stopped by hand", { timeout: 15000 });
+  await expect(page.getByTestId("watering-given")).toContainText("L");
+  expect(await call("probe", { action: "cancel" })).toBe(200);
+});
+

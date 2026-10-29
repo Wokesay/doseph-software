@@ -281,6 +281,7 @@ small, .small { font-size: 0.85rem; }
 .list { display: grid; }
 .list > .item { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border-bottom: 1px solid var(--border); }
 .list > .item:last-child { border-bottom: 0; }
+.list > .item.stacked { flex-direction: column; align-items: stretch; gap: 8px; }
 .item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .item .title { font-weight: 600; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
