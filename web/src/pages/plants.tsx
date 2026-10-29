@@ -275,13 +275,13 @@ function CompletedPlant(p: { plant: Plant; onChange: (d: Plants) => void }) {
     }
   };
   return (
-    <div class="item stack-sm" data-testid={`plant-done-${pl.id}`}>
+    <div class="item stacked" data-testid={`plant-done-${pl.id}`}>
       <div class="title">{t("plants.completedOn", { name: pl.name, date: day(pl.completedAt) })}</div>
       {pl.record && <RecordLines rec={pl.record} />}
-      <div class="wrap-row">
-        <Field label={t("plants.yield")} hint={t("plants.yieldHint")}>
-          <NumberInput value={yieldG} onValue={setYieldG} unit="g" min={0} max={1000000} name={`plant-yield-${pl.id}`} />
-        </Field>
+      <Field label={t("plants.yield")} hint={t("plants.yieldHint")}>
+        <NumberInput value={yieldG} onValue={setYieldG} unit="g" min={0} max={1000000} name={`plant-yield-${pl.id}`} />
+      </Field>
+      <div>
         <Button size="sm" onClick={save} disabled={yieldG === pl.yieldG} aria-label={t("plants.yieldSaveAria", { name: pl.name })} data-testid={`plant-yield-save-${pl.id}`}>
           {t("plants.yieldSave")}
         </Button>
@@ -411,14 +411,20 @@ function PhaseFields(p: { ph: PlantPhase; i: number; set: (i: number, part: Part
           ))}
         </select>
       </Field>
-      <Field label={t("plants.ecOwn")} hint={t("plants.ecOwnHint")}>
+      <Field
+        label={t("plants.ecOwn")}
+        hint={
+          ec != null && ec < floor ? (
+            <span class="warn-text" data-testid={`phase-ec-floor-${i}`}>
+              {t("plants.ecBelowFloor", { ec: num(ec, 1), floor: num(floor, 1) })}
+            </span>
+          ) : (
+            t("plants.ecOwnHint")
+          )
+        }
+      >
         <NumberInput value={ph.ecTarget} onValue={(v) => set(i, { ecTarget: v })} unit="mS/cm" step={0.1} name={`phase-ec-${i}`} />
       </Field>
-      {ec != null && ec < floor && (
-        <p class="small warn-text" role="note" data-testid={`phase-ec-floor-${i}`}>
-          {t("plants.ecBelowFloor", { floor: num(floor, 1) })}
-        </p>
-      )}
       <Field label={t("plants.phLow")} hint={t("plants.phOwnHint")}>
         <NumberInput value={ph.ph?.[0] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [v, ph.ph?.[1] ?? v + 0.4] })} step={0.1} name={`phase-ph-low-${i}`} />
       </Field>
@@ -460,7 +466,8 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
   const list = recipes.value;
   const systemPh = p.data.system ? p.data.systems[p.data.system] : null;
   const [name, setName] = useState(p.recipe?.name ?? "");
-  const [phases, setPhases] = useState<PlantPhase[]>(p.recipe?.phases ?? proposal(systemPh));
+  const [initial] = useState<PlantPhase[]>(() => p.recipe?.phases ?? proposal(systemPh));
+  const [phases, setPhases] = useState<PlantPhase[]>(initial);
   const set = (i: number, part: Partial<PlantPhase>) => setPhases(phases.map((x, n) => (n === i ? { ...x, ...part } : x)));
   const save = async () => {
     try {
@@ -494,7 +501,7 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
           <input class="input" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} name="plant-recipe-name" />
         </Field>
         <div class="section-title">{t("plants.phases")}</div>
-        {!p.recipe && <p class="muted small">{t("plants.proposal")}</p>}
+        {!p.recipe && phases === initial && <p class="muted small">{t("plants.proposal")}</p>}
         {systemPh && p.data.system && (
           <p class="muted small">{t("plants.systemPh", { system: t(`tank.system.${p.data.system}`), low: num(systemPh[0], 1), high: num(systemPh[1], 1) })}</p>
         )}

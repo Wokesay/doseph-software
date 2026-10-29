@@ -919,7 +919,7 @@ test("plants: a new plant recipe starts from a proposal and says an EC target be
   await expect(page.locator("input[name=phase-light-hours-1]")).toHaveValue("12");
   // An EC target below the floor of pH dosing is said, and goes with it
   await page.locator("input[name=phase-ec-0]").fill("0.3");
-  await expect(page.getByTestId("phase-ec-floor-0")).toContainText("pH− would never be dosed");
+  await expect(page.getByTestId("phase-ec-floor-0")).toContainText("The EC target 0.3\u00a0mS/cm is below 0.5\u00a0mS/cm, where the device doses no pH−");
   await page.locator("input[name=phase-ec-0]").fill("1.4");
   await expect(page.getByTestId("phase-ec-floor-0")).toHaveCount(0);
   await page.locator("input[name=plant-recipe-name]").fill("Peppers");

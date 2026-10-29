@@ -1463,10 +1463,10 @@ summary (RAT-064) and the proposals a new plant recipe starts from
   before this change) or whose count was lost (a damaged state, a backup
   restored on another device) are not known, never 0. So are the days of a
   phase a plant passed before the phases' starts were kept.
-- **The yield** is entered by hand in grams, from 0 to 1,000,000, while
-  the plant runs or after it is completed, and changed later. It stays
-  with the plant until the plant is deleted, and a backup carries it with
-  the record.
+- **The yield** is entered by hand in grams, from 0 to 1,000,000, and
+  changed later. The Plants page offers it with the completed plant; the
+  API takes it also while the plant runs. It stays with the plant until
+  the plant is deleted, and a backup carries it with the record.
 - **No cost.** A canister has no price, so the record holds no cost. The
   amounts let the user work it out.
 - **A new plant recipe** starts from a proposal:
