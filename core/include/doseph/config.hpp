@@ -98,10 +98,10 @@ struct ControlCfg {
 };
 
 // The locks a person releases that may be set to report only (SD-133), by their kind; a channel's
-// are named by theirs. Leak and high level never: they belong to the frame (PD-459).
+// are named by theirs. Leak, high level and the cable check never: they belong to the frame.
 inline const std::vector<std::string>& reportableLocks() {
-  static const std::vector<std::string> kinds = {"flow.dry",       "pump.cable",       "tank.volume",    "ec.no_effect",
-                                                 "ph.no_effect",   "channel.no_drops", "channel.siphon", "hw.return"};
+  static const std::vector<std::string> kinds = {"flow.dry",         "tank.volume",    "ec.no_effect", "ph.no_effect",
+                                                 "channel.no_drops", "channel.siphon", "hw.return"};
   return kinds;
 }
 struct LocksCfg {
@@ -330,8 +330,14 @@ struct RuntimeState {
 };
 void to_json(json& j, const RuntimeState& s);
 RuntimeState runtimeFromJson(const json& j);
-// Whether a latch stands that holds: one set while its lock reported only holds nothing (SD-133)
+// Whether a latch stands that holds: one set while its lock reported only holds nothing (SD-133).
+// A latch of a kind that may not report only always holds, whatever its entry says.
 bool holds(const RuntimeState& rt, const std::string& id);
+// Whether a latch of this kind stands that a new one must not replace: one that holds, or a report
+// while its kind still reports only. Once the kind locks again, the next one holds (SD-133).
+bool latched(const Config& cfg, const RuntimeState& rt, const std::string& id, const std::string& kind);
+// Whether a report of this latch already stands: its event is not logged again (SD-133)
+bool reportStands(const RuntimeState& rt, const std::string& id);
 // Sets a latch of a kind (its ID where empty). Where that kind is set to report only, the latch
 // is marked so: it is shown and alarms as any other, and holds nothing (SD-133). Returns whether
 // it holds.

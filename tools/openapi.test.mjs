@@ -82,3 +82,15 @@ test("every reference resolves", () => {
   };
   walk(spec, "#");
 });
+
+// The locks that may report only (SD-133) are one list: the core's, the web app's and the file's
+test("the locks that may report only are the same in the core, the web app and the OpenAPI file", () => {
+  const core = readFileSync(join(root, "core/include/doseph/config.hpp"), "utf8").match(/reportableLocks\(\) \{[^}]*\{([^}]*)\}/);
+  const web = readFileSync(join(root, "web/src/api.ts"), "utf8").match(/REPORTABLE_LOCKS = \[([^\]]*)\]/);
+  assert.ok(core && web, "both lists are found");
+  const names = (s) => [...s.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const file = spec.components.schemas.Locks.properties.reportOnly.items.enum;
+  assert.deepEqual(names(core[1]), file);
+  assert.deepEqual(names(web[1]), file);
+  for (const never of ["hw.leak", "hw.high_level", "pump.cable"]) assert.ok(!file.includes(never), never);
+});

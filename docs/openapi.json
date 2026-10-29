@@ -4137,9 +4137,9 @@
           "reportOnly": {
             "type": "array",
             "items": {
+              "type": "string",
               "enum": [
                 "flow.dry",
-                "pump.cable",
                 "tank.volume",
                 "ec.no_effect",
                 "ph.no_effect",
@@ -4148,7 +4148,7 @@
                 "hw.return"
               ]
             },
-            "description": "The locks a person releases that only report: their latch alarms as before and holds nothing (SD-133). Leak and high level always hold."
+            "description": "The locks a person releases that only report: their latch alarms as before and holds nothing (SD-133). Leak, high level and the cable check always lock."
           }
         },
         "required": [

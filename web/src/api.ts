@@ -276,6 +276,6 @@ export const del = <T = any>(p: string) => api<T>("DELETE", p);
 export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${action}`, body);
 
 // The locks a person releases that may be set to report only, by their kind (SD-133); as the core's
-export const REPORTABLE_LOCKS = ["flow.dry", "pump.cable", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return"] as const;
+export const REPORTABLE_LOCKS = ["flow.dry", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return"] as const;
 // Whether a latch holds: one set while its lock reported only holds nothing (SD-133)
 export const holds = (latch: { reportOnly?: boolean } | undefined) => !!latch && !latch.reportOnly;

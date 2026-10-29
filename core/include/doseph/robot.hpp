@@ -233,6 +233,7 @@ class Robot : public RemoteRuns {
   Result startChannelJob(const std::string& type, int channel, double seconds);
   bool channelJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
   void restartCycle();
+  void logLockChanges(const Config& was);
   // Plants (SD-128): saves `next`, says what changed and starts the check anew when the water plan
   // changed; plants whose phase ended move on first
   Result savePlants(Config next, const Msg& what);

@@ -448,7 +448,7 @@ void Robot::tick() {
 void Robot::watchRelease(Epoch epoch) {
   const Release r = hw_.release();
   auto latch = [&](const char* id, const char* title) {
-    if (rt_.latches.count(id)) return;
+    if (latched(cfg_, rt_, id, id)) return;
     // Leak and high level always hold; the return pump may report only (SD-133)
     if (setLatch(cfg_, rt_, id, {{"at", epoch}})) {
       act_.stopAll();
@@ -468,7 +468,7 @@ void Robot::watchRelease(Epoch epoch) {
   } else {
     returnSince_ = -1;
   }
-  if (returnSince_ >= 0 && now - returnSince_ >= kReturnMaxMs && !rt_.latches.count("hw.return")) {
+  if (returnSince_ >= 0 && now - returnSince_ >= kReturnMaxMs && !latched(cfg_, rt_, "hw.return", "hw.return")) {
     latch("hw.return", "ev.hw.return");
     if (holds(rt_, "hw.return")) act_.allowReturnPump(false);
   }
@@ -1176,13 +1176,18 @@ Result Robot::putLocks(const json& j) {
   const Config was = cfg_;
   Result r = saveConfig(next, std::nullopt);
   if (r.status != 200) return r;
-  // Each change is an event; one to report only is a warning, since the robot then goes on (SD-133)
+  logLockChanges(was);
+  return r;
+}
+
+// Each change of a lock is an event, also one a backup brings; one to report only is a warning,
+// since the robot then goes on (SD-133)
+void Robot::logLockChanges(const Config& was) {
   for (const auto& kind : reportableLocks()) {
     const bool before = was.reportsOnly(kind), now = cfg_.reportsOnly(kind);
     if (now && !before) log_.add(clock_.epoch(), "config", "warn", say("ev.locks.report_only", {{"lock", say("lock." + kind)}}));
     if (before && !now) log_.add(clock_.epoch(), "config", "info", say("ev.locks.lock", {{"lock", say("lock." + kind)}}));
   }
-  return r;
 }
 
 Result Robot::newTank() {
@@ -1444,6 +1449,7 @@ Result Robot::importConfig(const json& j) {
   const Config before = cfg_;
   Result r = saveConfig(next, say("ev.config.imported"));
   if (r.status != 200) return r;
+  logLockChanges(before);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)

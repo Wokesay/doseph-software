@@ -92,10 +92,12 @@ WatchResult evaluate(const WatchInput& in) {
     if (holds(in.rt, id)) add("latch." + id, say("watch.latch"), "problem", say("latch." + kind, l.is_object() ? l : json::object()));
     else add("latch." + id, say("watch.reported"), "problem", reportedEvent(kind, l));
   }
+  // Locks set to report only are a note, not a problem: no alarm, and the problem flag stays free
+  // for real faults (decided by the owner, SD-133)
   if (!in.cfg.locks.reportOnly.empty()) {
     json locks = json::array();
     for (const auto& kind : in.cfg.locks.reportOnly) locks.push_back(say("lock." + kind));
-    add("locks.report_only", say("watch.locks"), "problem", say("watch.report_only", {{"locks", locks}}));
+    add("locks.report_only", say("watch.locks"), "neutral", say("watch.report_only", {{"locks", locks}}));
   }
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));

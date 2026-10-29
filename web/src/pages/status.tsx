@@ -232,7 +232,7 @@ function Locks() {
     return item ? msg(item.text) : id;
   };
   return (
-    <Card title={<Term topic="latched" />} icon={<Lock size={18} />} class="locks">
+    <Card title={ids.some((id) => holds(st.latches[id])) ? <Term topic="latched" /> : t("status.reportsTitle")} icon={<Lock size={18} />} class="locks">
       <div class="list">
         {ids.map((id) => (
           <div class="item wrap-row" data-testid={`latch-${id}`}>

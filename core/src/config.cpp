@@ -452,12 +452,14 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!inRange(k.phMaxMlPerDose, 0.5, 20)) err(say("cfg.control.ph_max_ml", {{"min", 0.5}, {"max", 20}}));
   if (k.maxEcRounds < 1 || k.maxEcRounds > 20) err(say("cfg.control.ec_rounds", {{"min", 1}, {"max", 20}}));
   if (k.maxPhDoses < 1 || k.maxPhDoses > 12) err(say("cfg.control.ph_doses", {{"min", 1}, {"max", 12}}));
-  // Only a lock a person releases may report only, each once; never leak or high level (SD-133)
+  // Only a lock a person releases may report only, each once; never leak, high level or the cable
+  // check (SD-133)
   std::set<std::string> reportOnly;
   for (const auto& kind : c.locks.reportOnly) {
     const auto& all = reportableLocks();
-    if (std::find(all.begin(), all.end(), kind) == all.end() || !reportOnly.insert(kind).second)
-      err(say("cfg.locks.unknown", {{"lock", kind}}));
+    if (kind == "hw.leak" || kind == "hw.high_level" || kind == "pump.cable") err(say("cfg.locks.always"));
+    else if (std::find(all.begin(), all.end(), kind) == all.end()) err(say("cfg.locks.unknown", {{"lock", kind}}));
+    else if (!reportOnly.insert(kind).second) err(say("cfg.locks.twice", {{"lock", say("lock." + kind)}}));
   }
 
   const auto& t = c.tank;
@@ -621,8 +623,20 @@ void to_json(json& j, const RuntimeState& s) {
 
 bool holds(const RuntimeState& rt, const std::string& id) {
   const auto it = rt.latches.find(id);
-  return it != rt.latches.end() && !(it->second.is_object() && jbool(it->second, "reportOnly", false));
+  if (it == rt.latches.end()) return false;
+  const json& l = it->second;
+  if (!l.is_object() || !jbool(l, "reportOnly", false)) return true;
+  // A damaged state may say so of any latch: only a kind that may report only is taken at its word
+  const std::string kind = jstr(l, "key", id);
+  const auto& all = reportableLocks();
+  return std::find(all.begin(), all.end(), kind) == all.end();
 }
+
+bool latched(const Config& cfg, const RuntimeState& rt, const std::string& id, const std::string& kind) {
+  return holds(rt, id) || (rt.latches.count(id) && cfg.reportsOnly(kind));
+}
+
+bool reportStands(const RuntimeState& rt, const std::string& id) { return rt.latches.count(id) && !holds(rt, id); }
 
 bool setLatch(const Config& cfg, RuntimeState& rt, const std::string& id, json entry, const std::string& kind) {
   const bool report = cfg.reportsOnly(kind.empty() ? id : kind);

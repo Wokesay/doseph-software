@@ -155,12 +155,14 @@ void MixCycle::noFlow(Ctx& c, Actuators& act, Msg why) {
   const int tries = c.pumpInTank ? kDryTriesTank : kDryTries;
   if (++noFlowTries_ >= tries) {
     noFlowTries_ = 0;
-    if (setLatch(c.cfg, c.rt, "flow.dry", {{"at", c.epoch}, {"tries", tries}})) {
+    const json latch = {{"at", c.epoch}, {"tries", tries}};
+    const bool again = reportStands(c.rt, "flow.dry");
+    if (setLatch(c.cfg, c.rt, "flow.dry", latch)) {
       c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", tries}}));
       wait(c, act, say("cycle.wait.dry"), 0);
     } else {
-      // Reported only (SD-133): it tries again as before
-      c.log.add(c.epoch, "alarm", "alarm", reportedEvent("flow.dry", nullptr), say("ev.lock.reported.text"));
+      // Reported only (SD-133): reported once while its report stands, and it tries again as before
+      if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("flow.dry", nullptr), say("ev.lock.reported.text"), latch);
       wait(c, act, std::move(why));
     }
   } else {
@@ -265,13 +267,9 @@ bool MixCycle::cableCheck(Ctx& c, Actuators& act) {
   const json args = {{"phOn", numOrNull(cable_.phOn)}, {"phOff", numOrNull(phOff)}, {"ecOn", numOrNull(cable_.ecOn)}, {"ecOff", numOrNull(ecOff)}};
   json latch = args;
   latch["at"] = c.epoch;
-  cable_ = {};
-  if (!setLatch(c.cfg, c.rt, "pump.cable", latch)) {
-    // Reported only (SD-133): the check holds on as before
-    c.log.add(c.epoch, "alarm", "alarm", reportedEvent("pump.cable", nullptr), say("ev.lock.reported.text"), args);
-    return false;
-  }
+  c.rt.latches["pump.cable"] = latch;  // always holds: a damaged cable may endanger people (SD-133)
   c.log.add(c.epoch, "alarm", "alarm", say("ev.pump.cable"), say("ev.pump.cable.text", args), args);
+  cable_ = {};
   wait(c, act, say("cycle.wait.cable"), 0);
   return true;
 }
@@ -743,13 +741,15 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
     const double implied = v / q;
     const json latch = {{"at", c.epoch}, {"enteredL", v}, {"impliedL", std::round(implied)},
                         {"kind", which}, {"recipe", roundRecipe_}, {"effect", numOrNull(observed)}};
+    const bool again = reportStands(c.rt, "tank.volume");
     if (setLatch(c.cfg, c.rt, "tank.volume", latch)) {
       c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.volume"),
                 say("ev.cycle.volume.text", {{"implied", std::round(implied)}, {"entered", v}}));
       return true;
     }
-    c.log.add(c.epoch, "alarm", "alarm", reportedEvent("tank.volume", nullptr),
-              say("ev.cycle.volume_reported.text", {{"implied", std::round(implied)}, {"entered", v}}));
+    if (!again)
+      c.log.add(c.epoch, "alarm", "alarm", reportedEvent("tank.volume", nullptr),
+                say("ev.cycle.volume_reported.text", {{"implied", std::round(implied)}, {"entered", v}}), latch);
     confirmVolume(c.cfg, c.rt, latch);
     return false;
   };
@@ -804,11 +804,12 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
       c.rt.ecEffects[roundRecipe_] = clampEcEffect(judged / judgedMlPerL, recipeEffect(*dosed, kNaN).start);
     if (isNum(judged)) noEffectEc_ = judged < kNoEffectEc ? noEffectEc_ + 1 : 0;
     if (noEffectEc_ >= kNoEffectLatch) {
+      const bool again = reportStands(c.rt, "ec.no_effect");
       const bool held = setLatch(c.cfg, c.rt, "ec.no_effect", {{"at", c.epoch}});
       noEffectEc_ = 0;
       small_ = {};
       if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ec.no_effect"), say("ev.ec.no_effect.text"));
-      else c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ec.no_effect", nullptr), say("ev.lock.reported.text"));
+      else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ec.no_effect", nullptr), say("ev.lock.reported.text"));
     }
   } else if (kind == Kind::Ph) {
     const double drop = before_.ph - measured_.ph;
@@ -820,12 +821,12 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
     } else if (clean_) {
       // The test dose checks one side only: pH− buffers differ widely, so a weaker fall is normal;
       // a fall far stronger than at the strongest measured effect means a smaller tank (SD-105)
-      if (testDose_ && isNum(expectedTest_) && expectedTest_ > 0 && drop > kVolumeHigh * expectedTest_ && drop >= 0.05 &&
-          volumeLatch(drop / expectedTest_, "ph", isNum(mlPerL) && mlPerL > 0 ? drop / mlPerL : kNaN)) {
+      const bool misfit = testDose_ && isNum(expectedTest_) && expectedTest_ > 0 && drop > kVolumeHigh * expectedTest_ && drop >= 0.05;
+      if (misfit && volumeLatch(drop / expectedTest_, "ph", isNum(mlPerL) && mlPerL > 0 ? drop / mlPerL : kNaN)) {
         wait(c, act, say("cycle.wait.volume", {{"implied", std::round(v * expectedTest_ / drop)}, {"entered", v}}), 0);
         return;
       }
-      if (testDose_ && drop >= kNoEffectPh) {
+      if (testDose_ && !misfit && drop >= kNoEffectPh) {
         c.rt.newTank = false;
         c.log.add(c.epoch, "control", "info", say("ev.cycle.test_ok_ph"), say("ev.cycle.test_ok_ph.text", {{"entered", v}}));
       }
@@ -838,10 +839,11 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
         noEffectPh_ = 0;
       }
       if (noEffectPh_ >= kNoEffectLatch) {
+        const bool again = reportStands(c.rt, "ph.no_effect");
         const bool held = setLatch(c.cfg, c.rt, "ph.no_effect", {{"at", c.epoch}});
         noEffectPh_ = 0;
         if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ph.no_effect"), say("ev.ph.no_effect.text"));
-        else c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ph.no_effect", nullptr), say("ev.lock.reported.text"));
+        else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ph.no_effect", nullptr), say("ev.lock.reported.text"));
       }
     }
   }
