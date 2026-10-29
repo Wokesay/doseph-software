@@ -63,8 +63,9 @@ WatchResult evaluate(const WatchInput& in) {
   // Climate (SD-136): CO2 the valve was closed for, and light heat protection holds back
   for (const auto& r : in.rooms) {
     const Msg label = say("watch.climate", {{"name", r.name}});
-    if (r.co2High) add("climate." + r.id + ".co2", label, "problem", say("watch.climate.co2_high", {{"max", kCo2CutPpm}}));
-    if (r.heat > 0) add("climate." + r.id + ".heat", label, "problem", say(r.heat == 2 ? "watch.climate.heat_off" : "watch.climate.heat_dim", {{"limit", r.limitC}}));
+    if (r.co2High) add("climate." + r.id + ".co2", label, "problem", say("watch.climate.co2_high", {{"name", r.name}, {"max", kCo2CutPpm}}));
+    if (r.heat > 0)
+      add("climate." + r.id + ".heat", label, "problem", say(r.heat == 2 ? "watch.climate.heat_off" : "watch.climate.heat_dim", {{"name", r.name}, {"limit", r.limitC}}));
   }
   if (const Reading* f = find(in, "flow")) {
     const Msg label = say("watch.flow");
