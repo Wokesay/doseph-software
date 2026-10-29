@@ -2,6 +2,8 @@
 #include "doseph/gateway.hpp"
 
 #include <algorithm>
+#include <limits>
+#include <tuple>
 
 #include "doseph/messages.hpp"
 
@@ -616,6 +618,254 @@ std::optional<DoseProgress> Doser::takeFinished() {
   auto f = finished_;
   finished_.reset();
   return f;
+}
+
+// ---------------------------------------------------------------- NetOutputs
+
+namespace {
+
+std::string outputKey(const Config& cfg, const RoleBinding& b) {
+  const NetDeviceCfg* d = cfg.device(b.device);
+  return b.device + "@" + (d ? d->address : "") + ":" + std::to_string(b.channel);
+}
+
+const RoleBinding* shellyOutput(const Config& cfg, const std::string& role) {
+  const RoleDef* def = roleDef(role);
+  const auto it = cfg.roles.find(role);
+  if (!def || def->kind != "output" || it == cfg.roles.end() || it->second.source != "shelly" || !cfg.device(it->second.device)) return nullptr;
+  return &it->second;
+}
+
+}  // namespace
+
+bool NetOutputs::want(const std::string& role, bool on) {
+  const RoleDef* def = roleDef(role);
+  if (!def || def->kind != "output") return false;
+  outs_[role].want = on;
+  return true;
+}
+
+void NetOutputs::allOff() {
+  for (auto& [role, o] : outs_) o.want = false;
+  forceOff_ = true;
+}
+
+void NetOutputs::send(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, const std::string& stage, const std::string& method,
+                      const json& params, Ms now) {
+  const RoleBinding& b = cfg.roles.at(role);
+  o.stage = stage;
+  o.pending = dev.rpc(cfg, b.device, method, params, role + "|" + stage, now);
+  if (o.pending == 0) {  // no such device: nothing to wait for
+    o.stage.clear();
+    o.retryAt = now + kNetPollMs;
+  }
+}
+
+void NetOutputs::off(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, Ms now) {
+  const RoleBinding& b = cfg.roles.at(role);
+  dev.rpc(cfg, b.device, "Switch.Set", {{"id", b.channel}, {"on", false}}, role + "|off", now);
+  o.lastOff = now;
+  o.onSent = false;
+}
+
+void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
+  hold_ = hold;
+  const bool force = forceOff_;
+  forceOff_ = false;
+  // Outputs let go: off again until a device answers, for a minute at most
+  for (auto it = releasing_.begin(); it != releasing_.end();) {
+    if (now > it->until) {
+      failedReleases_.push_back(it->device.name);
+      it = releasing_.erase(it);
+      continue;
+    }
+    if (it->pending == 0 && now - it->lastSent >= kNetPollMs) {
+      it->pending = dev.releaseRpc(it->device, it->user, it->password, it->ownId, "Switch.Set", {{"id", it->channel}, {"on", false}}, now);
+      it->lastSent = now;
+    }
+    ++it;
+  }
+  for (const auto& def : roleDefs()) {
+    if (def.kind != "output") continue;
+    Out& o = outs_[def.id];
+    const RoleBinding* b = shellyOutput(cfg, def.id);
+    if (!b) {
+      o = Out{};  // nothing wanted of a role without an output: a later binding starts with nothing
+      continue;
+    }
+    const std::string key = outputKey(cfg, *b);
+    if (o.key != key) {  // bound anew: off first, then its settings are checked; nothing wanted yet
+      o = Out{};
+      o.key = key;
+      // An off still going out for this very output, let go before, would undo what it does now
+      const NetDeviceCfg* d = cfg.device(b->device);
+      releasing_.erase(std::remove_if(releasing_.begin(), releasing_.end(),
+                                      [&](const Release& r) { return d && r.device.address == d->address && r.channel == b->channel; }),
+                       releasing_.end());
+    }
+    if (!dev.online(b->device, now)) {
+      // Away: its settings may be gone with it (a reset, a power loss); checked again once back
+      o.verified = false;
+      o.wasOnline = false;
+      o.onSent = false;
+      o.stage.clear();
+      o.pending = 0;
+      o.problem = say("device.offline");
+      continue;
+    }
+    if (!o.wasOnline) {
+      o.wasOnline = true;
+      o.problem = {};
+      o.lastOff = std::numeric_limits<Ms>::min() / 2;
+    }
+    const auto isOn = dev.output(b->device, b->channel, now);
+    const json id = b->channel;
+    // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019).
+    // A switch-on whose answer is not in yet is the robot's own.
+    const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on"));
+    if (force || !o.want || hold || unchecked) {
+      // Off at once, and again while the device says on or has not said; a Stop and a start always
+      if ((force || isOn != false || o.onSent) && (force || now - o.lastOff >= kNetPollMs)) off(cfg, dev, def.id, o, now);
+      // A bound output shows whether it could switch: its settings are checked while it is off
+      if (!o.verified && o.stage.empty() && now >= o.retryAt) {
+        o.wrote = false;
+        send(cfg, dev, def.id, o, "read", "Switch.GetConfig", {{"id", id}}, now);
+      }
+      continue;
+    }
+    // On wanted: every switch-on reads the settings back first (RAT-019). Once switched on it is
+    // not switched on again until it was off: an auto-off that acted stays off
+    if (!o.stage.empty() || isOn != false || o.onSent || now < o.retryAt) continue;
+    o.wrote = false;
+    send(cfg, dev, def.id, o, "read", "Switch.GetConfig", {{"id", id}}, now);
+  }
+}
+
+void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, Ms now) {
+  if (a.tag == "release") {
+    for (auto it = releasing_.begin(); it != releasing_.end(); ++it)
+      if (it->pending == a.id) {
+        if (a.ok) {
+          releasing_.erase(it);  // the device switched it off
+        } else if (a.other) {
+          // Another device answers at its address: nothing more goes there, and the alarm says so
+          failedReleases_.push_back(it->device.name);
+          releasing_.erase(it);
+        } else {
+          it->pending = 0;  // again at the next poll
+        }
+        return;
+      }
+    return;
+  }
+  const size_t bar = a.tag.find('|');
+  if (bar == std::string::npos) return;
+  const std::string role = a.tag.substr(0, bar), stage = a.tag.substr(bar + 1);
+  const RoleDef* def = roleDef(role);
+  const RoleBinding* b = shellyOutput(cfg, role);
+  const auto oit = outs_.find(role);
+  if (!def || !b || oit == outs_.end()) return;
+  Out& o = oit->second;
+  if (o.key != outputKey(cfg, *b) || b->device != a.device) return;  // for a binding gone since
+  if (stage == "off") {
+    if (!a.ok) o.problem = say("device.switch_failed");
+    else if (o.problem.key == "device.switch_failed") o.problem = {};
+    return;
+  }
+  // Only the answer to the request the stage waits for: a late one of an older check counts for nothing
+  if (stage != o.stage || a.id != o.pending) return;
+  o.pending = 0;
+  const json id = b->channel;
+  auto giveUp = [&](Msg why, Ms retry) {
+    o.stage.clear();
+    o.problem = std::move(why);
+    o.retryAt = now + retry;
+  };
+  if (!a.ok) return giveUp(say(stage == "on" ? "device.switch_on_failed" : "device.check_failed"), kNetPollMs);
+  if (stage == "read" || stage == "reread") {
+    // The settings of this very output: a read-back that names another one says nothing
+    if (!a.result.is_object() || !a.result.contains("id") || a.result["id"] != id) return giveUp(say("device.check_failed"), kNetPollMs);
+    const json wanted = shellySwitchConfig(*def, a.result);
+    if (shellyConfigFits(wanted, a.result)) {
+      o.verified = true;
+      o.refused = false;
+      o.problem = {};
+      if (o.want && !hold_) send(cfg, dev, role, o, "on", "Switch.Set", {{"id", id}, {"on", true}}, now);
+      else o.stage.clear();
+      return;
+    }
+    if (!o.wrote) {
+      o.wrote = true;
+      send(cfg, dev, role, o, "write", "Switch.SetConfig", {{"id", id}, {"config", wanted}}, now);
+      return;
+    }
+    // Written and still not so: it does not switch on (RAT-019)
+    o.verified = false;
+    o.refused = true;
+    return giveUp(say("device.settings_differ"), kMinute);
+  }
+  if (stage == "write") return send(cfg, dev, role, o, "reread", "Switch.GetConfig", {{"id", id}}, now);
+  if (stage == "on") {
+    o.stage.clear();
+    o.onSent = true;
+    // Not wanted any more while it switched on: off at once
+    if (!o.want || hold_) off(cfg, dev, role, o, now);
+  }
+}
+
+void NetOutputs::release(const Config& cfg, NetDevices& dev, const std::string& role, Ms now) {
+  outs_.erase(role);
+  const RoleBinding* b = shellyOutput(cfg, role);
+  if (!b) return;
+  Release r;
+  r.device = *cfg.device(b->device);
+  if (dev.isOther(b->device)) {
+    // Another device answers at its address: an off would reach the wrong one
+    failedReleases_.push_back(r.device.name);
+    return;
+  }
+  std::tie(r.user, r.password) = dev.credentials(b->device);
+  r.ownId = dev.ownId(b->device);
+  r.channel = b->channel;
+  r.lastSent = now;
+  r.until = now + kMinute;
+  r.pending = dev.releaseRpc(r.device, r.user, r.password, r.ownId, "Switch.Set", {{"id", r.channel}, {"on", false}}, now);
+  releasing_.push_back(std::move(r));
+}
+
+std::vector<std::string> NetOutputs::takeFailedReleases() {
+  std::vector<std::string> out;
+  out.swap(failedReleases_);
+  return out;
+}
+
+Msg NetOutputs::problem(const std::string& role) const {
+  const auto it = outs_.find(role);
+  return it == outs_.end() ? Msg{} : it->second.problem;
+}
+
+json NetOutputs::status(const Config& cfg, const NetDevices& dev, Ms now) const {
+  json out = json::object();
+  for (const auto& def : roleDefs()) {
+    if (def.kind != "output") continue;
+    const RoleBinding* b = shellyOutput(cfg, def.id);
+    const auto oit = outs_.find(def.id);
+    const Out none;
+    const Out& o = oit == outs_.end() || !b || oit->second.key != outputKey(cfg, *b) ? none : oit->second;
+    json j = {{"want", o.want}, {"verified", o.verified}, {"problem", o.problem.key.empty() ? json(nullptr) : json(o.problem)}};
+    if (!b) j["state"] = "not_assigned";
+    else if (!dev.online(b->device, now)) j["state"] = "offline";
+    else if (o.refused) j["state"] = "refused";
+    else {
+      const auto on = dev.output(b->device, b->channel, now);
+      if (on == true) j["state"] = o.verified && (o.onSent || o.stage == "on") ? "on" : "unchecked";
+      else if (!o.stage.empty()) j["state"] = "checking";
+      else if (!on) j["state"] = "waiting";  // its status not read yet, or stale
+      else j["state"] = o.verified ? "off" : "unchecked";
+    }
+    out[def.id] = j;
+  }
+  return out;
 }
 
 }  // namespace doseph

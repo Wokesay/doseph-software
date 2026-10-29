@@ -74,6 +74,10 @@
     },
     {
       "name": "coupling"
+    },
+    {
+      "name": "devices",
+      "description": "Shelly and ESPHome devices and MQTT topics, and the roles bound to them (SD-132)"
     }
   ],
   "paths": {
@@ -2756,6 +2760,328 @@
         }
       }
     },
+    "/devices": {
+      "get": {
+        "operationId": "getDevices",
+        "summary": "The network devices and the roles bound to them, with their states (SD-132)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account",
+          "peer"
+        ],
+        "responses": {
+          "200": {
+            "description": "The devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Devices"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addDevice",
+        "summary": "Adds a Shelly or ESPHome device by its address",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "shelly",
+                      "esphome"
+                    ]
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "address",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Its ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/devices/{id}": {
+      "delete": {
+        "operationId": "removeDevice",
+        "summary": "Removes a device; its output is switched off first and its roles are released",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/devices/{id}/credentials": {
+      "put": {
+        "operationId": "putDeviceCredentials",
+        "summary": "A device's user and password, kept apart from the configuration and never shown; \"\" removes them",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/roles/{role}": {
+      "put": {
+        "operationId": "putRole",
+        "summary": "Binds a role to a device or a topic; an output bound elsewhere before is switched off first",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleBinding"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteRole",
+        "summary": "Releases a role; its output is switched off first",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/canisters": {
       "post": {
         "operationId": "putCanister",
@@ -4155,6 +4481,82 @@
           "reportOnly"
         ]
       },
+      "NetDevice": {
+        "type": "object",
+        "description": "A network device added by its address (SD-132)",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "shelly",
+              "esphome"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RoleBinding": {
+        "type": "object",
+        "description": "What a role is bound to: a Shelly's switch or input, an ESPHome entity, or an MQTT topic (SD-132). An output role only on a Shelly Gen2+.",
+        "properties": {
+          "source": {
+            "enum": [
+              "shelly",
+              "esphome",
+              "mqtt"
+            ]
+          },
+          "device": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "integer"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "availability": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "Devices": {
+        "type": "object",
+        "description": "The network devices with what they said, and each role with its binding and its state. Never a password.",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "roles": {
+            "type": "object"
+          },
+          "mqttTopics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "Active": {
         "type": "object",
         "properties": {
@@ -4334,6 +4736,18 @@
           },
           "notify": {
             "$ref": "#/components/schemas/Notify"
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetDevice"
+            }
+          },
+          "roles": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RoleBinding"
+            }
           }
         },
         "description": "The configuration: everything a backup holds"

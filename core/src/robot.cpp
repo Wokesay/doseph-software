@@ -23,6 +23,7 @@ constexpr const char* kAuthFile = "auth.json";
 constexpr const char* kDeviceFile = "device.json";  // the device's identity, never in a backup (SD-129)
 constexpr const char* kPeerFile = "peer.json";  // the coupled device with its token, never in a backup (SD-131)
 constexpr const char* kMqttFile = "mqtt.json";  // MQTT with its password, apart from the configuration (SD-130)
+constexpr const char* kDeviceSecretsFile = "devices.json";  // network devices' passwords, never in a backup (SD-132)
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
@@ -244,11 +245,16 @@ void Robot::logEvent(const std::string& type, const std::string& sev, Msg title,
 void Robot::boot() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   bool stateUnknown = false;
+  bool configRead = false;
   if (auto s = store_.read(kConfigFile)) {
     try {
       Config c = configFromJson(json::parse(*s));
-      if (validateConfig(c, hw_.channelCount()).empty()) cfg_ = c;
-      else stateUnknown = true;
+      if (validateConfig(c, hw_.channelCount()).empty()) {
+        cfg_ = c;
+        configRead = true;
+      } else {
+        stateUnknown = true;
+      }
     } catch (...) {
       stateUnknown = true;
     }
@@ -274,6 +280,8 @@ void Robot::boot() {
     const json j = json::parse(*s, nullptr, false);
     mqtt_ = mqttFromJson(j);
   }
+  // Network devices' passwords that cannot be read are none: such a device refuses until set again
+  if (auto s = store_.read(kDeviceSecretsFile)) devices_.secretsFromJson(json::parse(*s, nullptr, false));
   if (auto s = store_.read(kStateFile)) {
     try {
       rt_ = runtimeFromJson(json::parse(*s));
@@ -317,6 +325,25 @@ void Robot::boot() {
   doser_.setBootTag(std::to_string(rt_.bootCount));
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
   act_.stopAll();
+  outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
+  if (configRead) {
+    // What is kept of a device the configuration no longer has, or has at another address, goes: a
+    // later one with its ID starts afresh, and no password reaches another host. Without a
+    // configuration read from the file nothing goes: it may come back.
+    json kept;
+    if (auto s = store_.read(kDeviceSecretsFile)) kept = json::parse(*s, nullptr, false);
+    bool dropped = false;
+    if (kept.is_object())
+      for (const auto& [id, v] : kept.items()) {
+        const NetDeviceCfg* d = cfg_.device(id);
+        const std::string at = jstr(v, "address");
+        if (!d || (!at.empty() && at != d->address)) {
+          devices_.forget(id);
+          dropped = true;
+        }
+      }
+    if (dropped) saveDeviceSecrets();
+  }
   if (holds(rt_, "hw.return")) act_.allowReturnPump(false);  // the device forgot it (SD-109)
   if (stateUnknown) {
     rt_.stopped = true;
@@ -379,6 +406,11 @@ void Robot::tick() {
   if (!c.channelJob && lastChannelJob_) restartCycle();
   lastChannelJob_ = c.channelJob;
   act_.enforce(c);
+  // Network devices (SD-132): polled, and their outputs switched only by the gateway (R1)
+  for (const auto& a : devices_.tick(cfg_, now)) outputs_.answer(cfg_, devices_, a, now);
+  outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
+  for (const auto& name : outputs_.takeFailedReleases())
+    log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
   // Drops without a running pump went into the tank: the check mixes first and learns nothing,
   // as after a cut dose (SD-111)
   if (act_.takeUnplannedDrops()) mixFirstNow();
@@ -422,6 +454,7 @@ void Robot::tick() {
     in.channelCount = hw_.channelCount();
     in.hold = c.hold;
     if (peer_) in.peer = {true, peer_->role == "leader", peerLinkOk(c.now), deviation_, peer_->name};
+    in.roles = roleStates(now);
     watch_ = evaluate(in);
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
@@ -586,12 +619,15 @@ json Robot::diagnostics() {
   std::uint8_t b[4];
   rng_(b, sizeof b);
   const json st = state();
+  // The package leaves out addresses: the network devices' are in the home network (SD-132)
+  json diagConfig = cfg_;
+  for (auto& d : diagConfig["devices"]) d["address"] = nullptr;
   json evs = json::array();
   for (const auto& e : log_.query(clock_.epoch() - 72 * 3600, clock_.epoch(), "", 300)) evs.push_back(e);
   return {{"reportId", "DP-" + toHex(b, sizeof b)},
           {"createdAt", clock_.epoch()},
           {"info", info()},
-          {"config", cfg_},
+          {"config", diagConfig},
           {"readings", st["readings"]},
           {"cycle", st["cycle"]},
           {"watchdog", st["watchdog"]},
@@ -1450,6 +1486,9 @@ Result Robot::importConfig(const json& j) {
   Result r = saveConfig(next, say("ev.config.imported"));
   if (r.status != 200) return r;
   logLockChanges(before);
+  // The network devices' outputs off, and what moved or went is let go (SD-132)
+  outputs_.allOff();
+  reconcileDevices(before);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)
@@ -2148,6 +2187,7 @@ Result Robot::putMqtt(const json& j) {
   mqtt_ = next;
   mqttRevision_++;
   mqttStatus_ = {{"connected", false}, {"error", nullptr}, {"at", 0}};
+  devices_.mqttConnected(false);  // the platform connects anew; what came before counts no more
   log_.add(clock_.epoch(), "config", "info", changed("cfg.what.mqtt"));
   return Result::ok(mqttSettings());
 }
@@ -2155,6 +2195,196 @@ Result Robot::putMqtt(const json& j) {
 void Robot::setMqttStatus(bool connected, const Msg& error) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   mqttStatus_ = {{"connected", connected}, {"error", error.key.empty() ? json(nullptr) : json(error)}, {"at", clock_.epoch()}};
+  devices_.mqttConnected(connected);
+}
+
+std::vector<std::string> Robot::mqttValueTopics() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return devices_.mqttTopics(cfg_);
+}
+
+void Robot::mqttValue(const std::string& topic, const std::string& payload) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  devices_.mqttMessage(cfg_, topic, payload, clock_.nowMs());
+}
+
+// ---------------------------------------------------------------- Network devices (SD-132)
+
+std::vector<WatchInput::Role> Robot::roleStates(Ms now) const {
+  std::vector<WatchInput::Role> out;
+  const json outs = outputs_.status(cfg_, devices_, now);
+  for (const auto& def : roleDefs()) {
+    if (!cfg_.roles.count(def.id)) continue;
+    WatchInput::Role r{def.id, false, {}};
+    if (def.kind == "output") {
+      const json& o = outs[def.id];
+      const std::string st = jstr(o, "state");
+      r.ok = st == "on" || st == "off";
+      const Msg why = outputs_.problem(def.id);
+      r.text = r.ok ? say(st == "on" ? "watch.role.on" : "watch.role.off") : !why.key.empty() ? why : say("watch.role." + st);
+    } else {
+      const RoleValue v = devices_.value(cfg_, def.id, now);
+      r.ok = v.state == "ok";
+      r.text = r.ok ? say(v.value->is_boolean() ? (v.value->get<bool>() ? "watch.role.true" : "watch.role.false") : "watch.role.value",
+                          {{"value", *v.value}})
+                    : say("watch.role." + v.state);
+    }
+    out.push_back(std::move(r));
+  }
+  return out;
+}
+
+bool Robot::saveDeviceSecrets() {
+  // Each entry with the address it belongs to: a configuration that moved the device without this
+  // file being written after it (a power loss between the two) drops it at the next start
+  json j = devices_.secretsJson();
+  for (auto& [id, v] : j.items())
+    if (const NetDeviceCfg* d = cfg_.device(id)) v["address"] = d->address;
+  return store_.write(kDeviceSecretsFile, j.dump());
+}
+
+// After the configuration changed (a device added or removed, a role bound or released, an import):
+// an output whose binding moved or went is let go and switched off, and a device that went or moved
+// to another address or kind is forgotten with its password and the ID it had (SD-132)
+void Robot::reconcileDevices(const Config& before) {
+  const Ms now = clock_.nowMs();
+  for (const auto& def : roleDefs()) {
+    if (def.kind != "output") continue;
+    const auto was = before.roles.find(def.id);
+    if (was == before.roles.end() || was->second.source != "shelly") continue;
+    const NetDeviceCfg* d0 = before.device(was->second.device);
+    const auto is = cfg_.roles.find(def.id);
+    const NetDeviceCfg* d1 = is == cfg_.roles.end() ? nullptr : cfg_.device(is->second.device);
+    const bool same = d0 && d1 && is->second.source == "shelly" && is->second.channel == was->second.channel && d0->id == d1->id &&
+                      d0->address == d1->address && d0->kind == d1->kind;
+    if (!same) outputs_.release(before, devices_, def.id, now);
+  }
+  bool forgot = false;
+  for (const auto& d0 : before.devices) {
+    const NetDeviceCfg* d1 = cfg_.device(d0.id);
+    if (!d1 || d1->address != d0.address || d1->kind != d0.kind) {
+      devices_.forget(d0.id);
+      forgot = true;
+    }
+  }
+  devices_.pruneMqtt(cfg_);
+  if (forgot) saveDeviceSecrets();
+}
+
+json Robot::devices() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Ms now = clock_.nowMs();
+  json roles = json::object();
+  const json outs = outputs_.status(cfg_, devices_, now);
+  for (const auto& def : roleDefs()) {
+    json r = {{"kind", def.kind}, {"pulse", def.pulse}, {"autoOffS", autoOffS(def)}, {"binding", nullptr}};
+    if (const auto it = cfg_.roles.find(def.id); it != cfg_.roles.end()) r["binding"] = bindingToJson(it->second);
+    if (def.kind == "output") {
+      r["output"] = outs[def.id];
+    } else {
+      const RoleValue v = devices_.value(cfg_, def.id, now);
+      r["value"] = v.value ? *v.value : json(nullptr);
+      r["state"] = v.state;
+    }
+    roles[def.id] = r;
+  }
+  return {{"devices", devices_.status(cfg_, now)}, {"roles", roles}, {"mqttTopics", devices_.mqttTopics(cfg_)}};
+}
+
+Result Robot::addDevice(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Config next = cfg_;
+  NetDeviceCfg d;
+  for (int n = 1; n < 1000 && d.id.empty(); ++n)
+    if (!cfg_.device("d" + std::to_string(n))) d.id = "d" + std::to_string(n);
+  d.kind = jstr(j, "kind");
+  d.address = jstr(j, "address");
+  d.name = utf8Prefix(jstr(j, "name"), 40);
+  next.devices.push_back(d);
+  const Config before = cfg_;
+  Result r = saveConfig(next, say("ev.device.added", {{"name", d.name}}));
+  if (r.status != 200) return r;
+  reconcileDevices(before);
+  devices_.forget(d.id);  // an ID used before starts afresh: nothing it said, no password
+  saveDeviceSecrets();
+  return Result::ok({{"id", d.id}});
+}
+
+Result Robot::removeDevice(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const NetDeviceCfg* d = cfg_.device(id);
+  if (!d) return Result::fail(404, say("device.none"));
+  const std::string name = d->name;
+  Config next = cfg_;
+  // Its roles go with it; an output is switched off (R1: through the gateway)
+  for (auto it = next.roles.begin(); it != next.roles.end();)
+    it = (it->second.source == "shelly" || it->second.source == "esphome") && it->second.device == id ? next.roles.erase(it) : std::next(it);
+  next.devices.erase(std::remove_if(next.devices.begin(), next.devices.end(), [&](const NetDeviceCfg& x) { return x.id == id; }), next.devices.end());
+  const Config before = cfg_;
+  Result r = saveConfig(next, say("ev.device.removed", {{"name", name}}));
+  if (r.status != 200) return r;
+  reconcileDevices(before);
+  // Removed either way; a password file not written is dropped at the next start, as its device is gone
+  if (!saveDeviceSecrets()) log_.add(clock_.epoch(), "config", "warn", say("store.failed"));
+  return r;
+}
+
+Result Robot::putDeviceCredentials(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const NetDeviceCfg* d = cfg_.device(id);
+  if (!d) return Result::fail(404, say("device.none"));
+  const std::string user = jstr(j, "user"), password = jstr(j, "password");
+  if (user.size() > 64 || password.size() > 128) return Result::fail(422, say("api.bad_input"));
+  devices_.setCredentials(id, d->kind == "shelly" ? "admin" : user, password);
+  if (!saveDeviceSecrets()) return Result::fail(500, say("store.failed"));
+  return Result::ok();
+}
+
+Result Robot::putRole(const std::string& role, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!roleDef(role)) return Result::fail(404, say("role.none"));
+  RoleBinding b;
+  try {
+    b = bindingFromJson(j);
+  } catch (...) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  Config next = cfg_;
+  next.roles[role] = b;
+  const Config before = cfg_;
+  Result r = saveConfig(next, say("ev.role.bound", {{"role", say("role." + role)}}));
+  if (r.status != 200) return r;  // refused: the output it had stays as it is
+  reconcileDevices(before);
+  return r;
+}
+
+Result Robot::deleteRole(const std::string& role) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.roles.count(role)) return Result::fail(404, say("role.none"));
+  Config next = cfg_;
+  next.roles.erase(role);
+  const Config before = cfg_;
+  Result r = saveConfig(next, say("ev.role.unbound", {{"role", say("role." + role)}}));
+  if (r.status != 200) return r;
+  reconcileDevices(before);
+  return r;
+}
+
+bool Robot::wantOutput(const std::string& role, bool on) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return outputs_.want(role, on);
+}
+
+std::vector<NetRequest> Robot::takeDeviceRequests() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return devices_.take();
+}
+
+void Robot::deviceResponse(long long id, int status, const json& body) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  const Ms now = clock_.nowMs();
+  if (const auto a = devices_.response(cfg_, id, status, body, now)) outputs_.answer(cfg_, devices_, *a, now);
+  if (devices_.takeLearned()) saveDeviceSecrets();  // a Shelly's own ID, from now on how it is known
 }
 
 std::vector<MqttMessage> Robot::mqttDiscoveryMessages() {
@@ -2220,6 +2450,7 @@ Result Robot::stop(const Msg& who) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036)
   act_.stopAll();
+  outputs_.allOff();
   const bool was = rt_.stopped;
   rt_.stopped = true;
   Ctx c = ctx();

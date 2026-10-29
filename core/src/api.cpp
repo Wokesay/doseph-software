@@ -423,6 +423,13 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("POST", {"tank", "new"})) return fromResult(robot_.newTank());
   if (is("PUT", {"control"})) return fromResult(robot_.putControl(body));
   if (is("PUT", {"locks"})) return fromResult(robot_.putLocks(body));
+  // Network devices and their roles (SD-132)
+  if (is("GET", {"devices"})) return jsonResp(200, robot_.devices());
+  if (is("POST", {"devices"})) return fromResult(robot_.addDevice(body));
+  if (is("DELETE", {"devices", "*"})) return fromResult(robot_.removeDevice(p[1]));
+  if (is("PUT", {"devices", "*", "credentials"})) return fromResult(robot_.putDeviceCredentials(p[1], body));
+  if (is("PUT", {"roles", "*"})) return fromResult(robot_.putRole(p[1], body));
+  if (is("DELETE", {"roles", "*"})) return fromResult(robot_.deleteRole(p[1]));
   if (is("POST", {"canisters"})) return fromResult(robot_.putCanister(body));
   if (is("DELETE", {"canisters", "*"})) return fromResult(robot_.deleteCanister(p[1]));
   if (is("POST", {"canisters", "*", "stock"})) return fromResult(robot_.setStock(p[1], body));

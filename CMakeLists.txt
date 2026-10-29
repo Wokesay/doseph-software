@@ -71,6 +71,7 @@ add_library(doseph_core
   core/src/push.cpp
   core/src/mqtt.cpp
   core/src/coupling.cpp
+  core/src/devices.cpp
   core/src/service.cpp
   core/src/plants.cpp
   core/src/robot.cpp
@@ -88,7 +89,7 @@ endif()
 
 if(DP_BUILD_SIM)
   find_package(Threads REQUIRED)
-  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp sim/push.cpp sim/mqtt_link.cpp)
+  add_library(doseph_sim STATIC sim/world.cpp sim/simhw.cpp sim/simulation.cpp sim/folder_lock.cpp sim/push.cpp sim/mqtt_link.cpp sim/netdevices.cpp)
   target_include_directories(doseph_sim PUBLIC sim)
   target_link_libraries(doseph_sim PUBLIC doseph_core Threads::Threads)
   target_compile_options(doseph_sim PRIVATE ${DP_WARN})
@@ -130,6 +131,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_mqtt_link.cpp
     tests/core/test_coupling.cpp
     tests/core/test_locks.cpp
+    tests/core/test_devices.cpp
     tests/core/test_service.cpp
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp

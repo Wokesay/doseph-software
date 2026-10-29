@@ -171,11 +171,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-019 – Network sockets fail safe on their own
 
-- **Dropped:** the grow controller only (mains outlets on the network); not part of the mixing robot (SD-105).
-- **Rule:** When the robot takes over a smart plug it sets "off after power loss", and for pulse and heating roles it writes an auto-off timer into the plug a little above the software's maximum run time (about 1.11 ×). A role is bound only once these settings were read back, and they are checked again before every switch-on. Loads that run for hours (light, fans, a circulation pump) get no auto-off. Fans were the one exception to "off after power loss" on the grow controller: they came back on, since heat and humidity build up without them and fans carry no risk.
+- **Rule:** When the robot takes over the output of a smart plug or relay it sets "off after power loss" and "never on by itself", keeps the device's own input from switching it, and for a pulse role writes an auto-off timer into the device a little above the software's longest run (1.11 ×, rounded up to a whole minute). The output may switch only once these settings were read back, and they are read back again before every switch-on: once more written where they differ, and no switch-on where they still differ. Loads that run for hours (light, a circulation pump) get no auto-off.
 - **Why:** If the controller fails while a valve or pump is on, nothing switches it off any more – only a timer inside the device still acts. A device's settings can also be lost or changed, by a factory reset or in the maker's own app, so the robot reads them back instead of trusting them.
 - **Evidence:** Observed on the reference installation (2026): at first no smart relay had a fail-safe of its own. Device timers were then set, for example 90 s for the dosing pumps (above the 60 s software cap), 300 s for the CO2 valve and 1800 s for the inlet valve and the watering pump; loads running for hours got none, as a timer would cut the light in the middle of the day. A later read-back of every device found two that still restored their last state after a power loss and one planned auto-off that had never been set. The factor 1.11 for pulse roles is an assumption.
-- **Later:** step 9 (smart plugs).
+- **Implemented in:** `core/src/devices.cpp`, `core/src/gateway.cpp`
+- **Tests:** `tests/core/test_devices.cpp` "Devices: a Shelly output gets off after power loss, never on by itself, not switched by its own input, and a pulse role an auto-off at 1.11 times its longest run (SD-132, RAT-019)"; `tests/core/test_devices.cpp` "Devices: a Shelly relay bound as the refill valve gets its settings written and read back; it switches on only after a check, off at once, and again while it says on (SD-132, RAT-019)"
 
 ### RAT-020 – pH dosing only on plausible readings, and only while it has an effect
 
@@ -211,11 +211,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-024 – "Not present" is a finding, not a resting state
 
-- **Dropped:** the grow controller only (sensor slots on the bus); not part of the mixing robot (SD-105).
 - **Rule:** A measurement role with no device assigned has a state of its own, "not assigned": it never carries a value and is never used for control. Once a role is assigned, a device that disappears or stops answering is "offline", and the watchdog counts that as a problem.
 - **Why:** A sensor can vanish without any loud failure – renamed, replaced or removed. If "missing" counts as harmless, monitoring stays green while an input is gone.
 - **Evidence:** Observed on the reference installation (2026): sensors that disappeared were not counted as faults, so the overall health stayed green with a sensor missing.
-- **Later:** step 9 (sensors on network devices, assigned to roles). The robot's own probes come with its profile (SD-108).
+- **Implemented in:** `core/src/devices.cpp`, `core/src/robot.cpp`, `core/src/watchdog.cpp`
+- **Tests:** `tests/core/test_devices.cpp` "Devices: the float switch from a Shelly input, ESPHome or MQTT; offline, stale or unreadable it has no value (SD-132, RAT-024, R5)"; `tests/core/test_devices.cpp` "Devices: a device away is offline; back after a power loss its settings are checked again; a restart of the robot switches its outputs off (SD-132, RAT-024, R6)"
 
 ### RAT-025 – Control reads only validated values; no valid calibration, no control value
 

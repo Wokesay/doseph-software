@@ -16,6 +16,11 @@ if grep -rnE '(hw_?|hardware)(\.|->)(startRun|setFeedPump|allowReturnPump|stopAl
   err "actuator call outside the gateway"
 fi
 
+# R1 for network devices (SD-132): only the gateway switches an output or writes its settings.
+if grep -rnE '"Switch\.(Set|SetConfig|Toggle)"|\.(rpc|rpcAt|releaseRpc)\(' core/src | grep -v '^core/src/gateway.cpp'; then
+  err "a network output switched outside the gateway"
+fi
+
 # R2: the watchdog sees only the read model and the configuration: no hardware, no gateway, no cycle (RAT-074).
 if grep -nE '#include "doseph/(hardware|gateway|cycle|robot|truth|api|plan)\.hpp"' core/include/doseph/watchdog.hpp core/src/watchdog.cpp; then
   err "the watchdog has a path to actuators"

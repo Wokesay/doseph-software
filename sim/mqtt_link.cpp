@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "mqtt_link.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <optional>
@@ -153,6 +154,22 @@ void MqttLink::run() {
     sock = kNone;
     reader = doseph::MqttReader{};
   };
+  // The topics roles read (SD-132): subscribed once each while connected, new ones as they come
+  std::vector<std::string> subscribed;
+  std::uint16_t packetId = 0;
+  auto subscribeValues = [&] {
+    std::vector<std::string> topics;
+    {
+      std::lock_guard<std::recursive_mutex> l(sim_.mutex());
+      topics = sim_.robot().mqttValueTopics();
+    }
+    std::vector<std::string> fresh;
+    for (const auto& t : topics)
+      if (std::find(subscribed.begin(), subscribed.end(), t) == subscribed.end()) fresh.push_back(t);
+    if (fresh.empty()) return;
+    packetId = static_cast<std::uint16_t>(packetId % 65535 + 1);
+    if (sendAll(sock, doseph::mqttSubscribePacket(packetId, fresh))) subscribed.insert(subscribed.end(), fresh.begin(), fresh.end());
+  };
   auto publish = [&](const doseph::MqttMessage& m) {
     lastSent = Clock::now();
     return sendAll(sock, doseph::mqttPublishPacket(m.topic, m.payload, m.retain));
@@ -235,7 +252,10 @@ void MqttLink::run() {
       publish(state);
       lastState = state.payload;
       lastPublish = lastHeard = Clock::now();
-      // Commands need TLS (PD-461), which the simulator has not: it subscribes to nothing
+      // Commands need TLS (PD-461), which the simulator has not: it subscribes to no command topic.
+      // Values roles read come also without TLS (SD-130, SD-132).
+      subscribed.clear();
+      subscribeValues();
       continue;
     }
     std::string in;
@@ -246,7 +266,10 @@ void MqttLink::run() {
     if (!in.empty()) {
       lastHeard = Clock::now();
       reader.feed(in);
-      while (reader.next()) {
+      while (auto p = reader.next()) {
+        if (p->type != 3) continue;
+        std::lock_guard<std::recursive_mutex> l(sim_.mutex());
+        sim_.robot().mqttValue(p->topic, p->payload);
       }
       if (reader.broken()) {
         lost(doseph::say("mqtt.lost"));
@@ -257,6 +280,7 @@ void MqttLink::run() {
     // configuration changed (a canister or a recipe more or less)
     if (msSince(lastPublish) >= 2000) {
       lastPublish = Clock::now();
+      subscribeValues();
       std::vector<doseph::MqttMessage> discovery;
       doseph::MqttMessage state;
       {

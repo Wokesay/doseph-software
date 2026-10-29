@@ -929,30 +929,49 @@ watering follow with decisions of their own.
   - The robot switches network outputs only on Shelly devices of the
     second generation or later, over their local RPC interface. Their
     safety settings can be written and read back there.
-  - Gen1 Shelly devices and ESP relays are not switched.
-  - A device is added by its address and known by its own ID. The
-    address is only where it is reached now.
+  - Gen1 Shelly devices and ESP relays are not switched. A Shelly
+    without the RPC interface counts as the first generation.
+  - A device is added by its address and known by its own ID, which it
+    says at first contact and in every answer. The address is only where
+    it is reached now: another device answering there is offline and
+    says so. An address is added once.
   - A device with a password: the robot keeps the password apart from
     the configuration, never in a backup and never shown (as SD-124).
 - **Binding an output to a role** (RAT-019, RAT-060).
-  - The robot writes "off after power loss" into the output.
+  - The robot writes "off after power loss" and "never on by itself"
+    into the output. Where the device has an input of its own, the input
+    is detached from the output: the robot reads it as a value.
   - For a pulse role, such as the refill valve, it also writes an
     auto-off at 1.11 × the role's longest run, rounded up to a whole
     minute. A continuous role, such as the circulation pump, gets none.
-  - The role is bound only once both were read back as written.
+  - The output may switch only once these were read back as written.
   - Before every switch-on the robot reads them back again. If they
     differ it writes them once more; if they still differ, it does not
-    switch on, and the watchdog says why.
+    switch on, and the watchdog says why. It tries again after a minute.
+  - An output bound anew, or whose device was away, or that is on
+    without the robot having switched it after a check, is switched off
+    and its settings are checked before it may switch on. Off goes at
+    once, and again while the device still says on. A Stop and a start
+    switch every output off, whatever it said last.
+  - An answer counts only for the request it answers.
+  - An output let go (its role released or moved, its device removed or
+    moved, a backup restored) is switched off, and the off is repeated
+    until the device answers as itself; after a minute, or at once where
+    another device answers at its address, an alarm says it may still be
+    on. A want from before never switches a later binding on.
   - Every output switches only through the gateway (R1).
 - **Values from devices.** A role that reads a value (a float switch, a
   temperature) takes it from one of these:
   - a Shelly Gen2+, its inputs and sensors, read every 5 s;
-  - an ESPHome device's web server, read every 5 s;
+  - an ESPHome device's web server, read every 5 s, by the URLs of its
+    REST interface (`/binary_sensor/<id>`, `/sensor/<id>`; to be checked
+    with a real device before devices are offered);
   - an MQTT topic on the broker of SD-130 (ESPHome, Tasmota and others),
     as a plain value or a field of a JSON message.
-  - A polled value is stale 30 s after its last good answer. An MQTT
-    value counts while the broker connection stands and, where the
-    device has one, its availability topic says online.
+  - A polled value is stale 30 s after it was read. An MQTT value counts
+    while the broker connection stands and, where the device has one,
+    its availability topic says online; after an outage only once it
+    comes again.
   - A role with no device is "not assigned" and never has a value. An
     assigned device that stops answering is "offline", a problem
     (RAT-024). A missing value is never 0 (R5).

@@ -2,11 +2,13 @@
 #include "doseph/config.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <set>
 #include <stdexcept>
 
+#include "doseph/coupling.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/service.hpp"
 
@@ -151,6 +153,12 @@ double Config::canisterFlow(const CanisterCfg& b) const {
   return it == peerFlows.end() ? kNaN : it->second;
 }
 
+const NetDeviceCfg* Config::device(const std::string& id) const {
+  for (const auto& d : devices)
+    if (d.id == id) return &d;
+  return nullptr;
+}
+
 bool Config::reportsOnly(const std::string& kind) const {
   // Only a lock a person releases, whatever a configuration says: never leak or high level
   const auto& all = reportableLocks();
@@ -243,6 +251,12 @@ void to_json(json& j, const Config& c) {
   json setup = json::object();
   for (const auto& [id, m] : c.setup) setup[id] = {{"state", m.state}, {"at", m.at}};
   j["setup"] = setup;
+  json devices = json::array();
+  for (const auto& d : c.devices) devices.push_back(deviceToJson(d));
+  j["devices"] = devices;
+  json roles = json::object();
+  for (const auto& [id, b] : c.roles) roles[id] = bindingToJson(b);
+  j["roles"] = roles;
   j["probes"] = {{"ph", c.phCal}, {"ec", c.ecCal}};
 }
 
@@ -407,6 +421,8 @@ Config configFromJson(const json& in) {
     if (st && ((state == "done" && std::string(st->how) == "confirm") || (state == "skipped" && st->optional)))
       c.setup[id] = SetupMark{state, epochOr(m, "at")};
   }
+  for (const auto& d : arrayAt(j, "devices")) c.devices.push_back(deviceFromJson(d));
+  for (const auto& [id, b] : objectAt(j, "roles").items()) c.roles[id] = bindingFromJson(b);
   for (const auto& [key, v] : objectAt(j, "channels").items()) {
     int n = 0;
     try {
@@ -460,6 +476,54 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (kind == "hw.leak" || kind == "hw.high_level" || kind == "pump.cable") err(say("cfg.locks.always"));
     else if (std::find(all.begin(), all.end(), kind) == all.end()) err(say("cfg.locks.unknown", {{"lock", kind}}));
     else if (!reportOnly.insert(kind).second) err(say("cfg.locks.twice", {{"lock", say("lock." + kind)}}));
+  }
+
+  // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
+  std::set<std::string> deviceIds;
+  if (c.devices.size() > kMaxNetDevices) err(say("cfg.device.too_many", {{"max", kMaxNetDevices}}));
+  std::set<std::string> addresses;
+  for (const auto& d : c.devices) {
+    std::string addr = d.address;
+    std::transform(addr.begin(), addr.end(), addr.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (!addr.empty() && !addresses.insert(addr).second) err(say("cfg.device.twice", {{"name", d.name}}));
+    const bool idOk = d.id.size() >= 2 && d.id.size() <= 4 && d.id[0] == 'd' &&
+                      std::all_of(d.id.begin() + 1, d.id.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
+    if (!idOk || !deviceIds.insert(d.id).second) err(say("cfg.device.id", {{"id", d.id}}));
+    if (d.kind != "shelly" && d.kind != "esphome") err(say("cfg.device.kind", {{"name", d.name}}));
+    if (!peerAddress(d.address)) err(say("cfg.device.address", {{"name", d.name}}));
+    if (d.name.empty() || chars(d.name) > 40) err(say("cfg.device.name", {{"max", 40}}));
+  }
+  std::set<std::string> switches;
+  auto topicOk = [](const std::string& t) {
+    return !t.empty() && t.size() <= 200 && t.find_first_of("+#") == std::string::npos;
+  };
+  for (const auto& [role, b] : c.roles) {
+    const RoleDef* def = roleDef(role);
+    if (!def) {
+      err(say("cfg.role.unknown", {{"role", role}}));
+      continue;
+    }
+    const Msg name = say("role." + role);
+    const NetDeviceCfg* d = c.device(b.device);
+    if (def->kind == "output" && b.source != "shelly") err(say("cfg.role.output_shelly", {{"role", name}}));
+    if (b.source == "shelly" || b.source == "esphome") {
+      if (!d || d->kind != b.source) err(say("cfg.role.device", {{"role", name}}));
+    } else if (b.source == "mqtt") {
+      if (!topicOk(b.entity) || (!b.availability.empty() && !topicOk(b.availability)) || chars(b.field) > 60)
+        err(say("cfg.role.topic", {{"role", name}}));
+    } else {
+      err(say("cfg.role.source", {{"role", name}}));
+    }
+    if (b.source == "shelly" && (b.channel < 0 || b.channel > 15)) err(say("cfg.role.channel", {{"role", name}, {"max", 15}}));
+    if (b.source == "esphome") {
+      const size_t slash = b.entity.find('/');
+      const std::string domain = b.entity.substr(0, slash), object = slash == std::string::npos ? "" : b.entity.substr(slash + 1);
+      const bool objOk = !object.empty() && object.size() <= 64 &&
+                         std::all_of(object.begin(), object.end(), [](unsigned char ch) { return std::islower(ch) || std::isdigit(ch) || ch == '_'; });
+      if ((domain != "binary_sensor" && domain != "sensor") || !objOk) err(say("cfg.role.entity", {{"role", name}}));
+    }
+    if (def->kind == "output" && b.source == "shelly" && !switches.insert(b.device + ":" + std::to_string(b.channel)).second)
+      err(say("cfg.role.shared", {{"role", name}}));
   }
 
   const auto& t = c.tank;

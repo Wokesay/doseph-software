@@ -186,6 +186,15 @@ of its own.
 | The leader doses a canister on the follower's channel by the follower's calibration and books the result; a run there that does not end in time is booked as run; never more than one channel runs across both, and the follower's own channel jobs wait for the leader's maintenance | SD-131, PD-457 | ✓ | `gateway.cpp`, `robot.cpp`, `cycle.cpp` · test_coupling.cpp |
 | Without the follower its canisters are not planned; the watchdog shows the link and a difference of more than 0.3 pH or 0.2 mS/cm for 10 min between the devices | SD-131 | ✓ | `robot.cpp`, `watchdog.cpp` · test_coupling.cpp |
 
+## Network devices (SD-132)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| An output of a network device may switch only once "off after power loss", "never on by itself", its own input detached and, for a pulse role, an auto-off at 1.11 × its longest run read back as written; they are read back before every switch-on, written once more where they differ, and where they still differ it is not switched on | RAT-019 | ✓ | `devices.cpp`, `gateway.cpp` · test_devices.cpp |
+| A role without a device has no value; an assigned device that does not answer, a stale or unreadable value give none either, and the watchdog counts each as a problem | RAT-024 | ✓ | `devices.cpp`, `robot.cpp`, `watchdog.cpp` · test_devices.cpp |
+| Only the gateway switches a network output (R1, checked by `arch_check.sh`), and an answer counts only for the request it answers; off goes at once and again while the device says on; a Stop and a restart switch every output off; an output on without a check, bound anew, or whose device was away is switched off and checked before it switches on; an output let go is switched off until its device answers, with an alarm after a minute | SD-132, R1, R6 | ✓ | `gateway.cpp`, `robot.cpp` · test_devices.cpp |
+| Outputs are switched only on a Shelly of the second generation or later, known by its own ID: another device at its address is offline; values come from a Shelly, ESPHome's web server or an MQTT topic, MQTT only while connected and its availability says online, and after an outage only once it comes again; passwords live apart, never in a backup or an answer of the API; an import or a removal forgets what moved or went | SD-132 | ✓ | `devices.cpp`, `config.cpp`, `robot.cpp` · test_devices.cpp |
+
 ## Locks that report only (SD-133)
 
 | Rule | Rationale | Status | Implementation · tests |

@@ -32,6 +32,13 @@ struct WatchInput {
     bool coupled = false, leader = false, linkOk = false, deviation = false;
     std::string name;
   } peer{};
+  // The roles bound to network devices (SD-132): whether each works, and the text that says so
+  struct Role {
+    std::string id;
+    bool ok = false;
+    Msg text;
+  };
+  std::vector<Role> roles{};
 };
 
 struct Assessment {

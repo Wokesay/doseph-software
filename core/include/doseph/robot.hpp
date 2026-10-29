@@ -102,6 +102,21 @@ class Robot : public RemoteRuns {
   std::vector<PeerRequest> takePeerRequests();
   void peerResponse(long long id, int status, const json& body);
 
+  // ---- Network devices (SD-132): Shelly Gen2+, ESPHome, MQTT; roles bound to them
+  json devices() const;
+  Result addDevice(const json& j);
+  Result removeDevice(const std::string& id);
+  // A device's credentials {user, password}; kept apart from the configuration, never shown
+  Result putDeviceCredentials(const std::string& id, const json& j);
+  Result putRole(const std::string& role, const json& j);
+  Result deleteRole(const std::string& role);
+  // What the platform sends to the devices, and the answers it gets (status 0: not reached)
+  std::vector<NetRequest> takeDeviceRequests();
+  void deviceResponse(long long id, int status, const json& body);
+  // Logic says what it wants of an output role; the gateway decides (R1). False for a role that is
+  // not an output.
+  bool wantOutput(const std::string& role, bool on);
+
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
   Result createToken(const json& j);
@@ -195,6 +210,9 @@ class Robot : public RemoteRuns {
   // Counts each change of the settings: the platform connects anew when it moves
   int mqttRevision() const { return mqttRevision_; }
   void setMqttStatus(bool connected, const Msg& error);
+  // The MQTT topics roles read (SD-132), and a message on one of them
+  std::vector<std::string> mqttValueTopics() const;
+  void mqttValue(const std::string& topic, const std::string& payload);
   // What goes to the broker: the discovery configs and the state
   std::vector<MqttMessage> mqttDiscoveryMessages();
   MqttMessage mqttStateMessage();
@@ -286,6 +304,12 @@ class Robot : public RemoteRuns {
   void watchDeviation(const Ctx& c);
   bool savePeer();
   MqttSettings mqtt_;
+  NetDevices devices_;
+  NetOutputs outputs_;
+  bool saveDeviceSecrets();
+  void reconcileDevices(const Config& before);
+  // The roles' states for the watchdog: each bound role, whether it works, and why not
+  std::vector<WatchInput::Role> roleStates(Ms now) const;
   int mqttRevision_ = 0;
   json mqttStatus_ = {{"connected", false}, {"error", nullptr}, {"at", 0}};
   std::vector<Delivery> deliveries_;

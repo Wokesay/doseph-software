@@ -3,8 +3,8 @@
 // and what was notified, the password, access tokens, backup and restore,
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
-import { ApiError, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
+import { Bell, Bug, Cable, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { ApiError, DEVICE_ROLES, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type Devices, type RoleBinding, type RoleSource, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang, type TextKey } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
@@ -538,6 +538,239 @@ function MqttCard() {
   );
 }
 
+// Network devices (SD-132): Shelly Gen2+ and ESPHome devices by their address, and the roles bound
+// to them. An output only on a Shelly; the robot reads its safety settings back before it switches it.
+function DevicesCard() {
+  const [d, setD] = useState<Devices | null>(null);
+  const [kind, setKind] = useState<"shelly" | "esphome">("shelly");
+  const [address, setAddress] = useState("");
+  const [name, setName] = useState("");
+  const load = () => get<Devices>("/devices").then(setD).catch(() => {});
+  useEffect(() => {
+    load();
+    const id = window.setInterval(load, 5000);
+    return () => window.clearInterval(id);
+  }, []);
+  if (!d) return null;
+  const add = async () => {
+    try {
+      await post("/devices", { kind, address: address.trim(), name: name.trim() });
+      setAddress("");
+      setName("");
+      await refreshConfig();
+      await load();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const remove = async (id: string, label: string) => {
+    if (!confirm(t("settings.devices.removeAsk", { name: label }))) return;
+    try {
+      await del(`/devices/${encodeURIComponent(id)}`);
+      await refreshConfig();
+      await load();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const [login, setLogin] = useState<{ id: string; user: string; password: string } | null>(null);
+  const saveLogin = async () => {
+    if (!login) return;
+    try {
+      await put(`/devices/${encodeURIComponent(login.id)}/credentials`, { user: login.user, password: login.password });
+      setLogin(null);
+      await load();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Card title={t("settings.devices")} icon={<Cable size={18} />}>
+      <div class="stack" data-testid="devices">
+        <p class="muted small">{t("settings.devices.intro")}</p>
+        {d.devices.length > 0 && (
+          <div class="list">
+            {d.devices.map((x) => (
+              <div class="item wrap-row" data-testid={`device-${x.id}`}>
+                <div class="grow">
+                  <div class="title">
+                    {x.name} <span class="muted small">{x.kind === "shelly" ? "Shelly" : "ESPHome"} · <span class="mono">{x.address}</span></span>
+                  </div>
+                  <div class="small">
+                    {!x.polled ? (
+                      <Pill>{t("settings.devices.unused")}</Pill>
+                    ) : x.online ? (
+                      <Pill tone="ok">{t("settings.devices.online")}</Pill>
+                    ) : (
+                      <Pill tone="bad">{t("settings.devices.offline")}</Pill>
+                    )}{" "}
+                    {x.problem && <span class="muted">{msg(x.problem)}</span>}
+                  </div>
+                  {login?.id === x.id && (
+                    <div class="form-grid">
+                      {x.kind === "esphome" && (
+                        <Field label={t("settings.push.user")}>
+                          <input class="input" name="device-user" value={login.user} autoCapitalize="off" spellcheck={false} onInput={(e) => setLogin({ ...login, user: (e.target as HTMLInputElement).value })} />
+                        </Field>
+                      )}
+                      <Field label={t("settings.push.password")} hint={t("settings.devices.passwordHint")}>
+                        <input class="input" type="password" name="device-password" autoComplete="new-password" value={login.password} onInput={(e) => setLogin({ ...login, password: (e.target as HTMLInputElement).value })} />
+                      </Field>
+                      <div class="row">
+                        <Button size="sm" variant="primary" onClick={saveLogin}>
+                          {t("common.save")}
+                        </Button>
+                        <Button size="sm" onClick={() => setLogin(null)}>
+                          {t("common.cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div class="row-actions">
+                  <Button size="sm" onClick={() => setLogin({ id: x.id, user: "", password: "" })}>
+                    {x.hasPassword ? t("settings.devices.passwordSet") : t("settings.devices.password")}
+                  </Button>
+                  <Button size="sm" onClick={() => remove(x.id, x.name)}>
+                    {t("settings.devices.remove")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div class="form-grid">
+          <Field label={t("settings.devices.kind")}>
+            <Seg value={kind} onChange={setKind} options={[["shelly", "Shelly"], ["esphome", "ESPHome"]]} />
+          </Field>
+          <Field label={t("settings.devices.address")}>
+            <input class="input" name="device-address" value={address} placeholder="shelly-1.local" autoCapitalize="off" spellcheck={false} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
+          </Field>
+          <Field label={t("settings.devices.name")}>
+            <input class="input" name="device-name" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+          </Field>
+        </div>
+        <div>
+          <Button variant="primary" onClick={add} disabled={!address.trim() || !name.trim()} data-testid="add-device">
+            {t("settings.devices.add")}
+          </Button>
+        </div>
+        <div class="section-title">{t("settings.devices.roles")}</div>
+        {DEVICE_ROLES.map((r) => (
+          <RoleRow key={`${r}${JSON.stringify(d.roles[r]?.binding)}`} role={r} devices={d} reload={load} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; reload: () => unknown }) {
+  const info = p.devices.roles[p.role];
+  const output = info?.kind === "output";
+  const blank: RoleBinding = { source: "shelly", device: "", channel: 0, entity: "", field: "", invert: false, availability: "" };
+  const [b, setB] = useState<RoleBinding>(info?.binding ?? blank);
+  const set = (patch: Partial<RoleBinding>) => setB({ ...b, ...patch });
+  const fits = p.devices.devices.filter((x) => x.kind === b.source);
+  const state = output ? info?.output?.state : info?.state;
+  const problem = output ? info?.output?.problem : null;
+  const save = async () => {
+    try {
+      await put(`/roles/${p.role}`, b);
+      await refreshConfig();
+      await p.reload();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const release = async () => {
+    try {
+      await del(`/roles/${p.role}`);
+      await refreshConfig();
+      await p.reload();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const sources: [RoleSource, string][] = output ? [["shelly", "Shelly"]] : [["shelly", "Shelly"], ["esphome", "ESPHome"], ["mqtt", "MQTT"]];
+  return (
+    <div class="stack-sm" data-testid={`role-${p.role}`}>
+      <div class="row" style="justify-content:space-between">
+        <strong>{t(`settings.devices.role.${p.role}` as TextKey)}</strong>
+        <span class="small" data-testid={`role-state-${p.role}`}>
+          {info?.binding ? (
+            <Pill tone={state === "ok" || state === "on" || state === "off" ? "ok" : state === "checking" || state === "waiting" ? "info" : "bad"}>
+              {t(`settings.devices.state.${state ?? "not_assigned"}` as TextKey)}
+              {!output && state === "ok" ? `: ${typeof info?.value === "boolean" ? t(info.value ? "settings.devices.yes" : "settings.devices.no") : String(info?.value)}` : ""}
+            </Pill>
+          ) : (
+            <span class="muted">{t("settings.devices.state.not_assigned")}</span>
+          )}
+        </span>
+      </div>
+      {problem && <span class="muted small">{msg(problem)}</span>}
+      <div class="form-grid">
+        <Field label={t("settings.devices.source")}>
+          <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
+        </Field>
+        {b.source !== "mqtt" && (
+          <Field label={t("settings.devices.device")}>
+            <select class="input" name={`role-device-${p.role}`} value={b.device} onChange={(e) => set({ device: (e.target as HTMLSelectElement).value })}>
+              <option value="">–</option>
+              {fits.map((x) => (
+                <option value={x.id}>{x.name}</option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {b.source === "shelly" && (
+          <Field label={output ? t("settings.devices.output") : t("settings.devices.input")}>
+            <input class="input" name={`role-channel-${p.role}`} inputMode="numeric" value={String(b.channel)} onInput={(e) => set({ channel: Number((e.target as HTMLInputElement).value) || 0 })} />
+          </Field>
+        )}
+        {b.source === "esphome" && (
+          <Field label={t("settings.devices.entity")}>
+            <input class="input mono" name={`role-entity-${p.role}`} value={b.entity} placeholder="binary_sensor/tank_full" autoCapitalize="off" spellcheck={false} onInput={(e) => set({ entity: (e.target as HTMLInputElement).value })} />
+          </Field>
+        )}
+        {b.source === "mqtt" && (
+          <>
+            <Field label={t("settings.devices.topic")}>
+              <input class="input mono" name={`role-topic-${p.role}`} value={b.entity} autoCapitalize="off" spellcheck={false} onInput={(e) => set({ entity: (e.target as HTMLInputElement).value })} />
+            </Field>
+            <Field label={t("settings.devices.field")}>
+              <input class="input mono" name={`role-field-${p.role}`} value={b.field} autoCapitalize="off" spellcheck={false} onInput={(e) => set({ field: (e.target as HTMLInputElement).value })} />
+            </Field>
+            <Field label={t("settings.devices.availability")}>
+              <input class="input mono" name={`role-availability-${p.role}`} value={b.availability} autoCapitalize="off" spellcheck={false} onInput={(e) => set({ availability: (e.target as HTMLInputElement).value })} />
+            </Field>
+          </>
+        )}
+      </div>
+      {!output && (
+        <label class="row small" style="gap:6px">
+          <Toggle checked={b.invert} onChange={(v) => set({ invert: v })} label={t("settings.devices.invert")} />
+          {t("settings.devices.invert")}
+        </label>
+      )}
+      {output && info?.pulse && <p class="muted small">{t("settings.devices.autoOff", { min: Math.round((info?.autoOffS ?? 0) / 60) })}</p>}
+      {output && <p class="muted small">{t("settings.devices.detached")}</p>}
+      <div class="row">
+        <Button size="sm" variant="primary" onClick={save} data-testid={`save-role-${p.role}`}>
+          {t("settings.devices.assign")}
+        </Button>
+        {info?.binding && (
+          <Button size="sm" onClick={release}>
+            {t("settings.devices.release")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Locks a person releases may only report, for operations that watch in their own way (SD-133).
 // Leak, high level, Stop and the limits always hold; the card says so.
 function LocksCard() {
@@ -860,6 +1093,7 @@ export function SettingsPage() {
       <NotifyCard key={`n${rev}`} />
       <PushCard />
       <MqttCard />
+      <DevicesCard />
       <CouplingCard />
       <PasswordCard />
       <TokensCard />

@@ -58,6 +58,8 @@ WatchResult evaluate(const WatchInput& in) {
     else
       add("coupling.link", label, "ok", say("watch.coupling.ok", {{"name", in.peer.name}}));
   }
+  // Network devices (SD-132): a bound role that does not work is a problem (RAT-024)
+  for (const auto& r : in.roles) add("role." + r.id, say("role." + r.id), r.ok ? "ok" : "problem", r.text);
   if (const Reading* f = find(in, "flow")) {
     const Msg label = say("watch.flow");
     if (in.stopped || !in.needsFlow) add("flow", label, "neutral", say("watch.flow_not_needed"));
