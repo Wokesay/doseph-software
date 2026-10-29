@@ -65,7 +65,11 @@ export type ServiceItem = { id: string; kind: string; channel: number; days: num
 export type ServicePlan = { dates: number[]; items: ServiceItem[] };
 
 // Plants and their phases (SD-128)
-export type PlantPhase = { name: string; days: number; confirm: boolean; recipe: string; ecTarget: number | null; ph: [number, number] | null };
+// `shotsPerDay`, `shotS`: for a watering circuit that follows the plant (SD-134); null: the circuit's own
+export type PlantPhase = {
+  name: string; days: number; confirm: boolean; recipe: string; ecTarget: number | null; ph: [number, number] | null;
+  shotsPerDay?: number | null; shotS?: number | null;
+};
 export type PlantRecipe = { id: string; name: string; note: string; phases: PlantPhase[] };
 export type Plant = {
   id: string; name: string; from: string; phases: PlantPhase[]; start: number; phase: number; phaseStart: number;
@@ -130,6 +134,8 @@ export type RobotState = {
     // `anyway`: only the water stands in the way, which a person may water over (RAT-086)
     circuits: {
       id: string; running: boolean; due: boolean; paused: boolean; nextAt: number | null; nextS: number | null; dayS: number;
+      // The plant it follows, its current phase and the shots that gives; null: it follows none
+      plant: { id: string; name: string; phase: string | null; shotsPerDay: number; shotS: number } | null;
       // `upTo`: cut by a restart, it ran this long at most
       last: { at: number; s: number; l: number | null; end: Msg; override?: boolean; upTo?: boolean } | null; blocked: Msg | null; hand: Msg | null; anyway: boolean;
     }[];
@@ -303,6 +309,7 @@ export type WaterCircuit = {
   id: string; name: string; mode: "window" | "times" | "interval" | "manual";
   fromMin: number; toMin: number; shotsPerDay: number; shotS: number; times: { atMin: number; s: number }[]; everyMin: number;
   longestS: number; rateLpm: number | null; dailyMaxS: number | null; paused: boolean;
+  plant: string;  // window: the plant whose current phase sets shots a day and their length; "": none
 };
 
 /** The circulation pump runs during a dose, its mixing wait and a fill, or always (SD-132). */

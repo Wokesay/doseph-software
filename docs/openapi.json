@@ -5095,6 +5095,19 @@
               "number",
               "null"
             ]
+          },
+          "shotsPerDay": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "For a watering circuit with a time window that follows the plant (SD-134); null: the circuit's own"
+          },
+          "shotS": {
+            "type": [
+              "number",
+              "null"
+            ]
           }
         }
       },
@@ -5673,6 +5686,10 @@
           },
           "paused": {
             "type": "boolean"
+          },
+          "plant": {
+            "type": "string",
+            "description": "window: the plant whose current phase sets shots a day and their length where it has them (SD-134); empty: none"
           }
         },
         "required": [

@@ -1166,6 +1166,9 @@ Result Robot::deletePlant(const std::string& id) {
   const std::string name = was->name;
   Config next = cfg_;
   next.plants.erase(std::remove_if(next.plants.begin(), next.plants.end(), [&](const PlantCfg& p) { return p.id == id; }), next.plants.end());
+  // A circuit that followed it keeps its own shots (SD-134)
+  for (auto& w : next.watering.circuits)
+    if (w.plant == id) w.plant.clear();
   return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
 }
 

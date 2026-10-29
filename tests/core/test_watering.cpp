@@ -621,3 +621,76 @@ TEST_CASE("Watering: a due shot that waits an hour lapses; the next comes by the
   CHECK_FALSE(circuitState(r, "w1")["due"].get<bool>());
   CHECK(watering(r)["running"] == "w2");
 }
+
+TEST_CASE("Watering: a window that follows a plant takes shots a day and the length of a shot from the plant's current phase where it has them, never past its longest shot; without a running plant its own (SD-134, RAT-076)") {
+  doseph::Config cfg;
+  doseph::PhaseCfg grow, bloom;
+  grow.name = "Growth";
+  grow.shotsPerDay = 4;
+  grow.shotS = 45;
+  bloom.name = "Bloom";
+  bloom.shotS = 900;  // past the circuit's longest
+  doseph::PlantCfg p;
+  p.id = "p1";
+  p.name = "Bed 1";
+  p.phases = {grow, bloom};
+  cfg.plants = {p};
+  doseph::WaterCircuitCfg w;
+  w.mode = "window";
+  w.shotsPerDay = 6;
+  w.shotS = 60;
+  w.longestS = 120;
+  w.plant = "p1";
+  doseph::WaterCircuitCfg e = doseph::effectiveCircuit(cfg, w);
+  CHECK(e.shotsPerDay == 4);
+  CHECK(e.shotS == 45);
+  cfg.plants[0].phase = 1;  // shots a day not set: the circuit's own
+  e = doseph::effectiveCircuit(cfg, w);
+  CHECK(e.shotsPerDay == 6);
+  CHECK(e.shotS == 120);
+  cfg.plants[0].completedAt = 1;  // done: the circuit's own
+  e = doseph::effectiveCircuit(cfg, w);
+  CHECK(e.shotsPerDay == 6);
+  CHECK(e.shotS == 60);
+  cfg.plants[0].completedAt = 0;
+  cfg.plants[0].phase = 0;
+  w.mode = "interval";  // only a window follows a plant
+  CHECK(doseph::effectiveCircuit(cfg, w).shotS == 60);
+}
+
+TEST_CASE("Watering: a circuit follows a plant over the API; only a window follows one that exists, a phase's shots are in bounds, and a plant deleted lets the circuit go (SD-134)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "window"}, {"fromMin", 0}, {"toMin", 0}, {"shotsPerDay", 6}, {"shotS", 60}});
+  json pr = {{"name", "Tomatoes"},
+             {"phases", json::array({{{"name", "Growth"}, {"days", 21}, {"recipe", "two_part"}, {"shotsPerDay", 12}, {"shotS", 30}},
+                                     {{"name", "Fruit"}, {"days", 56}, {"recipe", "two_part"}}})}};
+  json bad = pr;
+  bad["phases"][0]["shotsPerDay"] = 0;
+  CHECK(r.call("PUT", "plant-recipes", bad).status == 422);
+  bad = pr;
+  bad["phases"][0]["shotS"] = 24 * 3600 + 1;
+  CHECK(r.call("PUT", "plant-recipes", bad).status == 422);
+  const std::string prId = r.ok("PUT", "plant-recipes", pr)["id"];
+  const std::string plant = r.ok("POST", "plants", {{"name", "Bed 1"}, {"plantRecipe", prId}})["id"];
+  const json w1 = {{"id", "w1"}, {"name", "Tent"}, {"mode", "window"}, {"fromMin", 0}, {"toMin", 0}, {"shotsPerDay", 6}, {"shotS", 60}, {"rateLpm", 2}, {"longestS", 120}};
+  json linked = w1;
+  linked["plant"] = "nope";
+  CHECK(r.call("PUT", "watering/circuits", linked).status == 422);
+  linked["plant"] = plant;
+  linked["mode"] = "interval";
+  CHECK(r.call("PUT", "watering/circuits", linked).status == 422);
+  linked["mode"] = "window";
+  r.ok("PUT", "watering/circuits", linked);
+  json c = circuitState(r, "w1");
+  CHECK(c["plant"]["name"] == "Bed 1");
+  CHECK(c["plant"]["phase"] == "Growth");
+  CHECK(c["plant"]["shotsPerDay"] == 12);
+  CHECK(c["nextS"] == 30);
+  CHECK(c["nextAt"].get<doseph::Epoch>() - r.s.clock().epoch() <= 120 * 60);  // every 2 h over the day
+  r.ok("DELETE", "plants/" + plant);
+  CHECK(r.ok("GET", "config")["watering"]["circuits"][0]["plant"] == "");
+  c = circuitState(r, "w1");
+  CHECK(c["plant"].is_null());
+  CHECK(c["nextS"] == 60);
+}
+

@@ -17,6 +17,8 @@ namespace doseph {
 
 struct Ctx;
 class NetOutputs;
+struct Config;
+struct PhaseCfg;
 struct WaterCircuitCfg;
 
 constexpr Ms kWaterOpenMs = kMinute;      // a circuit that did not say "on" by then ends its shot
@@ -111,6 +113,13 @@ class Watering {
 
 // The length of a circuit's shot due at this local minute; nothing when none is
 std::optional<double> shotAt(const WaterCircuitCfg& w, int minuteOfDay);
+
+// The phase of the plant a circuit follows, while the plant runs; nothing otherwise (SD-134)
+const PhaseCfg* followedPhase(const Config& cfg, const WaterCircuitCfg& w);
+// The circuit as its schedule waters: a window that follows a plant takes shots a day and the length
+// of a shot from the plant's current phase where the phase has them, the length never past the
+// circuit's longest shot (RAT-076)
+WaterCircuitCfg effectiveCircuit(const Config& cfg, const WaterCircuitCfg& w);
 
 // A circuit's next shot after this local minute: in how many minutes (1 to a day) and how long;
 // nothing by hand only. By the local clock as it is now: a change of the clocks moves it.

@@ -5,7 +5,7 @@
 // anyway after a confirmation that names why (RAT-086). An empty tank, Stop or a dose stop even that.
 import { useEffect, useState } from "preact/hooks";
 import { Droplets, Plus, Trash2 } from "lucide-preact";
-import { del, get, post, put, type Devices, type WaterCircuit } from "../api";
+import { del, get, post, put, type Devices, type Plants, type WaterCircuit } from "../api";
 import { ago, duration, num, time } from "../format";
 import { msg, t } from "../i18n";
 import { config, refreshConfig, refreshState, state, toast, toastError } from "../store";
@@ -129,8 +129,14 @@ function ReserveCard() {
 // A circuit's settings, for a new one or a change; its output is assigned once it is saved. A pause
 // is not part of it: only the switch on the card sets one, so a change never ends one made elsewhere.
 function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null; reload: () => unknown; onClose: () => void }) {
-  const blank: Form = { id: "", name: "", mode: "manual", fromMin: 480, toMin: 1200, shotsPerDay: 6, shotS: 60, times: [], everyMin: 240, longestS: 300, rateLpm: null, dailyMaxS: null };
-  const [c, setC] = useState<Form>(p.circuit ? { ...p.circuit } : blank);
+  const blank: Form = { id: "", name: "", mode: "manual", fromMin: 480, toMin: 1200, shotsPerDay: 6, shotS: 60, times: [], everyMin: 240, longestS: 300, rateLpm: null, dailyMaxS: null, plant: "" };
+  const [c, setC] = useState<Form>(p.circuit ? { ...p.circuit, plant: p.circuit.plant ?? "" } : blank);
+  const [plants, setPlants] = useState<Plants["plants"]>([]);
+  useEffect(() => {
+    get<Plants>("/plants")
+      .then((d) => setPlants(d.plants))
+      .catch(() => {});
+  }, []);
   const [id, setId] = useState(p.circuit?.id ?? "");
   const set = (patch: Partial<Form>) => setC({ ...c, ...patch });
   const running = !!id && state.value?.watering.running === id;
@@ -145,7 +151,8 @@ function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null;
   const save = async () => {
     try {
       // What the schedule does not use and is empty stays as it was
-      const body: Record<string, unknown> = { ...c, name: c.name.trim() };
+      // Only a window follows a plant (SD-134)
+      const body: Record<string, unknown> = { ...c, name: c.name.trim(), plant: c.mode === "window" ? c.plant : "" };
       for (const k of ["longestS", "shotS", "shotsPerDay", "everyMin"] as const) if (c[k] == null) delete body[k];
       if (id) body.id = id;
       else delete body.id;
@@ -242,6 +249,16 @@ function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null;
               <p class="muted small" data-testid="window-shots">
                 {t("watering.windowShots", { list: preview.map(hhmm).join(", ") })}
               </p>
+            )}
+            {plants.length > 0 && (
+              <Field label={t("watering.plant")} hint={t("watering.plantHint")}>
+                <select class="select input" name="circuit-plant" value={c.plant} onChange={(e) => set({ plant: (e.target as HTMLSelectElement).value })}>
+                  <option value="">{t("watering.plantNone")}</option>
+                  {plants.map((x) => (
+                    <option value={x.id}>{x.name}</option>
+                  ))}
+                </select>
+              </Field>
             )}
           </>
         )}
@@ -390,6 +407,16 @@ function CircuitCard(p: { c: WaterCircuit; devices: Devices | null; onEdit: () =
           <span class="muted">{t("watering.mode")}: </span>
           <span data-testid={`circuit-schedule-${p.c.id}`}>{schedule(p.c)}</span>
         </div>
+        {s?.plant && (
+          <div>
+            <span class="muted">{t("watering.plant")}: </span>
+            <span data-testid={`circuit-plant-${p.c.id}`}>
+              {s.plant.phase != null
+                ? t("watering.follows", { plant: s.plant.name, phase: s.plant.phase, n: s.plant.shotsPerDay, s: s.plant.shotS })
+                : t("watering.followsDone", { plant: s.plant.name })}
+            </span>
+          </div>
+        )}
         {s?.nextAt != null && s.nextS != null && (
           <div>
             <span class="muted">{t("watering.next")}: </span>

@@ -149,6 +149,8 @@ struct WaterCircuitCfg {
   double rateLpm = kNaN;                  // what it gives, for the count; NaN: not known
   double dailyMaxS = kNaN;                // its run time per local day; NaN: none
   bool paused = false;                    // its schedule rests; by hand it still waters
+  std::string plant;                      // window: a plant whose current phase sets shots a day
+                                          // and their length where it has them (RAT-076)
 };
 struct WateringCfg {
   double reservePct = 20;  // what stays in the tank, of its volume; never below 10 % (RAT-067)
@@ -218,6 +220,10 @@ struct PhaseCfg {
   std::string recipe;
   double ecTarget = kNaN;
   double phLow = kNaN, phHigh = kNaN;
+  // Watering (SD-134): shots a day and the length of a shot for a circuit linked to the plant; 0 and
+  // NaN: not set, the circuit's own hold
+  int shotsPerDay = 0;
+  double shotS = kNaN;
 };
 
 // A plant recipe: the phases a plant goes through (SD-128)
