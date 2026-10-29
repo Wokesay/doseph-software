@@ -435,6 +435,8 @@ struct RuntimeState {
   // amount is not known, and the litres watering gave. They only grow; a plant keeps where they
   // stood at its start, so its record is the difference (RAT-064, SD-138).
   struct Count {
+    std::string id;     // random when the count began: a plant's record compares it, so a count
+                        // begun anew (lost, or another device's) never passes for its own
     Epoch since = 0;
     std::map<std::string, double> ml;
     std::map<std::string, int> unknown;

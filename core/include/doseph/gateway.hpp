@@ -188,7 +188,9 @@ class Doser {
   // What runs now (SD-111): the line pulled back last time filled again, a run of the dose, or
   // the line pulled back after its last run
   enum class Leg { Refill, Dose, PullBack };
-  void book(const Ctx& c, Ms ms);
+  // `known`: the run time was reported; a guess (no answer, a lost link, an abort without a report)
+  // is booked to the stock and the daily amount, and counts as not known for the plants' records
+  void book(const Ctx& c, Ms ms, bool known = true);
   void logOrder(const Ctx& c);
   bool launch(const Ctx& c, Actuators& act);
   bool pullBack(const Ctx& c, Actuators& act);

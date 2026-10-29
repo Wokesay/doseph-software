@@ -301,9 +301,6 @@ void Robot::boot() {
       stateUnknown = true;
     }
   }
-  // The tank's count for the plants' records: a new one where none could be read, so a plant that
-  // kept the old one knows its amounts are lost (RAT-064)
-  if (rt_.count.since == 0) rt_.count.since = std::max<Epoch>(clock_.epoch(), 1);
   if (auto s = store_.read(kAuthFile)) {
     const json j = json::parse(*s, nullptr, false);
     if (j.is_object()) auth_.load(j);
@@ -334,6 +331,15 @@ void Robot::boot() {
   clock_.start(rt_.clock, log_.newestTs(), rt_.bootCount);
   bootEpoch_ = clock_.epoch();
   bootMs_ = clock_.nowMs();
+  // The tank's count for the plants' records: a new one where none could be read, with an ID of its
+  // own, so a plant that kept the old one knows its amounts are lost (RAT-064)
+  if (rt_.count.id.empty()) {
+    std::uint8_t b[8];
+    rng_(b, sizeof b);
+    rt_.count = RuntimeState::Count{};
+    rt_.count.id = toHex(b, sizeof b);
+    rt_.count.since = bootEpoch_;
+  }
   climate_.start(bootMs_);  // the dehumidifier rests, and CO2 waits for a value read since (SD-136)
   lastSnapshot_ = bootEpoch_;
   doser_.setBootTag(std::to_string(rt_.bootCount));
@@ -375,6 +381,8 @@ void Robot::boot() {
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
+    // How much went in is not known: the plants' records say so (RAT-064, R5)
+    if (r.intoTank()) rt_.count.unknown[r.canister]++;
     if (r.intoTank())
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
                say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});

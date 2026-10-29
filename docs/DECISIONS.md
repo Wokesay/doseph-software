@@ -1442,8 +1442,10 @@ summary (RAT-064) and the proposals a new plant recipe starts from
 - **What is counted.** The device counts what went into the tank: per
   canister the ml of doses and line fills, and the litres watering gave.
   A run or a shot whose amount is not known is counted as such, never as
-  nothing (R5). The counts only grow and are kept in the run-time state,
-  which a dose already writes; a count that cannot be read starts again.
+  nothing (R5): one whose run time was guessed (no answer, a lost link,
+  an abort without a report) and one cut by a restart. The counts only grow and are kept in the run-time state,
+  which a dose already writes. A count that cannot be read starts again
+  with an ID of its own, so it never passes for the old one.
 - **Per plant.** A plant keeps where the counts stood at its start. Its
   amounts are the difference at its end. Plants on one tank share its
   water, so the amounts are the tank's, and the record names the plants
@@ -1458,7 +1460,9 @@ summary (RAT-064) and the proposals a new plant recipe starts from
   - the litres watered;
   - the plants beside it.
 
-  Later changes of canisters or plants do not change it.
+  Later changes of canisters or plants do not change it. Where a plant
+  started on a day before the device counted it, the record says from
+  when its amounts are counted.
 - **Not known is said.** Amounts that were not counted (a plant started
   before this change) or whose count was lost (a damaged state, a backup
   restored on another device) are not known, never 0. So are the days of a

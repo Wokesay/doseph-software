@@ -177,7 +177,7 @@ json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count
     const auto at = static_cast<size_t>(i);
     const Epoch from = at < p.began.size() ? p.began[at] : 0;
     const Epoch to = i < p.phase ? (at + 1 < p.began.size() ? p.began[at + 1] : 0) : localDaysLater(lastDay, 1, zone);
-    phases.push_back({{"name", p.phases[at].name}, {"days", from > 0 && to > from ? json(daysBetween(from, to)) : json(nullptr)}});
+    phases.push_back({{"name", p.phases[at].name}, {"days", from > 0 && to >= from ? json(daysBetween(from, to)) : json(nullptr)}});
   }
   json r = {{"from", p.start},
             {"to", end},
@@ -186,8 +186,8 @@ json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count
             {"phases", phases}};
   // The tank's amounts while it ran: the difference to where they stood at its start
   const json& c = p.counted;
-  const bool counted = c.is_object() && c.contains("since") && c["since"].is_number_integer();
-  const bool same = counted && now.since != 0 && c["since"].get<Epoch>() == now.since;
+  const bool counted = c.is_object() && c.contains("id") && c["id"].is_string();
+  const bool same = counted && !now.id.empty() && c["id"].get<std::string>() == now.id;
   r["countedFrom"] = counted && c.contains("at") && c["at"].is_number_integer() ? c["at"] : json(nullptr);
   r["countLost"] = counted && !same;
   json canisters = json::array();

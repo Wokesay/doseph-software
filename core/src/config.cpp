@@ -41,6 +41,25 @@ const json& objectAt(const json& j, const char* key) {
   return j[key];
 }
 
+// A plant's record as it was frozen (RAT-064), or null where its shape is not that of one: the app
+// reads its lists and numbers as they are
+json recordOrNull(const json& r) {
+  if (!r.is_object()) return nullptr;
+  for (const char* k : {"phases", "canisters", "with"})
+    if (!r.contains(k) || !r[k].is_array()) return nullptr;
+  for (const char* k : {"from", "to", "days"})
+    if (!r.contains(k) || !r[k].is_number()) return nullptr;
+  for (const auto& ph : r["phases"])
+    if (!ph.is_object() || !ph.contains("name") || !ph["name"].is_string()) return nullptr;
+  for (const auto& b : r["canisters"])
+    if (!b.is_object() || !b.contains("name") || !b["name"].is_string() || !b.contains("ml") || !b["ml"].is_number() || !b.contains("unknown") ||
+        !b["unknown"].is_number_integer())
+      return nullptr;
+  for (const auto& n : r["with"])
+    if (!n.is_string()) return nullptr;
+  return r;
+}
+
 const json& arrayAt(const json& j, const char* key) {
   static const json empty = json::array();
   if (!j.contains(key) || j[key].is_null()) return empty;
@@ -688,14 +707,14 @@ Config configFromJson(const json& in) {
       if (!b.is_number_integer()) throw std::invalid_argument("a phase's start is not a time");
       x.began.push_back(b.get<Epoch>());
     }
-    if (x.began.empty()) {
-      x.began.assign(static_cast<size_t>(std::max(x.phase, 0)) + 1, 0);
+    if (x.began.empty() && x.phase >= 0 && x.phase < static_cast<int>(x.phases.size())) {
+      x.began.assign(static_cast<size_t>(x.phase) + 1, 0);
       x.began.front() = x.start;
       x.began.back() = x.phaseStart;
     }
     x.yieldG = numOrNaN(p, "yieldG");
     if (p.contains("counted") && p["counted"].is_object()) x.counted = p["counted"];
-    if (p.contains("record") && p["record"].is_object()) x.record = p["record"];
+    if (x.completedAt != 0) x.record = recordOrNull(p.contains("record") ? p["record"] : json());
     c.plants.push_back(std::move(x));
   }
   c.lead = jstr(j, "lead");
@@ -939,6 +958,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (p.name.empty() || chars(p.name) > 40) err(say("cfg.plant.name"));
     checkPhases(p.name, p.phases);
     if (p.phase < 0 || p.phase >= static_cast<int>(p.phases.size())) err(say("cfg.plant.phase", {{"name", p.name}}));
+    if (p.began.size() > p.phases.size()) err(say("cfg.plant.phase", {{"name", p.name}}));
+    if (isNum(p.yieldG) && (p.yieldG < 0 || p.yieldG > kYieldMaxG)) err(say("plant.yield"));
   }
   if (!c.lead.empty() && !c.plant(c.lead)) err(say("cfg.plant.lead"));
   if (!c.tank.system.empty() &&
@@ -959,16 +980,17 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
 json countJson(const RuntimeState::Count& c) {
   json ml = json::object();
   for (const auto& [k, v] : c.ml) ml[k] = numOrNull(v);
-  return {{"since", c.since}, {"ml", ml}, {"unknown", c.unknown}, {"wateredL", numOrNull(c.wateredL)}, {"wateredUnknown", c.wateredUnknown}};
+  return {{"id", c.id}, {"since", c.since}, {"ml", ml}, {"unknown", c.unknown}, {"wateredL", numOrNull(c.wateredL)}, {"wateredUnknown", c.wateredUnknown}};
 }
 
-// A count that cannot be read starts again, with a new `since`: a plant that kept the old one then
-// says its amounts are not known, never a difference to a count that is gone (R5)
+// A count that cannot be read starts again, with a new ID: a plant that kept the old one then says
+// its amounts are not known, never a difference to a count that is gone (R5)
 RuntimeState::Count countFromJson(const json& j) {
   RuntimeState::Count c;
-  if (!j.is_object() || !j.contains("since") || !j["since"].is_number_integer()) return c;
+  if (!j.is_object() || !j.contains("id") || !j["id"].is_string() || j["id"].get<std::string>().empty()) return c;
   try {
-    c.since = j["since"].get<Epoch>();
+    c.id = j["id"].get<std::string>();
+    c.since = epochOr(j, "since");
     for (const auto& [k, v] : objectAt(j, "ml").items()) {
       if (!v.is_number() || !isNum(v.get<double>()) || v.get<double>() < 0) return {};
       c.ml[k] = v.get<double>();

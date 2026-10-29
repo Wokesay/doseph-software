@@ -248,6 +248,7 @@ function RecordLines(p: { rec: PlantRecord }) {
       </div>
       {known ? (
         <>
+          {day(r.countedFrom!) !== day(r.from) && <div class="muted">{t("plants.rec.since", { date: day(r.countedFrom!) })}</div>}
           <div>{list ? t("plants.rec.amounts", { list }) : t("plants.rec.nothing")}</div>
           {r.wateredL != null && (r.wateredL > 0 || r.wateredUnknown > 0) && (
             <div>

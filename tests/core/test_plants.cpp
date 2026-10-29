@@ -361,6 +361,7 @@ TEST_CASE("Plants: a completed plant's record keeps its days and each phase's, t
   p.harvestAt = localDaysLater(day1, 29, kZone) + 3600;
   p.completedAt = localDaysLater(day1, 30, kZone) + 7200;  // on its day 31
   RuntimeState::Count then;
+  then.id = "c0ffee";
   then.since = 100;
   then.ml = {{"a", 10}};
   then.wateredL = 5;
@@ -397,20 +398,25 @@ TEST_CASE("Plants: a completed plant's record keeps its days and each phase's, t
   // The count is kept in the run-time state; one that cannot be read starts again (since 0, then a
   // new one at the start)
   const RuntimeState::Count back = countFromJson(countJson(now));
+  CHECK(back.id == "c0ffee");
   CHECK(back.since == 100);
   CHECK(back.ml.at("a") == doctest::Approx(60.04));
   CHECK(back.unknown.at("a") == 1);
   CHECK(back.wateredUnknown == 2);
   json damaged = countJson(now);
   damaged["ml"]["a"] = -3;
-  CHECK(countFromJson(damaged).since == 0);
+  CHECK(countFromJson(damaged).id.empty());
   damaged = countJson(now);
   damaged["wateredL"] = "x";
-  CHECK(countFromJson(damaged).since == 0);
+  CHECK(countFromJson(damaged).id.empty());
+  damaged = countJson(now);
+  damaged.erase("id");
+  CHECK(countFromJson(damaged).id.empty());
 
   // The count was lost (a new one since): the amounts are not known, never a difference to nothing
   RuntimeState::Count fresh;
-  fresh.since = 200;
+  fresh.id = "c0ffee2";  // begun anew, also at the same time: its own ID
+  fresh.since = 100;
   fresh.ml = {{"a", 1}};
   r = plantRecord(c, p, fresh, kZone);
   CHECK(r["countLost"] == true);
@@ -438,6 +444,43 @@ TEST_CASE("Plants: a completed plant's record keeps its days and each phase's, t
   CHECK(r["phases"][0]["days"].is_null());
   CHECK(r["phases"][1]["days"].is_null());
   CHECK(r["phases"][2]["days"] == 3);
+  // A phase confirmed on the day it began lasted 0 days, which is known
+  PlantCfg quick = plant("p5", kT0, {phase("A", 3, true), phase("B", 4, false)});
+  quick.phase = 1;
+  quick.phaseStart = quick.start;
+  quick.began = {quick.start, quick.start};
+  quick.completedAt = localDaysLater(quick.start, 2, kZone) + 60;
+  r = plantRecord(c, quick, now, kZone);
+  CHECK(r["phases"][0]["days"] == 0);
+  CHECK(r["phases"][1]["days"] == 3);
+
+  // On import: a yield out of bounds is refused; a record only of a completed plant and only in its
+  // shape, else none; a current phase that does not exist allocates nothing before it is refused
+  Config imp = withRecipes();
+  imp.plants = {plant("p6", kT0, {phase("A", 3, false)})};
+  imp.plants[0].completedAt = kT0 + kDay;
+  imp.plants[0].record = r;
+  json ij = imp;
+  CHECK(configFromJson(ij).plants[0].record == r);
+  const auto says = [](const Config& x, const std::string& key) {
+    const auto errs = validateConfig(x, 4);
+    return std::any_of(errs.begin(), errs.end(), [&](const Msg& m) { return m.key == key; });
+  };
+  ij["plants"][0]["yieldG"] = -5;
+  CHECK(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["yieldG"] = 2e6;
+  CHECK(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["yieldG"] = 300;
+  CHECK_FALSE(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["record"] = {{"from", 1}};
+  CHECK(configFromJson(ij).plants[0].record.is_null());
+  ij["plants"][0]["record"] = r;
+  ij["plants"][0]["completedAt"] = 0;  // running: no record
+  CHECK(configFromJson(ij).plants[0].record.is_null());
+  ij["plants"][0]["phase"] = 2147483647;
+  ij["plants"][0].erase("began");
+  CHECK(configFromJson(ij).plants[0].began.empty());
+  CHECK(says(configFromJson(ij), "cfg.plant.phase"));
 }
 
 TEST_CASE("Plants over the API: completing a plant freezes its record with what went into the tank while it ran, as the dose events book it; the yield is entered by hand while it runs or later (RAT-064, SD-138)") {
@@ -489,4 +532,32 @@ TEST_CASE("Plants over the API: completing a plant freezes its record with what 
   REQUIRE(r.putPlant(id, {{"yieldG", 200}}).status == 200);
   CHECK(r.configJson()["plants"][0]["record"] == rec);
   CHECK(r.configJson()["plants"][0]["yieldG"] == 200);
+}
+
+TEST_CASE("Plants over the API: a dose cut by a restart counts in the plant's record as an amount not known, never as nothing; the count keeps its ID across the restart (RAT-064, SD-138, R5)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Lettuce"}, {"phases", json::array({{{"name", "Growth"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  Result res = r.startPlant({{"name", "Tray"}, {"plantRecipe", prId}});
+  REQUIRE(res.status == 200);
+  const std::string id = res.body["id"];
+  bool dosing = false;
+  for (int i = 0; i < 20 * 60 && !dosing; ++i) {
+    s.step(kSecond);
+    dosing = !r.state()["dosing"].is_null();
+  }
+  REQUIRE(dosing);
+  const std::string canister = r.state()["dosing"]["canister"];
+  s.step(3 * kSecond);
+  s.reboot();
+  Robot& again = s.robot();
+  REQUIRE(again.plantComplete(id).status == 200);
+  const json rec = again.plants()["plants"][0]["record"];
+  CHECK(rec["countLost"] == false);
+  bool cut = false;
+  for (const auto& b : rec["canisters"])
+    if (b["id"] == canister) cut = b["unknown"].get<int>() >= 1;
+  CHECK(cut);
 }

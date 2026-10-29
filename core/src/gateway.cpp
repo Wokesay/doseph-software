@@ -400,7 +400,7 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   return true;
 }
 
-void Doser::book(const Ctx& c, Ms ms) {
+void Doser::book(const Ctx& c, Ms ms, bool known) {
   const auto& o = *active_;
   const double ml = isNum(o.step.flowMlPerMin) ? o.step.flowMlPerMin * static_cast<double>(ms) / 60000.0 : kNaN;
   progress_.msDone += ms;
@@ -412,7 +412,7 @@ void Doser::book(const Ctx& c, Ms ms) {
   // What went into the tank, for the plants' records (RAT-064): an amount not known is counted as
   // such, never as nothing (R5)
   if (counted(o.purpose) && ms > 0) {
-    if (isNum(ml)) c.rt.count.ml[o.step.canister] += ml;
+    if (known && isNum(ml)) c.rt.count.ml[o.step.canister] += ml;
     else c.rt.count.unknown[o.step.canister]++;
   }
 }
@@ -474,7 +474,7 @@ void Doser::remoteTick(const Ctx& c) {
     if (c.now <= deadline) return;
     if (c.remote) c.remote->abort(job_);
     running_ = false;
-    book(c, runRequestedMs_);
+    book(c, runRequestedMs_, false);
     fail(c, say("dose.no_response", {{"name", o.step.name}}));
     return;
   }
@@ -521,7 +521,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
         legEnded(c, act, false, 0, "");
         return;
       }
-      book(c, mine && st.actualMs > 0 ? st.actualMs : runRequestedMs_);
+      book(c, mine && st.actualMs > 0 ? st.actualMs : runRequestedMs_, mine && st.actualMs > 0);
       fail(c, say("dose.no_response", {{"name", o.step.name}}));
       return;
     }
@@ -539,7 +539,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     }
     if (lost) {
       act.stopPumps();
-      book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
+      book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_), false);
       const json reason = st.error.empty() ? json(say("dose.disconnected")) : json(st.error);
       fail(c, say("dose.lost", {{"name", o.step.name}, {"reason", reason}}));
       return;
@@ -589,7 +589,7 @@ void Doser::abort(const Ctx& c, Actuators& act, const Msg& reason) {
     // The other device stops it and books there; here what ran is booked as far as it may have run
     if (running_) {
       if (c.remote) c.remote->abort(job_);
-      book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_));
+      book(c, std::clamp<Ms>(c.now - runStartedAt_, 0, runRequestedMs_), false);
     }
     running_ = false;
     progress_.state = DoseProgress::State::Aborted;
@@ -610,7 +610,7 @@ void Doser::abort(const Ctx& c, Actuators& act, const Msg& reason) {
       return;
     }
     if (leg_ == Leg::Refill) c.rt.pulledBackMs.erase(active_->step.channel);  // how full the line is is unknown
-    else book(c, ran);
+    else book(c, ran, st.jobId == job_);
   }
   act.clearRun(active_->step.channel);
   running_ = false;
