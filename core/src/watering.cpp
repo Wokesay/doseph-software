@@ -53,6 +53,9 @@ double dayRunS(const RuntimeState& rt, const std::string& date, const std::strin
 // A shot's litres and run time, booked to the count and to the local day it began (SD-134). Water
 // of a circuit whose flow is not known leaves the count without a value (R5).
 void book(RuntimeState& rt, const std::string& circuit, const std::string& date, double s, double l) {
+  // For the plants' records (RAT-064)
+  if (isNum(l)) rt.count.wateredL += l;
+  else if (s > 0) rt.count.wateredUnknown++;
   if (const auto g = givenL(rt)) {
     if (isNum(l)) rt.watering["givenL"] = *g + l;
     else if (s > 0) rt.watering["givenL"] = nullptr;

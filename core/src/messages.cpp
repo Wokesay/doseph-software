@@ -363,6 +363,7 @@ constexpr Entry kMessages[] = {
     {"plant.leads", "{name} sets the water – change its phase or complete it instead"},
     {"plant.start", "The start must be today or a day of the past year"},
     {"plant.harvest_at", "The harvest must lie between the start and now"},
+    {"plant.yield", "The yield is a number of grams from 0 to 1,000,000"},
     {"recipe.in_plant", "{name} uses this recipe – change its phases first"},
     {"cfg.plant.phases", "{name}: 1 to {max} phases"},
     {"cfg.phase.name", "{name}: each phase needs a name of up to 40 characters"},

@@ -78,6 +78,19 @@ export type Plant = {
   id: string; name: string; from: string; phases: PlantPhase[]; start: number; phase: number; phaseStart: number;
   harvestAt: number; completedAt: number; running: boolean; leading: boolean; day: number;
   phaseDay?: number; phaseEnd?: number; daysOver?: number; ecTarget?: number | null; phTarget?: number | null;
+  // The local midnight each phase it reached began, 0: not known; the yield by hand, g (RAT-064)
+  began: number[]; yieldG: number | null;
+  // Frozen when it is completed (RAT-064, SD-138); null while it runs
+  record: PlantRecord | null;
+};
+// What a plant was given: the tank's amounts while it ran, which plants beside it shared (SD-138).
+// `countedFrom` null: not counted; `countLost`: the count was lost; both leave the amounts unknown.
+export type PlantRecord = {
+  from: number; to: number; days: number; harvestAt: number | null;
+  phases: { name: string; days: number | null }[];
+  countedFrom: number | null; countLost: boolean;
+  canisters: { id: string; name: string; role: string; ml: number; unknown: number }[];
+  wateredL: number | null; wateredUnknown: number; with: string[];
 };
 export type Plants = { system: GrowSystem | ""; systems: Record<GrowSystem, [number, number]>; plantRecipes: PlantRecipe[]; plants: Plant[]; lead: string | null; plan: { source: string; recipe: string | null; plant: string | null } };
 export type WaterPlan = {

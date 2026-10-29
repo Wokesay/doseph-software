@@ -294,6 +294,9 @@ struct PlantRecipeCfg {
   std::vector<PhaseCfg> phases;
 };
 
+// The largest yield entered by hand, g (RAT-064)
+constexpr double kYieldMaxG = 1e6;
+
 // A plant on the tank (SD-128): started from a plant recipe, whose phases it copied, so a later
 // change of the recipe does not move it. Its progress belongs to it, and a backup carries it.
 struct PlantCfg {
@@ -305,6 +308,14 @@ struct PlantCfg {
   Epoch phaseStart = 0;    // the local midnight its current phase began
   Epoch harvestAt = 0;     // recorded by the user, never by the robot (RAT-002); 0: not yet
   Epoch completedAt = 0;   // completed, a step of its own (RAT-077); 0: running
+  // The local midnight each phase it reached began; 0: not known (it moved on before they were kept)
+  std::vector<Epoch> began;
+  double yieldG = kNaN;    // entered by hand, while it runs or later (RAT-064); NaN: none
+  // Where the tank's counts stood when it started: {since, at, ml, unknown, wateredL,
+  // wateredUnknown}; null: it started before the device counted (SD-138)
+  json counted = nullptr;
+  // Its record, frozen when it is completed (RAT-064); null while it runs
+  json record = nullptr;
   bool running() const { return completedAt == 0; }
 };
 
@@ -420,6 +431,16 @@ struct RuntimeState {
   // Canister → its level in ml, counted from use; missing: unknown, never
   // assumed full (RAT-015); may fall below zero (SD-119)
   std::map<std::string, double> stockMl;
+  // What went into the tank since `since`: ml per canister from doses and line fills, the runs whose
+  // amount is not known, and the litres watering gave. They only grow; a plant keeps where they
+  // stood at its start, so its record is the difference (RAT-064, SD-138).
+  struct Count {
+    Epoch since = 0;
+    std::map<std::string, double> ml;
+    std::map<std::string, int> unknown;
+    double wateredL = 0;
+    int wateredUnknown = 0;
+  } count;
   // The pair parts of the nutrient round under way: {recipe, order, canister,
   // catchUp, parts: {canister: {planned, done}}}; null without one (SD-114)
   json pairRound = nullptr;
@@ -488,5 +509,8 @@ Msg reportedEvent(const std::string& kind, const json& latch);
 // A canister's counted level: "unknown", "ok", "low" (below its minimum,
 // RAT-071) or "empty" (at or below zero by the count) (SD-119)
 std::string stockStatus(const CanisterCfg& b, const RuntimeState& rt);
+// The tank's count as JSON, and read back; one that cannot be read is a new one (since 0)
+json countJson(const RuntimeState::Count& c);
+RuntimeState::Count countFromJson(const json& j);
 
 }  // namespace doseph

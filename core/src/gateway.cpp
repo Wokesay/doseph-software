@@ -409,6 +409,12 @@ void Doser::book(const Ctx& c, Ms ms) {
   // The canister's level, run by run: a dose and a line fill take from it alike; a calibration is
   // booked from the cup when its amount is entered (SD-119). Kept below zero, never hidden as 0 (RAT-015).
   if (o.purpose != "calibration") takeStock(c, o.step.canister, o.step.name, ml);
+  // What went into the tank, for the plants' records (RAT-064): an amount not known is counted as
+  // such, never as nothing (R5)
+  if (counted(o.purpose) && ms > 0) {
+    if (isNum(ml)) c.rt.count.ml[o.step.canister] += ml;
+    else c.rt.count.unknown[o.step.canister]++;
+  }
 }
 
 void takeStock(const Ctx& c, const std::string& canister, const std::string& name, double ml) {

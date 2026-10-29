@@ -1432,3 +1432,53 @@ change; the rest are control details decided here by the minimal principle.
 - **Who.** As for any change of a plant (SD-129): a session, an app token
   or an account token; the phases are checked against the same bounds as
   a plant recipe's.
+
+## SD-138: A plant's record at its end, and a proposal for a new plant recipe
+
+2026-10-29. The rest of step 6 of #10, chosen by the owner: the end-of-run
+summary (RAT-064) and the proposals a new plant recipe starts from
+(RAT-066). These are details decided here by the minimal principle.
+
+- **What is counted.** The device counts what went into the tank: per
+  canister the ml of doses and line fills, and the litres watering gave.
+  A run or a shot whose amount is not known is counted as such, never as
+  nothing (R5). The counts only grow and are kept in the run-time state,
+  which a dose already writes; a count that cannot be read starts again.
+- **Per plant.** A plant keeps where the counts stood at its start. Its
+  amounts are the difference at its end. Plants on one tank share its
+  water, so the amounts are the tank's, and the record names the plants
+  that ran at the same time. There is no share per plant.
+- **The record** is frozen when the plant is completed. It holds:
+  - its days, from day 1 to the day it was completed;
+  - the days of each phase it reached, from the starts the plant now
+    keeps;
+  - the harvest;
+  - per canister the ml and the runs of unknown amount, with the
+    canister's name and role at that time;
+  - the litres watered;
+  - the plants beside it.
+
+  Later changes of canisters or plants do not change it.
+- **Not known is said.** Amounts that were not counted (a plant started
+  before this change) or whose count was lost (a damaged state, a backup
+  restored on another device) are not known, never 0. So are the days of a
+  phase a plant passed before the phases' starts were kept.
+- **The yield** is entered by hand in grams, from 0 to 1,000,000, while
+  the plant runs or after it is completed, and changed later. It stays
+  with the plant until the plant is deleted, and a backup carries it with
+  the record.
+- **No cost.** A canister has no price, so the record holds no cost. The
+  amounts let the user work it out.
+- **A new plant recipe** starts from a proposal:
+  - growth, 21 days at 18 h of light, which moves on only once the user
+    confirms, since the switch to 12 h starts flowering;
+  - flowering, 56 days at 12 h of light, with the second recipe where
+    there is one.
+
+  The hours of light act only on a light circuit that follows the plant
+  (SD-135). The names are labels (RAT-076), and the user changes anything.
+- **The EC floor.** Where a phase's EC target, its own or its recipe's,
+  lies below the EC floor of pH dosing, the editor says that pH− would then
+  never be dosed (RAT-046).
+- **Later:** the advice to drain at a phase change that lowers the EC
+  target (RAT-065), and cost per canister.

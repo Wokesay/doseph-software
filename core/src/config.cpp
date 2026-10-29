@@ -495,7 +495,11 @@ void to_json(json& j, const Config& c) {
                       {"phase", p.phase},
                       {"phaseStart", p.phaseStart},
                       {"harvestAt", p.harvestAt},
-                      {"completedAt", p.completedAt}});
+                      {"completedAt", p.completedAt},
+                      {"began", p.began},
+                      {"yieldG", numOrNull(p.yieldG)},
+                      {"counted", p.counted},
+                      {"record", p.record}});
   j["plants"] = plants;
   j["lead"] = c.lead;
   json channels = json::object();
@@ -679,6 +683,19 @@ Config configFromJson(const json& in) {
     x.phaseStart = epochOr(p, "phaseStart");
     x.harvestAt = epochOr(p, "harvestAt");
     x.completedAt = epochOr(p, "completedAt");
+    // A plant from before the phases' starts were kept knows its first and its current one
+    for (const auto& b : arrayAt(p, "began")) {
+      if (!b.is_number_integer()) throw std::invalid_argument("a phase's start is not a time");
+      x.began.push_back(b.get<Epoch>());
+    }
+    if (x.began.empty()) {
+      x.began.assign(static_cast<size_t>(std::max(x.phase, 0)) + 1, 0);
+      x.began.front() = x.start;
+      x.began.back() = x.phaseStart;
+    }
+    x.yieldG = numOrNaN(p, "yieldG");
+    if (p.contains("counted") && p["counted"].is_object()) x.counted = p["counted"];
+    if (p.contains("record") && p["record"].is_object()) x.record = p["record"];
     c.plants.push_back(std::move(x));
   }
   c.lead = jstr(j, "lead");
@@ -939,6 +956,36 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   return out;
 }
 
+json countJson(const RuntimeState::Count& c) {
+  json ml = json::object();
+  for (const auto& [k, v] : c.ml) ml[k] = numOrNull(v);
+  return {{"since", c.since}, {"ml", ml}, {"unknown", c.unknown}, {"wateredL", numOrNull(c.wateredL)}, {"wateredUnknown", c.wateredUnknown}};
+}
+
+// A count that cannot be read starts again, with a new `since`: a plant that kept the old one then
+// says its amounts are not known, never a difference to a count that is gone (R5)
+RuntimeState::Count countFromJson(const json& j) {
+  RuntimeState::Count c;
+  if (!j.is_object() || !j.contains("since") || !j["since"].is_number_integer()) return c;
+  try {
+    c.since = j["since"].get<Epoch>();
+    for (const auto& [k, v] : objectAt(j, "ml").items()) {
+      if (!v.is_number() || !isNum(v.get<double>()) || v.get<double>() < 0) return {};
+      c.ml[k] = v.get<double>();
+    }
+    for (const auto& [k, v] : objectAt(j, "unknown").items()) {
+      if (!v.is_number_integer() || v.get<int>() < 0) return {};
+      c.unknown[k] = v.get<int>();
+    }
+    c.wateredL = numOrNaN(j, "wateredL");
+    c.wateredUnknown = intOr(j, "wateredUnknown", 0);
+    if (!isNum(c.wateredL) || c.wateredL < 0 || c.wateredUnknown < 0) return {};
+  } catch (const std::exception&) {
+    return {};
+  }
+  return c;
+}
+
 void to_json(json& j, const RuntimeState& s) {
   j = json::object();
   j["latches"] = s.latches;
@@ -946,6 +993,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["phEffect"] = numOrNull(s.phEffect);
   j["ecEffects"] = s.ecEffects;
   j["stockMl"] = s.stockMl;
+  j["count"] = countJson(s.count);
   j["pairRound"] = s.pairRound;
   j["catchUp"] = s.catchUp;
   json pulled = json::object();
@@ -1043,6 +1091,7 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("stockMl") && j["stockMl"].is_object())
     for (const auto& [k, v] : j["stockMl"].items())
       if (v.is_number() && isNum(v.get<double>())) s.stockMl[k] = v.get<double>();
+  if (j.contains("count")) s.count = countFromJson(j["count"]);
   if (j.contains("pairRound") && j["pairRound"].is_object()) s.pairRound = j["pairRound"];
   if (j.contains("catchUp") && j["catchUp"].is_object()) s.catchUp = j["catchUp"];
   // A line pulled back for 1 ms to 1 s; anything else counts as not pulled back

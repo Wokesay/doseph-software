@@ -545,11 +545,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-064 – End-of-run summary is stored with the run
 
-- **Dropped:** the grow controller only (grow runs); not part of the mixing robot (SD-105).
 - **Rule:** At the end of a grow run a summary – water, nutrient amounts and their cost, the phases' durations, a yield entered by hand – is kept with that run's record; the yield can be added later.
 - **Why:** The figures must show the state at the run's end, and what is added later must not be lost when the next run starts.
 - **Evidence:** Observed on the reference installation (2026): end-of-run figures were read as the newest value overall rather than the value at the run's end, and a yield entered by hand was lost when the next run started.
-- **Later:** step 6 (grow runs and harvest).
+- **Changed:** A run is a plant (SD-128). Its record is frozen when it is completed: its days and each phase's, the harvest, the ml per canister that went into the tank while it ran and the litres watered, which are the tank's when plants share it. A canister has no price, so there is no cost. The yield is entered in grams while the plant runs or later, and stays with the plant (SD-138).
+- **Implemented in:** `core/include/doseph/config.hpp`, `core/src/config.cpp`, `core/src/gateway.cpp`, `core/src/watering.cpp`, `core/src/plants.cpp`, `core/src/robot.cpp`, `web/src/pages/plants.tsx`
+- **Tests:** `tests/core/test_plants.cpp` "Plants: a completed plant's record keeps its days and each phase's, the harvest, the ml per canister and the litres watered while it ran, and the plants beside it; a count that was lost or never kept is not known, never 0 (RAT-064, SD-138)"; `tests/core/test_plants.cpp` "Plants over the API: completing a plant freezes its record with what went into the tank while it ran, as the dose events book it; the yield is entered by hand while it runs or later (RAT-064, SD-138)"
 
 ### RAT-065 – Drain on EC step-down only when needed; always on product change
 
