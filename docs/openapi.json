@@ -4665,6 +4665,103 @@
           }
         }
       }
+    },
+    "/climate/rooms": {
+      "put": {
+        "operationId": "putRoom",
+        "summary": "Adds a climate room, or changes one by its ID (SD-136)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClimateRoom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/climate/rooms/{id}": {
+      "delete": {
+        "operationId": "deleteRoom",
+        "summary": "Removes a climate room with its roles; its outputs are let go and switched off (SD-136)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5291,6 +5388,41 @@
               "null"
             ],
             "description": "For a dimmed light circuit that follows the plant: brightness, 1 to 100 %; null: the circuit's own"
+          },
+          "dayC": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "For a climate room that follows the plant: temperature by day, 5 to 40 °C; null: the room's own"
+          },
+          "nightC": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "… temperature by night, 5 to 40 °C; null: the room's own"
+          },
+          "rhPct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "… humidity, 20 to 95 %; null: the room's own"
+          },
+          "vpdKpa": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "… a VPD, 0.2 to 2.5 kPa, which leads the humidity in place of one; null: none"
+          },
+          "co2Ppm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "… CO2 by day, 400 to 1500 ppm; null: the room's own"
           }
         }
       },
@@ -5928,6 +6060,83 @@
         "required": [
           "name"
         ]
+      },
+      "ClimateRoom": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "r1 to r99; empty or absent: a new room"
+          },
+          "name": {
+            "type": "string",
+            "description": "Up to 40 characters"
+          },
+          "lights": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its light circuits, each in one room only; the first one's day is the room's"
+          },
+          "startMin": {
+            "type": "integer",
+            "description": "Without a light circuit: its day's start, local minute of the day"
+          },
+          "hours": {
+            "type": "number",
+            "description": "Without a light circuit: its day's hours, 0 to 24"
+          },
+          "dayC": {
+            "type": "number",
+            "description": "Temperature target by day, 5 to 40 °C; 26 unless set (RAT-009)"
+          },
+          "nightC": {
+            "type": "number",
+            "description": "Temperature target by night, 5 to 40 °C; 22 unless set"
+          },
+          "byVpd": {
+            "type": "boolean",
+            "description": "The humidity follows a VPD target and the target temperature (RAT-009)"
+          },
+          "rhPct": {
+            "type": "number",
+            "description": "Humidity target, 20 to 95 %; 70 unless set"
+          },
+          "vpdKpa": {
+            "type": "number",
+            "description": "VPD target where it leads, 0.2 to 2.5 kPa"
+          },
+          "co2Ppm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "CO2 target by day, 400 to 1500 ppm; null: no CO2"
+          },
+          "heatC": {
+            "type": "number",
+            "description": "Heat protection for light: its first limit, 20 to 45 °C, above the temperature targets; the second is 2 °C higher"
+          },
+          "heaterW": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "The heater's power, 50 to 3500 W: its plug's power limit is a fifth above it (RAT-069); null: not set"
+          },
+          "circulateAlways": {
+            "type": "boolean",
+            "description": "The circulation fan runs at night too"
+          },
+          "plant": {
+            "type": "string",
+            "description": "A plant whose current phase sets the targets where it has them; empty: none"
+          }
+        }
       },
       "WateringSettings": {
         "type": "object",

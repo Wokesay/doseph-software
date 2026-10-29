@@ -122,6 +122,34 @@ void validateLighting(const Config& cfg, Err&& err) {
   }
 }
 
+template <class Err>
+void validateClimate(const Config& cfg, Err&& err) {
+  const ClimateCfg& k = cfg.climate;
+  if (k.rooms.size() > kMaxRooms) err(say("cfg.climate.too_many", {{"max", kMaxRooms}}));
+  std::set<std::string> ids, lights;
+  for (const auto& r : k.rooms) {
+    const bool idOk = r.id.size() >= 2 && r.id.size() <= 3 && r.id[0] == 'r' &&
+                      std::all_of(r.id.begin() + 1, r.id.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
+    if (!idOk || !ids.insert(r.id).second) err(say("cfg.climate.id", {{"id", r.id}}));
+    if (r.name.empty() || chars(r.name) > 40) err(say("cfg.climate.name", {{"max", 40}}));
+    const json name = r.name;
+    // A light circuit lies in one room at most: its heat protection is that room's (SD-136)
+    for (const auto& l : r.lights)
+      if (!cfg.lighting.circuit(l) || !lights.insert(l).second) err(say("cfg.climate.light", {{"name", name}}));
+    if (r.startMin < 0 || r.startMin >= 24 * 60 || !inRange(r.hours, 0, 24)) err(say("cfg.climate.day", {{"name", name}}));
+    if (!inRange(r.dayC, 5, 40) || !inRange(r.nightC, 5, 40)) err(say("cfg.climate.temp", {{"name", name}, {"min", 5}, {"max", 40}}));
+    if (!inRange(r.rhPct, 20, 95)) err(say("cfg.climate.rh", {{"name", name}, {"min", 20}, {"max", 95}}));
+    if (!inRange(r.vpdKpa, 0.2, 2.5)) err(say("cfg.climate.vpd", {{"name", name}, {"min", 0.2}, {"max", 2.5}}));
+    if (!std::isnan(r.co2Ppm) && !inRange(r.co2Ppm, 400, kCo2MaxTargetPpm))
+      err(say("cfg.climate.co2", {{"name", name}, {"min", 400}, {"max", kCo2MaxTargetPpm}}));
+    // The heat limit above both targets: light is not dimmed for a room kept as it should be
+    if (!inRange(r.heatC, 20, 45) || (isNum(r.dayC) && r.heatC <= r.dayC) || (isNum(r.nightC) && r.heatC <= r.nightC))
+      err(say("cfg.climate.heat", {{"name", name}, {"min", 20}, {"max", 45}}));
+    if (!std::isnan(r.heaterW) && !inRange(r.heaterW, 50, 3500)) err(say("cfg.climate.heater", {{"name", name}, {"min", 50}, {"max", 3500}}));
+    if (!r.plant.empty() && !cfg.plant(r.plant)) err(say("cfg.climate.plant", {{"name", name}}));
+  }
+}
+
 }  // namespace
 
 WaterCircuitCfg waterCircuitFromJson(const json& x) {
@@ -174,6 +202,47 @@ const WaterCircuitCfg* WateringCfg::circuit(const std::string& id) const {
 std::string waterRole(const std::string& circuit) { return "water." + circuit; }
 std::string lightRole(const std::string& circuit) { return "light." + circuit; }
 
+ClimateRoomCfg climateRoomFromJson(const json& x) {
+  if (!x.is_object()) throw std::invalid_argument("a room is not an object");
+  ClimateRoomCfg r;
+  r.id = jstr(x, "id");
+  r.name = jstr(x, "name");
+  for (const auto& l : arrayAt(x, "lights")) {
+    if (!l.is_string()) throw std::invalid_argument("a room's light circuit is not a string");
+    r.lights.push_back(l.get<std::string>());
+  }
+  r.startMin = intOr(x, "startMin", r.startMin);
+  for (const auto& [key, field] : {std::pair{"hours", &r.hours}, std::pair{"dayC", &r.dayC}, std::pair{"nightC", &r.nightC},
+                                   std::pair{"rhPct", &r.rhPct}, std::pair{"vpdKpa", &r.vpdKpa}, std::pair{"heatC", &r.heatC}})
+    if (x.contains(key)) *field = numOrNaN(x, key);
+  r.co2Ppm = numOrNaN(x, "co2Ppm");
+  r.heaterW = numOrNaN(x, "heaterW");
+  if ((x.contains("byVpd") && !x["byVpd"].is_boolean()) || (x.contains("circulateAlways") && !x["circulateAlways"].is_boolean()))
+    throw std::invalid_argument("not true or false");
+  r.byVpd = jbool(x, "byVpd", false);
+  r.circulateAlways = jbool(x, "circulateAlways", false);
+  r.plant = jstr(x, "plant");
+  return r;
+}
+
+const ClimateRoomCfg* ClimateCfg::room(const std::string& id) const {
+  for (const auto& r : rooms)
+    if (r.id == id) return &r;
+  return nullptr;
+}
+
+std::string climateRole(const std::string& room, const std::string& kind) { return "climate." + room + "." + kind; }
+
+const std::vector<std::string>& climateOutputs() {
+  static const std::vector<std::string> k = {"exhaust", "circulation", "heater", "humidifier", "dehumidifier", "co2_valve"};
+  return k;
+}
+
+const std::vector<std::string>& climateSensors() {
+  static const std::vector<std::string> k = {"temp", "rh", "co2"};
+  return k;
+}
+
 const LightCircuitCfg* LightingCfg::circuit(const std::string& id) const {
   for (const auto& c : circuits)
     if (c.id == id) return &c;
@@ -218,7 +287,12 @@ json phasesJson(const std::vector<PhaseCfg>& phases) {
                    {"shotsPerDay", ph.shotsPerDay ? json(*ph.shotsPerDay) : json(nullptr)},
                    {"shotS", numOrNull(ph.shotS)},
                    {"lightHours", ph.lightHours ? json(*ph.lightHours) : json(nullptr)},
-                   {"lightPct", ph.lightPct ? json(*ph.lightPct) : json(nullptr)}});
+                   {"lightPct", ph.lightPct ? json(*ph.lightPct) : json(nullptr)},
+                   {"dayC", ph.dayC ? json(*ph.dayC) : json(nullptr)},
+                   {"nightC", ph.nightC ? json(*ph.nightC) : json(nullptr)},
+                   {"rhPct", ph.rhPct ? json(*ph.rhPct) : json(nullptr)},
+                   {"vpdKpa", ph.vpdKpa ? json(*ph.vpdKpa) : json(nullptr)},
+                   {"co2Ppm", ph.co2Ppm ? json(*ph.co2Ppm) : json(nullptr)}});
   return out;
 }
 
@@ -245,8 +319,10 @@ std::vector<PhaseCfg> phasesFromJson(const json& j) {
       x.shotsPerDay = n < 0 || n > 100000 ? -1 : static_cast<int>(n);  // out of bounds stays so
     }
     x.shotS = numOrNaN(p, "shotS");
-    // Light (SD-135): a number or nothing
-    for (const auto& [key, field] : {std::pair{"lightHours", &x.lightHours}, std::pair{"lightPct", &x.lightPct}}) {
+    // Light (SD-135) and climate (SD-136): a number or nothing
+    for (const auto& [key, field] : {std::pair{"lightHours", &x.lightHours}, std::pair{"lightPct", &x.lightPct}, std::pair{"dayC", &x.dayC},
+                                     std::pair{"nightC", &x.nightC}, std::pair{"rhPct", &x.rhPct}, std::pair{"vpdKpa", &x.vpdKpa},
+                                     std::pair{"co2Ppm", &x.co2Ppm}}) {
       if (!p.contains(key) || p[key].is_null()) continue;
       if (!p[key].is_number()) throw std::invalid_argument(std::string(key) + " is not a number");
       *field = p[key].get<double>();
@@ -367,6 +443,24 @@ void to_json(json& j, const Config& c) {
                       {"thresholdPct", numOrNull(l.thresholdPct)}, {"sunriseMin", l.sunriseMin}, {"sunsetMin", l.sunsetMin},
                       {"plant", l.plant}});
   j["lighting"] = {{"circuits", lights}};
+  json rooms = json::array();
+  for (const auto& r : c.climate.rooms)
+    rooms.push_back({{"id", r.id},
+                     {"name", r.name},
+                     {"lights", r.lights},
+                     {"startMin", r.startMin},
+                     {"hours", numOrNull(r.hours)},
+                     {"dayC", numOrNull(r.dayC)},
+                     {"nightC", numOrNull(r.nightC)},
+                     {"byVpd", r.byVpd},
+                     {"rhPct", numOrNull(r.rhPct)},
+                     {"vpdKpa", numOrNull(r.vpdKpa)},
+                     {"co2Ppm", numOrNull(r.co2Ppm)},
+                     {"heatC", numOrNull(r.heatC)},
+                     {"heaterW", numOrNull(r.heaterW)},
+                     {"circulateAlways", r.circulateAlways},
+                     {"plant", r.plant}});
+  j["climate"] = {{"rooms", rooms}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -516,6 +610,9 @@ Config configFromJson(const json& in) {
   if (const json& l = objectAt(j, "lighting"); !l.empty()) {
     for (const auto& x : arrayAt(l, "circuits")) c.lighting.circuits.push_back(lightCircuitFromJson(x));
   }
+  if (const json& cl = objectAt(j, "climate"); !cl.empty()) {
+    for (const auto& x : arrayAt(cl, "rooms")) c.climate.rooms.push_back(climateRoomFromJson(x));
+  }
   if (const json& f = objectAt(j, "circulation"); f.contains("mode")) {
     if (!f["mode"].is_string()) throw std::invalid_argument("the circulation's mode is not a string");
     c.circulation.mode = f["mode"].get<std::string>();
@@ -654,6 +751,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (c.circulation.mode != "mixing" && c.circulation.mode != "always") err(say("cfg.circulation.mode"));
   validateWatering(c, err);
   validateLighting(c, err);
+  validateClimate(c, err);
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
@@ -691,7 +789,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
       // A float switch over MQTT says "not full" only while its sender is seen: a value kept on the
       // broker outlives a sender that stopped, and the float is the valve's limit (RAT-032)
       // The same holds for the limits of watering (SD-134)
-      else if ((role == "tank_full" || role == "tank_empty" || role == "tank_level") && b.availability.empty())
+      // And for a room's CO2, which opens the valve while it reads low (SD-136)
+      else if ((role == "tank_full" || role == "tank_empty" || role == "tank_level" || def->kind == "co2") && b.availability.empty())
         err(say("cfg.role.availability", {{"role", name}}));
     } else {
       err(say("cfg.role.source", {{"role", name}}));
@@ -806,6 +905,10 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
         err(say("cfg.phase.shot", {{"name", name}, {"phase", ph.name}, {"max", kMaxShotS / 3600}}));
       if (ph.lightHours && !inRange(*ph.lightHours, 0, 24)) err(say("cfg.phase.light_hours", {{"name", name}, {"phase", ph.name}}));
       if (ph.lightPct && !inRange(*ph.lightPct, 1, 100)) err(say("cfg.phase.light_pct", {{"name", name}, {"phase", ph.name}}));
+      // Climate (SD-136): within the room's bounds
+      if ((ph.dayC && !inRange(*ph.dayC, 5, 40)) || (ph.nightC && !inRange(*ph.nightC, 5, 40)) || (ph.rhPct && !inRange(*ph.rhPct, 20, 95)) ||
+          (ph.vpdKpa && !inRange(*ph.vpdKpa, 0.2, 2.5)) || (ph.co2Ppm && !inRange(*ph.co2Ppm, 400, kCo2MaxTargetPpm)))
+        err(say("cfg.phase.climate", {{"name", name}, {"phase", ph.name}}));
     }
   };
   std::set<std::string> plantIds;

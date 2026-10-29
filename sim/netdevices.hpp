@@ -12,6 +12,10 @@
 //   shelly-pump.local  a Shelly Gen2 relay with two outputs, each a watering pump that takes water
 //                      from the tank
 //   shelly-dimmer.local a Shelly dimmer with one light on the lamps' 0–10 V line (SD-135)
+//   shelly-climate.local  a Shelly Gen2 relay with four outputs in a grow room: its exhaust fan,
+//                      circulation fan, heater and dehumidifier (SD-136)
+//   shelly-climate2.local a Shelly Gen2 relay with two outputs: the room's humidifier and CO2 valve
+//   esp-climate.local  an ESPHome device in the room: sensor/air_temp, sensor/air_rh, sensor/co2
 //   esp-1.local        an ESPHome device: binary_sensor/tank_full, binary_sensor/tank_empty,
 //                      sensor/water_temp, sensor/tank_level (the tank's litres)
 // A Shelly's settings act as the real one's: the auto-off switches it off, and a power cycle
@@ -79,6 +83,12 @@ class NetTwin {
   bool circulating() const;  // the circulation pump runs
   int watering() const;      // how many watering pumps run
   FakeEsphome* sensors();    // the ESPHome device, whose level and floats follow the tank
+  // The grow room (SD-136): its air goes on by `dt` with what runs in it, and its sensors say so
+  struct Room {
+    double tempC = 22, rhPct = 60, co2Ppm = 600;
+  };
+  void climate(doseph::Ms dt);
+  Room& room() { return room_; }
   doseph::json toJson() const;
   // The simulator panel: a device away or back, an input, an ESPHome value
   bool control(const std::string& action, const doseph::json& body);
@@ -86,6 +96,7 @@ class NetTwin {
  private:
   std::vector<FakeShelly> shellies_;
   std::vector<FakeEsphome> esps_;
+  Room room_;
 };
 
 }  // namespace sim

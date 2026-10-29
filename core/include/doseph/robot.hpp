@@ -17,6 +17,7 @@
 #include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
 #include "doseph/refill.hpp"
+#include "doseph/climate.hpp"
 #include "doseph/lighting.hpp"
 #include "doseph/watering.hpp"
 #include "doseph/service.hpp"
@@ -138,6 +139,9 @@ class Robot : public RemoteRuns {
   Result putLight(const json& j);
   Result deleteLight(const std::string& id);
   Result lightHand(const std::string& id, const json& j);
+  // Climate (SD-136): a room added or changed, or removed with its outputs and sensors
+  Result putRoom(const json& j);
+  Result deleteRoom(const std::string& id);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -337,6 +341,7 @@ class Robot : public RemoteRuns {
   bool circulationWanted(const Ctx& c) const;
   Watering water_;
   Lighting light_;
+  Climate climate_;
   int secondOfDay(Epoch epoch) const;  // local
   Epoch waterChangedAt_ = 0;  // the last dose or fill: the water is judged by a check after it
   WaterIn waterIn(const Ctx& c) const;

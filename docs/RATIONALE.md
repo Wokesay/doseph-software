@@ -90,11 +90,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-009 – Climate targets keep VPD in a corridor
 
-- **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with climate (SD-136). The targets are a room's own or its plant's phase's; by night 4 °C below the day unless set. The VPD corridor is shown, not acted on.
 - **Rule:** The default climate targets are a day temperature of 26 °C in the vegetative phase and 27 °C in flowering, with 70 % relative humidity (about 1.0 kPa VPD) and 62 % (about 1.35 kPa). When the climate is led by VPD, the humidity setpoint follows from the VPD target and the target temperature, not the measured one.
 - **Why:** Extra light or CO2 pays off only when temperature and humidity keep up: with more CO2 the best leaf temperature rises, and at a high VPD the leaves close their stomata and take up no more CO2. Keeping VPD in a corridor of about 1.0–1.4 kPa avoids water stress as well as wasted enrichment.
 - **Evidence:** Observed on the reference installation (2026): day temperatures of 26–27.5 °C in the phases with CO2 enrichment, humidity set for a VPD of 1.0–1.4 kPa. In the last weeks of flowering the corridor was left on purpose (50 % RH, about 1.63 kPa) to lower the risk of mould, accepting a slightly smaller yield. CO2 enrichment there also followed light intensity; without CO2 dosing only the temperature and humidity targets carry over.
-- **Later:** step 9 (climate).
+- **Implemented in:** `core/src/climate.cpp`, `core/include/doseph/config.hpp`
+- **Tests:** `tests/core/test_climate.cpp` "Climate: air VPD from temperature and humidity; a VPD target gives the humidity at the target temperature (SD-136, RAT-017, RAT-009)"; `tests/core/test_climate.cpp` "Climate: a room's day is its first light circuit's; a plant's phase sets its targets where it has them, a VPD leading the humidity (SD-136, RAT-076, RAT-009)"
 
 ### RAT-010 – Irrigation is controlled by the number of shots, not the shot size
 
@@ -157,11 +158,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-017 – VPD is air VPD, with no value when an input is missing
 
-- **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with climate (SD-136).
 - **Rule:** VPD is air VPD, from air temperature and relative humidity with the FAO-56 saturation vapour pressure: VPD = es(T) · (1 − RH/100), with no leaf offset. With an input missing or not valid, or two readings of the device's own sensors more than 60 s apart, there is no VPD (a gap), never 0. A sensor that reports only when its value changes has no age by its report time, so for it the 60 s pairing gives way to each input's own freshness. A leaf offset may come later, shown as "estimated".
 - **Why:** How much cooler a leaf is than the air under LED light depends on light, air movement and leaf angle. Subtracting a fixed amount would pass a guess off as a measurement, the same mistake as a default standing in for a reading. The phase targets are air VPD anyway.
 - **Evidence:** Observed on the reference installation (2026): a cross-check at 27 °C and 62 % RH gave 1.352 kPa against 1.36 kPa worked out by hand. A run through failure cases (an input missing or offline, implausible humidity, light off) gave no 0 in any of them. Leaf VPD under LED was put at roughly 0.1–0.2 kPa below air VPD, varying. The 60 s limit is an assumption.
-- **Later:** step 9 (climate).
+- **Implemented in:** `core/src/climate.cpp`
+- **Tests:** `tests/core/test_climate.cpp` "Climate: air VPD from temperature and humidity; a VPD target gives the humidity at the target temperature (SD-136, RAT-017, RAT-009)"
 
 ### RAT-018 – No parallel dosing sequence; time limits sit above the longest legitimate run
 
@@ -245,7 +247,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-028 – After a restart, outputs fall back to off but recorded facts survive
 
-- **Changed:** Light (SD-135) follows its plan after a restart: on by day, off at night. A hand switch is not resumed.
+- **Changed:** Light (SD-135) follows its plan after a restart: on by day, off at night. A hand switch is not resumed. A room's climate (SD-136) regulates by its rules again; its dehumidifier rests 5 min first, and CO2 waits for a value read since the start.
 - **Rule:** After a restart the outputs fall back to off, while recorded facts survive: latches, jump locks, learned effects, the Stop, a new tank and an open dose in the dosing journal (SD-106).
 - **Why:** Outputs and recorded facts need opposite handling after an unexplained reset. An output is safest off, and switching it back on by itself is a hazard. A recorded fact (a lock is set, a calibration is valid, a run is active) has to come back, because losing it quietly releases a lock or ends a run.
 - **Evidence:** Observed on the reference installation (2026): stored on/off facts such as "calibration valid" and "run active" could be lost without any error message, while numeric settings were kept.
@@ -297,11 +299,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-034 – Humidifier and dehumidifier never together; compressor protection
 
-- **Dropped:** the grow controller only (room climate); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with climate (SD-136). Every output of a room switches at most once a minute; the other timings named below stay open.
 - **Rule:** The gateway never runs humidifier and dehumidifier at the same time; when the other device's state is unknown (its plug does not answer), the device stays off. A compressor dehumidifier switches on again only 5 min after it was switched off, also after a Stop or a restart; switching off is always allowed.
 - **Why:** The two work against each other: both at once waste energy, and switching between them too fast makes them chase each other. A compressor needs a few minutes to equalise pressure before it restarts; only a quick restart harms it, so a switch-off for safety is never delayed.
 - **Evidence:** Observed on the reference installation (2026): in one test night humidity swung four times between 62 % and 85 % around a target of 70 ± 5 %, because a lock meant for switching on also delayed switching off and so forced a minimum run. The power trace showed a compressor unit: about 3 min of fan only at 32 W, then the compressor starting and rising from 315 W to 420 W. The installation also locked the opposite device for 10 min after each switch-off, ran the dehumidifier at least 10 min and pulsed the humidifier in 30 s steps; those timings are open until the climate function is built.
-- **Later:** step 9 (climate).
+- **Implemented in:** `core/src/climate.cpp`
+- **Tests:** `tests/core/test_climate.cpp` "Climate: humidifier and dehumidifier never run together; the dehumidifier rests 5 min after a start and after it went off (SD-136, RAT-034)"; `tests/core/test_climate.cpp` "Climate: after a restart of the robot the fans run by their rule again, and the dehumidifier rests its 5 min (SD-136, R6, RAT-034)"
 
 ### RAT-035 – Light ramps of 15 minutes inside the light period
 
@@ -584,11 +587,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-069 – "Supply" profile for devices with their own thermostat
 
-- **Dropped:** the grow controller only (room climate devices); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with climate (SD-136): a room's heater. Its power limit is a fifth above the heater's power, written where the device can keep one.
 - **Rule:** A plug profile "supply" for a device that regulates itself, such as a heater with its own thermostat: off after a power loss, no auto-off in the plug, but a power limit in the plug as a net for a thermostat that sticks; the watchdog assesses it.
 - **Why:** Such a device has to stay powered to do its job, so a timer in the plug would end its work a fixed time after every switch-on. A stuck thermostat does not show in how long the relay is on, but in the power the device draws, so the net is a power limit.
 - **Evidence:** Observed on the reference installation (2026): such a heater's relay stayed on for weeks while its thermostat cycled – 19 heating phases above 50 W in about four weeks, the longest 6.8 min, the median 0.3 min, at most 369 W. A limit of about 450 W was proposed instead of the plug's far higher factory limit.
-- **Later:** step 9 (smart plugs).
+- **Implemented in:** `core/src/climate.cpp`, `core/src/devices.cpp`
+- **Tests:** `tests/core/test_climate.cpp` "Climate: too warm runs the exhaust fan, and back at its target it stops; too cold gives the heater power, its plug a power limit a fifth above its power; an output switches at most once a minute (SD-136, RAT-069)"
 
 ### RAT-070 – Calibration is not consumption; book actual run time per run
 

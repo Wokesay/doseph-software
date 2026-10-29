@@ -51,12 +51,47 @@ RoleDef circuitRole(const WaterCircuitCfg& c) {
 // Light runs for hours: no auto-off (RAT-019)
 RoleDef lightCircuitRole(const LightCircuitCfg& c) { return {lightRole(c.id), "output", false, 0, true, c.dimmed}; }
 
+// The CO2 valve opens in pulses of at most a minute; the device closes it on its own (RAT-019)
+constexpr Ms kCo2PulseMs = kMinute;
+
+// A room's role of a kind (SD-136): the fans and the heater, which has its own thermostat, run for
+// hours with no auto-off; the heater's plug gets a power limit a fifth above its power, rounded up to
+// 10 W, as a net (RAT-069); the CO2 valve opens in pulses
+std::optional<RoleDef> climateRoleDef(const ClimateRoomCfg& room, const std::string& kind) {
+  const std::string id = climateRole(room.id, kind);
+  if (kind == "exhaust" || kind == "circulation") return RoleDef{id, "output", false, 0, false, false, true, false};
+  if (kind == "co2_valve") return RoleDef{id, "output", true, kCo2PulseMs, false, false, false, true};
+  if (kind == "heater")
+    return RoleDef{id, "output", false, 0, false, false, false, true, isNum(room.heaterW) ? std::ceil(room.heaterW * 1.2 / 10.0) * 10.0 : 0.0};
+  if (kind == "humidifier" || kind == "dehumidifier") return RoleDef{id, "output", false, 0, false, false, false, true};
+  if (kind == "temp" || kind == "rh" || kind == "co2") return RoleDef{id, kind};
+  return std::nullopt;
+}
+
+// "climate.<room>.<kind>" split; nothing for another role
+std::optional<std::pair<std::string, std::string>> climateParts(const std::string& id) {
+  if (id.rfind("climate.", 0) != 0) return std::nullopt;
+  const size_t dot = id.find('.', 8);
+  if (dot == std::string::npos) return std::nullopt;
+  return std::pair{id.substr(8, dot - 8), id.substr(dot + 1)};
+}
+
 }  // namespace
+
+bool throughStop(const std::string& role) {
+  if (role.rfind("light.", 0) == 0) return true;
+  const auto parts = climateParts(role);
+  return parts && (parts->second == "exhaust" || parts->second == "circulation");
+}
 
 std::vector<RoleDef> roleDefs(const Config& cfg) {
   std::vector<RoleDef> out = roleDefs();
   for (const auto& c : cfg.watering.circuits) out.push_back(circuitRole(c));
   for (const auto& c : cfg.lighting.circuits) out.push_back(lightCircuitRole(c));
+  for (const auto& r : cfg.climate.rooms) {
+    for (const auto& k : climateOutputs()) out.push_back(*climateRoleDef(r, k));
+    for (const auto& k : climateSensors()) out.push_back(*climateRoleDef(r, k));
+  }
   return out;
 }
 
@@ -66,6 +101,8 @@ std::optional<RoleDef> roleDef(const Config& cfg, const std::string& id) {
     if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return circuitRole(*c);
   if (id.rfind("light.", 0) == 0)
     if (const LightCircuitCfg* c = cfg.lighting.circuit(id.substr(6))) return lightCircuitRole(*c);
+  if (const auto parts = climateParts(id))
+    if (const ClimateRoomCfg* r = cfg.climate.room(parts->first)) return climateRoleDef(*r, parts->second);
   return std::nullopt;
 }
 
@@ -74,6 +111,8 @@ Msg roleLabel(const Config& cfg, const std::string& id) {
     if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return say("role.water", {{"name", c->name}});
   if (id.rfind("light.", 0) == 0)
     if (const LightCircuitCfg* c = cfg.lighting.circuit(id.substr(6))) return say("role.light", {{"name", c->name}});
+  if (const auto parts = climateParts(id))
+    if (const ClimateRoomCfg* r = cfg.climate.room(parts->first)) return say("role.climate." + parts->second, {{"name", r->name}});
   return say("role." + id);
 }
 
@@ -117,6 +156,8 @@ json shellySwitchConfig(const RoleDef& r, const json& current) {
   if (r.pulse) c["auto_off_delay"] = autoOffS(r);
   // A device with an input of its own must not switch the output by it: the robot reads the input
   if (current.is_object() && current.contains("in_mode")) c["in_mode"] = "detached";
+  // A power limit where the role has one and the device can keep it (RAT-069)
+  if (r.powerLimitW > 0 && current.is_object() && current.contains("power_limit")) c["power_limit"] = r.powerLimitW;
   return c;
 }
 
@@ -418,7 +459,7 @@ bool saysOnline(const std::string& payload) {
 RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) const {
   RoleValue v;
   const RoleBinding* b = bindingOf(cfg, role);
-  const RoleDef* def = roleDef(role);
+  const auto def = roleDef(cfg, role);
   if (!b || !def) {
     v.state = "not_assigned";
     return v;
@@ -444,8 +485,11 @@ RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) 
     }
     const Seen& s = seen_.at(b->device);
     if (b->source == "shelly") {
-      // The input as its last status said, as old as that status
-      const std::string key = "input:" + std::to_string(b->channel);
+      // The input as its last status said, as old as that status; a room's air temperature and
+      // humidity from a sensor of the Shelly's own (SD-136)
+      const bool temp = def->kind == "temp", rh = def->kind == "rh";
+      const std::string key = (temp ? "temperature:" : rh ? "humidity:" : "input:") + std::to_string(b->channel);
+      const char* field = temp ? "tC" : rh ? "rh" : "state";
       if (s.statusAt < 0) {
         v.state = "waiting";
         return v;
@@ -455,8 +499,8 @@ RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) 
         v.state = "stale";
         return v;
       }
-      if (s.status.is_object() && s.status.contains(key) && s.status[key].is_object() && s.status[key].contains("state"))
-        raw = s.status[key]["state"];
+      if (s.status.is_object() && s.status.contains(key) && s.status[key].is_object() && s.status[key].contains(field))
+        raw = s.status[key][field];
     } else {
       const auto it = s.entities.find(b->entity);
       if (it == s.entities.end()) {

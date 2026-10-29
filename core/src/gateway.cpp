@@ -663,10 +663,11 @@ bool NetOutputs::limited(const Config& cfg, const NetDevices& dev, const std::st
 }
 
 bool NetOutputs::want(const std::string& role, bool on) {
-  // A fixed output, a watering circuit's (SD-134) or a light's (SD-135); the tick drops what the
-  // configuration lacks
+  // A fixed output, a watering circuit's (SD-134), a light's (SD-135) or a room's (SD-136); the tick
+  // drops what the configuration lacks
   const RoleDef* def = roleDef(role);
-  if (!(def ? def->kind == "output" : role.rfind("water.", 0) == 0 || role.rfind("light.", 0) == 0)) return false;
+  if (!(def ? def->kind == "output" : role.rfind("water.", 0) == 0 || role.rfind("light.", 0) == 0 || role.rfind("climate.", 0) == 0))
+    return false;
   outs_[role].want = on;
   return true;
 }
@@ -677,9 +678,9 @@ void NetOutputs::wantLevel(const std::string& role, double pct) {
 }
 
 void NetOutputs::allOff() {
-  // Light follows its plan, whatever stops (SD-135)
+  // Light follows its plan, and a room's fans their rule, whatever stops (SD-135, SD-136)
   for (auto& [role, o] : outs_)
-    if (role.rfind("light.", 0) != 0) o.want = false;
+    if (!throughStop(role)) o.want = false;
   forceOff_ = true;
 }
 
@@ -702,7 +703,8 @@ void NetOutputs::off(const Config& cfg, NetDevices& dev, const std::string& role
   o.onAt = -1;
 }
 
-void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
+void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool stopped, bool hold, Ms now) {
+  stopped_ = stopped;
   hold_ = hold;
   const bool force = forceOff_;
   forceOff_ = false;
@@ -769,8 +771,9 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     }
     const json id = b->channel;
     const std::string comp = def.dimmer ? "Light" : "Switch";
-    // Light follows its plan through a Stop and a hold (SD-135)
-    const bool held = hold && !def.light, forced = force && !def.light;
+    // Light follows its plan, and a room's fans their rule, through a Stop and a hold (SD-135); a
+    // room's other outputs are off at a Stop and go on through a hold of the pumps (SD-136)
+    const bool held = heldBy(def), forced = force && !throughStop(def.id);
     // The refill valve's own limits, whatever wants it open (RAT-032): never open without a float
     // that says "not full", and closed once it has been on for the longest fill. Closed so, it
     // opens again only when wanted anew.
@@ -880,7 +883,7 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
       o.verified = true;
       o.refused = false;
       o.problem = {};
-      if (o.want && (!hold_ || def->light) && !limited(cfg, dev, role, now)) {
+      if (o.want && !heldBy(*def) && !limited(cfg, dev, role, now)) {
         o.onAt = now;
         o.lastLevel = now;
         send(cfg, dev, role, o, "on", comp + ".Set", onParams, now);
@@ -905,7 +908,7 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
     o.onSent = true;
     // Not wanted any more while it switched on: off at once
     if (limited(cfg, dev, role, now)) o.want = false;
-    if (!o.want || (hold_ && !def->light)) off(cfg, dev, role, o, now);
+    if (!o.want || heldBy(*def)) off(cfg, dev, role, o, now);
   }
 }
 

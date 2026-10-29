@@ -2,6 +2,7 @@
 #include "netdevices.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace sim {
 
@@ -176,6 +177,28 @@ NetTwin::NetTwin() {
   for (int i = 0; i < 2; ++i) pumps.switches.push_back({false, 0, shellySwitchDefaults(false)});
   pumps.waters = true;
   shellies_.push_back(pumps);
+  FakeShelly room;  // a grow room's devices (SD-136)
+  room.address = "shelly-climate.local";
+  room.id = "shellypro4pm-sim000007";
+  room.model = "SPSW-104PE16EU";
+  // It measures power, so each output keeps a power limit (W)
+  json metered = shellySwitchDefaults(false);
+  metered["power_limit"] = 4480;
+  for (int i = 0; i < 4; ++i) room.switches.push_back({false, 0, metered});
+  shellies_.push_back(room);
+  FakeShelly room2;
+  room2.address = "shelly-climate2.local";
+  room2.id = "shellyplus2pm-sim000008";
+  room2.model = "SNSW-102P16EU";
+  for (int i = 0; i < 2; ++i) room2.switches.push_back({false, 0, shellySwitchDefaults(false)});
+  shellies_.push_back(room2);
+  FakeEsphome air;
+  air.address = "esp-climate.local";
+  air.name = "room-sensors";
+  air.entities["sensor/air_temp"] = 22.0;
+  air.entities["sensor/air_rh"] = 60.0;
+  air.entities["sensor/co2"] = 600.0;
+  esps_.push_back(air);
   FakeEsphome esp;
   esp.address = "esp-1.local";
   esp.name = "tank-sensors";
@@ -231,7 +254,39 @@ int NetTwin::watering() const {
   return n;
 }
 
-FakeEsphome* NetTwin::sensors() { return esps_.empty() ? nullptr : &esps_.front(); }
+FakeEsphome* NetTwin::sensors() { return esphome("esp-1.local"); }
+
+void NetTwin::climate(Ms dt) {
+  // The air outside and the room's own losses through its walls; the exhaust fan changes the air
+  // in about 5 min (assumptions)
+  constexpr double kOutC = 18, kOutRh = 55, kOutPpm = 420;
+  constexpr double kWalls = 1.0 / 1800, kExhaust = 1.0 / 300;
+  auto running = [&](const char* address, int n) {
+    const FakeShelly* s = shelly(address);
+    return s && s->online && n < static_cast<int>(s->switches.size()) && s->switches[n].on;
+  };
+  const FakeShelly* d = shelly("shelly-dimmer.local");
+  const double lamps = d && d->online && !d->lights.empty() && d->lights[0].on ? d->lights[0].brightness / 100.0 : 0.0;
+  const bool exhaust = running("shelly-climate.local", 0), heater = running("shelly-climate.local", 2);
+  const bool dehumidifier = running("shelly-climate.local", 3), humidifier = running("shelly-climate2.local", 0);
+  const bool valve = running("shelly-climate2.local", 1);
+  const double k = kWalls + (exhaust ? kExhaust : 0);
+  const double s = static_cast<double>(dt) / 1000.0;
+  Room& r = room_;
+  // Lamps at full brightness warm a closed room by 14 °C, the heater by 12 °C; the plants wet the air
+  // more with light, the humidifier and dehumidifier move it by 25 %; plants take up CO2 with light,
+  // and the valve gives 3 ppm/s (assumptions)
+  r.tempC += s * ((kOutC - r.tempC) * k + lamps * 14 * kWalls + (heater ? 12 * kWalls : 0));
+  r.rhPct += s * ((kOutRh - r.rhPct) * k + (8 + 12 * lamps) * kWalls + (humidifier ? 25 * kWalls : 0) - (dehumidifier ? 25 * kWalls : 0));
+  r.rhPct = std::clamp(r.rhPct, 5.0, 100.0);
+  r.co2Ppm += s * ((kOutPpm - r.co2Ppm) * k - 0.3 * lamps + (valve ? 3.0 : 0));
+  r.co2Ppm = std::max(r.co2Ppm, 300.0);
+  if (FakeEsphome* e = esphome("esp-climate.local")) {
+    e->entities["sensor/air_temp"] = std::round(r.tempC * 10.0) / 10.0;
+    e->entities["sensor/air_rh"] = std::round(r.rhPct);
+    e->entities["sensor/co2"] = std::round(r.co2Ppm);
+  }
+}
 
 bool NetTwin::circulating() const {
   for (const auto& s : shellies_)

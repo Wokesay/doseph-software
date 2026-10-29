@@ -331,10 +331,11 @@ void Robot::boot() {
   clock_.start(rt_.clock, log_.newestTs(), rt_.bootCount);
   bootEpoch_ = clock_.epoch();
   bootMs_ = clock_.nowMs();
+  climate_.start(bootMs_);  // the dehumidifier rests, and CO2 waits for a value read since (SD-136)
   lastSnapshot_ = bootEpoch_;
   doser_.setBootTag(std::to_string(rt_.bootCount));
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007). Light
-  // alone follows its plan (SD-135).
+  // follows its plan, and a room's fans their rule (SD-135, SD-136).
   act_.stopAll();
   outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
   if (configRead) {
@@ -454,7 +455,9 @@ void Robot::tick() {
   outputs_.want("circulation_pump", circulationWanted(c));
   // Light by its plan or a person's hand, through Stop, holds and maintenance (SD-135)
   light_.tick(c, secondOfDay(c.epoch), outputs_);
-  outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
+  // Climate by its rules; the fans through a Stop, the rest off at one (SD-136)
+  climate_.tick(c, secondOfDay(c.epoch), devices_, outputs_);
+  outputs_.tick(cfg_, devices_, rt_.stopped, !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
   // Drops without a running pump went into the tank: the check mixes first and learns nothing,
@@ -802,6 +805,7 @@ json Robot::state() {
           {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
           {"watering", water_.status(c, waterIn(c))},
           {"lighting", Lighting::status(c, secondOfDay(c.epoch), outputs_.status(cfg_, devices_, c.now))},
+          {"climate", climate_.status(c, secondOfDay(c.epoch), devices_, outputs_.status(cfg_, devices_, c.now))},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -1177,6 +1181,8 @@ Result Robot::deletePlant(const std::string& id) {
     if (w.plant == id) w.plant.clear();
   for (auto& lc : next.lighting.circuits)
     if (lc.plant == id) lc.plant.clear();
+  for (auto& room : next.climate.rooms)
+    if (room.plant == id) room.plant.clear();
   return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
 }
 
@@ -2695,12 +2701,65 @@ Result Robot::deleteLight(const std::string& id) {
                                               [&](const LightCircuitCfg& lc) { return lc.id == id; }),
                                next.lighting.circuits.end());
   next.roles.erase(lightRole(id));
+  // A room it lay in goes on without it (SD-136)
+  for (auto& room : next.climate.rooms) room.lights.erase(std::remove(room.lights.begin(), room.lights.end(), id), room.lights.end());
   const Config before = cfg_;
   Result r = saveConfig(next, changed("cfg.what.lighting"));
   if (r.status != 200) return r;
   Lighting::forget(rt_, id);
   saveState(true);
   reconcileDevices(before);  // its output is let go and switched off
+  return r;
+}
+
+Result Robot::putRoom(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  json body = j;
+  std::string id = jstr(body, "id");
+  if (id.empty()) {
+    // A new room: the next free number
+    for (int n = 1; id.empty(); ++n)
+      if (!cfg_.climate.room("r" + std::to_string(n))) id = "r" + std::to_string(n);
+    body["id"] = id;
+  } else if (const ClimateRoomCfg* was = cfg_.climate.room(id)) {
+    // A plant followed stays so, unless the change says otherwise
+    if (!body.contains("plant")) body["plant"] = was->plant;
+  } else {
+    return Result::fail(404, say("climate.none"));
+  }
+  ClimateRoomCfg room;
+  try {
+    room = climateRoomFromJson(body);
+  } catch (...) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  Config next = cfg_;
+  bool found = false;
+  for (auto& x : next.climate.rooms)
+    if (x.id == id) {
+      x = room;
+      found = true;
+    }
+  if (!found) next.climate.rooms.push_back(room);
+  Result r = saveConfig(next, changed("cfg.what.climate"));
+  if (r.status == 200) r.body["id"] = id;
+  return r;
+}
+
+Result Robot::deleteRoom(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.climate.room(id)) return Result::fail(404, say("climate.none"));
+  Config next = cfg_;
+  next.climate.rooms.erase(std::remove_if(next.climate.rooms.begin(), next.climate.rooms.end(), [&](const ClimateRoomCfg& r) { return r.id == id; }),
+                           next.climate.rooms.end());
+  for (const auto& kind : climateOutputs()) next.roles.erase(climateRole(id, kind));
+  for (const auto& kind : climateSensors()) next.roles.erase(climateRole(id, kind));
+  const Config before = cfg_;
+  Result r = saveConfig(next, changed("cfg.what.climate"));
+  if (r.status != 200) return r;
+  climate_.forget(id);
+  reconcileDevices(before);  // its outputs are let go and switched off
   return r;
 }
 
@@ -2825,7 +2884,7 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
 Result Robot::stop(const Msg& who) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036);
-  // light follows its plan (SD-135)
+  // light follows its plan, and a room's fans their rule (SD-135, SD-136)
   act_.stopAll();
   outputs_.allOff();
   const bool was = rt_.stopped;
