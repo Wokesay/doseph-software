@@ -6,7 +6,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { Droplets, Plus, Trash2 } from "lucide-preact";
 import { del, get, post, put, type Devices, type Plants, type WaterCircuit } from "../api";
-import { ago, duration, num, time } from "../format";
+import { ago, deviceTime, duration, num } from "../format";
 import { msg, t } from "../i18n";
 import { config, refreshConfig, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, Field, Modal, NumberInput, Pill, Seg, Toggle } from "../ui";
@@ -427,7 +427,7 @@ function CircuitCard(p: { c: WaterCircuit; devices: Devices | null; onEdit: () =
         {s?.nextAt != null && s.nextS != null && (
           <div>
             <span class="muted">{t("watering.next")}: </span>
-            <span data-testid={`circuit-next-${p.c.id}`}>{t("watering.nextAt", { at: time(s.nextAt), in: duration((s.nextAt - st.now) * 1000), s: s.nextS })}</span>
+            <span data-testid={`circuit-next-${p.c.id}`}>{t("watering.nextAt", { at: deviceTime(s.nextAt, config.value?.system.timezone), in: duration((s.nextAt - st.now) * 1000), s: s.nextS })}</span>
           </div>
         )}
         <div>
