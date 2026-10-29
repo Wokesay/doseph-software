@@ -339,6 +339,8 @@ export const msgDe: Record<string, string> = {
   "ev.plant.lead": "{name} bestimmt jetzt das Wasser",
   "ev.plant.deleted": "{name} entfernt",
   "plant.last_phase": "Das ist die letzte Phase – trag stattdessen die Ernte ein und schließ die Pflanze ab",
+  "plant.current_phase": "Die aktuelle Phase bleibt; nur die Phasen danach können weg",
+  "plant.past_phases": "Vergangene Phasen bleiben, wie sie waren",
   "plant.not_running": "Die Pflanze ist abgeschlossen",
   "plant.leads": "{name} bestimmt das Wasser – ändere stattdessen ihre Phase oder schließ sie ab",
   "plant.start": "Der Start muss heute oder an einem Tag des vergangenen Jahres liegen",

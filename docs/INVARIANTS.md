@@ -147,6 +147,7 @@ of its own.
 | A phase that waits for its confirmation stays after its days and reminds daily, as the last phase does until the harvest is recorded; only the user records the harvest | RAT-002 | ✓ | `plants.cpp`, `robot.cpp` · test_plants.cpp |
 | Logic reads a phase's parameters, never its name; CI refuses phase names in the core | RAT-076 | ✓ | `plants.cpp`, `arch_check.sh` · test_plants.cpp |
 | The harvest is an event of a running plant; completing it is a step of its own | RAT-077 | ✓ | `config.hpp`, `robot.cpp` · test_plants.cpp |
+| A running plant's own phases change: the current one and those after it, never those past, and the current one stays; only that plant changes, not its plant recipe; a completed plant's phases stay | SD-137 | ✓ | `robot.cpp`, `plants.tsx` · test_plants.cpp, robot.spec.ts |
 | The cultivation system is one of a fixed list per tank; it sets what the app offers, never the water plan | SD-128 | ✓ | `config.hpp`, `config.cpp`, `robot.cpp` · test_plants.cpp, robot.spec.ts |
 | The calendar lists the next 8 weeks by local day: phases that begin, a phase that waits for confirmation, planned ends and the maintenance dates; what is past its plan stands at today | SD-128 | ✓ | `plants.cpp`, `robot.cpp` · test_plants.cpp, robot.spec.ts |
 

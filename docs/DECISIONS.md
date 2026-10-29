@@ -1409,3 +1409,26 @@ by the minimal principle: a safety frame, not a guard for every case.
     it is: neither more nor less light.
   - *Alarms.* Heat protection and CO2 above 2,000 ppm are problems of the
     watchdog, and so alarms after 5 min (SD-123); CO2 is a critical one.
+
+## SD-137: A running plant's own phases
+
+2026-10-29. A follow-up of SD-128, which copies a plant recipe's phases into
+a plant when it starts, so that a later change of the recipe does not reach
+a plant already running. The owner decided how a running plant's phases
+change; the rest are control details decided here by the minimal principle.
+
+- **Per plant** (decided by the owner). A running plant's phases are
+  edited on the plant itself, with the same fields as a plant recipe's.
+  Only that plant changes; its plant recipe stays a template for plants
+  started later.
+- **What may change.** The current phase and those after it: their
+  values, and phases added or removed after the current one. The phases
+  already past stay as they were, and the current phase stays. A
+  completed plant's phases are its record and stay; its name may change.
+- **At once.** A change of the leading plant's current phase changes the
+  water plan at once, as any change of the plan does (SD-128). A current
+  phase given fewer days than have passed moves on at the next local
+  midnight, unless it waits for its confirmation.
+- **Who.** As for any change of a plant (SD-129): a session, an app token
+  or an account token; the phases are checked against the same bounds as
+  a plant recipe's.

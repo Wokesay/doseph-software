@@ -358,6 +358,8 @@ constexpr Entry kMessages[] = {
     {"ev.plant.deleted", "{name} removed"},
     {"plant.last_phase", "This is the last phase – record the harvest and complete the plant instead"},
     {"plant.not_running", "The plant is completed"},
+    {"plant.current_phase", "The current phase stays; only the phases after it may go"},
+    {"plant.past_phases", "Phases already past stay as they were"},
     {"plant.leads", "{name} sets the water – change its phase or complete it instead"},
     {"plant.start", "The start must be today or a day of the past year"},
     {"plant.harvest_at", "The harvest must lie between the start and now"},
