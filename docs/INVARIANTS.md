@@ -250,6 +250,8 @@ of its own.
 | CO2 only by day, with a target, while the exhaust fan is off, outside maintenance and on a value of at least 300 ppm read since the start and within 2 min, in pulses of a minute with an auto-off in the device; no target above 1,500 ppm; above 2,000 ppm the valve closes with an alarm; ten pulses without a rise lock it until a person releases it | SD-136, RAT-019 | ✓ | `climate.cpp`, `config.cpp` · test_climate.cpp |
 | The fans keep their rule through a Stop, a hold and a restart; a Stop switches heater, humidifier, dehumidifier and CO2 off until Resume; a hold of the pumps does not | SD-136, R6 | ✓ | `gateway.cpp`, `climate.cpp` · test_climate.cpp |
 | Only a session or an app token manages rooms; a room removed lets its outputs go | SD-136, SD-129 | ✓ | `api.cpp`, `robot.cpp` · test_climate.cpp |
+| Heat protection: above a room's heat limit its dimmers go down 10 points every 2 min from the brightest, never below their driver's threshold; 2 °C above it every light of the room goes off, also one switched on by hand; 1 °C below it light follows its plan; without a value it stays as it is | SD-136 | ✓ | `climate.cpp`, `lighting.cpp` · test_climate.cpp |
+| Heat protection and CO2 above 2,000 ppm are watchdog problems: an alarm after 5 min, CO2 a critical one | SD-136, SD-123 | ✓ | `watchdog.cpp`, `alarms.cpp` · test_climate.cpp |
 
 ## Locks that report only (SD-133)
 

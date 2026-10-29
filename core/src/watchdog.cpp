@@ -60,6 +60,13 @@ WatchResult evaluate(const WatchInput& in) {
   }
   // Network devices (SD-132): a bound role that does not work is a problem (RAT-024)
   for (const auto& r : in.roles) add("role." + r.id, r.label.key.empty() ? say("role." + r.id) : r.label, r.ok ? "ok" : "problem", r.text);
+  // Climate (SD-136): CO2 the valve was closed for, and light heat protection holds back
+  for (const auto& r : in.rooms) {
+    const Msg label = say("watch.climate", {{"name", r.name}});
+    if (r.co2High) add("climate." + r.id + ".co2", label, "problem", say("watch.climate.co2_high", {{"name", r.name}, {"max", kCo2CutPpm}}));
+    if (r.heat > 0)
+      add("climate." + r.id + ".heat", label, "problem", say(r.heat == 2 ? "watch.climate.heat_off" : "watch.climate.heat_dim", {{"name", r.name}, {"limit", r.limitC}}));
+  }
   if (const Reading* f = find(in, "flow")) {
     const Msg label = say("watch.flow");
     if (in.stopped || !in.needsFlow) add("flow", label, "neutral", say("watch.flow_not_needed"));

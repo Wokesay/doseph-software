@@ -8,6 +8,7 @@
 // on or off until the plan's next change. Only the gateway switches (R1).
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 
@@ -37,17 +38,24 @@ const PhaseCfg* followedLightPhase(const Config& cfg, const LightCircuitCfg& l);
 // where it has them
 LightCircuitCfg effectiveLight(const Config& cfg, const LightCircuitCfg& l);
 
+// What heat protection leaves of a light (SD-136): a dimmer's brightness at most so much, or off
+struct LightCap {
+  double pct = 100;
+  bool off = false;
+};
+using LightCaps = std::map<std::string, LightCap>;  // by circuit
+
 class Lighting {
  public:
-  // Every light as its plan, or a person, wants it now
-  void tick(Ctx& c, int secondOfDay, NetOutputs& out);
+  // Every light as its plan, or a person, wants it now, within what heat protection leaves of it
+  void tick(Ctx& c, int secondOfDay, NetOutputs& out, const LightCaps& caps = {});
   // By hand: on or off until the plan's next change; nothing: back to the plan. False for no such
   // circuit.
   static bool hand(Ctx& c, const std::string& circuit, std::optional<bool> on, int secondOfDay);
   // A circuit removed: what was switched by hand goes with it
   static void forget(RuntimeState& rt, const std::string& circuit);
   // `outputs`: the gateway's status of the output roles
-  static json status(const Ctx& c, int secondOfDay, const json& outputs);
+  static json status(const Ctx& c, int secondOfDay, const json& outputs, const LightCaps& caps = {});
 };
 
 }  // namespace doseph

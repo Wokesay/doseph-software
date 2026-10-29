@@ -80,7 +80,7 @@ LightCircuitCfg effectiveLight(const Config& cfg, const LightCircuitCfg& l) {
   return e;
 }
 
-void Lighting::tick(Ctx& c, int secondOfDay, NetOutputs& out) {
+void Lighting::tick(Ctx& c, int secondOfDay, NetOutputs& out, const LightCaps& caps) {
   if (!c.rt.lighting.is_object()) c.rt.lighting = json::object();
   // The hand switches of circuits gone
   for (auto it = c.rt.lighting.begin(); it != c.rt.lighting.end();) {
@@ -97,6 +97,11 @@ void Lighting::tick(Ctx& c, int secondOfDay, NetOutputs& out) {
       if (on) pct = handPct(e, p);
     } else {
       c.rt.lighting.erase(l.id);  // past the plan's next change: by the plan again
+    }
+    // Heat protection, also over a switch by hand: dimmed, never below the driver's threshold, or off
+    if (const auto cap = caps.find(l.id); cap != caps.end()) {
+      if (cap->second.off) on = false;
+      else if (l.dimmed && on) pct = std::max({std::min(pct, cap->second.pct), isNum(e.thresholdPct) ? e.thresholdPct : 0.0, 1.0});
     }
     out.want(lightRole(l.id), on);
     if (l.dimmed && on) out.wantLevel(lightRole(l.id), pct);
@@ -125,13 +130,17 @@ void Lighting::forget(RuntimeState& rt, const std::string& circuit) {
   if (rt.lighting.is_object()) rt.lighting.erase(circuit);
 }
 
-json Lighting::status(const Ctx& c, int secondOfDay, const json& outputs) {
+json Lighting::status(const Ctx& c, int secondOfDay, const json& outputs, const LightCaps& caps) {
   json out = json::array();
   for (const auto& l : c.cfg.lighting.circuits) {
     const LightCircuitCfg e = effectiveLight(c.cfg, l);
     const LightPoint p = lightAt(e, secondOfDay);
     const auto h = handOf(c.rt, l.id, c.epoch, p.day);
-    const bool on = h ? (*h)["on"].get<bool>() : p.on;
+    const auto cap = caps.find(l.id);
+    const bool capped = cap != caps.end();
+    const bool on = (h ? (*h)["on"].get<bool>() : p.on) && !(capped && cap->second.off);
+    double pct = !on ? 0.0 : h ? handPct(e, p) : p.pct;
+    if (capped && on) pct = std::max({std::min(pct, cap->second.pct), isNum(e.thresholdPct) ? e.thresholdPct : 0.0, 1.0});
     json plant = nullptr;
     if (!l.plant.empty())
       if (const PlantCfg* pl = c.cfg.plant(l.plant)) {
@@ -143,12 +152,13 @@ json Lighting::status(const Ctx& c, int secondOfDay, const json& outputs) {
     out.push_back({{"id", l.id},
                    {"day", p.day},
                    {"on", on},
-                   {"pct", !l.dimmed ? json(nullptr) : json(!on ? 0.0 : h ? handPct(e, p) : p.pct)},
+                   {"pct", !l.dimmed ? json(nullptr) : json(pct)},
                    {"hours", e.hours},
                    {"nextChangeAt", p.changeInS < kDayS ? json(c.epoch + p.changeInS) : json(nullptr)},
                    {"hand", h ? json{{"on", (*h)["on"]}, {"until", (*h)["until"]}} : json(nullptr)},
-                   {"darkOn", h && (*h)["on"].get<bool>() && !p.day},
+                   {"darkOn", h && on && !p.day},
                    {"plant", plant},
+                   {"heat", capped ? json{{"off", cap->second.off}, {"pct", cap->second.pct}} : json(nullptr)},
                    {"output", output}});
   }
   return out;

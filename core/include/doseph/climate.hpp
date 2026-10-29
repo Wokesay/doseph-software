@@ -16,8 +16,10 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "doseph/common.hpp"
+#include "doseph/lighting.hpp"
 
 namespace doseph {
 
@@ -49,12 +51,25 @@ struct ClimateTargets {
 };
 ClimateTargets climateTargets(const Config& cfg, const ClimateRoomCfg& r, int secondOfDay);
 
+// What a room says the watchdog should know (SD-136)
+struct ClimateAlert {
+  std::string id, name;
+  bool co2High = false;   // above 2,000 ppm: the valve is closed
+  int heat = 0;           // heat protection: 1 the light dimmed, 2 the light off
+  double limitC = kNaN;   // its heat limit
+};
+
 class Climate {
  public:
   // The robot started: the dehumidifier waits its 5 min, and CO2 a value read since (RAT-034, R6)
   void start(Ms now);
-  // Every room's outputs as their rules want them now
+  // Every room's outputs as their rules want them now, and what heat protection leaves of its light
   void tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& out);
+  // Heat protection (SD-136): above a room's heat limit its dimmers go down a step every 2 min,
+  // never below their driver's threshold; 2 °C above it every light of the room goes off; 1 °C
+  // below it the light follows its plan again
+  const LightCaps& lightCaps() const { return caps_; }
+  std::vector<ClimateAlert> alerts(const Config& cfg) const;
   // A room removed
   void forget(const std::string& room) { rooms_.erase(room); }
   // `outputs`: the gateway's status of the output roles
@@ -72,8 +87,12 @@ class Climate {
     bool co2High = false;  // above 2,000 ppm, until back below the highest target
     double pulseFromPpm = kNaN;  // CO2 at the last pulse's start
     int noRise = 0;              // pulses in a row after which it had not risen
+    int heat = 0;                // heat protection: 0 none, 1 dimmed, 2 off
+    double capPct = 100;         // the dimmers' brightness at most
+    Ms stepAt = 0;               // its last step down
   };
   std::map<std::string, Room> rooms_;
+  LightCaps caps_;
   Ms startMs_ = 0;
 };
 

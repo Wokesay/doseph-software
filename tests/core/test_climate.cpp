@@ -394,3 +394,55 @@ TEST_CASE("Climate: a phase's temperature stays below the room's heat limit; a v
   r.s.robot().mqttValue("room/temp", "24");
   r.waitUntil("heater on again", [&] { return heater(r); }, 120);
 }
+
+TEST_CASE("Climate: above its heat limit a room's dimmers go down a step every 2 min, never below their threshold; 2 °C above it every light of the room goes off, also against a hand; 1 °C below it light follows its plan; the watchdog says so (SD-136, RAT-013)") {
+  Run r(harness::device());
+  r.ok("PUT", "lighting/circuits", {{"name", "Lamps"}, {"dimmed", true}, {"startMin", 0}, {"hours", 24}, {"pct", 80}, {"thresholdPct", 10}});
+  r.ok("PUT", "lighting/circuits", {{"name", "Shelf"}, {"startMin", 0}, {"hours", 24}});
+  addRoom(r, {{"lights", {"l1", "l2"}}});
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-dimmer.local"}, {"name", "Dimmer"}});  // d4
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Relay"}});         // d5
+  r.ok("PUT", "roles/light.l1", {{"source", "shelly"}, {"device", "d4"}, {"channel", 0}});
+  r.ok("PUT", "roles/light.l2", {{"source", "shelly"}, {"device", "d5"}, {"channel", 0}});
+  auto& lamp = r.s.net().shelly("shelly-dimmer.local")->lights[0];
+  auto shelf = [&] { return r.s.net().shelly("shelly-1.local")->switches[0].on; };
+  keepUntil(r, 26, 70, 600, "both on", [&] { return lamp.on && lamp.brightness == 80 && shelf(); }, 90);
+  // Above 30 °C: a step down, then one every 2 min; the switched shelf stays on
+  keepUntil(r, 31, 70, 600, "a step down", [&] { return lamp.brightness == 70; }, 30);
+  keep(r, 31, 70, 600, 2 * 60 + 10);
+  CHECK(lamp.brightness == 60);
+  CHECK(shelf());
+  const json lights = r.state()["lighting"];
+  CHECK(lights[0]["heat"]["pct"] == 60);
+  CHECK(room(r)["heat"]["off"] == false);
+  bool said = false;
+  const json wd = r.state()["watchdog"];
+  for (const auto& i : wd["items"]) said |= i["id"] == "climate.r1.heat" && i["status"] == "problem";
+  CHECK(said);
+  // Never below the driver's threshold
+  keep(r, 31, 70, 600, 14 * 60);
+  CHECK(lamp.on);
+  CHECK(lamp.brightness == 10);
+  // 2 °C above: every light of the room off, also one switched on by hand
+  keepUntil(r, 32.5, 70, 600, "all off", [&] { return !lamp.on && !shelf(); }, 30);
+  r.ok("POST", "lighting/circuits/l2/hand", {{"on", true}});
+  keep(r, 32.5, 70, 600, 30);
+  CHECK_FALSE(shelf());
+  // Back at the limit it stays off; 1 °C below it, light follows its plan again
+  keep(r, 30, 70, 600, 60);
+  CHECK_FALSE(lamp.on);
+  keepUntil(r, 28.9, 70, 600, "by its plan again", [&] { return lamp.on && lamp.brightness == 80 && shelf(); }, 60);
+  CHECK(room(r)["heat"].is_null());
+}
+
+TEST_CASE("Climate: CO2 above 2,000 ppm becomes a critical alarm (SD-136)") {
+  Run r(harness::device());
+  addRoom(r, {{"co2Ppm", 1000}});
+  // A problem stands 5 min before it is an alarm
+  keepUntil(r, 26, 70, 2500, "a critical alarm", [&] {
+    const json alarms = r.state()["alarms"];
+    for (const auto& a : alarms)
+      if (a["id"] == "climate.r1.co2" && a["level"] == "critical") return true;
+    return false;
+  }, 8 * 60);
+}
