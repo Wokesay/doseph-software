@@ -4,10 +4,12 @@
 #include <doctest/doctest.h>
 
 #include <functional>
+#include <limits>
 #include <string>
 
 #include "doseph/api.hpp"
 #include "doseph/devices.hpp"
+#include "doseph/gateway.hpp"
 #include "doseph/messages.hpp"
 #include "simulation.hpp"
 
@@ -49,6 +51,7 @@ const json* item(const json& watchdog, const std::string& id) {
 void bindValve(sim::Simulation& s) {
   REQUIRE(s.robot().addDevice({{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Valve"}}).status == 200);
   REQUIRE(s.robot().putRole("refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
+  s.step(kSecond);  // the gateway takes the binding up; a want from before it counts for nothing
 }
 
 }  // namespace
@@ -310,4 +313,241 @@ TEST_CASE("Devices: removing a device switches its output off first and releases
     CHECK_FALSE(permitted(Role::Account, m, {"roles", "refill_valve"}));
     CHECK_FALSE(permitted(Role::Peer, m, {"roles", "refill_valve"}));
   }
+}
+
+namespace {
+
+// The gateway and the device layer alone, with a twin Shelly that answers when told to (SD-132)
+struct Rig {
+  Config cfg;
+  NetDevices dev;
+  NetOutputs out;
+  sim::FakeShelly relay;
+  Ms now = 0;
+  std::vector<NetRequest> queued;
+  Rig() {
+    cfg.devices = {{"d1", "shelly", "a.local", "Valve"}};
+    cfg.roles["refill_valve"] = {"shelly", "d1", 0, "", "", false, ""};
+    relay.address = "a.local";
+    relay.id = "shellyplus2pm-rig";
+    for (int i = 0; i < 2; ++i)
+      relay.switches.push_back({false, 0, {{"initial_state", "restore_last"}, {"auto_on", false}, {"auto_off", false}, {"auto_off_delay", 60.0}, {"in_mode", "follow"}}});
+    relay.inputs = {false, false};
+  }
+  void tick(bool hold = false) {
+    for (const auto& a : dev.tick(cfg, now)) out.answer(cfg, dev, a, now);
+    out.tick(cfg, dev, hold, now);
+    for (auto& r : dev.take()) queued.push_back(std::move(r));
+  }
+  void deliver(const NetRequest& r) {
+    if (const auto a = dev.response(cfg, r.id, 200, relay.handle(r.body, now), now)) out.answer(cfg, dev, *a, now);
+    for (auto& x : dev.take()) queued.push_back(std::move(x));
+  }
+  // Answers what waits, and what that brings, in order
+  void answerAll() {
+    for (int guard = 0; guard < 50 && !queued.empty(); ++guard) {
+      const NetRequest r = queued.front();
+      queued.erase(queued.begin());
+      deliver(r);
+    }
+  }
+  void run(Ms ms) {
+    for (Ms t = 0; t < ms; t += kSecond) {
+      now += kSecond;
+      tick();
+      answerAll();
+    }
+  }
+  bool switchesOn() const {
+    for (const auto& r : queued)
+      if (r.body.is_object() && r.body.value("method", "") == "Switch.Set" && r.body["params"].value("on", false)) return true;
+    return false;
+  }
+};
+
+}  // namespace
+
+TEST_CASE("Devices: an answer counts only for the request it answers: a late read-back of the output bound before never switches on the one bound now (SD-132, RAT-019)") {
+  Rig g;
+  g.run(10 * kSecond);
+  REQUIRE(g.out.status(g.cfg, g.dev, g.now)["refill_valve"]["state"] == "off");
+  REQUIRE(g.out.want("refill_valve", true));
+  g.now += kSecond;
+  g.tick();  // a read-back of output 0 is under way, unanswered
+  std::vector<NetRequest> late = g.queued;
+  g.queued.clear();
+  REQUIRE_FALSE(late.empty());
+  // Bound to output 1 meanwhile; the logic wants it on again
+  g.cfg.roles["refill_valve"].channel = 1;
+  g.now += kSecond;
+  g.tick();
+  g.out.want("refill_valve", true);
+  // The old answer comes now: it says nothing of output 1
+  for (const auto& r : late) g.deliver(r);
+  CHECK_FALSE(g.switchesOn());
+  CHECK_FALSE(g.relay.switches[1].on);
+  // Output 1 switches on only after its own settings were written and read back
+  g.run(10 * kSecond);
+  CHECK(g.relay.switches[1].on);
+  CHECK(g.relay.switches[1].config["initial_state"] == "off");
+}
+
+TEST_CASE("Devices: an output that is on without the robot having switched it after a check is switched off and checked first, also when it is wanted (SD-132, RAT-019)") {
+  sim::Simulation s(demo());
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  relay->switches[0].on = true;  // someone switched it on in the maker's app
+  bindValve(s);
+  s.robot().wantOutput("refill_valve", true);
+  bool wasOff = false;
+  REQUIRE(runUntil(s, [&] {
+    wasOff |= !relay->switches[0].on;
+    return wasOff && relay->switches[0].on;
+  }, 30));
+  CHECK(relay->switches[0].config["initial_state"] == "off");
+  CHECK(role(s, "refill_valve")["output"]["state"] == "on");
+}
+
+TEST_CASE("Devices: a device that answers as another one is not it: it is offline, says so, and its output is never switched; the ID it had stays across a restart (SD-132)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  REQUIRE(runUntil(s, [&] { return deviceStatus(s, "d1")["ownId"] == "shellyplus1-sim000001"; }, 15));
+  s.control("netId", {{"address", "shelly-1.local"}, {"id", "shellyplusplugs-heater"}});
+  REQUIRE(runUntil(s, [&] { return role(s, "refill_valve")["output"]["state"] == "offline"; }, 45));
+  CHECK(deviceStatus(s, "d1")["problem"]["key"] == "device.other");
+  s.robot().wantOutput("refill_valve", true);
+  s.step(20 * kSecond);
+  CHECK_FALSE(relay->switches[0].on);
+  s.reboot();
+  s.step(20 * kSecond);
+  CHECK(deviceStatus(s, "d1")["problem"]["key"] == "device.other");
+  // Replaced on purpose: removed and added again, it is known anew
+  REQUIRE(s.robot().removeDevice("d1").status == 200);
+  REQUIRE(s.robot().addDevice({{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Valve"}}).status == 200);
+  REQUIRE(runUntil(s, [&] { return deviceStatus(s, "d1")["online"] == true; }, 15));
+  CHECK(deviceStatus(s, "d1")["ownId"] == "shellyplusplugs-heater");
+}
+
+TEST_CASE("Devices: an import that drops or moves a binding switches the output off; a device that went or moved is forgotten with its password; a want from before never switches a later binding on (SD-132, R6)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  REQUIRE(s.robot().putDeviceCredentials("d1", {{"password", "relay-secret"}}).status == 200);
+  json file = s.robot().configJson();
+  file["roles"] = json::object();
+  file["devices"][0]["address"] = "shelly-plug.local";
+  REQUIRE(s.robot().importConfig(file).status == 200);
+  s.step(2 * kSecond);
+  CHECK_FALSE(relay->switches[0].on);
+  CHECK(deviceStatus(s, "d1")["hasPassword"] == false);
+  CHECK(deviceStatus(s, "d1")["ownId"] == "shellyplusplugs-sim000002");  // the old one's ID is forgotten, the new one's learned
+  // Bound again: nothing is wanted until the logic wants it anew
+  REQUIRE(s.robot().putRole("refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
+  s.step(20 * kSecond);
+  CHECK_FALSE(s.net().shelly("shelly-plug.local")->switches[0].on);
+}
+
+TEST_CASE("Devices: an output let go while its device cannot be reached is switched off once it can be, within a minute; otherwise an alarm says it may still be on (SD-132)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  s.control("netReachable", {{"address", "shelly-1.local"}, {"reachable", false}});
+  REQUIRE(s.robot().deleteRole("refill_valve").status == 200);
+  s.step(20 * kSecond);
+  CHECK(relay->switches[0].on);  // it cannot be reached
+  s.control("netReachable", {{"address", "shelly-1.local"}, {"reachable", true}});
+  REQUIRE(runUntil(s, [&] { return !relay->switches[0].on; }, 15));
+  CHECK(s.robot().events(0, std::numeric_limits<Epoch>::max(), "", 100).dump().find("ev.device.release_failed") == std::string::npos);
+  // Never reachable again: the alarm after a minute
+  REQUIRE(s.robot().putRole("refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
+  s.step(kSecond);
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  s.control("netReachable", {{"address", "shelly-1.local"}, {"reachable", false}});
+  REQUIRE(s.robot().removeDevice("d1").status == 200);
+  s.step(70 * kSecond);
+  CHECK(s.robot().events(0, std::numeric_limits<Epoch>::max(), "", 100).dump().find("ev.device.release_failed") != std::string::npos);
+}
+
+TEST_CASE("Devices: a Stop switches every bound output off at once, whatever its device said last (SD-132, RAT-036)") {
+  Rig g;
+  g.run(10 * kSecond);
+  g.relay.switches[0].on = true;  // switched on in the maker's app since the last status
+  g.out.allOff();
+  g.now += 100;
+  g.tick();
+  bool off = false;
+  for (const auto& r : g.queued)
+    off |= r.body.value("method", "") == "Switch.Set" && r.body["params"].value("on", true) == false;
+  CHECK(off);
+  g.answerAll();
+  CHECK_FALSE(g.relay.switches[0].on);
+}
+
+TEST_CASE("Devices: a Shelly input is as old as the device's last status, whatever else it answered since (SD-132, RAT-024)") {
+  Rig g;
+  g.cfg.roles["tank_full"] = {"shelly", "d1", 1, "", "", false, ""};
+  g.run(5 * kSecond);
+  REQUIRE(g.dev.value(g.cfg, "tank_full", g.now).state == "ok");
+  // Its status is no longer answered, while the gateway's requests are
+  for (int i = 0; i < 40; ++i) {
+    g.now += kSecond;
+    g.tick();
+    std::vector<NetRequest> keep;
+    for (const auto& r : g.queued)
+      if (r.body.value("method", "") == "Shelly.GetStatus") keep.push_back(r);
+      else g.deliver(r);
+    g.queued.clear();
+    if (i % 5 == 0) g.out.want("refill_valve", i % 10 == 0);
+  }
+  CHECK(g.dev.online("d1", g.now));
+  CHECK(g.dev.value(g.cfg, "tank_full", g.now).state == "stale");
+  CHECK_FALSE(g.dev.value(g.cfg, "tank_full", g.now).value.has_value());
+}
+
+TEST_CASE("Devices: MQTT values count only while connected: after an outage or a change of the MQTT settings, a value counts once it comes again (SD-132, R5)") {
+  sim::Simulation s(demo());
+  REQUIRE(s.robot().putRole("tank_full", {{"source", "mqtt"}, {"entity", "tank/full"}}).status == 200);
+  s.robot().setMqttStatus(true, {});
+  s.robot().mqttValue("tank/full", "ON");
+  CHECK(role(s, "tank_full")["value"] == true);
+  s.robot().setMqttStatus(false, say("mqtt.lost"));
+  s.robot().setMqttStatus(true, {});
+  CHECK(role(s, "tank_full")["state"] == "waiting");
+  s.robot().mqttValue("tank/full", "ON");
+  CHECK(role(s, "tank_full")["value"] == true);
+  REQUIRE(s.robot().putMqtt({{"enabled", false}}).status == 200);
+  CHECK(role(s, "tank_full")["state"] == "offline");
+  CHECK(role(s, "tank_full")["value"].is_null());
+}
+
+TEST_CASE("Devices: out of the box a Shelly's input switches its output; bound to a role it does not (SD-132, RAT-019)") {
+  sim::Simulation s(demo());
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  s.control("netInput", {{"address", "shelly-1.local"}, {"channel", 0}, {"state", true}});
+  CHECK(relay->switches[0].on);
+  s.control("netInput", {{"address", "shelly-1.local"}, {"channel", 0}, {"state", false}});
+  CHECK_FALSE(relay->switches[0].on);
+  bindValve(s);
+  REQUIRE(runUntil(s, [&] { return role(s, "refill_valve")["output"]["verified"] == true; }, 30));
+  s.control("netInput", {{"address", "shelly-1.local"}, {"channel", 0}, {"state", true}});
+  CHECK_FALSE(relay->switches[0].on);
+}
+
+TEST_CASE("Devices: a device is added once by its address; a role that is refused leaves the output it had as it was (SD-132)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  CHECK(s.robot().addDevice({{"kind", "shelly"}, {"address", "SHELLY-1.local"}, {"name", "Again"}}).status == 422);
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  CHECK(s.robot().putRole("refill_valve", {{"source", "mqtt"}, {"entity", "x"}}).status == 422);
+  s.step(10 * kSecond);
+  CHECK(relay->switches[0].on);
+  CHECK_FALSE(s.robot().wantOutput("tank_full", true));
+  CHECK_FALSE(s.robot().wantOutput("heater", true));
 }

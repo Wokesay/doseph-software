@@ -481,7 +481,11 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
   if (c.devices.size() > kMaxNetDevices) err(say("cfg.device.too_many", {{"max", kMaxNetDevices}}));
+  std::set<std::string> addresses;
   for (const auto& d : c.devices) {
+    std::string addr = d.address;
+    std::transform(addr.begin(), addr.end(), addr.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (!addr.empty() && !addresses.insert(addr).second) err(say("cfg.device.twice", {{"name", d.name}}));
     const bool idOk = d.id.size() >= 2 && d.id.size() <= 4 && d.id[0] == 'd' &&
                       std::all_of(d.id.begin() + 1, d.id.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
     if (!idOk || !deviceIds.insert(d.id).second) err(say("cfg.device.id", {{"id", d.id}}));

@@ -113,8 +113,9 @@ class Robot : public RemoteRuns {
   // What the platform sends to the devices, and the answers it gets (status 0: not reached)
   std::vector<NetRequest> takeDeviceRequests();
   void deviceResponse(long long id, int status, const json& body);
-  // Logic says what it wants of an output role; the gateway decides (R1)
-  void wantOutput(const std::string& role, bool on) { outputs_.want(role, on); }
+  // Logic says what it wants of an output role; the gateway decides (R1). False for a role that is
+  // not an output.
+  bool wantOutput(const std::string& role, bool on);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -306,6 +307,7 @@ class Robot : public RemoteRuns {
   NetDevices devices_;
   NetOutputs outputs_;
   bool saveDeviceSecrets();
+  void reconcileDevices(const Config& before);
   // The roles' states for the watchdog: each bound role, whether it works, and why not
   std::vector<WatchInput::Role> roleStates(Ms now) const;
   int mqttRevision_ = 0;

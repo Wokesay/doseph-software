@@ -214,45 +214,61 @@ class Doser {
 };
 
 // The outputs of network devices (SD-132), switched only here (R1). Logic says what it wants of an
-// output role; the gateway reads the output's safety settings back before every switch-on, writes
-// them once more where they differ, and refuses to switch on where they still differ (RAT-019).
-// Off goes at once, and again while the device still says on. An output bound anew, or whose
-// device was away, is switched off and its settings are checked before it may switch on.
+// output role; the gateway decides. Before every switch-on it reads the output's safety settings
+// back (RAT-019), writes them once more where they differ, and refuses to switch on where they
+// still differ. An answer counts only for the request it answers. Off goes at once, and again while
+// the device still says on. An output bound anew, or whose device was away, or that is on without
+// the robot having switched it after a check, is switched off and checked before it may switch on.
+// An output let go (unbound, rebound, its device removed or moved) is switched off, and the off is
+// repeated until the device answers or a minute has passed.
 class NetOutputs {
  public:
-  void want(const std::string& role, bool on);
-  bool wants(const std::string& role) const;
-  // A Stop or a start: every output off, and nothing wanted (R6)
+  // False for a role that is not an output
+  bool want(const std::string& role, bool on);
+  // A Stop or a start: nothing wanted, and every bound output gets an off at the next tick, whatever
+  // it said last (R6, RAT-036)
   void allOff();
   // `hold`: nothing may switch on now (Stop, a hold of every pump)
   void tick(const Config& cfg, NetDevices& dev, bool hold, Ms now);
   void answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, Ms now);
-  // A role's output is let go (unbound, its device removed): it is switched off first
   void release(const Config& cfg, NetDevices& dev, const std::string& role, Ms now);
+  // Releases whose off no device confirmed within a minute, by the name of the device
+  std::vector<std::string> takeFailedReleases();
   // Why an output does not switch, where it does not
   Msg problem(const std::string& role) const;
-  // Whether the device said last that the output is on
-  bool isOn(const Config& cfg, const NetDevices& dev, const std::string& role) const;
-  // Each output role: {state: not_assigned | offline | checking | off | on | refused, verified, problem}
+  // Each output role: {state, want, verified, problem}; state: not_assigned | offline | checking |
+  // unchecked | refused | off | on. Only "off" and "on" are ready.
   json status(const Config& cfg, const NetDevices& dev, Ms now) const;
 
  private:
   struct Out {
     bool want = false;
-    std::string key;    // device:channel it is bound to, to see a new binding
+    std::string key;    // device@address:channel it is bound to, to see a new binding
     std::string stage;  // "" | read | write | reread | on
+    long long pending = 0;  // the request the stage waits for
     bool wrote = false;     // the settings were written once in this check
     bool verified = false;  // read back as written
     bool refused = false;   // written and read back, and still not so: it does not switch on
-    bool onSent = false;    // switched on, which the device's status may not say yet
+    bool onSent = false;    // switched on by the robot after a check
     bool wasOnline = false;
     Msg problem;
     Ms lastOff = -kNetPollMs;
     Ms retryAt = 0;
   };
+  struct Release {
+    NetDeviceCfg device;
+    std::string user, password;
+    int channel = 0;
+    long long pending = 0;
+    Ms lastSent = 0, until = 0;
+  };
   void send(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, const std::string& stage, const std::string& method, const json& params, Ms now);
+  void off(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, Ms now);
   std::map<std::string, Out> outs_;
+  std::vector<Release> releasing_;
+  std::vector<std::string> failedReleases_;
   bool hold_ = false;
+  bool forceOff_ = false;
 };
 
 }  // namespace doseph

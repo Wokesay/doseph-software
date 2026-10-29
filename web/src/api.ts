@@ -287,6 +287,7 @@ export type NetDevice = {
   address: string;
   name: string;
   online: boolean;
+  polled: boolean;
   hasPassword: boolean;
   ownId: string | null;
   problem: Msg | null;

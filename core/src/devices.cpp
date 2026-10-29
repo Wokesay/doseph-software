@@ -26,7 +26,7 @@ const RoleBinding* bindingOf(const Config& cfg, const std::string& role) {
 
 const std::vector<RoleDef>& roleDefs() {
   static const std::vector<RoleDef> defs = {
-      {"refill_valve", "output", true, 25 * kMinute},  // RAT-079: the longest fill
+      {"refill_valve", "output", true, 25 * kMinute},  // the longest fill (SD-132)
       {"circulation_pump", "output", false, 0},        // runs for hours: no auto-off (RAT-019)
       {"tank_full", "binary", false, 0},               // the float switch in the tank (PD-460)
   };
@@ -57,7 +57,8 @@ RoleBinding bindingFromJson(const json& j) {
   b.device = jstr(j, "device");
   if (j.contains("channel") && !j["channel"].is_null()) {
     if (!j["channel"].is_number_integer()) throw std::invalid_argument("a role's channel is not a whole number");
-    b.channel = j["channel"].get<int>();
+    const long long ch = j["channel"].get<long long>();
+    b.channel = ch < 0 || ch > 1000 ? -1 : static_cast<int>(ch);  // out of range: refused by the check
   }
   b.entity = jstr(j, "entity");
   b.field = jstr(j, "field");
@@ -134,20 +135,24 @@ std::optional<json> mqttValueOf(const std::string& payload, const std::string& f
 
 // ---------------------------------------------------------------- NetDevices
 
-NetRequest NetDevices::request(const Config& cfg, const NetDeviceCfg& d, const std::string& method, const std::string& path, json body) {
-  (void)cfg;
+NetRequest NetDevices::request(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& method,
+                               const std::string& path, json body) {
   NetRequest r;
   r.id = ++seq_;
   r.device = d.id;
   r.address = d.address;
   r.method = method;
   r.path = path;
+  if (body.is_object()) body["id"] = r.id;  // a Shelly's RPC: its answer names the request
   r.body = std::move(body);
-  if (const auto it = credentials_.find(d.id); it != credentials_.end()) {
-    r.user = d.kind == "shelly" ? "admin" : it->second.user;
-    r.password = it->second.password;
-  }
+  r.user = d.kind == "shelly" && !password.empty() ? "admin" : user;
+  r.password = password;
   return r;
+}
+
+NetRequest NetDevices::request(const NetDeviceCfg& d, const std::string& method, const std::string& path, json body) {
+  const auto [user, password] = credentials(d.id);
+  return request(d, user, password, method, path, std::move(body));
 }
 
 std::vector<NetAnswer> NetDevices::tick(const Config& cfg, Ms now) {
@@ -159,7 +164,7 @@ std::vector<NetAnswer> NetDevices::tick(const Config& cfg, Ms now) {
       continue;
     }
     seen_[it->second.device].problem = say("device.no_answer");
-    if (it->second.kind == "gateway") failed.push_back({it->second.device, it->second.tag, false, nullptr});
+    if (it->second.kind == "gateway") failed.push_back({it->first, it->second.device, it->second.tag, false, nullptr});
     it = pending_.erase(it);
   }
   for (const auto& d : cfg.devices) {
@@ -170,14 +175,14 @@ std::vector<NetAnswer> NetDevices::tick(const Config& cfg, Ms now) {
     s.nextPoll = now + kNetPollMs;
     if (d.kind == "shelly") {
       // Who it is first: only the second generation and later are used (SD-132)
-      const std::string method = s.gen == 0 ? "Shelly.GetDeviceInfo" : "Shelly.GetStatus";
-      NetRequest r = request(cfg, d, "POST", "/rpc", {{"id", seq_ + 1}, {"method", method}});
-      pending_[r.id] = {d.id, s.gen == 0 ? "info" : "status", "", now};
+      const bool info = s.gen == 0;
+      NetRequest r = request(d, "POST", "/rpc", {{"method", info ? "Shelly.GetDeviceInfo" : "Shelly.GetStatus"}});
+      pending_[r.id] = {d.id, info ? "info" : "status", "", now};
       out_.push_back(std::move(r));
     } else if (d.kind == "esphome") {
       for (const auto& [role, b] : cfg.roles) {
         if (b.source != "esphome" || b.device != d.id || b.entity.empty()) continue;
-        NetRequest r = request(cfg, d, "GET", "/" + b.entity, nullptr);
+        NetRequest r = request(d, "GET", "/" + b.entity, nullptr);
         pending_[r.id] = {d.id, "entity", b.entity, now};
         out_.push_back(std::move(r));
       }
@@ -187,11 +192,17 @@ std::vector<NetAnswer> NetDevices::tick(const Config& cfg, Ms now) {
 }
 
 long long NetDevices::rpc(const Config& cfg, const std::string& device, const std::string& method, const json& params, const std::string& tag, Ms now) {
-  const auto d = std::find_if(cfg.devices.begin(), cfg.devices.end(), [&](const NetDeviceCfg& x) { return x.id == device; });
-  if (d == cfg.devices.end()) return 0;
-  NetRequest r = request(cfg, *d, "POST", "/rpc", {{"id", seq_ + 1}, {"method", method}, {"params", params}});
+  const NetDeviceCfg* d = cfg.device(device);
+  if (!d) return 0;
+  const auto [user, password] = credentials(device);
+  return rpcAt(*d, user, password, method, params, tag, now);
+}
+
+long long NetDevices::rpcAt(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& method,
+                            const json& params, const std::string& tag, Ms now) {
+  NetRequest r = request(d, user, password, "POST", "/rpc", {{"method", method}, {"params", params}});
   const long long id = r.id;
-  pending_[id] = {device, "gateway", tag, now};
+  pending_[id] = {d.id, "gateway", tag, now};
   out_.push_back(std::move(r));
   return id;
 }
@@ -211,29 +222,48 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   Seen& s = seen_[p.device];
   auto fail = [&](Msg why) -> std::optional<NetAnswer> {
     s.problem = std::move(why);
-    if (p.kind == "gateway") return NetAnswer{p.device, p.tag, false, nullptr};
+    if (p.kind == "gateway") return NetAnswer{id, p.device, p.tag, false, nullptr};
     return std::nullopt;
   };
   if (status == 0) return fail(say("device.unreachable"));
   if (status == 401) return fail(say("device.auth"));
   if (status == 404 && p.kind == "info") return fail(say("device.shelly_gen1"));  // no RPC: the first generation
-  if (status < 200 || status >= 300) return fail(say("device.http", {{"status", status}}));
   if (p.kind == "entity") {
     // ESPHome's web server: {"id": "binary_sensor-float", "value": true, "state": "ON"}
-    if (!body.is_object()) return fail(say("device.unreadable"));
+    if (status < 200 || status >= 300 || !body.is_object()) {
+      s.entities[p.tag] = {{"error", true}, {"at", now}};
+      return fail(status == 404 ? say("device.no_entity", {{"entity", p.tag}}) : say("device.http", {{"status", status}}));
+    }
     s.entities[p.tag] = {{"body", body}, {"at", now}};
     s.lastOk = now;
     s.problem = {};
     return std::nullopt;
   }
+  if (status < 200 || status >= 300) return fail(say("device.http", {{"status", status}}));
   // Shelly's RPC: {"id", "src", "result"} or {"id", "src", "error": {"code", "message"}}
   if (!body.is_object()) return fail(say("device.unreadable"));
-  if (body.contains("error")) return fail(say("device.rpc_error", {{"message", jstr(body["error"], "message")}}));
+  // Known by its own ID: another device at its address is not it (SD-132)
+  const std::string src = jstr(body, "src");
+  const auto known = ownIds_.find(p.device);
+  if (known != ownIds_.end() && !known->second.empty() && src != known->second) {
+    s.other = true;
+    s.status = nullptr;
+    return fail(say("device.other", {{"id", utf8Prefix(src, 64)}}));
+  }
+  s.other = false;
+  if (body.contains("error")) return fail(say("device.rpc_error", {{"message", utf8Prefix(jstr(body["error"], "message"), 120)}}));
   const json result = body.contains("result") ? body["result"] : json(nullptr);
   if (p.kind == "info") {
-    s.ownId = jstr(result, "id");
     s.gen = result.is_object() && result.contains("gen") && result["gen"].is_number_integer() ? result["gen"].get<int>() : 1;
     if (s.gen < 2) return fail(say("device.shelly_gen1"));
+    const std::string own = jstr(result, "id");
+    if (known == ownIds_.end() || known->second.empty()) {
+      ownIds_[p.device] = own;
+      learned_ = true;
+    } else if (own != known->second) {
+      s.other = true;
+      return fail(say("device.other", {{"id", utf8Prefix(own, 64)}}));
+    }
     s.lastOk = now;
     s.problem = {};
     s.nextPoll = now;  // its status at once
@@ -244,15 +274,28 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   s.problem = {};
   if (p.kind == "status") {
     s.status = result;
+    s.statusAt = now;
     return std::nullopt;
   }
-  return NetAnswer{p.device, p.tag, true, result};
+  return NetAnswer{id, p.device, p.tag, true, result};
+}
+
+void NetDevices::mqttConnected(bool on) {
+  if (!on) mqtt_.clear();
+  mqttUp_ = on;
 }
 
 void NetDevices::mqttMessage(const Config& cfg, const std::string& topic, const std::string& payload, Ms now) {
+  if (!mqttUp_) return;
   const auto topics = mqttTopics(cfg);
   if (std::find(topics.begin(), topics.end(), topic) == topics.end()) return;
   mqtt_[topic] = {payload, now};
+}
+
+void NetDevices::pruneMqtt(const Config& cfg) {
+  const auto topics = mqttTopics(cfg);
+  for (auto it = mqtt_.begin(); it != mqtt_.end();)
+    it = std::find(topics.begin(), topics.end(), it->first) == topics.end() ? mqtt_.erase(it) : std::next(it);
 }
 
 std::vector<std::string> NetDevices::mqttTopics(const Config& cfg) const {
@@ -269,19 +312,30 @@ std::vector<std::string> NetDevices::mqttTopics(const Config& cfg) const {
 
 bool NetDevices::online(const std::string& device, Ms now) const {
   const auto it = seen_.find(device);
-  if (it == seen_.end() || it->second.lastOk < 0) return false;
+  if (it == seen_.end() || it->second.lastOk < 0 || it->second.other) return false;
   return now - it->second.lastOk <= kNetStaleMs;
 }
 
-std::optional<bool> NetDevices::output(const std::string& device, int channel) const {
+std::optional<bool> NetDevices::output(const std::string& device, int channel, Ms now) const {
   const auto it = seen_.find(device);
-  if (it == seen_.end() || !it->second.status.is_object()) return std::nullopt;
+  if (it == seen_.end() || it->second.other || !it->second.status.is_object() || now - it->second.statusAt > kNetStaleMs) return std::nullopt;
   const std::string key = "switch:" + std::to_string(channel);
   if (!it->second.status.contains(key)) return std::nullopt;
   const json& sw = it->second.status[key];
   if (!sw.is_object() || !sw.contains("output") || !sw["output"].is_boolean()) return std::nullopt;
   return sw["output"].get<bool>();
 }
+
+namespace {
+
+// An availability topic says "online", plain or as {"state": "online"} (Zigbee2MQTT)
+bool saysOnline(const std::string& payload) {
+  if (lower(payload) == "online") return true;
+  const json j = json::parse(payload, nullptr, false);
+  return j.is_object() && lower(jstr(j, "state")) == "online";
+}
+
+}  // namespace
 
 RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) const {
   RoleValue v;
@@ -294,7 +348,7 @@ RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) 
   std::optional<json> raw;
   if (b->source == "mqtt") {
     const auto avail = b->availability.empty() ? mqtt_.end() : mqtt_.find(b->availability);
-    if (!mqttUp_ || (!b->availability.empty() && (avail == mqtt_.end() || lower(avail->second.payload) != "online"))) {
+    if (!mqttUp_ || (!b->availability.empty() && (avail == mqtt_.end() || !saysOnline(avail->second.payload)))) {
       v.state = "offline";
       return v;
     }
@@ -312,8 +366,17 @@ RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) 
     }
     const Seen& s = seen_.at(b->device);
     if (b->source == "shelly") {
+      // The input as its last status said, as old as that status
       const std::string key = "input:" + std::to_string(b->channel);
-      v.at = s.lastOk;
+      if (s.statusAt < 0) {
+        v.state = "waiting";
+        return v;
+      }
+      v.at = s.statusAt;
+      if (now - s.statusAt > kNetStaleMs) {
+        v.state = "stale";
+        return v;
+      }
       if (s.status.is_object() && s.status.contains(key) && s.status[key].is_object() && s.status[key].contains("state"))
         raw = s.status[key]["state"];
     } else {
@@ -322,7 +385,11 @@ RoleValue NetDevices::value(const Config& cfg, const std::string& role, Ms now) 
         v.state = "waiting";
         return v;
       }
-      v.at = jnum(it->second, "at") >= 0 ? static_cast<Ms>(jnum(it->second, "at")) : 0;
+      v.at = static_cast<Ms>(jnum(it->second, "at", 0));
+      if (jbool(it->second, "error", false)) {
+        v.state = "unreadable";
+        return v;
+      }
       if (now - v.at > kNetStaleMs) {
         v.state = "stale";
         return v;
@@ -359,17 +426,22 @@ json NetDevices::status(const Config& cfg, Ms now) const {
   for (const auto& d : cfg.devices) {
     json j = deviceToJson(d);
     const auto it = seen_.find(d.id);
+    const auto own = ownIds_.find(d.id);
+    // An ESPHome device is asked only for what roles read from it
+    const bool polled = d.kind == "shelly" || std::any_of(cfg.roles.begin(), cfg.roles.end(), [&](const auto& r) {
+                          return r.second.source == "esphome" && r.second.device == d.id;
+                        });
+    j["polled"] = polled;
     j["online"] = online(d.id, now);
     j["hasPassword"] = hasPassword(d.id);
-    j["ownId"] = nullptr;
+    j["ownId"] = own == ownIds_.end() || own->second.empty() ? json(nullptr) : json(own->second);
     j["problem"] = nullptr;
     j["switches"] = json::array();
     j["inputs"] = json::array();
     if (it != seen_.end()) {
       const Seen& s = it->second;
-      if (!s.ownId.empty()) j["ownId"] = s.ownId;
       if (!s.problem.key.empty()) j["problem"] = s.problem;
-      if (s.status.is_object())
+      if (s.status.is_object() && !s.other)
         for (const auto& [k, v] : s.status.items()) {
           if (!v.is_object()) continue;
           if (k.rfind("switch:", 0) == 0 && v.contains("output"))
@@ -390,26 +462,43 @@ void NetDevices::setCredentials(const std::string& device, const std::string& us
 
 bool NetDevices::hasPassword(const std::string& device) const { return credentials_.count(device) > 0; }
 
+std::pair<std::string, std::string> NetDevices::credentials(const std::string& device) const {
+  const auto it = credentials_.find(device);
+  return it == credentials_.end() ? std::pair<std::string, std::string>{} : std::pair<std::string, std::string>{it->second.user, it->second.password};
+}
+
 json NetDevices::secretsJson() const {
   json j = json::object();
   for (const auto& [d, c] : credentials_) j[d] = {{"user", c.user}, {"password", c.password}};
+  for (const auto& [d, own] : ownIds_)
+    if (!own.empty()) j[d]["ownId"] = own;
   return j;
 }
 
 void NetDevices::secretsFromJson(const json& j) {
   credentials_.clear();
+  ownIds_.clear();
   if (!j.is_object()) return;
   for (const auto& [d, v] : j.items()) {
     const std::string p = jstr(v, "password");
     if (!p.empty()) credentials_[d] = {jstr(v, "user"), p};
+    const std::string own = jstr(v, "ownId");
+    if (!own.empty()) ownIds_[d] = own;
   }
+}
+
+bool NetDevices::takeLearned() {
+  const bool l = learned_;
+  learned_ = false;
+  return l;
 }
 
 void NetDevices::forget(const std::string& device) {
   seen_.erase(device);
   credentials_.erase(device);
+  ownIds_.erase(device);
   for (auto it = pending_.begin(); it != pending_.end();)
-    it = it->second.device == device ? pending_.erase(it) : std::next(it);
+    it = it->second.device == device && it->second.kind != "gateway" ? pending_.erase(it) : std::next(it);
 }
 
 }  // namespace doseph

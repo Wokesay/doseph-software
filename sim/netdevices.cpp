@@ -15,8 +15,8 @@ json shellySwitchDefaults(bool withInput) {
   return c;
 }
 
-json rpcError(const json& req, int code, const std::string& message) {
-  return {{"id", req.value("id", 0)}, {"src", "sim"}, {"error", {{"code", code}, {"message", message}}}};
+json rpcError(const json& req, const std::string& src, int code, const std::string& message) {
+  return {{"id", req.value("id", 0)}, {"src", src}, {"error", {{"code", code}, {"message", message}}}};
 }
 
 }  // namespace
@@ -38,29 +38,29 @@ json FakeShelly::handle(const json& req, Ms now) {
   }
   if (method == "Switch.GetConfig") {
     Switch* s = sw();
-    if (!s) return rpcError(req, -103, "Invalid argument 'id'");
+    if (!s) return rpcError(req, id, -103, "Invalid argument 'id'");
     json c = s->config;
     c["id"] = params["id"];
     return result(c);
   }
   if (method == "Switch.SetConfig") {
     Switch* s = sw();
-    if (!s || !params.contains("config") || !params["config"].is_object()) return rpcError(req, -103, "Invalid argument");
+    if (!s || !params.contains("config") || !params["config"].is_object()) return rpcError(req, id, -103, "Invalid argument");
     for (const auto& [k, v] : params["config"].items())
-      if (!s->config.contains(k)) return rpcError(req, -103, "Invalid argument '" + k + "'");
+      if (!s->config.contains(k)) return rpcError(req, id, -103, "Invalid argument '" + k + "'");
     if (!ignoresConfig)
       for (const auto& [k, v] : params["config"].items()) s->config[k] = v;
     return result({{"restart_required", false}});
   }
   if (method == "Switch.Set") {
     Switch* s = sw();
-    if (!s || !params.contains("on") || !params["on"].is_boolean()) return rpcError(req, -103, "Invalid argument");
+    if (!s || !params.contains("on") || !params["on"].is_boolean()) return rpcError(req, id, -103, "Invalid argument");
     const bool was = s->on;
     s->on = params["on"].get<bool>();
     if (s->on && !was) s->onSince = now;
     return result({{"was_on", was}});
   }
-  return rpcError(req, -114, "Method " + method + " not found");
+  return rpcError(req, id, -114, "Method " + method + " not found");
 }
 
 void FakeShelly::advance(Ms now) {
@@ -111,7 +111,7 @@ NetTwin::NetTwin() {
 
 std::pair<int, json> NetTwin::answer(const doseph::NetRequest& r, Ms now) {
   if (FakeShelly* s = shelly(r.address)) {
-    if (!s->online) return {0, nullptr};
+    if (!s->online || !s->reachable) return {0, nullptr};
     if (s->gen < 2 || r.path != "/rpc") return {404, nullptr};  // the first generation has no RPC
     return {200, s->handle(r.body, now)};
   }
@@ -175,11 +175,26 @@ bool NetTwin::control(const std::string& action, const json& body) {
     }
     return false;
   }
+  if (action == "netReachable") {
+    FakeShelly* s = shelly(address);
+    if (!s) return false;
+    s->reachable = body.value("reachable", true);
+    return true;
+  }
   if (action == "netInput") {
     FakeShelly* s = shelly(address);
     const int n = body.value("channel", 0);
     if (!s || n < 0 || n >= static_cast<int>(s->inputs.size())) return false;
     s->inputs[n] = body.value("state", false);
+    // Out of the box the input switches its output ("follow"); detached it does not
+    if (n < static_cast<int>(s->switches.size()) && s->switches[n].config.value("in_mode", "") == "follow") s->switches[n].on = s->inputs[n];
+    return true;
+  }
+  if (action == "netId") {
+    // Another device at the address, as after the router gave its address to another one
+    FakeShelly* s = shelly(address);
+    if (!s || !body.contains("id") || !body["id"].is_string()) return false;
+    s->id = body["id"].get<std::string>();
     return true;
   }
   if (action == "netValue") {

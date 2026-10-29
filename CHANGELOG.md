@@ -33,8 +33,11 @@ All notable changes to this software. The format follows
     loss", "never on by itself" and, for the refill valve, a 28-minute
     auto-off into it, and reads them back. It checks them again before
     every switch-on and refuses where they do not hold.
+  - A Shelly is known by its own ID: another device answering at its
+    address is not used.
   - The outputs switch only through the gateway. A Stop or a restart
-    switches them off.
+    switches them off; an output that is let go is switched off until
+    its device answers, with an alarm after a minute.
   - A role whose device does not answer, or whose value is stale or
     unreadable, has no value and shows as a problem in the watchdog.
   - Device passwords live apart, never in a backup.

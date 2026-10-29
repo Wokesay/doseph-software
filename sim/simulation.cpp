@@ -271,6 +271,7 @@ void Simulation::reboot(Ms outageMs) {
   if (outageMs > 0) {
     clock_->advance(outageMs);
     world_.advance(clock_->nowMs());
+    net_.advance(clock_->nowMs());
   }
   createRobot();
   robot_->boot();
@@ -282,6 +283,7 @@ void Simulation::loadScenario(const std::string& name) {
   opts_.dataDir.clear();  // a scenario change runs in memory
   robot_.reset();
   api_.reset();
+  net_ = NetTwin{};  // the devices as out of the box
   build(true);
 }
 
@@ -334,7 +336,7 @@ json Simulation::control(const std::string& action, const json& b) {
     auto& slot = kind == "ec" ? world_.ecBuffer : world_.phBuffer;
     if (doseph::isNum(v)) slot = v;
     else slot.reset();
-  } else if (action == "netOnline" || action == "netInput" || action == "netValue") {
+  } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable") {
     if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
   } else if (action == "reboot") reboot(static_cast<Ms>(num("outageS", 0) * 1000));
   else if (action == "fastForward") fastForward(std::clamp(num("hours", 1), 0.0, 48.0));

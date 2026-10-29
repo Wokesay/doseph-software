@@ -23,6 +23,7 @@ struct FakeShelly {
   std::string address, id, model;
   int gen = 2;
   bool online = true;
+  bool reachable = true;  // the network to it; its power stays
   struct Switch {
     bool on = false;
     doseph::Ms onSince = 0;

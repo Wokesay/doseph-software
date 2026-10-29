@@ -108,9 +108,12 @@ change: it holds 6 ml (an **assumption**), which a run fills before the
 outlet drips (SD-111).
 The network devices' twins (SD-132): `netOnline` with
 `{"address": "shelly-1.local", "online": false}` takes a device away, as a
-power loss would, and `true` brings it back; `netInput` with
+power loss would, and `true` brings it back; `netReachable` with
+`{"address": "shelly-1.local", "reachable": false}` cuts only the network
+to it; `netId` with `{"address": "shelly-1.local", "id": "…"}` puts
+another device at the address; `netInput` with
 `{"address": "shelly-1.local", "channel": 0, "state": true}` sets a
-Shelly's input; `netValue` with `{"address": "esp-1.local", "entity":
+Shelly's input, which switches its output while it is not detached; `netValue` with `{"address": "esp-1.local", "entity":
 "binary_sensor/tank_full", "value": true}` sets an ESPHome value. The
 simulator's MQTT link also subscribes to the topics roles read, without
 TLS, since values need none (SD-130).

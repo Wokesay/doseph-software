@@ -17,7 +17,7 @@ if grep -rnE '(hw_?|hardware)(\.|->)(startRun|setFeedPump|allowReturnPump|stopAl
 fi
 
 # R1 for network devices (SD-132): only the gateway switches an output or writes its settings.
-if grep -rnE '"Switch\.(Set|SetConfig|Toggle)"' core/src | grep -v '^core/src/gateway.cpp'; then
+if grep -rnE '"Switch\.(Set|SetConfig|Toggle)"|\.(rpc|rpcAt)\(' core/src | grep -v '^core/src/gateway.cpp'; then
   err "a network output switched outside the gateway"
 fi
 

@@ -574,11 +574,12 @@ function DevicesCard() {
       toastError(e);
     }
   };
-  const password = async (id: string) => {
-    const pw = prompt(t("settings.devices.passwordAsk"));
-    if (pw === null) return;
+  const [login, setLogin] = useState<{ id: string; user: string; password: string } | null>(null);
+  const saveLogin = async () => {
+    if (!login) return;
     try {
-      await put(`/devices/${encodeURIComponent(id)}/credentials`, { password: pw });
+      await put(`/devices/${encodeURIComponent(login.id)}/credentials`, { user: login.user, password: login.password });
+      setLogin(null);
       await load();
       toast(t("settings.saved"));
     } catch (e) {
@@ -598,12 +599,38 @@ function DevicesCard() {
                     {x.name} <span class="muted small">{x.kind === "shelly" ? "Shelly" : "ESPHome"} · <span class="mono">{x.address}</span></span>
                   </div>
                   <div class="small">
-                    {x.online ? <Pill tone="ok">{t("settings.devices.online")}</Pill> : <Pill tone="bad">{t("settings.devices.offline")}</Pill>}{" "}
+                    {!x.polled ? (
+                      <Pill>{t("settings.devices.unused")}</Pill>
+                    ) : x.online ? (
+                      <Pill tone="ok">{t("settings.devices.online")}</Pill>
+                    ) : (
+                      <Pill tone="bad">{t("settings.devices.offline")}</Pill>
+                    )}{" "}
                     {x.problem && <span class="muted">{msg(x.problem)}</span>}
                   </div>
+                  {login?.id === x.id && (
+                    <div class="form-grid">
+                      {x.kind === "esphome" && (
+                        <Field label={t("settings.push.user")}>
+                          <input class="input" name="device-user" value={login.user} autoCapitalize="off" spellcheck={false} onInput={(e) => setLogin({ ...login, user: (e.target as HTMLInputElement).value })} />
+                        </Field>
+                      )}
+                      <Field label={t("settings.push.password")} hint={t("settings.devices.passwordHint")}>
+                        <input class="input" type="password" name="device-password" autoComplete="new-password" value={login.password} onInput={(e) => setLogin({ ...login, password: (e.target as HTMLInputElement).value })} />
+                      </Field>
+                      <div class="row">
+                        <Button size="sm" variant="primary" onClick={saveLogin}>
+                          {t("common.save")}
+                        </Button>
+                        <Button size="sm" onClick={() => setLogin(null)}>
+                          {t("common.cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div class="row-actions">
-                  <Button size="sm" onClick={() => password(x.id)}>
+                  <Button size="sm" onClick={() => setLogin({ id: x.id, user: "", password: "" })}>
                     {x.hasPassword ? t("settings.devices.passwordSet") : t("settings.devices.password")}
                   </Button>
                   <Button size="sm" onClick={() => remove(x.id, x.name)}>
@@ -676,7 +703,7 @@ function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; rel
           {info?.binding ? (
             <Pill tone={state === "ok" || state === "on" || state === "off" ? "ok" : state === "checking" || state === "waiting" ? "info" : "bad"}>
               {t(`settings.devices.state.${state ?? "not_assigned"}` as TextKey)}
-              {!output && state === "ok" ? `: ${String(info?.value)}` : ""}
+              {!output && state === "ok" ? `: ${typeof info?.value === "boolean" ? t(info.value ? "settings.devices.yes" : "settings.devices.no") : String(info?.value)}` : ""}
             </Pill>
           ) : (
             <span class="muted">{t("settings.devices.state.not_assigned")}</span>
@@ -686,7 +713,7 @@ function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; rel
       {problem && <span class="muted small">{msg(problem)}</span>}
       <div class="form-grid">
         <Field label={t("settings.devices.source")}>
-          <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "" })} options={sources} />
+          <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
         </Field>
         {b.source !== "mqtt" && (
           <Field label={t("settings.devices.device")}>
@@ -729,6 +756,7 @@ function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; rel
         </label>
       )}
       {output && info?.pulse && <p class="muted small">{t("settings.devices.autoOff", { min: Math.round((info?.autoOffS ?? 0) / 60) })}</p>}
+      {output && <p class="muted small">{t("settings.devices.detached")}</p>}
       <div class="row">
         <Button size="sm" variant="primary" onClick={save} data-testid={`save-role-${p.role}`}>
           {t("settings.devices.assign")}
