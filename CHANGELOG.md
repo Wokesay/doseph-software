@@ -53,6 +53,11 @@ All notable changes to this software. The format follows
     of light, brightness, the driver's threshold, sunrise and sunset, and
     a plant to follow; then assign its Shelly output.
   - A phase's hours of light and brightness are set on the Plants page.
+- Heat protection for light (SD-136), step 9.6b. Above a room's heat
+  limit its dimmers go down a step every 2 minutes, never below the lamp
+  driver's threshold; 2 °C above it all its lights go off, also one
+  switched on by hand; 1 °C below it light follows its plan again. It is
+  an alarm, and CO2 above 2,000 ppm is a critical one.
 - Climate, the robot's side (SD-136), step 9.6; the page follows.
   - Up to 8 rooms, each with an exhaust fan, a circulation fan, a heater
     with its own thermostat, a humidifier, a dehumidifier and a CO2 valve

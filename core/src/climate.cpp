@@ -36,6 +36,10 @@ constexpr double kCo2RisePpm = 10;
 // A dehumidifier the device reports off this long after it was switched on went off at the device:
 // it rests from then (RAT-034)
 constexpr Ms kOffAtDeviceMs = 30 * kSecond;
+// Heat protection (SD-136): a step down of the dimmers, how often, and how far above the limit the
+// light goes off
+constexpr double kHeatStepPct = 10, kHeatOffC = 2;
+constexpr Ms kHeatStepMs = 2 * kMinute;
 // Two readings of the robot's own sensors further apart than this give no VPD (RAT-017)
 constexpr Ms kVpdPairMs = kMinute;
 
@@ -161,6 +165,7 @@ void Climate::start(Ms now) {
 void Climate::tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& out) {
   // Rooms gone
   for (auto it = rooms_.begin(); it != rooms_.end();) it = c.cfg.climate.room(it->first) ? std::next(it) : rooms_.erase(it);
+  caps_.clear();
   const bool maintenance = c.maintenanceUntil > c.epoch;
   for (const auto& r : c.cfg.climate.rooms) {
     const ClimateTargets t = climateTargets(c.cfg, r, secondOfDay);
@@ -188,6 +193,35 @@ void Climate::tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& o
       o.onSince = on ? c.now : -1;
     };
     auto on = [&](const char* kind) { return st.outs[kind].on; };
+
+    // Heat protection for light. Without a value it stays as it is: neither more nor less light.
+    const double limit = effectiveRoom(c.cfg, r).heatC;
+    if (temp.v && isNum(limit)) {
+      const json args = {{"name", r.name}, {"limit", limit}, {"back", limit - kTempBandC}};
+      if (*temp.v > limit + kHeatOffC && st.heat < 2) {
+        st.heat = 2;
+        c.log.add(c.epoch, "alarm", "alarm", say("ev.climate.heat_off", args), say("ev.climate.heat.text", args), {{"room", r.id}, {"tempC", *temp.v}});
+      } else if (*temp.v > limit && st.heat == 0) {
+        // The first step down from the brightest dimmer of the room now
+        double brightest = 0;
+        for (const auto& id : r.lights)
+          if (const LightCircuitCfg* l = c.cfg.lighting.circuit(id); l && l->dimmed)
+            brightest = std::max(brightest, lightAt(effectiveLight(c.cfg, *l), secondOfDay).pct);
+        st.heat = 1;
+        st.capPct = std::max((brightest > 0 ? brightest : 100.0) - kHeatStepPct, 1.0);
+        st.stepAt = c.now;
+        c.log.add(c.epoch, "alarm", "alarm", say("ev.climate.heat_dim", args), say("ev.climate.heat.text", args), {{"room", r.id}, {"tempC", *temp.v}});
+      } else if (*temp.v > limit && st.heat == 1 && c.now - st.stepAt >= kHeatStepMs) {
+        st.capPct = std::max(st.capPct - kHeatStepPct, 1.0);
+        st.stepAt = c.now;
+      } else if (*temp.v <= limit - kTempBandC && st.heat > 0) {
+        st.heat = 0;
+        st.capPct = 100;
+        c.log.add(c.epoch, "control", "info", say("ev.climate.heat_end", args), {}, {{"room", r.id}});
+      }
+    }
+    if (st.heat > 0)
+      for (const auto& id : r.lights) caps_[id] = {st.capPct, st.heat == 2};
 
     // Exhaust: too warm or too humid; on where a value it needs is missing, which does no harm
     if ((temp.bound && !temp.v) || (rh.bound && !rh.v)) {
@@ -257,6 +291,16 @@ void Climate::tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& o
   }
 }
 
+std::vector<ClimateAlert> Climate::alerts(const Config& cfg) const {
+  std::vector<ClimateAlert> out;
+  for (const auto& r : cfg.climate.rooms) {
+    const auto st = rooms_.find(r.id);
+    if (st == rooms_.end() || (!st->second.co2High && st->second.heat == 0)) continue;
+    out.push_back({r.id, r.name, st->second.co2High, st->second.heat, effectiveRoom(cfg, r).heatC});
+  }
+  return out;
+}
+
 json Climate::status(const Ctx& c, int secondOfDay, const NetDevices& dev, const json& outputs) const {
   json out = json::array();
   for (const auto& r : c.cfg.climate.rooms) {
@@ -294,6 +338,8 @@ json Climate::status(const Ctx& c, int secondOfDay, const NetDevices& dev, const
                    {"missing", missing},
                    {"co2High", st != rooms_.end() && st->second.co2High},
                    {"co2Locked", c.rt.latches.count(co2Latch(r.id)) > 0},
+                   {"heat", st == rooms_.end() || st->second.heat == 0 ? json(nullptr)
+                                                                        : json{{"off", st->second.heat == 2}, {"pct", st->second.capPct}}},
                    {"outputs", outs},
                    {"plant", plant}});
   }

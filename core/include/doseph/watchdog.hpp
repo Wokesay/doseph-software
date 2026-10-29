@@ -40,6 +40,15 @@ struct WatchInput {
     Msg label{};  // its name; a watering circuit's is its own (SD-134)
   };
   std::vector<Role> roles{};
+  // Climate rooms (SD-136) where something is wrong: CO2 above 2,000 ppm, or heat protection on
+  // their light (1 dimmed, 2 off), with their heat limit
+  struct Room {
+    std::string id, name;
+    bool co2High = false;
+    int heat = 0;
+    double limitC = kNaN;
+  };
+  std::vector<Room> rooms{};
 };
 
 struct Assessment {

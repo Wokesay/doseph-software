@@ -1403,3 +1403,9 @@ by the minimal principle: a safety frame, not a guard for every case.
   - *The heater's power limit* is never written above the device's own,
     its rating or what a person set there. A limit stays on an output that
     later takes another role; it is reset at the device.
+  - *Heat protection.* Above the heat limit the dimmers of the room go
+    down 10 points from the brightest one, and again every 2 min. It acts
+    also on a light switched on by hand. Without a temperature it stays as
+    it is: neither more nor less light.
+  - *Alarms.* Heat protection and CO2 above 2,000 ppm are problems of the
+    watchdog, and so alarms after 5 min (SD-123); CO2 is a critical one.

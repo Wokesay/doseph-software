@@ -454,9 +454,10 @@ void Robot::tick() {
   }
   outputs_.want("circulation_pump", circulationWanted(c));
   // Light by its plan or a person's hand, through Stop, holds and maintenance (SD-135)
-  light_.tick(c, secondOfDay(c.epoch), outputs_);
-  // Climate by its rules; the fans through a Stop, the rest off at one (SD-136)
+  // Climate by its rules; the fans through a Stop, the rest off at one; then light within what its
+  // heat protection leaves of it (SD-136)
   climate_.tick(c, secondOfDay(c.epoch), devices_, outputs_);
+  light_.tick(c, secondOfDay(c.epoch), outputs_, climate_.lightCaps());
   outputs_.tick(cfg_, devices_, rt_.stopped, !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
@@ -504,6 +505,7 @@ void Robot::tick() {
     in.hold = c.hold;
     if (peer_) in.peer = {true, peer_->role == "leader", peerLinkOk(c.now), deviation_, peer_->name};
     in.roles = roleStates(now);
+    for (const auto& a : climate_.alerts(cfg_)) in.rooms.push_back({a.id, a.name, a.co2High, a.heat, a.limitC});
     watch_ = evaluate(in);
     // Alarms by level and the quiet hours; a target counts only while the check holds or waits (SD-123)
     const bool idle = ph == Phase::Off || ph == Phase::Stopped || ph == Phase::Hold || ph == Phase::Wait;
@@ -804,7 +806,7 @@ json Robot::state() {
            }()},
           {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
           {"watering", water_.status(c, waterIn(c))},
-          {"lighting", Lighting::status(c, secondOfDay(c.epoch), outputs_.status(cfg_, devices_, c.now))},
+          {"lighting", Lighting::status(c, secondOfDay(c.epoch), outputs_.status(cfg_, devices_, c.now), climate_.lightCaps())},
           {"climate", climate_.status(c, secondOfDay(c.epoch), devices_, outputs_.status(cfg_, devices_, c.now))},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
@@ -2771,7 +2773,7 @@ Result Robot::lightHand(const std::string& id, const json& j) {
   Ctx c = ctx();
   const std::optional<bool> on = j["on"].is_null() ? std::nullopt : std::optional<bool>(j["on"].get<bool>());
   if (!Lighting::hand(c, id, on, secondOfDay(c.epoch))) return Result::fail(404, say("light.none"));
-  light_.tick(c, secondOfDay(c.epoch), outputs_);
+  light_.tick(c, secondOfDay(c.epoch), outputs_, climate_.lightCaps());
   saveState(true);
   saveEvents();
   return Result::ok();
