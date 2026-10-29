@@ -316,7 +316,7 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
               <Field label={t("plants.lightHours")} hint={t("plants.lightHint")}>
                 <NumberInput value={ph.lightHours ?? null} onValue={(v) => set(i, { lightHours: v })} unit="h" min={0} max={24} step={0.5} name={`phase-light-hours-${i}`} />
               </Field>
-              <Field label={t("plants.lightPct")}>
+              <Field label={t("plants.lightPct")} hint={t("plants.lightPctHint")}>
                 <NumberInput value={ph.lightPct ?? null} onValue={(v) => set(i, { lightPct: v })} unit="%" min={1} max={100} name={`phase-light-pct-${i}`} />
               </Field>
             </div>

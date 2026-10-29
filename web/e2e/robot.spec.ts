@@ -695,7 +695,7 @@ test("watering: a circuit with a time window follows a plant, whose phase sets i
   await expect(page.getByTestId("circuit-next-w1")).toContainText("30 s");
 });
 
-test("light: a dimmer on the twin is added and given its output; on all day at its brightness, off by hand for a day and back to the plan; a day of 0 h switched on by hand is said (SD-135)", async ({ page }) => {
+test("light: a dimmer on the twin is added and given its output; on all day at its brightness, off by hand until tomorrow and back to the plan; a day of 0 h switched on by hand is said (SD-135)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");
   const card = page.getByTestId("devices");
@@ -719,12 +719,12 @@ test("light: a dimmer on the twin is added and given its output; on all day at i
   await expect(form.getByTestId("role-state-light.l1")).not.toContainText("not assigned", { timeout: 10000 });
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("light-state-l1")).toContainText("on, 70 %", { timeout: 30000 });
-  await expect(page.getByTestId("light-output-l1")).toContainText("Lamps, output 0, reads 70 %", { timeout: 15000 });
+  await expect(page.getByTestId("light-output-l1")).toContainText("Lamps, output 0, reports 70 %", { timeout: 15000 });
   await expect(page.getByTestId("light-plan-l1")).toHaveText("always on (24 h) · 70 %");
-  // Off by hand: a day of 24 h has no change, so for a day; then back to the plan
+  // Off by hand: a day of 24 h has no change, so until tomorrow; then back to the plan
   await page.getByTestId("light-off-l1").click();
   await expect(page.getByTestId("light-state-l1")).toContainText("off");
-  await expect(page.getByTestId("light-state-l1")).toContainText("by hand for a day");
+  await expect(page.getByTestId("light-state-l1")).toContainText("by hand until tomorrow, ");
   await expect(page.getByTestId("light-output-l1")).toHaveText("Lamps, output 0", { timeout: 15000 });
   await page.getByTestId("light-plan-again-l1").click();
   await expect(page.getByTestId("light-state-l1")).toContainText("on, 70 %", { timeout: 15000 });
@@ -736,11 +736,15 @@ test("light: a dimmer on the twin is added and given its output; on all day at i
   await page.getByTestId("save-light").click();
   await expect(page.getByTestId("light-state-l1")).toHaveText("off", { timeout: 15000 });
   await page.getByTestId("light-on-l1").click();
-  await expect(page.getByTestId("light-state-l1")).toContainText("on in the dark period", { timeout: 15000 });
-  await expect(page.getByTestId("light-l1")).toContainText("This can disturb flowering");
+  await expect(page.getByTestId("light-state-l1")).toContainText("on, 70 %", { timeout: 15000 });
+  await expect(page.getByTestId("light-l1")).toContainText("On by hand in the dark period, which can disturb flowering.");
+  // Back to the plan: off
+  await page.getByTestId("light-plan-again-l1").click();
+  await expect(page.getByTestId("light-state-l1")).toHaveText("off", { timeout: 15000 });
+  await expect(page.getByTestId("light-l1")).not.toContainText("dark period");
 });
 
-test("light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page (SD-135)", async ({ page }) => {
+test("light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page; without an output it says so and offers no switch by hand (SD-135)", async ({ page }) => {
   await login(page);
   const call = (method: string, path: string, body: unknown = {}) =>
     page.evaluate(
@@ -769,7 +773,11 @@ test("light: a circuit follows a plant, whose phase sets the hours of light and 
   await form.locator("select[name=light-plant]").selectOption({ label: "Bed 1" });
   await page.getByTestId("save-light").click();
   await page.keyboard.press("Escape");
+  // No output assigned: said, and nothing to switch by hand
+  await expect(page.getByTestId("light-state-l1")).toHaveText("no output");
+  await expect(page.getByTestId("light-on-l1")).toHaveCount(0);
+  await expect(page.getByTestId("light-off-l1")).toHaveCount(0);
   await expect(page.getByTestId("light-plant-l1")).toHaveText("Bed 1, phase Growth: 18 h, 60 %");
   await expect(page.getByTestId("light-plan-l1")).toHaveText("06:00–00:00 (18 h) · 60 %");
-  await expect(page.getByTestId("light-next-l1")).toContainText(/^(on|off) at /);
+  await expect(page.getByTestId("light-next-l1")).toContainText(/^day (ends|begins) at /);
 });

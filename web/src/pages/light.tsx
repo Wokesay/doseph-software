@@ -158,6 +158,7 @@ function LightForm(p: { circuit: LightCircuit | null; devices: Devices | null; r
         {preview && (
           <p class="muted small" data-testid="light-preview">
             {preview}
+            {c.plant && ` ${t("light.previewPlant")}`}
           </p>
         )}
         {plants.length > 0 && (
@@ -194,6 +195,9 @@ function LightCard(p: { c: LightCircuit; s: Status | undefined; devices: Devices
   const device = role?.binding ? p.devices?.devices.find((d) => d.id === role.binding!.device) : null;
   const problem = s?.output?.problem ?? null;
   const hours = s?.hours ?? p.c.hours;
+  // What the lamp does, not only what its plan wants: without an output, or one that cannot switch, that is said
+  const bound = !!role?.binding;
+  const cannot = s?.output?.state === "offline" || s?.output?.state === "refused" ? s.output.state : null;
   const hand = async (on: boolean | null) => {
     try {
       await post(`/lighting/circuits/${p.c.id}/hand`, { on });
@@ -209,13 +213,18 @@ function LightCard(p: { c: LightCircuit; s: Status | undefined; devices: Devices
       <div class="stack-sm" style="gap:4px">
         <h3 style="margin:0;font-size:1rem">{name}</h3>
         <span class="row small" style="flex-wrap:wrap" data-testid={`light-state-${p.c.id}`}>
-          {s && (s.on ? <Pill tone="ok">{s.pct != null ? t("light.state.onPct", { pct: pctText(s.pct) }) : t("light.state.on")}</Pill> : <Pill tone="neutral">{t("light.state.off")}</Pill>)}
-          {s?.hand && <Pill tone="accent">{s.nextChangeAt != null ? t("light.state.hand", { at: at(s.hand.until) }) : t("light.state.handDay")}</Pill>}
-          {s?.darkOn && <Pill tone="warn">{t("light.state.darkOn")}</Pill>}
-          {problem && <span class="muted">{msg(problem)}</span>}
+          {!bound ? (
+            <Pill tone="neutral">{t("light.state.noOutput")}</Pill>
+          ) : cannot ? (
+            <Pill tone="bad">{t(`settings.devices.state.${cannot}`)}</Pill>
+          ) : (
+            s && (s.on ? <Pill tone="ok">{s.pct != null ? t("light.state.onPct", { pct: pctText(s.pct) }) : t("light.state.on")}</Pill> : <Pill tone="neutral">{t("light.state.off")}</Pill>)
+          )}
+          {s?.hand && <Pill tone="accent">{t(s.nextChangeAt != null ? "light.state.hand" : "light.state.handDay", { at: at(s.hand.until) })}</Pill>}
+          {bound && problem && <span class="muted">{msg(problem)}</span>}
         </span>
       </div>
-      {s?.darkOn && <Banner tone="warn">{t("light.darkOnText")}</Banner>}
+      {bound && s?.darkOn && <Banner tone="warn">{t("light.darkOnText")}</Banner>}
       <div class="stack-sm small" style="gap:4px">
         <div>
           <span class="muted">{t("light.plan")}: </span>
@@ -257,7 +266,7 @@ function LightCard(p: { c: LightCircuit; s: Status | undefined; devices: Devices
         </div>
       </div>
       <div class="row" style="flex-wrap:wrap">
-        {s?.hand ? (
+        {!bound && !s?.hand ? null : s?.hand ? (
           <Button size="sm" onClick={() => hand(null)} aria-label={t("light.byPlanAria", { name })} data-testid={`light-plan-again-${p.c.id}`}>
             {t("light.byPlan")}
           </Button>

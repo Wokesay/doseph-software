@@ -36,8 +36,8 @@ All notable changes to this software. The format follows
   brightness; after a restart light goes on by its plan, and STOP, a hold
   and maintenance leave it as the plan says. Built in step 9.5.
 - The page Light (SD-135), step 9.5b.
-  - Each light circuit with its state, its plan and next change on the
-    device's clock, a dimmer's brightness as read back, and the plant it
+  - Each light circuit with its state (or that it has no output, or one
+    that cannot switch), its plan and next change on the device's clock, a dimmer's brightness as read back, and the plant it
     follows. A light switched on by hand in the dark period is shown with
     a warning.
   - Switch a light on or off until the plan's next change, or back to the
