@@ -69,6 +69,16 @@ All notable changes to this software. The format follows
     switch over MQTT needs an availability topic.
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
+- The circulation pump (SD-132, PD-421), the third part of step 9.
+  - A pump in the tank on a Shelly output. By default it runs during each
+    dose and its mixing wait, and during a fill, and is off while the
+    check measures; set to "Always" under Settings › Network devices, it
+    runs all the time.
+  - It is off during Stop, maintenance and a hold, and after a restart
+    until the robot has checked it and switched it on again.
+  - The mixing wait stays as long: stable readings decide.
+  - In the simulator, the plug's twin drives a circulation pump that
+    mixes the tank.
 - A lock a person releases can be set to report only, for operations that
   watch their tanks in their own way (SD-133).
   - It covers no flow and dry run, the tank volume, EC or pH without

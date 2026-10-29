@@ -134,6 +134,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_locks.cpp
     tests/core/test_devices.cpp
     tests/core/test_refill.cpp
+    tests/core/test_circulation.cpp
     tests/core/test_service.cpp
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp

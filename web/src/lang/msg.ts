@@ -678,4 +678,6 @@ export const msgDe: Record<string, string> = {
   "cycle.wait.refill": "Wartet: Das Nachfüllventil füllt den Tank",
   "cfg.refill.max_fill": "Die längste Füllzeit: {min} bis {max}\u00a0min",
   "cfg.what.refill": "Nachfüllen",
+  "cfg.what.circulation": "Umwälzpumpe",
+  "cfg.circulation.mode": "Die Umwälzpumpe läuft beim Mischen oder immer",
 };

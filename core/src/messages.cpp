@@ -603,6 +603,8 @@ constexpr Entry kMessages[] = {
     {"cycle.wait.refill", "Waiting: the refill valve fills the tank"},
     {"cfg.refill.max_fill", "The longest fill: {min} to {max}\u00a0min"},
     {"cfg.what.refill", "refill"},
+    {"cfg.what.circulation", "circulation pump"},
+    {"cfg.circulation.mode", "The circulation pump runs while mixing or always"},
     {"ev.device.added", "Device added: {name}"},
     {"ev.device.removed", "Device removed: {name}"},
     {"ev.role.bound", "Role assigned: {role}"},

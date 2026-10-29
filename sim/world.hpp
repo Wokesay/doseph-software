@@ -80,6 +80,10 @@ class World {
   bool output = false;
   bool pumpInTank = true;  // the profile's position of the feed pump
   double pumpLpm = 12.0;  // flow when it runs (assumption)
+  // A circulation pump in the tank (SD-132): it mixes the tank as a flow of this many L/min would
+  // (assumption)
+  bool circulation = false;
+  static constexpr double kCirculationLpm = 20.0;
   std::string flowFault;
   bool pumpRuns() const { return output; }
   bool primed() const;

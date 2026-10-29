@@ -209,6 +209,7 @@ void to_json(json& j, const Config& c) {
                   {"maxPhDoses", c.control.maxPhDoses}};
   j["locks"] = {{"reportOnly", c.locks.reportOnly}};
   j["refill"] = {{"maxFillMin", numOrNull(c.refill.maxFillMin)}};
+  j["circulation"] = {{"mode", c.circulation.mode}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -351,6 +352,10 @@ Config configFromJson(const json& in) {
     c.locks.reportOnly.push_back(x.get<std::string>());
   }
   if (const json& f = objectAt(j, "refill"); f.contains("maxFillMin")) c.refill.maxFillMin = numOrNaN(f, "maxFillMin");
+  if (const json& f = objectAt(j, "circulation"); f.contains("mode")) {
+    if (!f["mode"].is_string()) throw std::invalid_argument("the circulation's mode is not a string");
+    c.circulation.mode = f["mode"].get<std::string>();
+  }
   const json& l = objectAt(j, "limits");
   if (l.contains("minRunS")) c.limits.minRunS = numOrNaN(l, "minRunS");
   if (l.contains("maxRunS")) c.limits.maxRunS = numOrNaN(l, "maxRunS");
@@ -482,6 +487,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   // The refill valve's longest fill (RAT-079)
   if (!inRange(c.refill.maxFillMin, kRefillMinMin, kRefillMaxMin))
     err(say("cfg.refill.max_fill", {{"min", kRefillMinMin}, {"max", kRefillMaxMin}}));
+  if (c.circulation.mode != "mixing" && c.circulation.mode != "always") err(say("cfg.circulation.mode"));
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;

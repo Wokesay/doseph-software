@@ -4122,6 +4122,53 @@
           }
         }
       }
+    },
+    "/circulation": {
+      "put": {
+        "operationId": "putCirculation",
+        "summary": "Sets when the circulation pump runs (SD-132, PD-421)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CirculationSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4867,6 +4914,9 @@
           },
           "refill": {
             "$ref": "#/components/schemas/RefillSettings"
+          },
+          "circulation": {
+            "$ref": "#/components/schemas/CirculationSettings"
           }
         },
         "description": "The configuration: everything a backup holds"
@@ -5193,6 +5243,21 @@
         },
         "required": [
           "maxFillMin"
+        ]
+      },
+      "CirculationSettings": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "mixing",
+              "always"
+            ],
+            "description": "\"mixing\": during each dose, its mixing wait and a fill, never while the check measures; \"always\": all the time. Never during Stop, maintenance or a hold."
+          }
+        },
+        "required": [
+          "mode"
         ]
       }
     }

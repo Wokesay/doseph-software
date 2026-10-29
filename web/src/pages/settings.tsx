@@ -4,7 +4,7 @@
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
 import { Bell, Bug, Cable, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
-import { ApiError, DEVICE_ROLES, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type Devices, type RoleBinding, type RoleSource, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
+import { ApiError, type CirculationMode, DEVICE_ROLES, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type Devices, type RoleBinding, type RoleSource, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang, type TextKey } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
@@ -662,8 +662,40 @@ function DevicesCard() {
           <RoleRow key={`${r}${JSON.stringify(d.roles[r]?.binding)}`} role={r} devices={d} reload={load} />
         ))}
         {d.roles.refill_valve?.binding && <RefillPanel />}
+        {d.roles.circulation_pump?.binding && <CirculationPanel />}
       </div>
     </Card>
+  );
+}
+
+// The circulation pump (SD-132): with each dosing round and fill until mixed in, or always; never
+// during Stop, maintenance or a hold
+function CirculationPanel() {
+  const save = async (mode: CirculationMode) => {
+    try {
+      await put("/circulation", { mode });
+      await refreshConfig();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <div class="stack-sm" data-testid="circulation">
+      <div class="section-title" id="circulation-mode">
+        {t("settings.circulation")}
+      </div>
+      <Seg<CirculationMode>
+        value={config.value!.circulation.mode}
+        onChange={save}
+        labelledBy="circulation-mode"
+        options={[
+          ["mixing", t("settings.circulation.mixing")],
+          ["always", t("settings.circulation.always")],
+        ]}
+      />
+      <p class="muted small">{t("settings.circulation.intro")}</p>
+    </div>
   );
 }
 

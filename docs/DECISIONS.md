@@ -1019,6 +1019,20 @@ watering follow with decisions of their own.
     end a fill without a latch. During a fill a backup is not restored,
     and the longest fill does not change.
   - The refill's latch may report only (SD-133).
+- **The circulation pump's details** (9.3, decided here by the minimal
+  principle).
+  - "While mixing" (the default) runs it during each dose and its mixing
+    wait, and during a fill. It is off while the check measures, so that
+    every reading is taken alike and a pump that disturbs the probes
+    cannot bias one (RAT-044).
+  - "Always" runs it all the time. After a restart it is first switched
+    off, and on again once its settings were read back (RAT-019). Found
+    off at the device (a short power cut, a hand at the plug), it is
+    checked again and switched on again.
+  - The follower of a coupled pair never runs it: the leader runs the
+    check.
+  - The robot asks for it on every tick; the gateway switches (R1).
+  - Only a session or an app token sets its mode.
 - **The circulation pump** (PD-421).
   - A customer's pump in the tank, on a Shelly Gen2+ output.
   - By default it runs from the start of a dosing round and during a
