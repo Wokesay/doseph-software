@@ -5253,7 +5253,7 @@
               "mixing",
               "always"
             ],
-            "description": "\"mixing\": with each dosing round and fill until the check has measured again after its mixing wait; \"always\": all the time. Never during Stop, maintenance or a hold."
+            "description": "\"mixing\": during each dose, its mixing wait and a fill, never while the check measures; \"always\": all the time. Never during Stop, maintenance or a hold."
           }
         },
         "required": [

@@ -70,9 +70,10 @@ All notable changes to this software. The format follows
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
 - The circulation pump (SD-132, PD-421), the third part of step 9.
-  - A pump in the tank on a Shelly output. By default it runs from a
-    dosing round or a fill until the check has measured again; set to
-    "Always" under Settings › Network devices, it runs all the time.
+  - A pump in the tank on a Shelly output. By default it runs during each
+    dose and its mixing wait, and during a fill, and is off while the
+    check measures; set to "Always" under Settings › Network devices, it
+    runs all the time.
   - It is off during Stop, maintenance and a hold, and after a restart
     until the robot has checked it and switched it on again.
   - The mixing wait stays as long: stable readings decide.

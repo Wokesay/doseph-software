@@ -1021,12 +1021,16 @@ watering follow with decisions of their own.
   - The refill's latch may report only (SD-133).
 - **The circulation pump's details** (9.3, decided here by the minimal
   principle).
-  - "While mixing" (the default) runs it from a dosing round, a fill or
-    water to be mixed in first, until the check has measured again after
-    its mixing wait: it stays on through the rounds of one check and goes
-    off when the check holds.
+  - "While mixing" (the default) runs it during each dose and its mixing
+    wait, and during a fill. It is off while the check measures, so that
+    every reading is taken alike and a pump that disturbs the probes
+    cannot bias one (RAT-044).
   - "Always" runs it all the time. After a restart it is first switched
-    off, and on again once its settings were read back (RAT-019).
+    off, and on again once its settings were read back (RAT-019). Found
+    off at the device (a short power cut, a hand at the plug), it is
+    checked again and switched on again.
+  - The follower of a coupled pair never runs it: the leader runs the
+    check.
   - The robot asks for it on every tick; the gateway switches (R1).
   - Only a session or an app token sets its mode.
 - **The circulation pump** (PD-421).

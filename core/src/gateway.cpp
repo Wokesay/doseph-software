@@ -744,6 +744,14 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     const bool limit = o.want && limited(cfg, dev, def.id, now);
     if (limit) o.want = false;
     if (def.id == "refill_valve" && o.want && o.onAt >= 0 && now - o.onAt >= longestFill(cfg)) o.want = false;
+    // A continuous output the device says is off, though the robot switched it on a while ago (a short
+    // power cut, a hand at the device): checked again, and on again while wanted. A pulse output an
+    // auto-off switched off stays off.
+    if (!def.pulse && o.onSent && isOn == false && o.onAt >= 0 && now - o.onAt > 2 * kNetPollMs) {
+      o.onSent = false;
+      o.verified = false;
+      o.onAt = -1;
+    }
     // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019).
     // A switch-on whose answer is not in yet is the robot's own.
     const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on"));

@@ -414,6 +414,7 @@ void Robot::tick() {
   lastChannelJob_ = c.channelJob;
   act_.enforce(c);
   // Network devices (SD-132): polled, and their outputs switched only by the gateway (R1)
+  outputs_.want("circulation_pump", circulationWanted(c));
   for (const auto& a : devices_.tick(cfg_, now)) outputs_.answer(cfg_, devices_, a, now);
   // The refill valve (SD-132): a fill "top up water" asked for starts, one under way ends when it is
   // done or has to; the gateway switches the valve
@@ -2427,14 +2428,16 @@ void Robot::afterFill() {
   mixFirstNow();
 }
 
-// The circulation pump (SD-132, PD-421): never during Stop, maintenance or a hold; set to always,
-// all the time; otherwise with a dosing round and a fill, until the check has measured again after
-// its mixing wait. It mixes the tank; the mixing wait stays as long as without it (#1).
+// The circulation pump (SD-132, PD-421): never during Stop, maintenance or a hold, nor on the
+// follower of a coupled pair, whose leader runs the check; set to always, all the time; otherwise
+// during a dose and its mixing wait, and during a fill. It is off while the check measures: every
+// reading is taken alike, and a pump that disturbs the probes cannot bias one (RAT-044). The mixing
+// wait stays as long as without it (#1).
 bool Robot::circulationWanted(const Ctx& c) const {
-  if (c.stopped || c.maintenanceUntil > 0 || !c.hold.empty()) return false;
+  if (c.stopped || c.maintenanceUntil > 0 || !c.hold.empty() || c.follower) return false;
   if (cfg_.circulation.mode == "always") return true;
   const Phase ph = cycle_.phase();
-  return c.refilling || cycle_.mixPending() || ph == Phase::Dose || ph == Phase::Mix || ph == Phase::Remeasure;
+  return c.refilling || ph == Phase::Dose || ph == Phase::Mix;
 }
 
 Result Robot::putCirculation(const json& j) {
@@ -2583,6 +2586,7 @@ Result Robot::maintenance(double minutes) {
     return Result::fail(422, say("maint.minutes", {{"max", kMaxMaintenanceMin}}));
   const bool was = maintenanceUntilMs_ > 0;
   maintenanceUntilMs_ = minutes > 0 ? clock_.nowMs() + static_cast<Ms>(std::llround(minutes * 60.0)) * kSecond : 0;
+  if (minutes > 0) outputs_.want("circulation_pump", false);  // at once, not only at the next tick (SD-132)
   if (minutes > 0) log_.add(clock_.epoch(), "system", "info", say("ev.maintenance"), say("ev.maintenance.text", {{"min", minutes}}));
   else if (was) log_.add(clock_.epoch(), "system", "info", say("ev.maintenance_end"));
   // The cycle holds at once, or starts anew once the work is done

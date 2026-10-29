@@ -6,6 +6,7 @@
 // against the twin's plug, into which the circulation pump is plugged.
 #include <doctest/doctest.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,7 @@
 using harness::Run;
 using doseph::json;
 using doseph::kSecond;
+using doseph::Ms;
 
 namespace {
 
@@ -34,7 +36,7 @@ double mixWait(Run& r) {
 
 }  // namespace
 
-TEST_CASE("Circulation: by default the pump runs from a dosing round through its mixing wait and stops once the check holds; the mixing wait stays as long (SD-132, PD-421)") {
+TEST_CASE("Circulation: by default the pump runs during each dose and its mixing wait, and is off while the check measures and once it holds; the mixing wait stays as long (SD-132, PD-421, RAT-044)") {
   Run without(harness::device());
   const double alone = mixWait(without);
   Run r(harness::device());
@@ -45,8 +47,27 @@ TEST_CASE("Circulation: by default the pump runs from a dosing round through its
   r.waitUntil("the pump runs", [&] { return runs(r); }, 15);
   CHECK(mixWait(r) == alone);  // stability decides, not the pump (#1)
   CHECK(runs(r));
-  r.waitUntil("the check holds", [&] { return r.phase() == "hold"; }, 8 * 3600, 2000);
+  // Through the check: in every measuring window the pump is off (a switch lags a poll at most)
+  std::map<std::string, int> on, seen;
+  std::string phase;
+  Ms since = 0;
+  r.waitUntil("the check holds", [&] {
+    const std::string ph = r.phase();
+    if (ph != phase) phase = ph, since = 0;
+    else since += 2000;
+    if (since >= 10 * kSecond) {
+      seen[ph]++;
+      on[ph] += runs(r);
+    }
+    return ph == "hold";
+  }, 8 * 3600, 2000);
+  CHECK(seen["remeasure"] > 0);
+  CHECK(on["remeasure"] == 0);
+  CHECK(on["measure"] == 0);
+  CHECK(on["mix"] == seen["mix"]);
   r.waitUntil("the pump stops", [&] { return !runs(r); }, 15);
+  r.step(10 * 60 * kSecond, 2000);
+  CHECK_FALSE(runs(r));
 }
 
 TEST_CASE("Circulation: set to always, the pump runs; Stop, maintenance and a hold switch it off; after a restart it is off until the robot switches it on again (SD-132, R6)") {
@@ -69,6 +90,13 @@ TEST_CASE("Circulation: set to always, the pump runs; Stop, maintenance and a ho
   r.act("leak", {{"on", false}});
   r.ok("POST", "latches/hw.leak/ack");
   r.waitUntil("the pump runs again", [&] { return runs(r); }, 30);
+  // A short power cut at the plug: back, it is off (its initial state), and the robot finds it off
+  // and switches it on again after its check
+  r.act("netOnline", {{"address", "shelly-plug.local"}, {"online", false}});
+  r.step(5 * kSecond);
+  r.act("netOnline", {{"address", "shelly-plug.local"}, {"online", true}});
+  CHECK_FALSE(runs(r));
+  r.waitUntil("the pump runs again", [&] { return runs(r); }, 60);
   // The robot alone restarts: the plug keeps its power and is on, the robot switches it off first
   r.s.reboot();
   REQUIRE(r.login("demo-password"));
@@ -86,7 +114,7 @@ TEST_CASE("Circulation: in its default mode the pump runs while the refill valve
   r.ok("PUT", "roles/refill_valve", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
   r.ok("PUT", "roles/tank_full", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
   r.s.world().tank.volumeL = 80;
-  r.waitUntil("a fill may start", [&] { return r.state()["refill"]["blocked"].is_null(); }, 900);
+  r.waitUntil("a fill may start, with the pump off", [&] { return r.state()["refill"]["blocked"].is_null() && !runs(r); }, 3600);
   r.ok("POST", "refill/start");
   r.waitUntil("the pump runs", [&] { return runs(r); }, 15);
   CHECK(r.state()["refill"]["filling"] == true);
