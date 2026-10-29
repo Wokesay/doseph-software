@@ -759,7 +759,8 @@ function RefillPanel() {
 }
 
 // A role bound to a device: a fixed one here, a watering circuit's output on its page (SD-134)
-export function RoleRow(p: { role: string; label?: string; devices: Devices; reload: () => unknown }) {
+// `hideDetached`: the note on a Shelly's own input is said once for several outputs instead
+export function RoleRow(p: { role: string; label?: string; devices: Devices; reload: () => unknown; hideDetached?: boolean }) {
   const info = p.devices.roles[p.role];
   const output = info?.kind === "output";
   const blank: RoleBinding = { source: "shelly", device: "", channel: 0, entity: "", field: "", invert: false, availability: "" };
@@ -851,7 +852,7 @@ export function RoleRow(p: { role: string; label?: string; devices: Devices; rel
         </label>
       )}
       {output && info?.pulse && <p class="muted small">{t("settings.devices.autoOff", { min: Math.round((info?.autoOffS ?? 0) / 60) })}</p>}
-      {output && <p class="muted small">{t("settings.devices.detached")}</p>}
+      {output && !p.hideDetached && <p class="muted small">{t("settings.devices.detached")}</p>}
       <div class="row">
         <Button size="sm" variant="primary" onClick={save} data-testid={`save-role-${p.role}`}>
           {t("settings.devices.assign")}

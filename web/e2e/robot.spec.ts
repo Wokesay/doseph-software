@@ -822,14 +822,15 @@ test("climate: a room is added and given its exhaust fan and sensors; too warm, 
   await sim(page, "climateAir", { tempC: 31, rhPct: 60, co2Ppm: 700 });
   await expect(page.getByTestId("room-devices-r1")).toContainText("Exhaust fan: on", { timeout: 30000 });
   await expect(page.getByTestId("room-temp-r1")).toContainText("target 26 °C");
-  await expect(page.getByTestId("room-co2-r1")).toContainText("target 1000 ppm");
+  await expect(page.getByTestId("room-co2-r1")).toContainText("target 1,000 ppm");
   await expect(page.getByTestId("room-state-r1")).toContainText("Day");
   // CO2 far too high: said
   await sim(page, "climateAir", { co2Ppm: 3000 });
   await expect(page.getByTestId("room-r1")).toContainText("CO2 above 2,000 ppm", { timeout: 20000 });
   // The sensors gone: said what has no value
   expect(await call("POST", "sim/netOnline", { address: "esp-climate.local", online: false })).toBe(200);
-  await expect(page.getByTestId("room-r1")).toContainText("No value from Air temperature, Air humidity, CO2", { timeout: 60000 });
+  await expect(page.getByTestId("room-missing-r1")).toContainText("No air temperature", { timeout: 60000 });
+  await expect(page.getByTestId("room-missing-r1")).toContainText("No CO2 value: the CO2 valve stays closed.");
 });
 
 test("climate: a room follows a plant, whose phase sets its targets; the phase's climate is set on the Plants page (SD-136)", async ({ page }) => {

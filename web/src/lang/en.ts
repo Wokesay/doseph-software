@@ -105,7 +105,7 @@ const base: Record<keyof typeof deBase, string> = {
   "shell.stopAll": "Stop everything",
   "shell.stopped": "Stopped: everything off",
   "shell.stoppedBar": "Stopped – dosing channels and feed pump are off and stay off until you resume.",
-  "shell.stopText": "All pumps, valves and watering circuits go off at once, and so do heaters, humidifiers, dehumidifiers and CO2. Fans and light keep running. A running dose is cancelled, the robot rests until you choose \"Resume\".",
+  "shell.stopText": "All pumps, valves and watering circuits go off at once, and so do heaters, humidifiers, dehumidifiers and CO2 valves. Fans and light keep running. A running dose is cancelled, the robot rests until you choose \"Resume\".",
   "shell.stopNote": "Measuring goes on.",
   "shell.stopSending": "Sending …",
   "shell.stopRetry": "Send again",

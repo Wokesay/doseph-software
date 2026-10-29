@@ -110,7 +110,7 @@ export const deBase = {
   "shell.stopAll": "Alles stoppen",
   "shell.stopped": "Gestoppt: alles aus",
   "shell.stoppedBar": "Gestoppt – Dosierkanäle und Förderpumpe sind aus und bleiben aus, bis du fortsetzt.",
-  "shell.stopText": "Alle Pumpen, Ventile und Gießkreise gehen sofort aus, ebenso Heizung, Be- und Entfeuchter und CO2. Lüfter und Licht laufen weiter. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
+  "shell.stopText": "Alle Pumpen, Ventile und Gießkreise gehen sofort aus, ebenso Heizung, Be- und Entfeuchter und CO2-Ventil. Lüfter und Licht laufen weiter. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
   "shell.stopNote": "Messen läuft weiter.",
   "shell.stopSending": "Sende …",
   "shell.stopRetry": "Erneut senden",

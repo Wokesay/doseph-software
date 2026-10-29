@@ -5,7 +5,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { Plus } from "lucide-preact";
 import { CLIMATE_OUTPUTS, CLIMATE_SENSORS, del, get, post, put, type ClimateRoom, type Devices, type Plants, type RobotState } from "../api";
-import { figure } from "../format";
+import { figure, numUpTo } from "../format";
 import { t, type TextKey } from "../i18n";
 import { config, refreshConfig, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, Field, Modal, NumberInput, Pill, Seg, Toggle } from "../ui";
@@ -17,13 +17,13 @@ type Form = Omit<ClimateRoom, "hours" | "dayC" | "nightC" | "rhPct" | "vpdKpa" |
   hours: number | null; dayC: number | null; nightC: number | null; rhPct: number | null; vpdKpa: number | null; heatC: number | null;
 };
 
-const nb = " ";
+const nb = "\u00a0";
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const minutes = (v: string): number | null => {
   const [h, m] = v.split(":").map(Number);
   return v && Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
 };
-const unit = (v: number | null | undefined, u: string) => (v == null ? null : `${figure(v)}${nb}${u}`);
+const unit = (v: number | null | undefined, u: string) => (v == null ? null : `${numUpTo(v, 2)}${nb}${u}`);
 
 const ToDevices = () => <a href="#/settings">{t("climate.toDevices")}</a>;
 
@@ -118,7 +118,10 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
             {lights.map((l) => (
               <label class="row small" style="gap:6px">
                 <Toggle checked={c.lights.includes(l.id)} onChange={(v) => toggleLight(l.id, v)} label={l.name} />
-                <span aria-hidden="true">{l.name}</span>
+                <span aria-hidden="true">
+                  {l.name}
+                  {c.lights[0] === l.id && <span class="muted"> {t("climate.lightsFirst")}</span>}
+                </span>
               </label>
             ))}
             <p class="muted small">{t("climate.lightsHint")}</p>
@@ -137,9 +140,7 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
             </div>
           </>
         )}
-        <div class="section-title" id="room-lead">
-          {t("climate.targets")}
-        </div>
+        <div class="section-title">{t("climate.targets")}</div>
         <div class="form-grid">
           <Field label={t("climate.dayC")}>
             <NumberInput value={c.dayC} onValue={(v) => set({ dayC: v })} unit="°C" min={5} max={40} step={0.5} name="room-day-c" />
@@ -148,7 +149,10 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
             <NumberInput value={c.nightC} onValue={(v) => set({ nightC: v })} unit="°C" min={5} max={40} step={0.5} name="room-night-c" />
           </Field>
         </div>
-        <Field label={t("climate.lead")}>
+        <div class="stack-sm">
+          <span class="small" id="room-lead">
+            {t("climate.lead")}
+          </span>
           <Seg<"rh" | "vpd">
             value={c.byVpd ? "vpd" : "rh"}
             onChange={(v) => set({ byVpd: v === "vpd" })}
@@ -158,7 +162,7 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
               ["vpd", t("climate.lead.vpd")],
             ]}
           />
-        </Field>
+        </div>
         <div class="form-grid">
           {c.byVpd ? (
             <Field label={t("climate.vpdKpa")} hint={t("climate.vpdHint")}>
@@ -198,6 +202,11 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
         ) : !p.devices ? null : (
           <>
             <div class="section-title">{t("climate.devices")}</div>
+            {shellies.length > 0 && (
+              <p class="muted small">
+                {t("climate.devicesNote")} {t("settings.devices.detached")}
+              </p>
+            )}
             {shellies.length === 0 && (
               <p class="muted small">
                 {t("climate.noShelly")} <ToDevices />
@@ -207,7 +216,14 @@ function RoomForm(p: { room: ClimateRoom | null; devices: Devices | null; reload
               CLIMATE_OUTPUTS.map((kind) => {
                 const role = `climate.${id}.${kind}`;
                 return p.devices!.roles[role] ? (
-                  <RoleRow key={`${role}${JSON.stringify(p.devices!.roles[role]?.binding)}`} role={role} label={t(`climate.out.${kind}` as TextKey)} devices={p.devices!} reload={p.reload} />
+                  <RoleRow
+                    key={`${role}${JSON.stringify(p.devices!.roles[role]?.binding)}`}
+                    role={role}
+                    label={t(`climate.out.${kind}` as TextKey)}
+                    devices={p.devices!}
+                    reload={p.reload}
+                    hideDetached
+                  />
                 ) : null;
               })}
             <div class="section-title">{t("climate.sensors")}</div>
@@ -235,7 +251,7 @@ function Air(p: { label: string; value: string | null; target: string | null; te
   );
 }
 
-function RoomCard(p: { r: ClimateRoom; s: Status | undefined; onEdit: () => void }) {
+function RoomCard(p: { r: ClimateRoom; s: Status | undefined; devices: Devices | null; onEdit: () => void }) {
   const cfg = config.value!;
   const s = p.s;
   const name = p.r.name;
@@ -250,7 +266,11 @@ function RoomCard(p: { r: ClimateRoom; s: Status | undefined; onEdit: () => void
     }
   };
   const tg = s?.targets;
-  const sensorName = (k: string) => t(`climate.sensor.${k}` as TextKey);
+  // What is assigned: a sensor not assigned is no sensor, not a value missing
+  const bound = (kind: string) => !p.devices || !!p.devices.roles[`climate.${p.r.id}.${kind}`]?.binding;
+  const nothing = !!p.devices && [...CLIMATE_OUTPUTS, ...CLIMATE_SENSORS].every((k) => !p.devices!.roles[`climate.${p.r.id}.${k}`]?.binding);
+  const value = (kind: string, v: string | null) => (bound(kind) ? v : t("climate.noSensor"));
+  const limit = (d: number) => `${figure(p.r.heatC + d)}${nb}°C`;
   return (
     <div class="item stacked" data-testid={`room-${p.r.id}`}>
       <div class="stack-sm" style="gap:4px">
@@ -263,27 +283,38 @@ function RoomCard(p: { r: ClimateRoom; s: Status | undefined; onEdit: () => void
           </span>
         </span>
       </div>
-      {s && s.missing.length > 0 && <Banner tone="warn">{t("climate.missing", { list: s.missing.map(sensorName).join(", ") })}</Banner>}
-      {s?.heat && <Banner tone="warn">{s.heat.off ? t("climate.heatOff") : t("climate.heatDim", { pct: `${figure(s.heat.pct)}${nb}%` })}</Banner>}
+      {nothing && <Banner tone="info">{t("climate.nothingAssigned")}</Banner>}
+      {s && s.missing.length > 0 && (
+        <Banner tone="warn">
+          <span data-testid={`room-missing-${p.r.id}`}>{s.missing.map((k) => t(`climate.missing.${k}` as TextKey)).join(" ")}</span>
+        </Banner>
+      )}
+      {s?.heat && p.r.lights.length > 0 && (
+        <Banner tone="warn">
+          {s.heat.off
+            ? t("climate.heatOff", { off: limit(2), back: limit(-1) })
+            : t("climate.heatDim", { limit: limit(0), pct: `${figure(s.heat.pct)}${nb}%`, off: limit(2) })}
+        </Banner>
+      )}
       {s?.co2High && <Banner tone="bad">{t("climate.co2High")}</Banner>}
       {s?.co2Locked && (
         <Banner tone="bad">
           {t("climate.co2Locked")}{" "}
-          <Button size="sm" onClick={release} data-testid={`room-release-${p.r.id}`}>
+          <Button size="sm" onClick={release} aria-label={t("climate.releaseAria", { name })} data-testid={`room-release-${p.r.id}`}>
             {t("climate.release")}
           </Button>
         </Banner>
       )}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr));gap:12px" data-testid={`room-air-${p.r.id}`}>
-        <Air label={t("climate.temp")} value={unit(s?.air.tempC, "°C")} target={tg?.tempC != null ? t("climate.target", { value: unit(tg.tempC, "°C") }) : null} testid={`room-temp-${p.r.id}`} />
+        <Air label={t("climate.temp")} value={value("temp", unit(s?.air.tempC, "°C"))} target={tg?.tempC != null ? t("climate.target", { value: unit(tg.tempC, "°C") }) : null} testid={`room-temp-${p.r.id}`} />
         <Air
           label={t("climate.rh")}
-          value={unit(s?.air.rhPct, "%")}
+          value={value("rh", unit(s?.air.rhPct, "%"))}
           target={tg?.rhPct != null ? (s?.byVpd && tg.vpdKpa != null ? t("climate.targetVpd", { value: unit(tg.rhPct, "%"), vpd: unit(tg.vpdKpa, "kPa") }) : t("climate.target", { value: unit(tg.rhPct, "%") })) : null}
           testid={`room-rh-${p.r.id}`}
         />
-        <Air label={t("climate.vpd")} value={unit(s?.air.vpdKpa, "kPa")} target={tg?.vpdKpa != null ? t("climate.target", { value: unit(tg.vpdKpa, "kPa") }) : null} testid={`room-vpd-${p.r.id}`} />
-        <Air label={t("climate.co2")} value={unit(s?.air.co2Ppm, "ppm")} target={tg?.co2Ppm != null ? t("climate.target", { value: unit(tg.co2Ppm, "ppm") }) : null} testid={`room-co2-${p.r.id}`} />
+        <Air label={t("climate.vpd")} value={bound("temp") && bound("rh") ? unit(s?.air.vpdKpa, "kPa") : t("climate.noSensor")} target={tg?.vpdKpa != null ? t("climate.target", { value: unit(tg.vpdKpa, "kPa") }) : null} testid={`room-vpd-${p.r.id}`} />
+        <Air label={t("climate.co2")} value={value("co2", unit(s?.air.co2Ppm, "ppm"))} target={tg?.co2Ppm != null ? t("climate.target", { value: unit(tg.co2Ppm, "ppm") }) : null} testid={`room-co2-${p.r.id}`} />
       </div>
       <div class="row small" style="flex-wrap:wrap" data-testid={`room-devices-${p.r.id}`}>
         {CLIMATE_OUTPUTS.filter((k) => s?.outputs[k]?.output && s.outputs[k].output!.state !== "not_assigned").map((k) => {
@@ -348,7 +379,7 @@ export function ClimatePage() {
               <p class="muted">{t("climate.none")}</p>
             ))}
           {rooms.map((r) => (
-            <RoomCard key={r.id} r={r} s={status.find((x) => x.id === r.id)} onEdit={() => setEditing(r)} />
+            <RoomCard key={r.id} r={r} s={status.find((x) => x.id === r.id)} devices={devices} onEdit={() => setEditing(r)} />
           ))}
         </div>
       </Card>
