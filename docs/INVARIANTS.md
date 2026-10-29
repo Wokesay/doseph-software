@@ -232,6 +232,7 @@ of its own.
 | Light follows its plan through a restart, a Stop, a hold and maintenance; a light on after a restart of the robot is checked while it stays on; a dimmer is off after a power loss and gets no auto-off; its brightness is read back and set again where it differs | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `lighting.cpp` · test_lighting.cpp |
 | A light whose settings do not hold is switched off; a circuit changed between switch and dimmer, or removed, lets its old output go; bound to the other kind of output it is said and nothing is sent to it | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `robot.cpp` · test_lighting.cpp |
 | By hand on or off until the plan's next change, also one a changed plan brings; not resumed after a restart; on by hand at night is said; only a session or an app token manages light | SD-135, SD-129 | ✓ | `lighting.cpp`, `robot.cpp`, `api.cpp` · test_lighting.cpp |
+| The page Light shows each circuit's state, or that it has no output or one that cannot switch, and offers no switch by hand without an output; its plan and next change on the device's clock, a dimmer's brightness read back, a switch by hand and, with a warning, a light on in the dark period; a phase's hours of light and brightness are set on the Plants page | SD-135 | ✓ | `light.tsx`, `plants.tsx` · robot.spec.ts, phone.spec.ts |
 
 ## Locks that report only (SD-133)
 

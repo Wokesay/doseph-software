@@ -63,6 +63,15 @@ function fmt(kind: "dt" | "t" | "d") {
 export const dateTime = (epoch: number) => fmt("dt").format(new Date(epoch * 1000));
 export const time = (epoch: number) => fmt("t").format(new Date(epoch * 1000));
 export const day = (epoch: number) => fmt("d").format(new Date(epoch * 1000));
+/** A time of day on the device's clock, as its plans count it, whatever the browser's zone; the
+ *  browser's own where the zone is unknown to it. */
+export function deviceTime(epoch: number, zone: string | undefined): string {
+  try {
+    return new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", timeZone: zone || undefined }).format(new Date(epoch * 1000));
+  } catch {
+    return time(epoch);
+  }
+}
 
 export function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
