@@ -33,6 +33,8 @@ struct RoleDef {
   std::string kind;    // "output" | "binary" | "level" (litres)
   bool pulse = false;  // an output with a longest run: the device switches it off on its own
   Ms maxRunMs = 0;     // a pulse output's longest run (hard limit)
+  bool light = false;  // a light circuit's (SD-135): no Stop, hold or maintenance switches it
+  bool dimmer = false; // on a Shelly "Light" component with a brightness, not a "Switch"
 };
 const std::vector<RoleDef>& roleDefs();  // the fixed ones
 const RoleDef* roleDef(const std::string& id);
@@ -132,7 +134,9 @@ class NetDevices {
   RoleValue value(const Config& cfg, const std::string& role, Ms now) const;
   bool online(const std::string& device, Ms now) const;
   // What a Shelly's last status said of a switch: on, off, or unknown (none, or stale)
-  std::optional<bool> output(const std::string& device, int channel, Ms now) const;
+  std::optional<bool> output(const std::string& device, int channel, Ms now, bool dimmer = false) const;
+  // A dimmer's brightness as last read, %; nothing without a fresh one (R5)
+  std::optional<double> brightness(const std::string& device, int channel, Ms now) const;
   // The devices for the API: online, what they said they are, their last problem
   json status(const Config& cfg, Ms now) const;
   // A device's credentials: Shelly's user is always "admin"; "" as password removes them

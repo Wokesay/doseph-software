@@ -1259,3 +1259,33 @@ by the minimal principle. Climate follows with decisions of its own.
   form: RAT-013 (the driver's threshold) and RAT-029 (0 % switches the
   relay off). Both were dropped for the mixing robot alone (SD-105) and
   are taken up again.
+- **Details from building it** (step 9.5, control details by the minimal
+  principle).
+  - *By hand.* A switch by hand holds until the plan's day or night
+    changes, also when a changed plan or phase brings that change. A day
+    of 0 or 24 h has no change; a switch by hand then holds for a day. It
+    is not resumed after a restart: light is by its plan again (R6).
+  - *Time.* The plan reads the local time of the device's time zone. On
+    the day the clocks change, a day that spans the change is an hour
+    longer or shorter.
+  - *Settings that do not hold.* A light whose Shelly settings cannot be
+    written (RAT-019) is switched off and says why, as any other output,
+    also when its plan has it on.
+  - *One device, two entries.* A Shelly added a second time by another
+    address (its IP and its name) switches nothing under the later
+    entry, which says so. Light, which a Stop leaves on, could otherwise
+    share an output with a valve or a pump unseen.
+  - *The wrong kind of output.* A light bound to a Shelly output of the
+    other kind (a dimmer as a switch, or the reverse) says so, and
+    nothing is sent to it. A circuit changed between switch and dimmer,
+    or removed, lets its old output go and switches it off.
+  - *Brightness.* A dimmer takes whole percent; the robot rounds up, so
+    the driver's threshold holds. While a light is on, a brightness read
+    back otherwise is set again, the brightness alone.
+  - *Ramps and a phase.* The ramps are checked against the circuit's own
+    hours. A phase with fewer hours may make them overlap: the light then
+    rises and falls within its day without reaching full brightness.
+  - *Account tokens.* An account token manages neither light circuits nor
+    the switch by hand. It may edit plants and their phases (SD-128), and
+    so the hours of light and the brightness a phase sets, within the
+    same limits (0 to 24 h, 1 to 100 %).

@@ -97,6 +97,30 @@ void validateWatering(const Config& cfg, Err&& err) {
   }
 }
 
+// Light (SD-135): a name, a day within 24 h whose ramps fit in it, a dimmer's brightness and the
+// driver's threshold in bounds, and a plant that is there
+template <class Err>
+void validateLighting(const Config& cfg, Err&& err) {
+  const LightingCfg& l = cfg.lighting;
+  if (l.circuits.size() > kMaxLights) err(say("cfg.light.too_many", {{"max", kMaxLights}}));
+  std::set<std::string> ids;
+  for (const auto& c : l.circuits) {
+    const bool idOk = c.id.size() >= 2 && c.id.size() <= 3 && c.id[0] == 'l' &&
+                      std::all_of(c.id.begin() + 1, c.id.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
+    if (!idOk || !ids.insert(c.id).second) err(say("cfg.light.id", {{"id", c.id}}));
+    if (c.name.empty() || chars(c.name) > 40) err(say("cfg.light.name", {{"max", 40}}));
+    const json name = c.name;
+    if (c.startMin < 0 || c.startMin >= 24 * 60) err(say("cfg.light.start", {{"name", name}}));
+    if (!inRange(c.hours, 0, 24)) err(say("cfg.light.hours", {{"name", name}}));
+    if (!inRange(c.pct, 1, 100)) err(say("cfg.light.pct", {{"name", name}}));
+    if (!inRange(c.thresholdPct, 0, 50)) err(say("cfg.light.threshold", {{"name", name}, {"max", 50}}));
+    if (c.sunriseMin < 0 || c.sunsetMin < 0 || c.sunriseMin > kMaxRampMin || c.sunsetMin > kMaxRampMin ||
+        (isNum(c.hours) && c.sunriseMin + c.sunsetMin > c.hours * 60))
+      err(say("cfg.light.ramps", {{"name", name}, {"max", kMaxRampMin}}));
+    if (!c.plant.empty() && !cfg.plant(c.plant)) err(say("cfg.light.plant", {{"name", name}}));
+  }
+}
+
 }  // namespace
 
 WaterCircuitCfg waterCircuitFromJson(const json& x) {
@@ -123,6 +147,23 @@ WaterCircuitCfg waterCircuitFromJson(const json& x) {
   return w;
 }
 
+LightCircuitCfg lightCircuitFromJson(const json& x) {
+  if (!x.is_object()) throw std::invalid_argument("a light circuit is not an object");
+  LightCircuitCfg l;
+  l.id = jstr(x, "id");
+  l.name = jstr(x, "name");
+  if (x.contains("dimmed") && !x["dimmed"].is_boolean()) throw std::invalid_argument("dimmed is not true or false");
+  l.dimmed = jbool(x, "dimmed", false);
+  l.startMin = intOr(x, "startMin", l.startMin);
+  if (x.contains("hours")) l.hours = numOrNaN(x, "hours");
+  if (x.contains("pct")) l.pct = numOrNaN(x, "pct");
+  if (x.contains("thresholdPct")) l.thresholdPct = numOrNaN(x, "thresholdPct");
+  l.sunriseMin = intOr(x, "sunriseMin", 0);
+  l.sunsetMin = intOr(x, "sunsetMin", 0);
+  l.plant = jstr(x, "plant");
+  return l;
+}
+
 const WaterCircuitCfg* WateringCfg::circuit(const std::string& id) const {
   for (const auto& c : circuits)
     if (c.id == id) return &c;
@@ -130,6 +171,13 @@ const WaterCircuitCfg* WateringCfg::circuit(const std::string& id) const {
 }
 
 std::string waterRole(const std::string& circuit) { return "water." + circuit; }
+std::string lightRole(const std::string& circuit) { return "light." + circuit; }
+
+const LightCircuitCfg* LightingCfg::circuit(const std::string& id) const {
+  for (const auto& c : circuits)
+    if (c.id == id) return &c;
+  return nullptr;
+}
 
 Limits Limits::bounded() const {
   Limits b;
@@ -167,7 +215,9 @@ json phasesJson(const std::vector<PhaseCfg>& phases) {
                    {"ecTarget", numOrNull(ph.ecTarget)},
                    {"ph", isNum(ph.phLow) && isNum(ph.phHigh) ? json::array({ph.phLow, ph.phHigh}) : json(nullptr)},
                    {"shotsPerDay", ph.shotsPerDay ? json(*ph.shotsPerDay) : json(nullptr)},
-                   {"shotS", numOrNull(ph.shotS)}});
+                   {"shotS", numOrNull(ph.shotS)},
+                   {"lightHours", ph.lightHours ? json(*ph.lightHours) : json(nullptr)},
+                   {"lightPct", ph.lightPct ? json(*ph.lightPct) : json(nullptr)}});
   return out;
 }
 
@@ -194,6 +244,12 @@ std::vector<PhaseCfg> phasesFromJson(const json& j) {
       x.shotsPerDay = n < 0 || n > 100000 ? -1 : static_cast<int>(n);  // out of bounds stays so
     }
     x.shotS = numOrNaN(p, "shotS");
+    // Light (SD-135): a number or nothing
+    for (const auto& [key, field] : {std::pair{"lightHours", &x.lightHours}, std::pair{"lightPct", &x.lightPct}}) {
+      if (!p.contains(key) || p[key].is_null()) continue;
+      if (!p[key].is_number()) throw std::invalid_argument(std::string(key) + " is not a number");
+      *field = p[key].get<double>();
+    }
     out.push_back(std::move(x));
   }
   return out;
@@ -303,6 +359,13 @@ void to_json(json& j, const Config& c) {
                         {"paused", w.paused},       {"plant", w.plant}});
   }
   j["watering"] = {{"reservePct", c.watering.reservePct}, {"circuits", circuits}};
+  json lights = json::array();
+  for (const auto& l : c.lighting.circuits)
+    lights.push_back({{"id", l.id},           {"name", l.name},           {"dimmed", l.dimmed},
+                      {"startMin", l.startMin}, {"hours", numOrNull(l.hours)}, {"pct", numOrNull(l.pct)},
+                      {"thresholdPct", numOrNull(l.thresholdPct)}, {"sunriseMin", l.sunriseMin}, {"sunsetMin", l.sunsetMin},
+                      {"plant", l.plant}});
+  j["lighting"] = {{"circuits", lights}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -449,6 +512,9 @@ Config configFromJson(const json& in) {
     if (w.contains("reservePct")) c.watering.reservePct = numOrNaN(w, "reservePct");
     for (const auto& x : arrayAt(w, "circuits")) c.watering.circuits.push_back(waterCircuitFromJson(x));
   }
+  if (const json& l = objectAt(j, "lighting"); !l.empty()) {
+    for (const auto& x : arrayAt(l, "circuits")) c.lighting.circuits.push_back(lightCircuitFromJson(x));
+  }
   if (const json& f = objectAt(j, "circulation"); f.contains("mode")) {
     if (!f["mode"].is_string()) throw std::invalid_argument("the circulation's mode is not a string");
     c.circulation.mode = f["mode"].get<std::string>();
@@ -586,6 +652,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     err(say("cfg.refill.max_fill", {{"min", kRefillMinMin}, {"max", kRefillMaxMin}}));
   if (c.circulation.mode != "mixing" && c.circulation.mode != "always") err(say("cfg.circulation.mode"));
   validateWatering(c, err);
+  validateLighting(c, err);
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
@@ -736,6 +803,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
         err(say("cfg.phase.shots", {{"name", name}, {"phase", ph.name}, {"max", 24 * 60}}));
       if (!std::isnan(ph.shotS) && !inRange(ph.shotS, 1, kMaxShotS))
         err(say("cfg.phase.shot", {{"name", name}, {"phase", ph.name}, {"max", kMaxShotS / 3600}}));
+      if (ph.lightHours && !inRange(*ph.lightHours, 0, 24)) err(say("cfg.phase.light_hours", {{"name", name}, {"phase", ph.name}}));
+      if (ph.lightPct && !inRange(*ph.lightPct, 1, 100)) err(say("cfg.phase.light_pct", {{"name", name}, {"phase", ph.name}}));
     }
   };
   std::set<std::string> plantIds;
@@ -790,6 +859,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["refill"] = s.refill;
   j["watering"] = s.watering;
   j["waterLow"] = s.waterLow;
+  j["lighting"] = s.lighting;
   j["settleMin"] = s.settleMin;
   j["alarms"] = s.alarms;
   j["lastReport"] = s.lastReport;
@@ -891,6 +961,7 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("refill") && j["refill"].is_object()) s.refill = j["refill"];
   if (j.contains("watering") && j["watering"].is_object()) s.watering = j["watering"];
   s.waterLow = jbool(j, "waterLow", false);
+  if (j.contains("lighting") && j["lighting"].is_object()) s.lighting = j["lighting"];
   if (j.contains("settleMin") && j["settleMin"].is_array())
     for (const auto& m : j["settleMin"])
       if (m.is_number() && isNum(m.get<double>()) && m.get<double>() >= 0 && s.settleMin.size() < 3) s.settleMin.push_back(m.get<double>());

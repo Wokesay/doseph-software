@@ -193,7 +193,7 @@ of its own.
 | An output of a network device may switch only once "off after power loss", "never on by itself", its own input detached and, for a pulse role, an auto-off at 1.11 × its longest run read back as written; they are read back before every switch-on, written once more where they differ, and where they still differ it is not switched on | RAT-019 | ✓ | `devices.cpp`, `gateway.cpp` · test_devices.cpp |
 | A role without a device has no value; an assigned device that does not answer, a stale or unreadable value give none either, and the watchdog counts each as a problem | RAT-024 | ✓ | `devices.cpp`, `robot.cpp`, `watchdog.cpp` · test_devices.cpp |
 | Only the gateway switches a network output (R1, checked by `arch_check.sh`), and an answer counts only for the request it answers; off goes at once and again while the device says on; a Stop and a restart switch every output off; an output on without a check, bound anew, or whose device was away is switched off and checked before it switches on; an output let go is switched off until its device answers, with an alarm after a minute | SD-132, R1, R6 | ✓ | `gateway.cpp`, `robot.cpp` · test_devices.cpp |
-| Outputs are switched only on a Shelly of the second generation or later, known by its own ID: another device at its address is offline; values come from a Shelly, ESPHome's web server or an MQTT topic, MQTT only while connected and its availability says online, and after an outage only once it comes again; passwords live apart, never in a backup or an answer of the API; an import or a removal forgets what moved or went | SD-132 | ✓ | `devices.cpp`, `config.cpp`, `robot.cpp` · test_devices.cpp |
+| Outputs are switched only on a Shelly of the second generation or later, known by its own ID: another device at its address is offline, and so is one device added a second time, by another address, under its later entry; values come from a Shelly, ESPHome's web server or an MQTT topic, MQTT only while connected and its availability says online, and after an outage only once it comes again; passwords live apart, never in a backup or an answer of the API; an import or a removal forgets what moved or went | SD-132 | ✓ | `devices.cpp`, `config.cpp`, `robot.cpp` · test_devices.cpp |
 
 ## Refill valve (SD-132)
 
@@ -220,6 +220,18 @@ of its own.
 | pH not corrected does not block watering and shows as a warning | RAT-084 | ✓ | `watering.cpp` · test_watering.cpp |
 | Water outside pH 4.0–8.5, EC more than 1.0 above its target or above 5.0, without a recent measurement or during a calibration blocks and stops a shot; a shot waits until a dose or fill is mixed in and measured, and a dose stops it; a person may water anyway, one shot by hand, as a warning | RAT-086 | ✓ | `watering.cpp`, `robot.cpp` · test_watering.cpp |
 | Stop, maintenance and a hold stop every circuit; a circuit changed or removed ends its shot; a restart switches them off, reports a cut shot, books it as run until the restart and does not repeat it; only a session or an app token manages circuits and waters, an account token only pauses a schedule | SD-134, R6, SD-129 | ✓ | `watering.cpp`, `robot.cpp`, `api.cpp` · test_watering.cpp |
+
+## Light (SD-135)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| Any number of light circuits (at most 16), each a Shelly switch or a dimmer on a 0–10 V line; a circuit's day begins at its own local time and lasts its hours of light, 0 to 24 h; a dimmer rises over its sunrise and falls over its sunset within the day | SD-135 | ✓ | `lighting.cpp`, `config.cpp` · test_lighting.cpp |
+| A dimming value below the driver's threshold is raised to it | RAT-013 | ✓ | `lighting.cpp` · test_lighting.cpp |
+| 0 % means off: the dimmer's output switches off with it | RAT-029 | ✓ | `lighting.cpp`, `gateway.cpp` · test_lighting.cpp |
+| A circuit that follows a plant takes the hours of light and the brightness from its current phase where it has them; without a running plant its own; a plant deleted lets it go | SD-135, RAT-076 | ✓ | `lighting.cpp`, `robot.cpp` · test_lighting.cpp |
+| Light follows its plan through a restart, a Stop, a hold and maintenance; a light on after a restart of the robot is checked while it stays on; a dimmer is off after a power loss and gets no auto-off; its brightness is read back and set again where it differs | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `lighting.cpp` · test_lighting.cpp |
+| A light whose settings do not hold is switched off; a circuit changed between switch and dimmer, or removed, lets its old output go; bound to the other kind of output it is said and nothing is sent to it | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `robot.cpp` · test_lighting.cpp |
+| By hand on or off until the plan's next change, also one a changed plan brings; not resumed after a restart; on by hand at night is said; only a session or an app token manages light | SD-135, SD-129 | ✓ | `lighting.cpp`, `robot.cpp`, `api.cpp` · test_lighting.cpp |
 
 ## Locks that report only (SD-133)
 

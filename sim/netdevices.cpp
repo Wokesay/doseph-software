@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "netdevices.hpp"
 
+#include <algorithm>
+
 namespace sim {
 
 using doseph::json;
@@ -13,6 +15,11 @@ json shellySwitchDefaults(bool withInput) {
             {"auto_off", false}, {"auto_off_delay", 60.0}};
   if (withInput) c["in_mode"] = "follow";
   return c;
+}
+
+json shellyLightDefaults() {
+  return {{"name", nullptr}, {"initial_state", "restore_last"}, {"auto_on", false}, {"auto_on_delay", 60.0},
+          {"auto_off", false}, {"auto_off_delay", 60.0}, {"in_mode", "dim"}};
 }
 
 json rpcError(const json& req, const std::string& src, int code, const std::string& message) {
@@ -33,6 +40,7 @@ json FakeShelly::handle(const json& req, Ms now) {
   if (method == "Shelly.GetStatus") {
     json st = {{"sys", {{"uptime", now / 1000}}}};
     for (size_t i = 0; i < switches.size(); ++i) st["switch:" + std::to_string(i)] = {{"id", i}, {"output", switches[i].on}};
+    for (size_t i = 0; i < lights.size(); ++i) st["light:" + std::to_string(i)] = {{"id", i}, {"output", lights[i].on}, {"brightness", lights[i].brightness}};
     for (size_t i = 0; i < inputs.size(); ++i) st["input:" + std::to_string(i)] = {{"id", i}, {"state", static_cast<bool>(inputs[i])}};
     return result(st);
   }
@@ -60,6 +68,36 @@ json FakeShelly::handle(const json& req, Ms now) {
     if (s->on && !was) s->onSince = now;
     return result({{"was_on", was}});
   }
+  // A dimmer (SD-135)
+  auto li = [&]() -> Light* {
+    const int n = params.value("id", -1);
+    return n >= 0 && n < static_cast<int>(lights.size()) ? &lights[n] : nullptr;
+  };
+  if (method == "Light.GetConfig") {
+    Light* l = li();
+    if (!l) return rpcError(req, id, -103, "Invalid argument 'id'");
+    json c = l->config;
+    c["id"] = params["id"];
+    return result(c);
+  }
+  if (method == "Light.SetConfig") {
+    Light* l = li();
+    if (!l || !params.contains("config") || !params["config"].is_object()) return rpcError(req, id, -103, "Invalid argument");
+    for (const auto& [k, v] : params["config"].items())
+      if (!l->config.contains(k)) return rpcError(req, id, -103, "Invalid argument '" + k + "'");
+    if (!ignoresConfig)
+      for (const auto& [k, v] : params["config"].items()) l->config[k] = v;
+    return result({{"restart_required", false}});
+  }
+  if (method == "Light.Set") {
+    Light* l = li();
+    if (!l || (params.contains("on") && !params["on"].is_boolean()) || (params.contains("brightness") && !params["brightness"].is_number()))
+      return rpcError(req, id, -103, "Invalid argument");
+    ++l->sets;
+    if (params.contains("on")) l->on = params["on"].get<bool>();
+    if (params.contains("brightness")) l->brightness = std::clamp(params["brightness"].get<double>(), 0.0, 100.0);
+    return result(json::object());
+  }
   return rpcError(req, id, -114, "Method " + method + " not found");
 }
 
@@ -78,6 +116,11 @@ void FakeShelly::advance(Ms now) {
 }
 
 void FakeShelly::powerCycle() {
+  for (auto& l : lights) {
+    const std::string init = l.config.value("initial_state", "off");
+    if (init == "off") l.on = false;
+    else if (init == "on") l.on = true;
+  }
   for (size_t i = 0; i < switches.size(); ++i) {
     Switch& s = switches[i];
     const std::string init = s.config.value("initial_state", "off");
@@ -119,6 +162,13 @@ NetTwin::NetTwin() {
   valve.inputs.push_back(false);
   valve.inlet = true;
   shellies_.push_back(valve);
+  FakeShelly dimmer;  // a dimmer on the lamps' 0–10 V line (SD-135)
+  dimmer.address = "shelly-dimmer.local";
+  dimmer.id = "shellyplus010v-sim000006";
+  dimmer.model = "SNDM-00100WW";
+  dimmer.lights.push_back({false, 100, shellyLightDefaults()});
+  dimmer.inputs.push_back(false);
+  shellies_.push_back(dimmer);
   FakeShelly pumps;
   pumps.address = "shelly-pump.local";
   pumps.id = "shellypro2-sim000005";
@@ -163,7 +213,7 @@ void NetTwin::advance(Ms now) {
 
 FakeShelly* NetTwin::shelly(const std::string& address) {
   for (auto& s : shellies_)
-    if (s.address == address) return &s;
+    if (s.address == address || std::find(s.aliases.begin(), s.aliases.end(), address) != s.aliases.end()) return &s;
   return nullptr;
 }
 

@@ -48,11 +48,15 @@ RoleDef circuitRole(const WaterCircuitCfg& c) {
   return {waterRole(c.id), "output", true, isNum(c.longestS) ? static_cast<Ms>(std::llround(c.longestS * 1000.0)) : 0};
 }
 
+// Light runs for hours: no auto-off (RAT-019)
+RoleDef lightCircuitRole(const LightCircuitCfg& c) { return {lightRole(c.id), "output", false, 0, true, c.dimmed}; }
+
 }  // namespace
 
 std::vector<RoleDef> roleDefs(const Config& cfg) {
   std::vector<RoleDef> out = roleDefs();
   for (const auto& c : cfg.watering.circuits) out.push_back(circuitRole(c));
+  for (const auto& c : cfg.lighting.circuits) out.push_back(lightCircuitRole(c));
   return out;
 }
 
@@ -60,12 +64,16 @@ std::optional<RoleDef> roleDef(const Config& cfg, const std::string& id) {
   if (const RoleDef* r = roleDef(id)) return *r;
   if (id.rfind("water.", 0) == 0)
     if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return circuitRole(*c);
+  if (id.rfind("light.", 0) == 0)
+    if (const LightCircuitCfg* c = cfg.lighting.circuit(id.substr(6))) return lightCircuitRole(*c);
   return std::nullopt;
 }
 
 Msg roleLabel(const Config& cfg, const std::string& id) {
   if (id.rfind("water.", 0) == 0)
     if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return say("role.water", {{"name", c->name}});
+  if (id.rfind("light.", 0) == 0)
+    if (const LightCircuitCfg* c = cfg.lighting.circuit(id.substr(6))) return say("role.light", {{"name", c->name}});
   return say("role." + id);
 }
 
@@ -258,7 +266,6 @@ std::vector<NetRequest> NetDevices::take() {
 }
 
 std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, int status, const json& body, Ms now) {
-  (void)cfg;
   const auto it = pending_.find(id);
   if (it == pending_.end()) return std::nullopt;  // late, after its time ran out
   const Pending p = it->second;
@@ -295,6 +302,16 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   if (!body.is_object()) return fail(say("device.unreadable"));
   // Known by its own ID: another device at its address is not it (SD-132)
   const std::string src = jstr(body, "src");
+  // One device under two entries (by two addresses): the later one switches nothing, so two roles
+  // never share an output unseen, one of them perhaps light, which a Stop leaves on (SD-135)
+  if (!src.empty())
+    for (const auto& [entry, own] : ownIds_)
+      if (entry != p.device && own == src)
+        if (const NetDeviceCfg* first = cfg.device(entry)) {
+          s.other = true;
+          s.status = nullptr;
+          return fail(say("device.twice", {{"name", first->name}}));
+        }
   const auto known = ownIds_.find(p.device);
   if (known != ownIds_.end() && !known->second.empty() && src != known->second) {
     s.other = true;
@@ -367,14 +384,24 @@ bool NetDevices::online(const std::string& device, Ms now) const {
   return now - it->second.lastOk <= kNetStaleMs;
 }
 
-std::optional<bool> NetDevices::output(const std::string& device, int channel, Ms now) const {
+std::optional<bool> NetDevices::output(const std::string& device, int channel, Ms now, bool dimmer) const {
   const auto it = seen_.find(device);
   if (it == seen_.end() || it->second.other || !it->second.status.is_object() || now - it->second.statusAt > kNetStaleMs) return std::nullopt;
-  const std::string key = "switch:" + std::to_string(channel);
+  const std::string key = (dimmer ? "light:" : "switch:") + std::to_string(channel);
   if (!it->second.status.contains(key)) return std::nullopt;
   const json& sw = it->second.status[key];
   if (!sw.is_object() || !sw.contains("output") || !sw["output"].is_boolean()) return std::nullopt;
   return sw["output"].get<bool>();
+}
+
+std::optional<double> NetDevices::brightness(const std::string& device, int channel, Ms now) const {
+  const auto it = seen_.find(device);
+  if (it == seen_.end() || it->second.other || !it->second.status.is_object() || now - it->second.statusAt > kNetStaleMs) return std::nullopt;
+  const std::string key = "light:" + std::to_string(channel);
+  if (!it->second.status.contains(key)) return std::nullopt;
+  const json& l = it->second.status[key];
+  if (!l.is_object() || !l.contains("brightness") || !l["brightness"].is_number()) return std::nullopt;
+  return l["brightness"].get<double>();
 }
 
 namespace {
@@ -488,6 +515,7 @@ json NetDevices::status(const Config& cfg, Ms now) const {
     j["ownId"] = own == ownIds_.end() || own->second.empty() ? json(nullptr) : json(own->second);
     j["problem"] = nullptr;
     j["switches"] = json::array();
+    j["lights"] = json::array();
     j["inputs"] = json::array();
     if (it != seen_.end()) {
       const Seen& s = it->second;
@@ -497,6 +525,8 @@ json NetDevices::status(const Config& cfg, Ms now) const {
           if (!v.is_object()) continue;
           if (k.rfind("switch:", 0) == 0 && v.contains("output"))
             j["switches"].push_back({{"channel", std::atoi(k.c_str() + 7)}, {"on", v["output"]}});
+          if (k.rfind("light:", 0) == 0 && v.contains("output"))
+            j["lights"].push_back({{"channel", std::atoi(k.c_str() + 6)}, {"on", v["output"]}, {"brightness", v.value("brightness", json(nullptr))}});
           if (k.rfind("input:", 0) == 0 && v.contains("state"))
             j["inputs"].push_back({{"channel", std::atoi(k.c_str() + 6)}, {"state", v["state"]}});
         }

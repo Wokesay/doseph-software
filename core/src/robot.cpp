@@ -333,7 +333,8 @@ void Robot::boot() {
   bootMs_ = clock_.nowMs();
   lastSnapshot_ = bootEpoch_;
   doser_.setBootTag(std::to_string(rt_.bootCount));
-  // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
+  // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007). Light
+  // alone follows its plan (SD-135).
   act_.stopAll();
   outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
   if (configRead) {
@@ -365,6 +366,8 @@ void Robot::boot() {
     Ctx c = ctx();
     if (RefillValve::reportCut(c)) afterFill();
     Watering::reportCut(c, localDate(c.epoch, cfg_.system.timezone));  // a shot cut by the restart is reported, not repeated (SD-134)
+    // Light is switched by its plan after a start; a hand switch is not resumed (SD-135, R6)
+    rt_.lighting = json::object();
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
@@ -449,6 +452,8 @@ void Robot::tick() {
     if (water_.running() != wasWatering) saveState(true);
   }
   outputs_.want("circulation_pump", circulationWanted(c));
+  // Light by its plan or a person's hand, through Stop, holds and maintenance (SD-135)
+  light_.tick(c, secondOfDay(c.epoch), outputs_);
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
@@ -796,6 +801,7 @@ json Robot::state() {
            }()},
           {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
           {"watering", water_.status(c, waterIn(c))},
+          {"lighting", Lighting::status(c, secondOfDay(c.epoch), outputs_.status(cfg_, devices_, c.now))},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -1169,6 +1175,8 @@ Result Robot::deletePlant(const std::string& id) {
   // A circuit that followed it keeps its own shots (SD-134)
   for (auto& w : next.watering.circuits)
     if (w.plant == id) w.plant.clear();
+  for (auto& lc : next.lighting.circuits)
+    if (lc.plant == id) lc.plant.clear();
   return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
 }
 
@@ -1547,6 +1555,8 @@ Result Robot::importConfig(const json& j) {
   water_.reset();
   for (const auto& w : before.watering.circuits)
     if (!cfg_.watering.circuit(w.id)) Watering::forgetRuntime(rt_, w.id);
+  for (const auto& lc : before.lighting.circuits)
+    if (!cfg_.lighting.circuit(lc.id)) Lighting::forget(rt_, lc.id);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)
@@ -2330,8 +2340,10 @@ void Robot::reconcileDevices(const Config& before) {
     const NetDeviceCfg* d0 = before.device(was->second.device);
     const auto is = cfg_.roles.find(def.id);
     const NetDeviceCfg* d1 = is == cfg_.roles.end() ? nullptr : cfg_.device(is->second.device);
+    // A light changed between switch and dimmer is another Shelly component: let go as the old one
+    const auto def1 = roleDef(cfg_, def.id);
     const bool same = d0 && d1 && is->second.source == "shelly" && is->second.channel == was->second.channel && d0->id == d1->id &&
-                      d0->address == d1->address && d0->kind == d1->kind;
+                      d0->address == d1->address && d0->kind == d1->kind && def1 && def1->dimmer == def.dimmer;
     if (!same) outputs_.release(before, devices_, def.id, now);
   }
   bool forgot = false;
@@ -2632,6 +2644,78 @@ Result Robot::pauseCircuit(const std::string& id, const json& j) {
   return r;
 }
 
+int Robot::secondOfDay(Epoch epoch) const {
+  // Zones are whole minutes off UTC: the seconds are UTC's
+  return localTime(epoch, cfg_.system.timezone).minuteOfDay * 60 + static_cast<int>(((epoch % 60) + 60) % 60);
+}
+
+Result Robot::putLight(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  json body = j;
+  std::string id = jstr(body, "id");
+  if (id.empty()) {
+    // A new circuit: the next free number
+    for (int n = 1; id.empty(); ++n)
+      if (!cfg_.lighting.circuit("l" + std::to_string(n))) id = "l" + std::to_string(n);
+    body["id"] = id;
+  } else if (const LightCircuitCfg* was = cfg_.lighting.circuit(id)) {
+    // A plant followed stays so, unless the change says otherwise
+    if (!body.contains("plant")) body["plant"] = was->plant;
+  } else {
+    return Result::fail(404, say("light.none"));
+  }
+  LightCircuitCfg lc;
+  try {
+    lc = lightCircuitFromJson(body);
+  } catch (...) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  Config next = cfg_;
+  bool found = false;
+  for (auto& x : next.lighting.circuits)
+    if (x.id == id) {
+      x = lc;
+      found = true;
+    }
+  if (!found) next.lighting.circuits.push_back(lc);
+  const Config before = cfg_;
+  Result r = saveConfig(next, changed("cfg.what.lighting"));
+  if (r.status != 200) return r;
+  reconcileDevices(before);  // a switch made a dimmer, or back: its output is let go as it was
+  r.body["id"] = id;
+  return r;
+}
+
+Result Robot::deleteLight(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.lighting.circuit(id)) return Result::fail(404, say("light.none"));
+  Config next = cfg_;
+  next.lighting.circuits.erase(std::remove_if(next.lighting.circuits.begin(), next.lighting.circuits.end(),
+                                              [&](const LightCircuitCfg& lc) { return lc.id == id; }),
+                               next.lighting.circuits.end());
+  next.roles.erase(lightRole(id));
+  const Config before = cfg_;
+  Result r = saveConfig(next, changed("cfg.what.lighting"));
+  if (r.status != 200) return r;
+  Lighting::forget(rt_, id);
+  saveState(true);
+  reconcileDevices(before);  // its output is let go and switched off
+  return r;
+}
+
+Result Robot::lightHand(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object() || !j.contains("on") || !(j["on"].is_boolean() || j["on"].is_null())) return Result::fail(422, say("api.bad_input"));
+  Ctx c = ctx();
+  const std::optional<bool> on = j["on"].is_null() ? std::nullopt : std::optional<bool>(j["on"].get<bool>());
+  if (!Lighting::hand(c, id, on, secondOfDay(c.epoch))) return Result::fail(404, say("light.none"));
+  light_.tick(c, secondOfDay(c.epoch), outputs_);
+  saveState(true);
+  saveEvents();
+  return Result::ok();
+}
+
 void Robot::fillEnded(bool opened) {
   // The check held while it filled: it starts anew, and mixes first where water may have gone in
   if (opened) afterFill();
@@ -2740,7 +2824,8 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
 
 Result Robot::stop(const Msg& who) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036)
+  // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036);
+  // light follows its plan (SD-135)
   act_.stopAll();
   outputs_.allOff();
   const bool was = rt_.stopped;

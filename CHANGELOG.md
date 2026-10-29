@@ -35,6 +35,21 @@ All notable changes to this software. The format follows
   per circuit; a plant's phase sets the hours of light and the
   brightness; after a restart light goes on by its plan, and STOP, a hold
   and maintenance leave it as the plan says. Built in step 9.5.
+- Light, the robot's side (SD-135), step 9.5; the page follows.
+  - Any number of light circuits, each a Shelly switch or a Shelly
+    dimmer on a 0–10 V line. A circuit's day begins at its own time and
+    lasts its hours of light; a dimmer rises over its sunrise and falls
+    over its sunset, never below the lamp driver's threshold, and 0 %
+    switches it off.
+  - A circuit may follow a plant, whose phase sets the hours of light and
+    the brightness (set per phase).
+  - Light follows its plan through a restart, STOP, a hold and
+    maintenance; a person may switch it on or off until the plan's next
+    change. A switch by hand is not resumed after a restart.
+  - A light whose Shelly settings do not hold is switched off. A circuit
+    bound to the wrong kind of Shelly output (a dimmer as a switch, or
+    the reverse) says so and switches nothing.
+  - The simulator has a Shelly dimmer.
 - Network devices (SD-132), the first part of step 9.
   - Shelly devices of the second generation and later, and ESPHome
     devices, are added by their address under Settings. Each shows
@@ -47,7 +62,8 @@ All notable changes to this software. The format follows
     auto-off into it, and reads them back. It checks them again before
     every switch-on and refuses where they do not hold.
   - A Shelly is known by its own ID: another device answering at its
-    address is not used.
+    address is not used, nor one device added a second time by another
+    address.
   - The outputs switch only through the gateway. A Stop or a restart
     switches them off; an output that is let go is switched off until
     its device answers, with an alarm after a minute.

@@ -11,10 +11,11 @@
 //                      line; set up so that the float does not switch the valve
 //   shelly-pump.local  a Shelly Gen2 relay with two outputs, each a watering pump that takes water
 //                      from the tank
+//   shelly-dimmer.local a Shelly dimmer with one light on the lamps' 0–10 V line (SD-135)
 //   esp-1.local        an ESPHome device: binary_sensor/tank_full, binary_sensor/tank_empty,
 //                      sensor/water_temp, sensor/tank_level (the tank's litres)
 // A Shelly's settings act as the real one's: the auto-off switches it off, and a power cycle
-// sets its outputs by their initial state.
+// sets its outputs by their initial state. A test may give one more addresses, as by its IP.
 #pragma once
 
 #include <map>
@@ -28,6 +29,7 @@ namespace sim {
 
 struct FakeShelly {
   std::string address, id, model;
+  std::vector<std::string> aliases;  // other addresses it answers at, as by its IP and its name
   int gen = 2;
   bool online = true;
   bool reachable = true;  // the network to it; its power stays
@@ -37,6 +39,14 @@ struct FakeShelly {
     doseph::json config;  // as Switch.GetConfig gives it
   };
   std::vector<Switch> switches;
+  // A dimmer on a 0–10 V line (SD-135): on and its brightness, as Light.GetStatus gives them
+  struct Light {
+    bool on = false;
+    double brightness = 100;
+    doseph::json config;  // as Light.GetConfig gives it
+    int sets = 0;         // Light.Set calls taken
+  };
+  std::vector<Light> lights;
   std::vector<bool> inputs;
   bool ignoresConfig = false;  // takes Switch.SetConfig and keeps its settings, as a faulty one might
   bool inlet = false;       // its output opens the tank's inlet, its input 0 is the float switch (SD-132)
