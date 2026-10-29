@@ -564,7 +564,7 @@ test("circulation: the twin's plug as the circulation pump; set to always, it ru
   const circulation = page.getByTestId("circulation");
   await expect(circulation.getByRole("tab", { name: "While mixing" })).toHaveAttribute("aria-selected", "true");
   await circulation.getByRole("tab", { name: "Always" }).click();
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(circulation.getByRole("tab", { name: "Always" })).toHaveAttribute("aria-selected", "true");
   await expect(card.getByTestId("role-state-circulation_pump")).toHaveText("on", { timeout: 20000 });
 });
 
