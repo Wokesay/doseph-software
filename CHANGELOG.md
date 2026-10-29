@@ -40,7 +40,10 @@ All notable changes to this software. The format follows
     the brightness (set per phase).
   - Light follows its plan through a restart, STOP, a hold and
     maintenance; a person may switch it on or off until the plan's next
-    change.
+    change. A switch by hand is not resumed after a restart.
+  - A light whose Shelly settings do not hold is switched off. A circuit
+    bound to the wrong kind of Shelly output (a dimmer as a switch, or
+    the reverse) says so and switches nothing.
   - The simulator has a Shelly dimmer.
 - Network devices (SD-132), the first part of step 9.
   - Shelly devices of the second generation and later, and ESPHome

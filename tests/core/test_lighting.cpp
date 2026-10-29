@@ -189,6 +189,127 @@ TEST_CASE("Light: by hand on or off until the plan's next change, then by the pl
   CHECK(r.call("POST", "lighting/circuits/l1/hand", {{"on", "yes"}}).status == 422);
 }
 
+TEST_CASE("Light: a sunrise of a whole day, a ramp at the day's end, a threshold of none and a fraction of an hour (SD-135, RAT-013, RAT-029)") {
+  doseph::LightCircuitCfg l = dimmer(0, 24);
+  CHECK(doseph::lightAt(l, 0).pct == 80);  // a day of 24 h has neither sunrise nor sunset
+  CHECK(doseph::lightAt(l, 0).changeInS == 24 * kH);
+  l = dimmer(6 * 60, 1);
+  l.sunriseMin = 30;
+  l.sunsetMin = 30;  // the ramps fill the day: up, then down at once
+  CHECK(doseph::lightAt(l, 6 * kH + 30 * 60 - 1).pct == 80);
+  CHECK(doseph::lightAt(l, 6 * kH + 30 * 60).pct == 80);
+  CHECK(doseph::lightAt(l, 7 * kH - 1).pct == 10);  // the last second: at the threshold, still on
+  CHECK(doseph::lightAt(l, 7 * kH - 1).on);
+  CHECK_FALSE(doseph::lightAt(l, 7 * kH).on);
+  l.thresholdPct = 0;  // no threshold: the ramp starts at 1 %, never at 0 %, which is off (RAT-029)
+  CHECK(doseph::lightAt(l, 6 * kH).pct >= 1);
+  CHECK(doseph::lightAt(l, 7 * kH - 1).pct >= 1);
+  l = dimmer(6 * 60, 0.5);
+  l.sunriseMin = 0;
+  l.sunsetMin = 0;
+  CHECK(doseph::lightAt(l, 6 * kH + 29 * 60).on);
+  CHECK(doseph::lightAt(l, 6 * kH + 29 * 60).changeInS == 60);
+  CHECK_FALSE(doseph::lightAt(l, 6 * kH + 30 * 60).on);
+  l.hours = doseph::kNaN;  // refused by the validation; were it here, no day
+  CHECK_FALSE(doseph::lightAt(l, 6 * kH).on);
+}
+
+TEST_CASE("Light: a hand switch is not resumed after a restart: light is by its plan again, on by day and off at night (SD-135, R6)") {
+  Run r(harness::device());
+  addDimmer(r, 60);
+  r.waitUntil("on", [&] { return lamp(r).on; }, 60);
+  r.ok("POST", "lighting/circuits/l1/hand", {{"on", false}});
+  r.waitUntil("off by hand", [&] { return !lamp(r).on; }, 15);
+  r.s.reboot();
+  REQUIRE(r.login("demo-password"));
+  CHECK(light(r)["hand"].is_null());
+  r.waitUntil("on by its plan", [&] { return lamp(r).on; }, 60);
+  // At night: on by hand, and after a restart off by its plan
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Tent"}, {"dimmed", true}, {"startMin", (nowMin(r) + 120) % 1440}, {"hours", 12}, {"pct", 80}});
+  r.waitUntil("off at night", [&] { return !lamp(r).on; }, 30);
+  r.ok("POST", "lighting/circuits/l1/hand", {{"on", true}});
+  r.waitUntil("on by hand", [&] { return lamp(r).on; }, 30);
+  CHECK(light(r)["pct"] == 80);  // the brightness it is on at, not the plan's 0 %
+  r.s.reboot();
+  REQUIRE(r.login("demo-password"));
+  r.waitUntil("off by its plan", [&] { return !lamp(r).on; }, 60);
+  CHECK(light(r)["hand"].is_null());
+  CHECK(light(r)["darkOn"] == false);
+}
+
+TEST_CASE("Light: a hand switch ends when a changed plan turns day into night or back, not only at the old plan's time (SD-135)") {
+  Run r(harness::device());
+  addDimmer(r, 60);
+  r.waitUntil("on", [&] { return lamp(r).on; }, 60);
+  r.ok("POST", "lighting/circuits/l1/hand", {{"on", false}});
+  r.waitUntil("off by hand", [&] { return !lamp(r).on; }, 15);
+  // Still day after the change: the hand switch holds
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Tent"}, {"dimmed", true}, {"startMin", ((nowMin(r) - 30) % 1440 + 1440) % 1440}, {"hours", 12}, {"pct", 80}});
+  r.step(15 * kSecond);
+  CHECK_FALSE(lamp(r).on);
+  CHECK(light(r)["hand"]["on"] == false);
+  // Night now: the plan has changed, and so has what the hand switch was against
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Tent"}, {"dimmed", true}, {"startMin", (nowMin(r) + 120) % 1440}, {"hours", 12}, {"pct", 80}});
+  r.step(5 * kSecond);
+  CHECK(light(r)["hand"].is_null());
+  // Day again: by the plan, on
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Tent"}, {"dimmed", true}, {"startMin", ((nowMin(r) - 30) % 1440 + 1440) % 1440}, {"hours", 12}, {"pct", 80}});
+  r.waitUntil("on by the plan", [&] { return lamp(r).on; }, 30);
+}
+
+TEST_CASE("Light: Stop switches the circulation pump off and leaves the light on (SD-135, SD-132)") {
+  Run r(harness::device());
+  addDimmer(r, 60);
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-plug.local"}, {"name", "Circulation"}});
+  r.ok("PUT", "roles/circulation_pump", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
+  r.ok("PUT", "circulation", {{"mode", "always"}});
+  auto pump = [&] { return r.s.net().shelly("shelly-plug.local")->switches[0].on; };
+  r.waitUntil("both on", [&] { return lamp(r).on && pump(); }, 90);
+  r.ok("POST", "stop");
+  r.step(5 * kSecond);
+  CHECK_FALSE(pump());
+  CHECK(lamp(r).on);
+  CHECK(lamp(r).brightness == 80);
+}
+
+TEST_CASE("Light: a dimmer whose settings do not hold is switched off, though its plan has it on (SD-135, RAT-019)") {
+  Run r(harness::device());
+  lamp(r).on = true;  // on at the device, with settings the robot cannot write
+  r.s.net().shelly("shelly-dimmer.local")->ignoresConfig = true;
+  addDimmer(r, 60);
+  r.waitUntil("refused", [&] { return light(r)["output"]["state"] == "refused"; }, 60);
+  r.waitUntil("off", [&] { return !lamp(r).on; }, 15);
+  CHECK(light(r)["output"]["problem"]["key"] == "device.settings_differ");
+}
+
+TEST_CASE("Light: a circuit changed between switch and dimmer lets its old output go; bound to the other kind of output, it says so and switches nothing (SD-135, R1)") {
+  Run r(harness::device());
+  // A switched light on a relay, made a dimmer: the relay goes off, and a relay dims nothing
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Relay"}});
+  const int start = ((nowMin(r) - 30) % 1440 + 1440) % 1440;
+  r.ok("PUT", "lighting/circuits", {{"name", "Shelf"}, {"startMin", start}, {"hours", 6}});
+  r.ok("PUT", "roles/light.l1", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  auto relay = [&] { return r.s.net().shelly("shelly-1.local")->switches[0].on; };
+  r.waitUntil("on by day", relay, 60);
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Shelf"}, {"dimmed", true}, {"startMin", start}, {"hours", 6}});
+  r.waitUntil("off once a dimmer", [&] { return !relay(); }, 15);
+  r.waitUntil("said", [&] { return light(r)["output"]["problem"]["key"] == "device.not_dimmer"; }, 15);
+  r.step(15 * kSecond);
+  CHECK_FALSE(relay());
+  // A dimmer bound as a switched light: said, and off; made a dimmer, it is on; a switch again, off
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-dimmer.local"}, {"name", "Lamps"}});
+  r.ok("PUT", "lighting/circuits", {{"name", "Tent"}, {"startMin", start}, {"hours", 6}, {"pct", 80}});
+  r.ok("PUT", "roles/light.l2", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
+  r.waitUntil("said", [&] { return light(r, "l2")["output"]["problem"]["key"] == "device.is_dimmer"; }, 15);
+  CHECK_FALSE(lamp(r).on);
+  r.ok("PUT", "lighting/circuits", {{"id", "l2"}, {"name", "Tent"}, {"dimmed", true}, {"startMin", start}, {"hours", 6}, {"pct", 80}});
+  r.waitUntil("on as a dimmer", [&] { return lamp(r).on; }, 60);
+  r.ok("PUT", "lighting/circuits", {{"id", "l2"}, {"name", "Tent"}, {"startMin", start}, {"hours", 6}, {"pct", 80}});
+  r.waitUntil("off once a switch", [&] { return !lamp(r).on; }, 15);
+  r.step(15 * kSecond);
+  CHECK_FALSE(lamp(r).on);
+}
+
 TEST_CASE("Light: a switched light on a relay is on by day and off by night; a light removed lets its output go (SD-135)") {
   Run r(harness::device());
   r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Relay"}});
@@ -200,6 +321,16 @@ TEST_CASE("Light: a switched light on a relay is on by day and off by night; a l
   r.ok("DELETE", "lighting/circuits/l1");
   r.waitUntil("off once removed", [&] { return !relay(); }, 15);
   CHECK_FALSE(r.ok("GET", "config")["roles"].contains("light.l1"));
+}
+
+TEST_CASE("Light: a dimmer removed is switched off (SD-135)") {
+  Run r(harness::device());
+  addDimmer(r, 60);
+  r.waitUntil("on", [&] { return lamp(r).on; }, 60);
+  r.ok("DELETE", "lighting/circuits/l1");
+  r.waitUntil("off once removed", [&] { return !lamp(r).on; }, 15);
+  r.step(15 * kSecond);
+  CHECK_FALSE(lamp(r).on);
 }
 
 TEST_CASE("Light: circuits are checked: a name, a day of 0 to 24 h whose ramps fit in it, a brightness and a threshold in bounds, a plant that exists; a phase's light in bounds (SD-135, R7)") {

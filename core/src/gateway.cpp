@@ -625,16 +625,20 @@ std::optional<DoseProgress> Doser::takeFinished() {
 
 namespace {
 
-std::string outputKey(const Config& cfg, const RoleBinding& b) {
-  const NetDeviceCfg* d = cfg.device(b.device);
-  return b.device + "@" + (d ? d->address : "") + ":" + std::to_string(b.channel);
-}
-
 // The Shelly component an output role is: a dimmer is a "Light", any other a "Switch"
 std::string component(const Config& cfg, const std::string& role) {
   const auto def = roleDef(cfg, role);
   return def && def->dimmer ? "Light" : "Switch";
 }
+
+// What an output is bound to: another component on the same channel is another output
+std::string outputKey(const Config& cfg, const std::string& role, const RoleBinding& b) {
+  const NetDeviceCfg* d = cfg.device(b.device);
+  return component(cfg, role) + "|" + b.device + "@" + (d ? d->address : "") + ":" + std::to_string(b.channel);
+}
+
+// A dimmer takes whole percent: up, so a brightness at the driver's threshold stays at it (RAT-013)
+long sentLevel(double pct) { return static_cast<long>(std::ceil(std::clamp(pct, 1.0, 100.0) - 1e-9)); }
 
 const RoleBinding* shellyOutput(const Config& cfg, const std::string& role) {
   const auto def = roleDef(cfg, role);
@@ -725,7 +729,7 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
       o = Out{};  // nothing wanted of a role without an output: a later binding starts with nothing
       continue;
     }
-    const std::string key = outputKey(cfg, *b);
+    const std::string key = outputKey(cfg, def.id, *b);
     if (o.key != key) {  // bound anew: off first, then its settings are checked; nothing wanted yet
       o = Out{};
       o.key = key;
@@ -755,6 +759,12 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
       o.lastOff = std::numeric_limits<Ms>::min() / 2;
     }
     const auto isOn = dev.output(b->device, b->channel, now, def.dimmer);
+    // A light bound to the other kind of output (a dimmer on a relay, or the reverse): said, as
+    // nothing sent to it would switch it (SD-135)
+    if (def.light && !isOn && dev.output(b->device, b->channel, now, !def.dimmer)) {
+      o.problem = say(def.dimmer ? "device.not_dimmer" : "device.is_dimmer");
+      continue;
+    }
     const json id = b->channel;
     const std::string comp = def.dimmer ? "Light" : "Switch";
     // Light follows its plan through a Stop and a hold (SD-135)
@@ -778,7 +788,8 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019).
     // A switch-on whose answer is not in yet is the robot's own. A light wanted on that is on (after
     // a restart) is checked while it stays on (SD-135).
-    const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on")) && !(def.light && o.want);
+    // One whose settings were written and still differ is switched off as any other (RAT-019).
+    const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on")) && !(def.light && o.want && !o.refused);
     if (forced || !o.want || held || unchecked || limit) {
       // Off at once, and again while the device says on or has not said; a Stop and a start always
       if ((forced || isOn != false || o.onSent) && (forced || now - o.lastOff >= kNetPollMs)) off(cfg, dev, def.id, o, now);
@@ -793,15 +804,17 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     // not switched on again until it was off: an auto-off that acted stays off
     if (!o.stage.empty() || now < o.retryAt) continue;
     if (isOn != false || o.onSent) {
-      if (def.light && isOn == true && !o.verified && !o.onSent) {
-        // A light on already, not switched by the robot since it started: checked while it stays on
+      if (def.light && isOn == true && !o.onSent) {
+        // A light on already, not switched by the robot since it started (or whose switch-on was
+        // not answered): checked while it stays on
         o.wrote = false;
         send(cfg, dev, def.id, o, "read", comp + ".GetConfig", {{"id", id}}, now);
       } else if (def.dimmer && o.onSent && isOn == true && now - o.lastLevel >= kNetPollMs) {
         // A dimmer at another brightness than wanted: set again
         const auto br = dev.brightness(b->device, b->channel, now);
         if (!br || std::fabs(*br - o.level) > 0.5) {
-          dev.rpc(cfg, b->device, "Light.Set", {{"id", id}, {"on", true}, {"brightness", std::lround(o.level)}}, def.id + "|level", now);
+          // The brightness alone: it switches nothing on (RAT-019)
+          dev.rpc(cfg, b->device, "Light.Set", {{"id", id}, {"brightness", sentLevel(o.level)}}, def.id + "|level", now);
           o.lastLevel = now;
         }
       }
@@ -837,10 +850,11 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
   const auto oit = outs_.find(role);
   if (!def || !b || oit == outs_.end()) return;
   Out& o = oit->second;
-  if (o.key != outputKey(cfg, *b) || b->device != a.device) return;  // for a binding gone since
+  if (o.key != outputKey(cfg, role, *b) || b->device != a.device) return;  // for a binding gone since
   if (stage == "off" || stage == "level") {
-    if (!a.ok) o.problem = say("device.switch_failed");
-    else if (o.problem.key == "device.switch_failed") o.problem = {};
+    const char* failed = stage == "off" ? "device.switch_failed" : "device.level_failed";
+    if (!a.ok) o.problem = say(failed);
+    else if (o.problem.key == failed) o.problem = {};
     return;
   }
   // Only the answer to the request the stage waits for: a late one of an older check counts for nothing
@@ -849,7 +863,7 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
   const json id = b->channel;
   const std::string comp = def->dimmer ? "Light" : "Switch";
   // Switched on: a dimmer at its brightness
-  const json onParams = def->dimmer ? json{{"id", id}, {"on", true}, {"brightness", std::lround(o.level)}} : json{{"id", id}, {"on", true}};
+  const json onParams = def->dimmer ? json{{"id", id}, {"on", true}, {"brightness", sentLevel(o.level)}} : json{{"id", id}, {"on", true}};
   auto giveUp = [&](Msg why, Ms retry) {
     o.stage.clear();
     o.problem = std::move(why);
@@ -932,7 +946,7 @@ json NetOutputs::status(const Config& cfg, const NetDevices& dev, Ms now) const 
     const RoleBinding* b = shellyOutput(cfg, def.id);
     const auto oit = outs_.find(def.id);
     const Out none;
-    const Out& o = oit == outs_.end() || !b || oit->second.key != outputKey(cfg, *b) ? none : oit->second;
+    const Out& o = oit == outs_.end() || !b || oit->second.key != outputKey(cfg, def.id, *b) ? none : oit->second;
     json j = {{"want", o.want},
               {"verified", o.verified},
               {"switchedOn", o.onSent || o.stage == "on"},

@@ -14,19 +14,28 @@ namespace {
 
 constexpr int kDayS = 24 * 3600;
 
-// What was switched by hand and still holds: {on, until}; nothing otherwise
-std::optional<json> handOf(const RuntimeState& rt, const std::string& id, Epoch now) {
+// What was switched by hand and still holds: {on, day, until}; nothing otherwise. It holds until the
+// plan's next change: the plan's day or night, as it is now, is no longer the one it was switched in
+// (also after a change of the plan or the phase), or its time has come.
+std::optional<json> handOf(const RuntimeState& rt, const std::string& id, Epoch now, bool dayNow) {
   if (!rt.lighting.is_object() || !rt.lighting.contains(id)) return std::nullopt;
   const json& h = rt.lighting[id];
   if (!h.is_object() || !h.contains("on") || !h["on"].is_boolean()) return std::nullopt;
   if (now >= static_cast<Epoch>(jnum(h, "until", 0))) return std::nullopt;
+  if (h.contains("day") && h["day"].is_boolean() && h["day"].get<bool>() != dayNow) return std::nullopt;
   return h;
+}
+
+// A light on by hand when its plan has it off: at its brightness by day, the driver's threshold kept
+double handPct(const LightCircuitCfg& e, const LightPoint& p) {
+  return p.pct > 0 ? p.pct : std::max({e.pct, isNum(e.thresholdPct) ? e.thresholdPct : 0.0, 1.0});
 }
 
 }  // namespace
 
 LightPoint lightAt(const LightCircuitCfg& l, int secondOfDay) {
   LightPoint p;
+  // Hours without a value are refused by the validation; were one here, no day is the safe side
   const int length = static_cast<int>(std::lround(std::clamp(isNum(l.hours) ? l.hours : 0.0, 0.0, 24.0) * 3600.0));
   if (length <= 0) {
     p.changeInS = kDayS;
@@ -72,22 +81,22 @@ LightCircuitCfg effectiveLight(const Config& cfg, const LightCircuitCfg& l) {
 }
 
 void Lighting::tick(Ctx& c, int secondOfDay, NetOutputs& out) {
-  // A hand switch past the plan's next change is gone
-  if (c.rt.lighting.is_object()) {
-    for (auto it = c.rt.lighting.begin(); it != c.rt.lighting.end();) {
-      if (!handOf(c.rt, it.key(), c.epoch)) it = c.rt.lighting.erase(it);
-      else ++it;
-    }
+  if (!c.rt.lighting.is_object()) c.rt.lighting = json::object();
+  // The hand switches of circuits gone
+  for (auto it = c.rt.lighting.begin(); it != c.rt.lighting.end();) {
+    if (!c.cfg.lighting.circuit(it.key())) it = c.rt.lighting.erase(it);
+    else ++it;
   }
   for (const auto& l : c.cfg.lighting.circuits) {
     const LightCircuitCfg e = effectiveLight(c.cfg, l);
     const LightPoint p = lightAt(e, secondOfDay);
     bool on = p.on;
     double pct = p.pct;
-    if (const auto h = handOf(c.rt, l.id, c.epoch)) {
+    if (const auto h = handOf(c.rt, l.id, c.epoch, p.day)) {
       on = (*h)["on"].get<bool>();
-      // On by hand in the dark period: at its brightness by day, the driver's threshold kept
-      if (on && pct <= 0) pct = std::max({e.pct, isNum(e.thresholdPct) ? e.thresholdPct : 0.0, 1.0});
+      if (on) pct = handPct(e, p);
+    } else {
+      c.rt.lighting.erase(l.id);  // past the plan's next change: by the plan again
     }
     out.want(lightRole(l.id), on);
     if (l.dimmed && on) out.wantLevel(lightRole(l.id), pct);
@@ -104,9 +113,11 @@ bool Lighting::hand(Ctx& c, const std::string& circuit, std::optional<bool> on, 
     return true;
   }
   const LightPoint p = lightAt(effectiveLight(c.cfg, *l), secondOfDay);
-  c.rt.lighting[circuit] = {{"on", *on}, {"until", c.epoch + p.changeInS}};
-  c.log.add(c.epoch, "control", "info", say(*on ? "ev.light.hand_on" : "ev.light.hand_off", {{"name", l->name}}),
-            say(p.day ? "ev.light.until_end" : "ev.light.until_start"), {{"circuit", circuit}, {"until", c.epoch + p.changeInS}});
+  c.rt.lighting[circuit] = {{"on", *on}, {"day", p.day}, {"until", c.epoch + p.changeInS}};
+  // A day of 0 or 24 h has no change: a hand switch then holds a day
+  const char* until = p.changeInS >= kDayS ? "ev.light.for_a_day" : p.day ? "ev.light.until_end" : "ev.light.until_start";
+  c.log.add(c.epoch, "control", "info", say(*on ? "ev.light.hand_on" : "ev.light.hand_off", {{"name", l->name}}), say(until),
+            {{"circuit", circuit}, {"until", c.epoch + p.changeInS}});
   return true;
 }
 
@@ -119,7 +130,8 @@ json Lighting::status(const Ctx& c, int secondOfDay, const json& outputs) {
   for (const auto& l : c.cfg.lighting.circuits) {
     const LightCircuitCfg e = effectiveLight(c.cfg, l);
     const LightPoint p = lightAt(e, secondOfDay);
-    const auto h = handOf(c.rt, l.id, c.epoch);
+    const auto h = handOf(c.rt, l.id, c.epoch, p.day);
+    const bool on = h ? (*h)["on"].get<bool>() : p.on;
     json plant = nullptr;
     if (!l.plant.empty())
       if (const PlantCfg* pl = c.cfg.plant(l.plant)) {
@@ -130,8 +142,8 @@ json Lighting::status(const Ctx& c, int secondOfDay, const json& outputs) {
     const json output = outputs.contains(role) ? outputs[role] : json(nullptr);
     out.push_back({{"id", l.id},
                    {"day", p.day},
-                   {"on", h ? (*h)["on"].get<bool>() : p.on},
-                   {"pct", l.dimmed ? json(p.pct) : json(nullptr)},
+                   {"on", on},
+                   {"pct", !l.dimmed ? json(nullptr) : json(!on ? 0.0 : h ? handPct(e, p) : p.pct)},
                    {"hours", e.hours},
                    {"nextChangeAt", p.changeInS < kDayS ? json(c.epoch + p.changeInS) : json(nullptr)},
                    {"hand", h ? json{{"on", (*h)["on"]}, {"until", (*h)["until"]}} : json(nullptr)},

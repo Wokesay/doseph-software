@@ -333,7 +333,8 @@ void Robot::boot() {
   bootMs_ = clock_.nowMs();
   lastSnapshot_ = bootEpoch_;
   doser_.setBootTag(std::to_string(rt_.bootCount));
-  // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
+  // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007). Light
+  // alone follows its plan (SD-135).
   act_.stopAll();
   outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
   if (configRead) {
@@ -365,6 +366,8 @@ void Robot::boot() {
     Ctx c = ctx();
     if (RefillValve::reportCut(c)) afterFill();
     Watering::reportCut(c, localDate(c.epoch, cfg_.system.timezone));  // a shot cut by the restart is reported, not repeated (SD-134)
+    // Light is switched by its plan after a start; a hand switch is not resumed (SD-135, R6)
+    rt_.lighting = json::object();
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
@@ -2337,8 +2340,10 @@ void Robot::reconcileDevices(const Config& before) {
     const NetDeviceCfg* d0 = before.device(was->second.device);
     const auto is = cfg_.roles.find(def.id);
     const NetDeviceCfg* d1 = is == cfg_.roles.end() ? nullptr : cfg_.device(is->second.device);
+    // A light changed between switch and dimmer is another Shelly component: let go as the old one
+    const auto def1 = roleDef(cfg_, def.id);
     const bool same = d0 && d1 && is->second.source == "shelly" && is->second.channel == was->second.channel && d0->id == d1->id &&
-                      d0->address == d1->address && d0->kind == d1->kind;
+                      d0->address == d1->address && d0->kind == d1->kind && def1 && def1->dimmer == def.dimmer;
     if (!same) outputs_.release(before, devices_, def.id, now);
   }
   bool forgot = false;
@@ -2674,8 +2679,11 @@ Result Robot::putLight(const json& j) {
       found = true;
     }
   if (!found) next.lighting.circuits.push_back(lc);
+  const Config before = cfg_;
   Result r = saveConfig(next, changed("cfg.what.lighting"));
-  if (r.status == 200) r.body["id"] = id;
+  if (r.status != 200) return r;
+  reconcileDevices(before);  // a switch made a dimmer, or back: its output is let go as it was
+  r.body["id"] = id;
   return r;
 }
 
@@ -2816,7 +2824,8 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
 
 Result Robot::stop(const Msg& who) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036)
+  // A Stop switches everything off actively, books what has run and holds until Resume (RAT-036);
+  // light follows its plan (SD-135)
   act_.stopAll();
   outputs_.allOff();
   const bool was = rt_.stopped;

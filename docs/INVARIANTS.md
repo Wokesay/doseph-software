@@ -230,7 +230,8 @@ of its own.
 | 0 % means off: the dimmer's output switches off with it | RAT-029 | ✓ | `lighting.cpp`, `gateway.cpp` · test_lighting.cpp |
 | A circuit that follows a plant takes the hours of light and the brightness from its current phase where it has them; without a running plant its own; a plant deleted lets it go | SD-135, RAT-076 | ✓ | `lighting.cpp`, `robot.cpp` · test_lighting.cpp |
 | Light follows its plan through a restart, a Stop, a hold and maintenance; a light on after a restart of the robot is checked while it stays on; a dimmer is off after a power loss and gets no auto-off; its brightness is read back and set again where it differs | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `lighting.cpp` · test_lighting.cpp |
-| By hand on or off until the plan's next change; on by hand at night is said; only a session or an app token manages light | SD-135, SD-129 | ✓ | `lighting.cpp`, `api.cpp` · test_lighting.cpp |
+| A light whose settings do not hold is switched off; a circuit changed between switch and dimmer, or removed, lets its old output go; bound to the other kind of output it is said and nothing is sent to it | SD-135, RAT-019, R1 | ✓ | `gateway.cpp`, `robot.cpp` · test_lighting.cpp |
+| By hand on or off until the plan's next change, also one a changed plan brings; not resumed after a restart; on by hand at night is said; only a session or an app token manages light | SD-135, SD-129 | ✓ | `lighting.cpp`, `robot.cpp`, `api.cpp` · test_lighting.cpp |
 
 ## Locks that report only (SD-133)
 

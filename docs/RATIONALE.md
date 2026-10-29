@@ -245,6 +245,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-028 – After a restart, outputs fall back to off but recorded facts survive
 
+- **Changed:** Light (SD-135) follows its plan after a restart: on by day, off at night. A hand switch is not resumed.
 - **Rule:** After a restart the outputs fall back to off, while recorded facts survive: latches, jump locks, learned effects, the Stop, a new tank and an open dose in the dosing journal (SD-106).
 - **Why:** Outputs and recorded facts need opposite handling after an unexplained reset. An output is safest off, and switching it back on by itself is a hazard. A recorded fact (a lock is set, a calibration is valid, a run is active) has to come back, because losing it quietly releases a lock or ends a run.
 - **Evidence:** Observed on the reference installation (2026): stored on/off facts such as "calibration valid" and "run active" could be lost without any error message, while numeric settings were kept.

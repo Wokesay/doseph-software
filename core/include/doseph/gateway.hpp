@@ -224,16 +224,18 @@ class Doser {
 // repeated until the device answers or a minute has passed. The refill valve closes on its own
 // limits, whatever wants it open (RAT-032): while the float does not say "not full", and once it
 // has been on for the longest fill. Light (SD-135) is neither held nor forced off by a Stop: it
-// follows its plan, and one found on after a restart is checked while it stays on. A dimmer is a
-// Shelly "Light": it switches on at its brightness, and a brightness read back otherwise is set again.
+// follows its plan, and one found on after a restart is checked while it stays on; one whose settings
+// do not hold is switched off. A dimmer is a Shelly "Light": it switches on at its brightness, and a
+// brightness read back otherwise is set again, the brightness alone. Bound to the other kind of output
+// (a dimmer on a relay, or the reverse), a light is said and nothing is sent to it.
 class NetOutputs {
  public:
   // False for a role that is not an output
   bool want(const std::string& role, bool on);
   // A dimmer's brightness while on, 1 to 100 % (SD-135)
   void wantLevel(const std::string& role, double pct);
-  // A Stop or a start: nothing wanted, and every bound output gets an off at the next tick, whatever
-  // it said last (R6, RAT-036)
+  // A Stop or a start: nothing wanted, and every bound output but light gets an off at the next tick,
+  // whatever it said last (R6, RAT-036); light follows its plan (SD-135)
   void allOff();
   // `hold`: nothing may switch on now (Stop, a hold of every pump)
   void tick(const Config& cfg, NetDevices& dev, bool hold, Ms now);
