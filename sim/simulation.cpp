@@ -345,7 +345,7 @@ json Simulation::control(const std::string& action, const json& b) {
     if (doseph::isNum(v)) slot = v;
     else slot.reset();
   } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable" ||
-             action == "netFloat") {
+             action == "netFloat" || action == "climateAir") {
     if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
   } else if (action == "reboot") reboot(static_cast<Ms>(num("outageS", 0) * 1000));
   else if (action == "fastForward") fastForward(std::clamp(num("hours", 1), 0.0, 48.0));

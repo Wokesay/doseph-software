@@ -70,6 +70,8 @@ export type ServicePlan = { dates: number[]; items: ServiceItem[] };
 export type PlantPhase = {
   name: string; days: number; confirm: boolean; recipe: string; ecTarget: number | null; ph: [number, number] | null;
   shotsPerDay?: number | null; shotS?: number | null; lightHours?: number | null; lightPct?: number | null;
+  // Climate (SD-136): a room's targets; a VPD leads the humidity in place of one
+  dayC?: number | null; nightC?: number | null; rhPct?: number | null; vpdKpa?: number | null; co2Ppm?: number | null;
 };
 export type PlantRecipe = { id: string; name: string; note: string; phases: PlantPhase[] };
 export type Plant = {
@@ -159,6 +161,19 @@ export type RobotState = {
     hand: { on: boolean; until: number } | null; darkOn: boolean;
     plant: { id: string; name: string; phase: string | null; hours: number; pct: number } | null;
     output: DeviceRole["output"] | null;
+    // Heat protection of its room (SD-136): its brightness at most so much, or off
+    heat: { off: boolean; pct: number } | null;
+  }[];
+  // Climate (SD-136): each room's day, targets, air, outputs, what has no value, and its alarms
+  climate: {
+    id: string; day: boolean; byVpd: boolean;
+    targets: { tempC: number | null; rhPct: number | null; vpdKpa: number | null; co2Ppm: number | null };
+    air: { tempC: number | null; rhPct: number | null; vpdKpa: number | null; co2Ppm: number | null };
+    missing: ("temp" | "rh" | "co2")[];
+    co2High: boolean; co2Locked: boolean;
+    heat: { off: boolean; pct: number } | null;
+    outputs: Record<ClimateOutput, { want: boolean; output: DeviceRole["output"] | null }>;
+    plant: { id: string; name: string; phase: string | null } | null;
   }[];
   // Maintenance mode until then (epoch seconds); null when off
   maintenanceUntil: number | null;
@@ -192,6 +207,7 @@ export type Config = {
   // Watering (SD-134): the reserve, and the circuits with their schedules
   watering: { reservePct: number; circuits: WaterCircuit[] };
   lighting: { circuits: LightCircuit[] };
+  climate: { rooms: ClimateRoom[] };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
   recipes: Recipe[];
@@ -324,6 +340,21 @@ export type WaterCircuit = {
 };
 
 /** A light circuit (SD-135): a Shelly switch, or a Shelly dimmer on a 0–10 V line, bound as the role `light.<id>`. */
+/** A climate room (SD-136): its outputs and sensors are the roles `climate.<id>.<kind>`. */
+export type ClimateRoom = {
+  id: string; name: string;
+  lights: string[];                 // its light circuits; the first one's day is the room's
+  startMin: number; hours: number;  // its own day without a light circuit
+  dayC: number; nightC: number; byVpd: boolean; rhPct: number; vpdKpa: number;
+  co2Ppm: number | null;            // by day; null: no CO2
+  heatC: number;                    // heat protection for light: its first limit
+  heaterW: number | null;           // the heater's power: its plug's power limit is a fifth above it
+  circulateAlways: boolean; plant: string;
+};
+export const CLIMATE_OUTPUTS = ["exhaust", "circulation", "heater", "humidifier", "dehumidifier", "co2_valve"] as const;
+export type ClimateOutput = (typeof CLIMATE_OUTPUTS)[number];
+export const CLIMATE_SENSORS = ["temp", "rh", "co2"] as const;
+
 export type LightCircuit = {
   id: string; name: string; dimmed: boolean;
   startMin: number; hours: number;  // its day: from its start, local time, for its hours of light
@@ -356,7 +387,7 @@ export type NetDevice = {
 export type RoleSource = "shelly" | "esphome" | "mqtt";
 export type RoleBinding = { source: RoleSource; device: string; channel: number; entity: string; field: string; invert: boolean; availability: string };
 export type DeviceRole = {
-  kind: "output" | "binary";
+  kind: "output" | "binary" | "level" | "temp" | "rh" | "co2";
   pulse: boolean;
   autoOffS: number;
   binding: RoleBinding | null;

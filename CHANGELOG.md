@@ -53,6 +53,17 @@ All notable changes to this software. The format follows
     of light, brightness, the driver's threshold, sunrise and sunset, and
     a plant to follow; then assign its Shelly output.
   - A phase's hours of light and brightness are set on the Plants page.
+- The page Climate (SD-136), step 9.6c.
+  - Each room with its day, its air against its targets (temperature,
+    humidity or VPD, CO2), its devices and the plant it follows. Heat
+    protection, CO2 above 2,000 ppm, a locked CO2 valve (with a button to
+    release it) and sensors without a value are said.
+  - Add a room with its light circuits or a day of its own, its targets,
+    heat limit, heater power and a plant to follow; then assign its
+    devices and sensors.
+  - A phase's climate targets are set on the Plants page; the light page
+    shows heat protection per circuit. The STOP dialog names what goes
+    off and what keeps running.
 - Heat protection for light (SD-136), step 9.6b. Above a room's heat
   limit its dimmers go down a step every 2 minutes, never below the lamp
   driver's threshold; 2 °C above it all its lights go off, also one

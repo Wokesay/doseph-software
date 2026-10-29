@@ -252,6 +252,7 @@ of its own.
 | Only a session or an app token manages rooms; a room removed lets its outputs go | SD-136, SD-129 | ✓ | `api.cpp`, `robot.cpp` · test_climate.cpp |
 | Heat protection: above a room's heat limit its dimmers go down 10 points every 2 min from the brightest, never below their driver's threshold; 2 °C above it every light of the room goes off, also one switched on by hand; 1 °C below it light follows its plan; without a value it stays as it is | SD-136 | ✓ | `climate.cpp`, `lighting.cpp` · test_climate.cpp |
 | Heat protection and CO2 above 2,000 ppm are watchdog problems: an alarm after 5 min, CO2 a critical one | SD-136, SD-123 | ✓ | `watchdog.cpp`, `alarms.cpp` · test_climate.cpp |
+| The page Climate shows each room's day, air against its targets, devices and plant, and says heat protection, CO2 too high, a locked valve and sensors without a value; a phase's climate is set on the Plants page | SD-136 | ✓ | `climate.tsx`, `plants.tsx` · robot.spec.ts, phone.spec.ts |
 
 ## Locks that report only (SD-133)
 

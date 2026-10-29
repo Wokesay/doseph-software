@@ -2,7 +2,7 @@
 // Shell: navigation, header with the Stop, page choice, sign-in.
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, Lightbulb, ListChecks, MoreHorizontal, OctagonX, Route, Settings, ShowerHead, Sprout, Syringe, Waves } from "lucide-preact";
+import { Droplets, FlaskConical, Gauge, History, LayoutDashboard, Lightbulb, ListChecks, MoreHorizontal, OctagonX, Route, Settings, ShowerHead, Sprout, Syringe, Thermometer, Waves } from "lucide-preact";
 import { ApiError, post } from "./api";
 import { msg, t, type TextKey } from "./i18n";
 import { authed, config, info, lastUpdate, refreshState, simulated, stale, state, toast, toastError } from "./store";
@@ -15,6 +15,7 @@ import { TankPage } from "./pages/tank";
 import { WaterPage } from "./pages/water";
 import { WateringPage } from "./pages/watering";
 import { LightPage } from "./pages/light";
+import { ClimatePage } from "./pages/climate";
 import { HistoryPage } from "./pages/history";
 import { ChannelsPage } from "./pages/channels";
 import { SettingsPage } from "./pages/settings";
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
   { path: "/water", label: "nav.water", icon: <Route size={19} />, el: () => <WaterPage /> },
   { path: "/watering", label: "nav.watering", icon: <ShowerHead size={19} />, el: () => <WateringPage /> },
   { path: "/light", label: "nav.light", icon: <Lightbulb size={19} />, el: () => <LightPage /> },
+  { path: "/climate", label: "nav.climate", icon: <Thermometer size={19} />, el: () => <ClimatePage /> },
   { path: "/history", label: "nav.history", icon: <History size={19} />, el: () => <HistoryPage /> },
   { path: "/channels", label: "nav.channels", icon: <Syringe size={19} />, el: () => <ChannelsPage /> },
   { path: "/setup", label: "nav.setup", icon: <ListChecks size={19} />, el: () => <SetupPage /> },

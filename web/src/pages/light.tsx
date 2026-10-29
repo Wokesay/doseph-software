@@ -221,6 +221,7 @@ function LightCard(p: { c: LightCircuit; s: Status | undefined; devices: Devices
           ) : (
             s && (s.on ? <Pill tone="ok">{s.pct != null ? t("light.state.onPct", { pct: pctText(s.pct) }) : t("light.state.on")}</Pill> : <Pill tone="neutral">{t("light.state.off")}</Pill>)
           )}
+          {s?.heat && <Pill tone="warn">{s.heat.off ? t("light.state.heatOff") : t("light.state.heatDim", { pct: pctText(s.heat.pct) })}</Pill>}
           {s?.hand && <Pill tone="accent">{t(s.nextChangeAt != null ? "light.state.hand" : "light.state.handDay", { at: at(s.hand.until) })}</Pill>}
           {bound && problem && <span class="muted">{msg(problem)}</span>}
         </span>
