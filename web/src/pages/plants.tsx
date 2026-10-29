@@ -32,8 +32,9 @@ function PlanCard() {
   );
 }
 
-function PlantRow(p: { plant: Plant; onChange: (d: Plants) => void }) {
+function PlantRow(p: { plant: Plant; data: Plants; onChange: (d: Plants) => void }) {
   const pl = p.plant;
+  const [editing, setEditing] = useState(false);
   const ph = pl.phases[pl.phase];
   const last = pl.phase + 1 === pl.phases.length;
   const act = async (path: string, ask?: string) => {
@@ -86,6 +87,9 @@ function PlantRow(p: { plant: Plant; onChange: (d: Plants) => void }) {
             {t("plants.harvest")}
           </Button>
         )}
+        <Button size="sm" onClick={() => setEditing(true)} aria-label={t("plants.editPhasesAria", { name: pl.name })} data-testid={`plant-phases-${pl.id}`}>
+          {t("plants.editPhases")}
+        </Button>
         {!pl.leading && (
           <Button size="sm" onClick={() => act("lead")} data-testid={`plant-lead-${pl.id}`}>
             {t("plants.lead")}
@@ -98,7 +102,76 @@ function PlantRow(p: { plant: Plant; onChange: (d: Plants) => void }) {
           <Trash2 size={15} />
         </Button>
       </div>
+      {editing && <PlantPhasesEditor plant={pl} data={p.data} onClose={() => setEditing(false)} onDone={p.onChange} />}
     </div>
+  );
+}
+
+// A running plant's own phases (SD-137): the current one and those to come change; those past stay
+// as they were, and the current one stays. Only this plant changes, not its plant recipe.
+function PlantPhasesEditor(p: { plant: Plant; data: Plants; onClose: () => void; onDone: (d: Plants) => void }) {
+  const systemPh = p.data.system ? p.data.systems[p.data.system] : null;
+  const current = p.plant.phase;
+  const [phases, setPhases] = useState<PlantPhase[]>(p.plant.phases);
+  const set = (i: number, part: Partial<PlantPhase>) => setPhases(phases.map((x, n) => (n === i ? { ...x, ...part } : x)));
+  const save = async () => {
+    try {
+      p.onDone(await put<Plants>(`/plants/${encodeURIComponent(p.plant.id)}`, { phases }));
+      await Promise.all([refreshConfig(), refreshState()]);
+      toast(t("plants.saved"));
+      p.onClose();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Modal
+      wide
+      title={t("plants.editPhasesOf", { name: p.plant.name })}
+      onClose={p.onClose}
+      footer={
+        <>
+          <button class="btn" onClick={p.onClose}>
+            {t("common.cancel")}
+          </button>
+          <Button variant="primary" onClick={save} disabled={phases.some((x) => !x.name.trim())} data-testid="save-plant-phases">
+            {t("common.save")}
+          </Button>
+        </>
+      }
+    >
+      <div class="stack" data-testid="plant-phases-form">
+        <p class="muted small">{t("plants.editPhasesNote")}</p>
+        {phases.map((ph, i) =>
+          i < current ? (
+            <div class="muted small" data-testid={`phase-${i}`}>
+              {t("plants.phasePast", { n: i + 1, name: ph.name, days: ph.days })}
+            </div>
+          ) : (
+            <fieldset class="stack-sm" data-testid={`phase-${i}`}>
+              <legend class="small">
+                {t("plants.phaseN", { n: i + 1 })}
+                {i === current && ` · ${t("plants.phaseCurrent")}`}
+              </legend>
+              <PhaseFields ph={ph} i={i} set={set} plant />
+              <div class="wrap-row">
+                <Toggle checked={ph.confirm} onChange={(v) => set(i, { confirm: v })} label={t("plants.confirm")} />
+                {i > current && (
+                  <Button size="sm" variant="danger-soft" onClick={() => setPhases(phases.filter((_, n) => n !== i))}>
+                    {t("plants.removePhase")}
+                  </Button>
+                )}
+              </div>
+            </fieldset>
+          ),
+        )}
+        <div>
+          <Button size="sm" onClick={() => setPhases([...phases, newPhase(phases[phases.length - 1]?.recipe ?? recipes.value[0]?.id ?? "", systemPh)])} data-testid="add-plant-phase">
+            <Plus size={15} /> {t("plants.addPhase")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -174,7 +247,7 @@ function PlantsCard(p: { data: Plants; onChange: (d: Plants) => void }) {
         {running.length ? (
           <div class="list">
             {running.map((pl) => (
-              <PlantRow plant={pl} onChange={p.onChange} />
+              <PlantRow plant={pl} data={p.data} onChange={p.onChange} />
             ))}
           </div>
         ) : (
@@ -240,6 +313,67 @@ const newPhase = (recipe: string, systemPh: [number, number] | null): PlantPhase
   ph: recipes.value.find((r) => r.id === recipe)?.ph ? null : systemPh,
 });
 
+// The fields of one phase, as a plant recipe and a running plant edit them
+// `plant`: a running plant's own: the hints on plants started from a recipe do not apply
+function PhaseFields(p: { ph: PlantPhase; i: number; set: (i: number, part: Partial<PlantPhase>) => void; plant?: boolean }) {
+  const list = recipes.value;
+  const { ph, i, set } = p;
+  const hint = (key: Parameters<typeof t>[0]) => (p.plant ? undefined : t(key));
+  return (
+    <div class="form-grid">
+      <Field label={t("plants.phaseName")}>
+        <input class="input" value={ph.name} maxLength={40} onInput={(e) => set(i, { name: (e.target as HTMLInputElement).value })} name={`phase-name-${i}`} />
+      </Field>
+      <Field label={t("plants.days")}>
+        <NumberInput value={ph.days} onValue={(v) => set(i, { days: v ?? 1 })} min={1} max={999} name={`phase-days-${i}`} />
+      </Field>
+      <Field label={t("plants.recipe")}>
+        <select class="select input" value={ph.recipe} onChange={(e) => set(i, { recipe: (e.target as HTMLSelectElement).value })} name={`phase-recipe-${i}`}>
+          {list.map((r) => (
+            <option value={r.id}>{r.name}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label={t("plants.ecOwn")} hint={t("plants.ecOwnHint")}>
+        <NumberInput value={ph.ecTarget} onValue={(v) => set(i, { ecTarget: v })} unit="mS/cm" step={0.1} name={`phase-ec-${i}`} />
+      </Field>
+      <Field label={t("plants.phLow")} hint={t("plants.phOwnHint")}>
+        <NumberInput value={ph.ph?.[0] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [v, ph.ph?.[1] ?? v + 0.4] })} step={0.1} name={`phase-ph-low-${i}`} />
+      </Field>
+      <Field label={t("plants.phHigh")}>
+        <NumberInput value={ph.ph?.[1] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [ph.ph?.[0] ?? v - 0.4, v] })} step={0.1} name={`phase-ph-high-${i}`} />
+      </Field>
+      <Field label={t("plants.shotsPerDay")} hint={hint("plants.shotsHint")}>
+        <NumberInput value={ph.shotsPerDay ?? null} onValue={(v) => set(i, { shotsPerDay: v == null ? null : Math.round(v) })} min={1} max={1440} name={`phase-shots-${i}`} />
+      </Field>
+      <Field label={t("plants.shotS")}>
+        <NumberInput value={ph.shotS ?? null} onValue={(v) => set(i, { shotS: v })} unit="s" min={1} name={`phase-shot-${i}`} />
+      </Field>
+      <Field label={t("plants.lightHours")} hint={hint("plants.lightHint")}>
+        <NumberInput value={ph.lightHours ?? null} onValue={(v) => set(i, { lightHours: v })} unit="h" min={0} max={24} step={0.5} name={`phase-light-hours-${i}`} />
+      </Field>
+      <Field label={t("plants.lightPct")} hint={t("plants.lightPctHint")}>
+        <NumberInput value={ph.lightPct ?? null} onValue={(v) => set(i, { lightPct: v })} unit="%" min={1} max={100} name={`phase-light-pct-${i}`} />
+      </Field>
+      <Field label={t("plants.dayC")} hint={hint("plants.climateHint")}>
+        <NumberInput value={ph.dayC ?? null} onValue={(v) => set(i, { dayC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-day-c-${i}`} />
+      </Field>
+      <Field label={t("plants.nightC")}>
+        <NumberInput value={ph.nightC ?? null} onValue={(v) => set(i, { nightC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-night-c-${i}`} />
+      </Field>
+      <Field label={t("plants.rhPct")}>
+        <NumberInput value={ph.rhPct ?? null} onValue={(v) => set(i, { rhPct: v })} unit="%" min={20} max={95} name={`phase-rh-${i}`} />
+      </Field>
+      <Field label={t("plants.vpdKpa")}>
+        <NumberInput value={ph.vpdKpa ?? null} onValue={(v) => set(i, { vpdKpa: v })} unit="kPa" min={0.2} max={2.5} step={0.05} name={`phase-vpd-${i}`} />
+      </Field>
+      <Field label={t("plants.co2Ppm")}>
+        <NumberInput value={ph.co2Ppm ?? null} onValue={(v) => set(i, { co2Ppm: v == null ? null : Math.round(v) })} unit="ppm" min={400} max={1500} step={50} name={`phase-co2-${i}`} />
+      </Field>
+    </div>
+  );
+}
+
 function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: () => void; onDone: (d: Plants) => void }) {
   const list = recipes.value;
   const systemPh = p.data.system ? p.data.systems[p.data.system] : null;
@@ -284,57 +418,7 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
         {phases.map((ph, i) => (
           <fieldset class="stack-sm" data-testid={`phase-${i}`}>
             <legend class="small">{t("plants.phaseN", { n: i + 1 })}</legend>
-            <div class="form-grid">
-              <Field label={t("plants.phaseName")}>
-                <input class="input" value={ph.name} maxLength={40} onInput={(e) => set(i, { name: (e.target as HTMLInputElement).value })} name={`phase-name-${i}`} />
-              </Field>
-              <Field label={t("plants.days")}>
-                <NumberInput value={ph.days} onValue={(v) => set(i, { days: v ?? 1 })} min={1} max={999} name={`phase-days-${i}`} />
-              </Field>
-              <Field label={t("plants.recipe")}>
-                <select class="select input" value={ph.recipe} onChange={(e) => set(i, { recipe: (e.target as HTMLSelectElement).value })} name={`phase-recipe-${i}`}>
-                  {list.map((r) => (
-                    <option value={r.id}>{r.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t("plants.ecOwn")} hint={t("plants.ecOwnHint")}>
-                <NumberInput value={ph.ecTarget} onValue={(v) => set(i, { ecTarget: v })} unit="mS/cm" step={0.1} name={`phase-ec-${i}`} />
-              </Field>
-              <Field label={t("plants.phLow")} hint={t("plants.phOwnHint")}>
-                <NumberInput value={ph.ph?.[0] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [v, ph.ph?.[1] ?? v + 0.4] })} step={0.1} name={`phase-ph-low-${i}`} />
-              </Field>
-              <Field label={t("plants.phHigh")}>
-                <NumberInput value={ph.ph?.[1] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [ph.ph?.[0] ?? v - 0.4, v] })} step={0.1} name={`phase-ph-high-${i}`} />
-              </Field>
-              <Field label={t("plants.shotsPerDay")} hint={t("plants.shotsHint")}>
-                <NumberInput value={ph.shotsPerDay ?? null} onValue={(v) => set(i, { shotsPerDay: v == null ? null : Math.round(v) })} min={1} max={1440} name={`phase-shots-${i}`} />
-              </Field>
-              <Field label={t("plants.shotS")}>
-                <NumberInput value={ph.shotS ?? null} onValue={(v) => set(i, { shotS: v })} unit="s" min={1} name={`phase-shot-${i}`} />
-              </Field>
-              <Field label={t("plants.lightHours")} hint={t("plants.lightHint")}>
-                <NumberInput value={ph.lightHours ?? null} onValue={(v) => set(i, { lightHours: v })} unit="h" min={0} max={24} step={0.5} name={`phase-light-hours-${i}`} />
-              </Field>
-              <Field label={t("plants.lightPct")} hint={t("plants.lightPctHint")}>
-                <NumberInput value={ph.lightPct ?? null} onValue={(v) => set(i, { lightPct: v })} unit="%" min={1} max={100} name={`phase-light-pct-${i}`} />
-              </Field>
-              <Field label={t("plants.dayC")} hint={t("plants.climateHint")}>
-                <NumberInput value={ph.dayC ?? null} onValue={(v) => set(i, { dayC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-day-c-${i}`} />
-              </Field>
-              <Field label={t("plants.nightC")}>
-                <NumberInput value={ph.nightC ?? null} onValue={(v) => set(i, { nightC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-night-c-${i}`} />
-              </Field>
-              <Field label={t("plants.rhPct")}>
-                <NumberInput value={ph.rhPct ?? null} onValue={(v) => set(i, { rhPct: v })} unit="%" min={20} max={95} name={`phase-rh-${i}`} />
-              </Field>
-              <Field label={t("plants.vpdKpa")}>
-                <NumberInput value={ph.vpdKpa ?? null} onValue={(v) => set(i, { vpdKpa: v })} unit="kPa" min={0.2} max={2.5} step={0.05} name={`phase-vpd-${i}`} />
-              </Field>
-              <Field label={t("plants.co2Ppm")}>
-                <NumberInput value={ph.co2Ppm ?? null} onValue={(v) => set(i, { co2Ppm: v == null ? null : Math.round(v) })} unit="ppm" min={400} max={1500} step={50} name={`phase-co2-${i}`} />
-              </Field>
-            </div>
+            <PhaseFields ph={ph} i={i} set={set} />
             <div class="wrap-row">
               <Toggle checked={ph.confirm} onChange={(v) => set(i, { confirm: v })} label={t("plants.confirm")} />
               {phases.length > 1 && (

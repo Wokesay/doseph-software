@@ -30,6 +30,9 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A running plant's own phases (SD-137): on the Plants page, "Phases"
+  edits the current phase and those after it for that plant alone; the
+  phases already past stay, and its plant recipe stays a template.
 - The decisions for climate (SD-136): per room an exhaust fan, a
   circulation fan, a heater with its own thermostat, a humidifier, a
   dehumidifier and a CO2 valve on Shelly outputs; a plant's phase sets

@@ -1114,11 +1114,21 @@ Result Robot::putPlant(const std::string& id, const json& j) {
   if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
   if (j.contains("name")) p->name = utf8Prefix(jstr(j, "name"), 80);
   if (j.contains("phases")) {
+    // A running plant's own phases (SD-137): the current one and those to come change, those past
+    // stay as they were; a completed plant's are its record
+    if (!p->running()) return Result::fail(409, say("plant.not_running"));
+    std::vector<PhaseCfg> phases;
     try {
-      p->phases = phasesFromJson(j);
+      phases = phasesFromJson(j);
     } catch (const std::exception&) {
       return Result::fail(422, say("api.bad_input"));
     }
+    const auto past = static_cast<size_t>(std::max(p->phase, 0));
+    if (phases.size() <= past) return Result::fail(409, say("plant.current_phase"));
+    if (phasesJson({p->phases.begin(), p->phases.begin() + static_cast<std::ptrdiff_t>(std::min(past, p->phases.size()))}) !=
+        phasesJson({phases.begin(), phases.begin() + static_cast<std::ptrdiff_t>(past)}))
+      return Result::fail(409, say("plant.past_phases"));
+    p->phases = std::move(phases);
   }
   return savePlants(next, say("ev.plant.changed", {{"name", p->name}}));
 }

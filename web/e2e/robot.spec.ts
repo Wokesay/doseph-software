@@ -864,3 +864,35 @@ test("climate: a room follows a plant, whose phase sets its targets; the phase's
   await expect(page.getByTestId("room-temp-r1")).toContainText("target 24 °C");
   await expect(page.getByTestId("room-rh-r1")).toContainText("from VPD 1.2 kPa");
 });
+
+test("plants: a running plant's own phases change on the Plants page; the past stays and the current phase cannot go (SD-137)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(
+      async ([m, p, b]) => {
+        const r = await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: m === "GET" ? undefined : JSON.stringify(b) });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      },
+      [method, path, body] as const,
+    );
+  const recipe = await call("PUT", "plant-recipes", { name: "Tomatoes", phases: [{ name: "Growth", days: 21, recipe: "two_part" }, { name: "Fruit", days: 56, recipe: "two_part" }] });
+  expect(recipe.status).toBe(200);
+  const plant = await call("POST", "plants", { name: "Bed 1", plantRecipe: recipe.body.id });
+  expect(plant.status).toBe(200);
+  expect((await call("POST", `plants/${plant.body.id}/next`)).status).toBe(200);  // in its second phase
+  await page.goto("/#/plants");
+  await page.getByRole("button", { name: "Edit the phases of Bed 1" }).click();
+  const form = page.getByTestId("plant-phases-form");
+  await expect(form.getByTestId("phase-0")).toHaveText("Phase 1: Growth, 21 days – past");
+  await expect(form.getByTestId("phase-1")).toContainText("current");
+  await expect(form.getByTestId("phase-1").getByRole("button", { name: "Remove phase" })).toHaveCount(0);
+  await form.locator("input[name=phase-days-1]").fill("30");
+  await page.getByTestId("add-plant-phase").click();
+  await form.locator("input[name=phase-name-2]").fill("Flush");
+  await page.getByTestId("save-plant-phases").click();
+  await expect(page.getByTestId(`plant-phase-${plant.body.id}`)).toContainText("Fruit: day 1 of 30");
+  // Only the plant: its recipe stays as it was
+  const after = await call("GET", "plants");
+  expect(after.body.plants[0].phases.length).toBe(3);
+  expect(after.body.plantRecipes[0].phases.length).toBe(2);
+});
