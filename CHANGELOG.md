@@ -30,6 +30,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A design for the account (`docs/ACCOUNT.md`, step 10 of #10). It keeps
+  the device the authority, connects it outbound through an end-to-end
+  encrypted relay, and keeps minimal data. It names the ways to push
+  through the account and what drives the running costs. Nothing is
+  built yet; the scope is a product question.
 - The decisions for climate (SD-136): per room an exhaust fan, a
   circulation fan, a heater with its own thermostat, a humidifier, a
   dehumidifier and a CO2 valve on Shelly outputs; a plant's phase sets

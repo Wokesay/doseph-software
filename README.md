@@ -99,7 +99,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 | `web/` | the web app (Preact, TypeScript); end-to-end tests against the simulator |
 | `tests/core/` | the core's tests (doctest) |
 | `tools/` | checks: architecture rules, text keys, the rule register, licenses and provenance of dependencies; packaging, SBOMs and release helpers |
-| `docs/` | concept, decisions (SD), rationale register (RAT), invariants, later steps, simulator, release, provenance |
+| `docs/` | concept, decisions (SD), rationale register (RAT), invariants, later steps, the account's design, simulator, release, provenance |
 
 ## Documentation
 
@@ -108,6 +108,7 @@ All checks, as CI runs them: `tools/ci.sh`.
 - [`docs/RATIONALE.md`](docs/RATIONALE.md) – the rules learned from practice (RAT-xxx)
 - [`docs/INVARIANTS.md`](docs/INVARIANTS.md) – the rules by module, with their code and tests
 - [`docs/LATER.md`](docs/LATER.md) – what later steps of the order of work rebuild
+- [`docs/ACCOUNT.md`](docs/ACCOUNT.md) – the design of the optional account
 - [`docs/SIMULATOR.md`](docs/SIMULATOR.md) – running and steering the simulator
 - [`docs/PROVENANCE.md`](docs/PROVENANCE.md) – where the code comes from
 - [`docs/RELEASE.md`](docs/RELEASE.md) – how a prototype is released

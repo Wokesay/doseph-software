@@ -75,9 +75,7 @@ app shows them in German by that key.
 
 ## Not built yet
 
-These follow in the order of work of #10: the twin of the new water path
-with drop sensors, push notifications and maintenance reminders, plant
-recipes with phases and a calendar, the app and commissioning, coupling
-two devices, Shelly and ESP devices (climate, light, watering, a refill
-valve), and an optional account. Control stays on the device in every
-step.
+These follow in the order of work of #10: the network (Wi-Fi with its own
+access point, LAN, a mobile router), an optional account (its design is
+in `docs/ACCOUNT.md`), and the device security items with the firmware.
+Control stays on the device in every step.
