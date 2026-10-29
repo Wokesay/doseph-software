@@ -140,7 +140,7 @@ const PhaseCfg* followedPhase(const Config& cfg, const WaterCircuitCfg& w) {
 WaterCircuitCfg effectiveCircuit(const Config& cfg, const WaterCircuitCfg& w) {
   WaterCircuitCfg e = w;
   if (const PhaseCfg* ph = followedPhase(cfg, w)) {
-    if (ph->shotsPerDay > 0) e.shotsPerDay = ph->shotsPerDay;
+    if (ph->shotsPerDay) e.shotsPerDay = *ph->shotsPerDay;
     if (isNum(ph->shotS)) e.shotS = std::min(ph->shotS, w.longestS);
   }
   return e;

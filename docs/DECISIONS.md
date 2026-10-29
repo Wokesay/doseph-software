@@ -1202,4 +1202,8 @@ decisions of their own.
     phase may set shots a day and the length of a shot; what it leaves
     empty, and everything once the plant no longer runs, is the
     circuit's own. A phase's shot is never longer than the circuit's
-    longest shot. A plant deleted lets its circuits go.
+    longest shot. A plant deleted lets its circuits go. A phase change
+    counts from the next shot that comes due once the robot has moved
+    the plant on (within seconds of midnight); a shot that waits or runs
+    keeps its length. A plant copies its phases when it starts (SD-128),
+    so shots set in a plant recipe reach plants started afterwards.

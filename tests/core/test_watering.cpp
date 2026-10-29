@@ -666,21 +666,23 @@ TEST_CASE("Watering: a circuit follows a plant over the API; only a window follo
                                      {{"name", "Fruit"}, {"days", 56}, {"recipe", "two_part"}}})}};
   json bad = pr;
   bad["phases"][0]["shotsPerDay"] = 0;
-  CHECK(r.call("PUT", "plant-recipes", bad).status == 422);
+  CHECK(errorKey(r.call("PUT", "plant-recipes", bad)) == "cfg.phase.shots");
   bad = pr;
   bad["phases"][0]["shotS"] = 24 * 3600 + 1;
-  CHECK(r.call("PUT", "plant-recipes", bad).status == 422);
+  CHECK(errorKey(r.call("PUT", "plant-recipes", bad)) == "cfg.phase.shot");
   const std::string prId = r.ok("PUT", "plant-recipes", pr)["id"];
   const std::string plant = r.ok("POST", "plants", {{"name", "Bed 1"}, {"plantRecipe", prId}})["id"];
   const json w1 = {{"id", "w1"}, {"name", "Tent"}, {"mode", "window"}, {"fromMin", 0}, {"toMin", 0}, {"shotsPerDay", 6}, {"shotS", 60}, {"rateLpm", 2}, {"longestS", 120}};
   json linked = w1;
   linked["plant"] = "nope";
-  CHECK(r.call("PUT", "watering/circuits", linked).status == 422);
+  CHECK(errorKey(r.call("PUT", "watering/circuits", linked)) == "cfg.water.plant");
   linked["plant"] = plant;
   linked["mode"] = "interval";
-  CHECK(r.call("PUT", "watering/circuits", linked).status == 422);
+  CHECK(errorKey(r.call("PUT", "watering/circuits", linked)) == "cfg.water.plant");
   linked["mode"] = "window";
   r.ok("PUT", "watering/circuits", linked);
+  r.ok("PUT", "watering/circuits", w1);  // a change that leaves the plant out keeps it
+  CHECK(r.ok("GET", "config")["watering"]["circuits"][0]["plant"] == plant);
   json c = circuitState(r, "w1");
   CHECK(c["plant"]["name"] == "Bed 1");
   CHECK(c["plant"]["phase"] == "Growth");
@@ -691,6 +693,29 @@ TEST_CASE("Watering: a circuit follows a plant over the API; only a window follo
   CHECK(r.ok("GET", "config")["watering"]["circuits"][0]["plant"] == "");
   c = circuitState(r, "w1");
   CHECK(c["plant"].is_null());
+  CHECK(c["nextS"] == 60);
+}
+
+TEST_CASE("Watering: a scheduled shot of a circuit that follows a plant runs as long as the phase says; the next phase without shots of its own gives the circuit's back (SD-134, RAT-076)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "window"}, {"fromMin", 0}, {"toMin", 0}, {"shotsPerDay", 6}, {"shotS", 60}});
+  json pr = {{"name", "Tomatoes"},
+             {"phases", json::array({{{"name", "Growth"}, {"days", 21}, {"recipe", "two_part"}, {"shotsPerDay", 12}, {"shotS", 30}},
+                                     {{"name", "Fruit"}, {"days", 56}, {"recipe", "two_part"}}})}};
+  const std::string prId = r.ok("PUT", "plant-recipes", pr)["id"];
+  const std::string plant = r.ok("POST", "plants", {{"name", "Bed 1"}, {"plantRecipe", prId}})["id"];
+  r.ok("PUT", "watering/circuits",
+       {{"id", "w1"}, {"name", "Tent"}, {"mode", "window"}, {"fromMin", 0}, {"toMin", 0}, {"shotsPerDay", 6}, {"shotS", 60}, {"rateLpm", 2}, {"longestS", 120}, {"plant", plant}});
+  waitFit(r);
+  // Every 2 h over the day, 30 s each
+  r.waitUntil("a scheduled shot", [&] { return circuitState(r, "w1")["last"].is_object(); }, 3 * 3600, 2000);
+  const json last = circuitState(r, "w1")["last"];
+  CHECK(last["end"]["key"] == "water.end.done");
+  CHECK(last["s"].get<double>() == doctest::Approx(30).epsilon(0.1));
+  // The next phase sets no shots: the circuit's own, 6 × 60 s
+  r.ok("POST", "plants/" + plant + "/next");
+  const json c = circuitState(r, "w1");
+  CHECK(c["plant"]["phase"] == "Fruit");
   CHECK(c["nextS"] == 60);
 }
 

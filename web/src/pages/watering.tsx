@@ -36,8 +36,12 @@ function windowShots(fromMin: number, toMin: number, n: number): number[] {
   return [...new Set(at)].sort((a, b) => a - b);
 }
 
-function schedule(c: WaterCircuit): string {
-  if (c.mode === "window") return t("watering.sched.window", { n: c.shotsPerDay, s: c.shotS, from: hhmm(c.fromMin), to: hhmm(c.toMin) });
+// The schedule as it waters: a window that follows a plant with the shots its phase gives (SD-134)
+function schedule(c: WaterCircuit, plant?: { phase: string | null; shotsPerDay: number; shotS: number } | null): string {
+  if (c.mode === "window") {
+    const by = plant?.phase != null ? plant : c;
+    return t("watering.sched.window", { n: by.shotsPerDay, s: by.shotS, from: hhmm(c.fromMin), to: hhmm(c.toMin) });
+  }
   if (c.mode === "times")
     return t("watering.sched.times", {
       list: [...c.times]
@@ -134,7 +138,7 @@ function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null;
   const [plants, setPlants] = useState<Plants["plants"]>([]);
   useEffect(() => {
     get<Plants>("/plants")
-      .then((d) => setPlants(d.plants))
+      .then((d) => setPlants(d.plants.filter((x) => x.running || x.id === p.circuit?.plant)))
       .catch(() => {});
   }, []);
   const [id, setId] = useState(p.circuit?.id ?? "");
@@ -248,6 +252,7 @@ function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null;
             {preview.length > 0 && (
               <p class="muted small" data-testid="window-shots">
                 {t("watering.windowShots", { list: preview.map(hhmm).join(", ") })}
+                {c.plant && ` ${t("watering.ownFallback")}`}
               </p>
             )}
             {plants.length > 0 && (
@@ -255,7 +260,7 @@ function CircuitForm(p: { circuit: WaterCircuit | null; devices: Devices | null;
                 <select class="select input" name="circuit-plant" value={c.plant} onChange={(e) => set({ plant: (e.target as HTMLSelectElement).value })}>
                   <option value="">{t("watering.plantNone")}</option>
                   {plants.map((x) => (
-                    <option value={x.id}>{x.name}</option>
+                    <option value={x.id}>{x.running ? x.name : t("watering.plantDone", { name: x.name })}</option>
                   ))}
                 </select>
               </Field>
@@ -334,7 +339,9 @@ function CircuitCard(p: { c: WaterCircuit; devices: Devices | null; onEdit: () =
   const s = st.watering.circuits.find((x) => x.id === p.c.id);
   const running = st.watering.running === p.c.id;
   const paused = s?.paused ?? p.c.paused;
-  const [seconds, setSeconds] = useState<number | null>(Math.min(p.c.mode === "manual" || p.c.mode === "times" ? 60 : p.c.shotS, p.c.longestS));
+  const [seconds, setSeconds] = useState<number | null>(
+    Math.min(p.c.mode === "manual" || p.c.mode === "times" ? 60 : s?.plant?.phase != null ? s.plant.shotS : p.c.shotS, p.c.longestS),
+  );
   const [asking, setAsking] = useState(false);
   // A shorter longest shot: the length for "Water now" follows it
   useEffect(() => {
@@ -405,7 +412,7 @@ function CircuitCard(p: { c: WaterCircuit; devices: Devices | null; onEdit: () =
       <div class="stack-sm small" style="gap:4px">
         <div>
           <span class="muted">{t("watering.mode")}: </span>
-          <span data-testid={`circuit-schedule-${p.c.id}`}>{schedule(p.c)}</span>
+          <span data-testid={`circuit-schedule-${p.c.id}`}>{schedule(p.c, s?.plant)}</span>
         </div>
         {s?.plant && (
           <div>

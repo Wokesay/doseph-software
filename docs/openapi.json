@@ -5107,7 +5107,8 @@
             "type": [
               "number",
               "null"
-            ]
+            ],
+            "description": "The length of a shot, s, 1 s to 24 h; never longer than the circuit's longest shot; null: the circuit's own"
           }
         }
       },

@@ -220,9 +220,9 @@ struct PhaseCfg {
   std::string recipe;
   double ecTarget = kNaN;
   double phLow = kNaN, phHigh = kNaN;
-  // Watering (SD-134): shots a day and the length of a shot for a circuit linked to the plant; 0 and
-  // NaN: not set, the circuit's own hold
-  int shotsPerDay = 0;
+  // Watering (SD-134): shots a day and the length of a shot for a circuit that follows the plant;
+  // nothing and NaN: not set, the circuit's own apply
+  std::optional<int> shotsPerDay;
   double shotS = kNaN;
 };
 
@@ -321,8 +321,8 @@ struct Config {
 };
 
 void to_json(json& j, const Config& c);
-// A list of phases in its JSON form ({phases: [{name, days, confirm, recipe, ecTarget, ph}]});
-// reading throws on a structure error
+// A list of phases in its JSON form ({phases: [{name, days, confirm, recipe, ecTarget, ph, shotsPerDay,
+// shotS}]}); reading throws on a structure error
 json phasesJson(const std::vector<PhaseCfg>& phases);
 std::vector<PhaseCfg> phasesFromJson(const json& j);
 // Brings a configuration of an older schema to the current one, one step

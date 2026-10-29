@@ -166,7 +166,7 @@ json phasesJson(const std::vector<PhaseCfg>& phases) {
                    {"recipe", ph.recipe},
                    {"ecTarget", numOrNull(ph.ecTarget)},
                    {"ph", isNum(ph.phLow) && isNum(ph.phHigh) ? json::array({ph.phLow, ph.phHigh}) : json(nullptr)},
-                   {"shotsPerDay", ph.shotsPerDay > 0 ? json(ph.shotsPerDay) : json(nullptr)},
+                   {"shotsPerDay", ph.shotsPerDay ? json(*ph.shotsPerDay) : json(nullptr)},
                    {"shotS", numOrNull(ph.shotS)}});
   return out;
 }
@@ -190,8 +190,8 @@ std::vector<PhaseCfg> phasesFromJson(const json& j) {
     }
     if (p.contains("shotsPerDay") && !p["shotsPerDay"].is_null()) {
       if (!p["shotsPerDay"].is_number_integer()) throw std::invalid_argument("shots a day is not a whole number");
-      x.shotsPerDay = p["shotsPerDay"].get<int>();
-      if (x.shotsPerDay == 0) x.shotsPerDay = -1;  // 0 is "not set": as one given, it is out of bounds
+      const long long n = p["shotsPerDay"].get<long long>();
+      x.shotsPerDay = n < 0 || n > 100000 ? -1 : static_cast<int>(n);  // out of bounds stays so
     }
     x.shotS = numOrNaN(p, "shotS");
     out.push_back(std::move(x));
@@ -732,7 +732,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
       if (std::isnan(ph.phLow) != std::isnan(ph.phHigh) ||
           (isNum(ph.phLow) && (!inRange(ph.phLow, 4.5, 7.5) || !inRange(ph.phHigh, 4.5, 7.5) || ph.phLow >= ph.phHigh)))
         err(say("cfg.recipe.ph_range", {{"name", ph.name}, {"min", 4.5}, {"max", 7.5}}));
-      if (ph.shotsPerDay != 0 && (ph.shotsPerDay < 1 || ph.shotsPerDay > 24 * 60))
+      if (ph.shotsPerDay && (*ph.shotsPerDay < 1 || *ph.shotsPerDay > 24 * 60))
         err(say("cfg.phase.shots", {{"name", name}, {"phase", ph.name}, {"max", 24 * 60}}));
       if (!std::isnan(ph.shotS) && !inRange(ph.shotS, 1, kMaxShotS))
         err(say("cfg.phase.shot", {{"name", name}, {"phase", ph.name}, {"max", kMaxShotS / 3600}}));

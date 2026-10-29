@@ -2548,8 +2548,9 @@ Result Robot::putCircuit(const json& j) {
       if (!cfg_.watering.circuit("w" + std::to_string(n))) id = "w" + std::to_string(n);
     body["id"] = id;
   } else if (const WaterCircuitCfg* was = cfg_.watering.circuit(id)) {
-    // A schedule paused stays so, unless the change says otherwise
+    // A schedule paused stays so, and a plant followed, unless the change says otherwise
     if (!body.contains("paused")) body["paused"] = was->paused;
+    if (!body.contains("plant")) body["plant"] = was->plant;
   } else {
     return Result::fail(404, say("water.none"));
   }
