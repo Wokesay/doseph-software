@@ -69,6 +69,30 @@ All notable changes to this software. The format follows
     switch over MQTT needs an availability topic.
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
+- Watering from the tank (SD-134), the fourth part of step 9: the robot's
+  side, through the API; the pages follow.
+  - Any number of circuits, each a pump or valve on a Shelly output, one
+    at a time. A schedule of shots in a daily window, fixed times, an
+    interval, or by hand only; a schedule can be paused.
+  - Water is judged by the check's last measurement: below pH 4.0 or
+    above 8.5, EC more than 1.0 above its target or above 5.0, no recent
+    reading or a calibration stop watering. A shot waits until a dose or
+    fill is mixed in, and a dose stops it. pH not corrected only warns.
+  - A person can water anyway, one shot by hand, which is logged as a
+    warning.
+  - The tank keeps a reserve (20 % by default): the robot counts the
+    litres given from a new tank or the float "full", or reads a float
+    "tank empty" or a level probe, new roles. At the reserve it says
+    water is low, which a refill valve answers with a fill.
+  - Schedules go by the clock's minutes: a clock set back gives no shot
+    twice, and a clock set after a start, or one that leaps far, makes
+    nothing up. A shot that waits an hour lapses.
+  - The device's own auto-off is 1.11 × each circuit's longest shot.
+    Stop, maintenance and a hold stop watering; a restart reports a cut
+    shot, counts it as run until the device's auto-off and does not
+    repeat it.
+  - The simulator has two watering pumps, and an ESPHome device whose
+    level and float follow the tank.
 - The circulation pump (SD-132, PD-421), the third part of step 9.
   - A pump in the tank on a Shelly output. By default it runs during each
     dose and its mixing wait, and during a fill, and is off while the

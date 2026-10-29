@@ -126,6 +126,7 @@ class MixCycle {
 
   Phase phase() const { return phase_; }
   bool dosing() const { return phase_ == Phase::Dose; }
+  bool mixPending() const { return mixPendingMs_ > 0; }
   const Measured& last() const { return last_; }
   json status(const Ctx& c) const;
   // Why the robot doses or not: what each kind of dose needs, each with

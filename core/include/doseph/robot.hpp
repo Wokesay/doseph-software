@@ -17,6 +17,7 @@
 #include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
 #include "doseph/refill.hpp"
+#include "doseph/watering.hpp"
 #include "doseph/service.hpp"
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
@@ -123,6 +124,14 @@ class Robot : public RemoteRuns {
   Result putRefill(const json& j);
   // The circulation pump (SD-132): {mode: "mixing" | "always"}
   Result putCirculation(const json& j);
+  // Watering (SD-134): the reserve {reservePct}; a circuit (a new one without an ID) and its
+  // removal; "water now" {seconds, override}, its stop, and pausing a circuit's schedule {paused}
+  Result putWatering(const json& j);
+  Result putCircuit(const json& j);
+  Result deleteCircuit(const std::string& id);
+  Result waterNow(const std::string& id, const json& j);
+  Result stopWater(const std::string& id);
+  Result pauseCircuit(const std::string& id, const json& j);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -320,6 +329,9 @@ class Robot : public RemoteRuns {
   // A fill ended: the check starts anew, after the water was mixed in where the valve was open
   void fillEnded(bool opened);
   bool circulationWanted(const Ctx& c) const;
+  Watering water_;
+  Epoch waterChangedAt_ = 0;  // the last dose or fill: the water is judged by a check after it
+  WaterIn waterIn(const Ctx& c) const;
   bool saveDeviceSecrets();
   void reconcileDevices(const Config& before);
   // The roles' states for the watchdog: each bound role, whether it works, and why not

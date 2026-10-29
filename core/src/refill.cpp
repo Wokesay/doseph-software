@@ -78,13 +78,17 @@ bool RefillValve::end(Ctx& c, NetOutputs& out, const std::string& latch, Msg why
 bool RefillValve::tick(Ctx& c, const RefillIn& in, NetOutputs& out) {
   // "top up water" raised asks for one fill. One standing when the robot starts asks for none:
   // after a restart nothing starts on its own (R6).
+  // So does watering that found the tank at its reserve (SD-134), each on its own.
+  const bool topUp = c.rt.topUp, low = c.rt.waterLow;
   if (!seenTopUp_) {
     seenTopUp_ = true;
-    lastTopUp_ = c.rt.topUp;
+    lastTopUp_ = topUp;
+    lastLow_ = low;
   }
-  if (c.rt.topUp && !lastTopUp_) asked_ = true;
-  lastTopUp_ = c.rt.topUp;
-  if (!c.rt.topUp) asked_ = false;
+  if ((topUp && !lastTopUp_) || (low && !lastLow_)) asked_ = true;
+  lastTopUp_ = topUp;
+  lastLow_ = low;
+  if (!topUp && !low) asked_ = false;
 
   if (filling()) {
     const Ms ran = c.now - since_;

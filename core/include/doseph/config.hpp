@@ -123,6 +123,41 @@ struct CirculationCfg {
   std::string mode = "mixing";
 };
 
+// Watering from the tank (SD-134): any number of circuits, each a pump or valve on a Shelly
+// output, one running at a time. Limits are the user's; the code keeps only a ceiling the device
+// takes (R7).
+constexpr size_t kMaxCircuits = 64;
+constexpr double kMaxShotS = 24 * 3600;
+constexpr size_t kMaxWaterTimes = 96;
+struct WaterTime {
+  int atMin = 0;    // local minute of the day
+  double s = 60;    // the shot's length
+};
+struct WaterCircuitCfg {
+  std::string id;              // w1, w2, …
+  std::string name;
+  // "window": shots spread evenly over a daily window (RAT-010); "times": fixed times; "interval":
+  // every N minutes around the clock; "manual": by hand only
+  std::string mode = "manual";
+  int fromMin = 8 * 60, toMin = 20 * 60;  // window
+  int shotsPerDay = 6;                    // window
+  double shotS = 60;                      // window and interval
+  std::vector<WaterTime> times;           // times
+  int everyMin = 240;                     // interval, from local midnight; at most a day
+  double longestS = 300;                  // no shot is longer, by any path; the device's auto-off
+                                          // is 1.11 × it (RAT-019)
+  double rateLpm = kNaN;                  // what it gives, for the count; NaN: not known
+  double dailyMaxS = kNaN;                // its run time per local day; NaN: none
+  bool paused = false;                    // its schedule rests; by hand it still waters
+};
+struct WateringCfg {
+  double reservePct = 20;  // what stays in the tank, of its volume; never below 10 % (RAT-067)
+  std::vector<WaterCircuitCfg> circuits;
+  const WaterCircuitCfg* circuit(const std::string& id) const;
+};
+// The output role of a circuit: "water.<id>"
+std::string waterRole(const std::string& circuit);
+
 // Fixed safety limits in code. The configuration may only tighten them (R7);
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
@@ -240,6 +275,7 @@ struct Config {
   LocksCfg locks;
   RefillCfg refill;
   CirculationCfg circulation;
+  WateringCfg watering;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
@@ -289,6 +325,7 @@ std::vector<PhaseCfg> phasesFromJson(const json& j);
 // saved again.
 json migrateConfig(json j);
 Config configFromJson(const json& j);  // migrates first; throws on structure errors
+WaterCircuitCfg waterCircuitFromJson(const json& j);  // throws on structure errors
 
 // Checks references and the rules of the domain and of safety; channelCount
 // is how many channels the device has.
@@ -330,6 +367,11 @@ struct RuntimeState {
   // A fill of the refill valve under way: {since, why}; kept so that a restart reports it, and
   // never resumes it (SD-132, R6)
   json refill = nullptr;
+  // Watering (SD-134): {givenL: litres given since the tank was last full, shot: {circuit, since,
+  // s, override} while one runs, day: {date, runS: {circuit: s}}, last: {circuit: {at, s, l, end}}}.
+  // `waterLow`: a shot would go below the reserve, so water is to be topped up.
+  json watering = json::object();
+  bool waterLow = false;
   // The settling times of the last three clean doses, min (SD-112): a large tank waits 1.5 × the longest
   std::vector<double> settleMin;
   // Alarms (SD-123): watchdog item → {since, raised, level, sent, round, ackUntil, reported};

@@ -73,6 +73,7 @@ add_library(doseph_core
   core/src/coupling.cpp
   core/src/devices.cpp
   core/src/refill.cpp
+  core/src/watering.cpp
   core/src/service.cpp
   core/src/plants.cpp
   core/src/robot.cpp
@@ -135,6 +136,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_devices.cpp
     tests/core/test_refill.cpp
     tests/core/test_circulation.cpp
+    tests/core/test_watering.cpp
     tests/core/test_service.cpp
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp

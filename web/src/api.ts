@@ -121,6 +121,13 @@ export type RobotState = {
   refill: { filling: boolean; asked: boolean; opened: boolean; since: number | null; why: "top_up" | "button" | null; full: boolean | null; blocked: Msg | null; maxFillMin: number };
   // The circulation pump (SD-132): its mode, and whether the robot wants it on now
   circulation: { mode: CirculationMode; wanted: boolean };
+  // Watering (SD-134): the circuit that waters, the litres given since the tank was full, the
+  // reserve and what the tank may still give, whether the water is fit, and each circuit's state
+  watering: {
+    running: string | null; override: boolean; givenL: number | null; reserveL: number | null; availableL: number | null; low: boolean;
+    fit: Msg | null; warning: Msg | null; mixing: boolean;
+    circuits: { id: string; running: boolean; due: boolean; dayS: number; last: { at: number; s: number; l: number | null; end: Msg } | null; blocked: Msg | null }[];
+  };
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   // `head`: the pump head fitted, null without one (SD-108)
@@ -160,6 +167,8 @@ export type Config = {
   // The refill valve's longest fill, 1 to 25 min (RAT-079)
   refill: { maxFillMin: number };
   circulation: { mode: CirculationMode };
+  // Watering (SD-134): the reserve, and the circuits with their schedules
+  watering: { reservePct: number; circuits: WaterCircuit[] };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
   recipes: Recipe[];
@@ -283,6 +292,13 @@ export const del = <T = any>(p: string) => api<T>("DELETE", p);
 // The simulator's controls (simulator only)
 export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${action}`, body);
 
+/** A watering circuit (SD-134): a pump or valve on a Shelly output, bound as the role `water.<id>`. */
+export type WaterCircuit = {
+  id: string; name: string; mode: "window" | "times" | "interval" | "manual";
+  fromMin: number; toMin: number; shotsPerDay: number; shotS: number; times: { atMin: number; s: number }[]; everyMin: number;
+  longestS: number; rateLpm: number | null; dailyMaxS: number | null; paused: boolean;
+};
+
 /** The circulation pump runs during a dose, its mixing wait and a fill, or always (SD-132). */
 export type CirculationMode = "mixing" | "always";
 
@@ -317,4 +333,4 @@ export type DeviceRole = {
   state?: string;
 };
 export type Devices = { devices: NetDevice[]; roles: Record<string, DeviceRole>; mqttTopics: string[] };
-export const DEVICE_ROLES = ["refill_valve", "circulation_pump", "tank_full"] as const;
+export const DEVICE_ROLES = ["refill_valve", "circulation_pump", "tank_full", "tank_empty", "tank_level"] as const;

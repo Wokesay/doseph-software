@@ -105,6 +105,8 @@ bool permitted(Role role, const std::string& method, const std::vector<std::stri
   if (first == "active") return method == "PUT" && n == 1;
   if (first == "plant-recipes") return (method == "PUT" && n == 1) || (method == "DELETE" && n == 2);
   if (first == "plants") return (n == 2 && (method == "PUT" || method == "DELETE")) || (n == 3 && method == "POST");
+  // Watering (SD-134): an account only pauses and resumes a circuit's schedule
+  if (first == "watering") return method == "POST" && n == 4 && p[3] == "pause";
   return false;
 }
 
@@ -428,6 +430,13 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("POST", {"refill", "start"})) return fromResult(robot_.startRefill());
   if (is("POST", {"refill", "stop"})) return fromResult(robot_.stopRefill());
   if (is("PUT", {"circulation"})) return fromResult(robot_.putCirculation(body));
+  // Watering (SD-134)
+  if (is("PUT", {"watering"})) return fromResult(robot_.putWatering(body));
+  if (is("PUT", {"watering", "circuits"})) return fromResult(robot_.putCircuit(body));
+  if (is("DELETE", {"watering", "circuits", "*"})) return fromResult(robot_.deleteCircuit(p[2]));
+  if (is("POST", {"watering", "circuits", "*", "now"})) return fromResult(robot_.waterNow(p[2], body));
+  if (is("POST", {"watering", "circuits", "*", "stop"})) return fromResult(robot_.stopWater(p[2]));
+  if (is("POST", {"watering", "circuits", "*", "pause"})) return fromResult(robot_.pauseCircuit(p[2], body));
   // Network devices and their roles (SD-132)
   if (is("GET", {"devices"})) return jsonResp(200, robot_.devices());
   if (is("POST", {"devices"})) return fromResult(robot_.addDevice(body));

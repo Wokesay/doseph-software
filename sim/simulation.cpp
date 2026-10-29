@@ -254,6 +254,12 @@ void Simulation::step(Ms dt, Ms tick) {
     // The twin's inlet (SD-132): an open valve lets tap water in, and the float switch says full at
     // its line (assumptions: 4 L/min, the float at 105 L)
     world_.circulation = net_.circulating();
+    // Watering pumps take water, and the ESPHome's level and float "tank empty" follow the tank
+    world_.takeWater(net_.watering() * kWaterLpm * static_cast<double>(d) / 60000.0);
+    if (sim::FakeEsphome* e = net_.sensors()) {
+      e->entities["sensor/tank_level"] = std::round(world_.tank.volumeL * 10.0) / 10.0;
+      e->entities["binary_sensor/tank_empty"] = world_.tank.volumeL < kEmptyAtL;
+    }
     if (sim::FakeShelly* v = net_.inlet()) {
       if (v->online && v->switches[0].on) world_.addWater(kInletLpm * static_cast<double>(d) / 60000.0);
       if (!v->floatStuck) v->setInput(0, world_.tank.volumeL >= kFloatAtL);

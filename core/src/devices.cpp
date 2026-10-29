@@ -29,6 +29,8 @@ const std::vector<RoleDef>& roleDefs() {
       {"refill_valve", "output", true, static_cast<Ms>(kRefillMaxMin * kMinute)},  // the longest fill (RAT-079)
       {"circulation_pump", "output", false, 0},        // runs for hours: no auto-off (RAT-019)
       {"tank_full", "binary", false, 0},               // the float switch in the tank (PD-460)
+      {"tank_empty", "binary", false, 0},              // a float switch at the tank's reserve (SD-134)
+      {"tank_level", "level", false, 0},               // a level probe, in litres (SD-134)
   };
   return defs;
 }
@@ -37,6 +39,34 @@ const RoleDef* roleDef(const std::string& id) {
   for (const auto& r : roleDefs())
     if (r.id == id) return &r;
   return nullptr;
+}
+
+namespace {
+
+// Each circuit a pulse output: the device switches it off past its longest shot (RAT-019)
+RoleDef circuitRole(const WaterCircuitCfg& c) {
+  return {waterRole(c.id), "output", true, isNum(c.longestS) ? static_cast<Ms>(std::llround(c.longestS * 1000.0)) : 0};
+}
+
+}  // namespace
+
+std::vector<RoleDef> roleDefs(const Config& cfg) {
+  std::vector<RoleDef> out = roleDefs();
+  for (const auto& c : cfg.watering.circuits) out.push_back(circuitRole(c));
+  return out;
+}
+
+std::optional<RoleDef> roleDef(const Config& cfg, const std::string& id) {
+  if (const RoleDef* r = roleDef(id)) return *r;
+  if (id.rfind("water.", 0) == 0)
+    if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return circuitRole(*c);
+  return std::nullopt;
+}
+
+Msg roleLabel(const Config& cfg, const std::string& id) {
+  if (id.rfind("water.", 0) == 0)
+    if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return say("role.water", {{"name", c->name}});
+  return say("role." + id);
 }
 
 int autoOffS(const RoleDef& r) {

@@ -9,6 +9,7 @@
 #include <set>
 
 #include "doseph/embedded.hpp"
+#include "doseph/localtime.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
 #include "doseph/sha256.hpp"
@@ -27,6 +28,14 @@ constexpr const char* kDeviceSecretsFile = "devices.json";  // network devices' 
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
+
+// The local day, YYYY-MM-DD
+std::string localDate(Epoch epoch, const std::string& zone) {
+  const LocalTime t = localTime(epoch, zone);
+  char date[16];
+  std::snprintf(date, sizeof date, "%04d-%02d-%02d", t.year, t.month, t.day);
+  return date;
+}
 constexpr const char* kHistoryFile = "history.bin";
 constexpr const char* kHistoryLog = "history.log";
 constexpr Epoch kSampleS = 10;           // history: one sample per 10 s (finest tier)
@@ -355,6 +364,7 @@ void Robot::boot() {
     // never resumed, and its water is mixed in first (SD-132, R6)
     Ctx c = ctx();
     if (RefillValve::reportCut(c)) afterFill();
+    Watering::reportCut(c, localDate(c.epoch, cfg_.system.timezone));  // a shot cut by the restart is reported, not repeated (SD-134)
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
@@ -423,6 +433,21 @@ void Robot::tick() {
   if (wasFilling && !refill_.filling()) fillEnded(opened);
   c.refilling = refill_.filling();
   if (c.refilling != wasFilling) saveState(true);
+  // Watering (SD-134): the water is judged by a check after the last dose or fill; a tank found
+  // full starts the count of litres given anew
+  {
+    const Phase ph = cycle_.phase();
+    if (ph == Phase::Dose || c.refilling) waterChangedAt_ = c.epoch;
+    const RoleValue full = devices_.value(cfg_, "tank_full", now);
+    const bool counted = rt_.watering.is_object() && rt_.watering.contains("givenL") && rt_.watering["givenL"] == 0;
+    if (full.state == "ok" && full.value->is_boolean() && full.value->get<bool>() && (!counted || rt_.waterLow)) {
+      rt_.watering["givenL"] = 0;
+      rt_.waterLow = false;
+    }
+    const bool wasWatering = water_.running();
+    water_.tick(c, waterIn(c), outputs_);
+    if (water_.running() != wasWatering) saveState(true);
+  }
   outputs_.want("circulation_pump", circulationWanted(c));
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
@@ -770,6 +795,7 @@ json Robot::state() {
              return r;
            }()},
           {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
+          {"watering", water_.status(c, waterIn(c))},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -1254,6 +1280,8 @@ Result Robot::newTank() {
   rt_.newTank = true;
   rt_.ecInBand = nullptr;  // a new fill (SD-115)
   rt_.topUp = false;
+  rt_.watering["givenL"] = 0;  // and the count of litres watered starts anew (SD-134)
+  rt_.waterLow = false;
   rt_.latches.erase("tank.volume");
   rt_.jumpLocks.clear();
   {
@@ -1498,7 +1526,8 @@ Result Robot::importConfig(const json& j) {
   if (!next.ecCal.is_null())
     if (auto e = SensorTruth::checkEc(next.ecCal)) errs.push_back(say("cfg.calibration.ec", {{"reason", *e}}));
   if (!errs.empty()) return Result::fail(422, errs.front(), {{"errors", errs}});
-  if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing() || refill_.filling()) return Result::fail(409, say("config.busy"));
+  if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing() || refill_.filling() || water_.running())
+    return Result::fail(409, say("config.busy"));
   // The lock against a second first setup never comes from a file
   next.system.passwordSet = cfg_.system.passwordSet || auth_.hasPassword();
   // Nor what the owner confirmed of commissioning: placement is physical, so a restored or new
@@ -1511,6 +1540,10 @@ Result Robot::importConfig(const json& j) {
   // The network devices' outputs off, and what moved or went is let go (SD-132)
   outputs_.allOff();
   reconcileDevices(before);
+  // Watering starts from the new schedules; a circuit that went takes its records with it (SD-134)
+  water_.reset();
+  for (const auto& w : before.watering.circuits)
+    if (!cfg_.watering.circuit(w.id)) Watering::forgetRuntime(rt_, w.id);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)
@@ -2235,9 +2268,9 @@ void Robot::mqttValue(const std::string& topic, const std::string& payload) {
 std::vector<WatchInput::Role> Robot::roleStates(Ms now) const {
   std::vector<WatchInput::Role> out;
   const json outs = outputs_.status(cfg_, devices_, now);
-  for (const auto& def : roleDefs()) {
+  for (const auto& def : roleDefs(cfg_)) {
     if (!cfg_.roles.count(def.id)) continue;
-    WatchInput::Role r{def.id, false, {}};
+    WatchInput::Role r{def.id, false, {}, roleLabel(cfg_, def.id)};
     if (def.kind == "output") {
       const json& o = outs[def.id];
       const std::string st = jstr(o, "state");
@@ -2281,7 +2314,13 @@ void Robot::reconcileDevices(const Config& before) {
     Ctx c = ctx();
     if (const auto opened = refill_.stop(c, outputs_, say("refill.end.changed"))) fillEnded(*opened);
   }
-  for (const auto& def : roleDefs()) {
+  // So does a shot whose circuit's output changed (SD-134)
+  for (const auto& w : before.watering.circuits)
+    if (bound(before, waterRole(w.id).c_str()) != bound(cfg_, waterRole(w.id).c_str())) {
+      Ctx c = ctx();
+      water_.stop(c, outputs_, w.id, say("water.end.changed"));
+    }
+  for (const auto& def : roleDefs(before)) {
     if (def.kind != "output") continue;
     const auto was = before.roles.find(def.id);
     if (was == before.roles.end() || was->second.source != "shelly") continue;
@@ -2309,8 +2348,8 @@ json Robot::devices() const {
   const Ms now = clock_.nowMs();
   json roles = json::object();
   const json outs = outputs_.status(cfg_, devices_, now);
-  for (const auto& def : roleDefs()) {
-    json r = {{"kind", def.kind}, {"pulse", def.pulse}, {"autoOffS", autoOffS(def)}, {"binding", nullptr}};
+  for (const auto& def : roleDefs(cfg_)) {
+    json r = {{"kind", def.kind}, {"pulse", def.pulse}, {"autoOffS", autoOffS(def)}, {"binding", nullptr}, {"label", roleLabel(cfg_, def.id)}};
     if (const auto it = cfg_.roles.find(def.id); it != cfg_.roles.end()) r["binding"] = bindingToJson(it->second);
     if (def.kind == "output") {
       r["output"] = outs[def.id];
@@ -2375,7 +2414,7 @@ Result Robot::putDeviceCredentials(const std::string& id, const json& j) {
 
 Result Robot::putRole(const std::string& role, const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (!roleDef(role)) return Result::fail(404, say("role.none"));
+  if (!roleDef(cfg_, role)) return Result::fail(404, say("role.none"));
   RoleBinding b;
   try {
     b = bindingFromJson(j);
@@ -2385,7 +2424,7 @@ Result Robot::putRole(const std::string& role, const json& j) {
   Config next = cfg_;
   next.roles[role] = b;
   const Config before = cfg_;
-  Result r = saveConfig(next, say("ev.role.bound", {{"role", say("role." + role)}}));
+  Result r = saveConfig(next, say("ev.role.bound", {{"role", roleLabel(cfg_, role)}}));
   if (r.status != 200) return r;  // refused: the output it had stays as it is
   reconcileDevices(before);
   return r;
@@ -2397,7 +2436,7 @@ Result Robot::deleteRole(const std::string& role) {
   Config next = cfg_;
   next.roles.erase(role);
   const Config before = cfg_;
-  Result r = saveConfig(next, say("ev.role.unbound", {{"role", say("role." + role)}}));
+  Result r = saveConfig(next, say("ev.role.unbound", {{"role", roleLabel(cfg_, role)}}));
   if (r.status != 200) return r;
   reconcileDevices(before);
   return r;
@@ -2446,6 +2485,147 @@ Result Robot::putCirculation(const json& j) {
   Config next = cfg_;
   next.circulation.mode = j["mode"].get<std::string>();
   return saveConfig(next, changed("cfg.what.circulation"));
+}
+
+WaterIn Robot::waterIn(const Ctx& c) const {
+  WaterIn in;
+  in.date = localDate(c.epoch, cfg_.system.timezone);
+  in.minuteOfDay = localTime(c.epoch, cfg_.system.timezone).minuteOfDay;
+  in.clockSecured = clock_.secured();
+  const Phase ph = cycle_.phase();
+  const Measured& last = cycle_.last();
+  // Mixed in: no dose, fill or mixing wait under way, and the check measured after the last of them
+  in.dosing = ph == Phase::Dose;
+  in.mixing = c.refilling || in.dosing || ph == Phase::Mix || ph == Phase::Remeasure || cycle_.mixPending() || last.at <= waterChangedAt_;
+  in.ph = last.ph;
+  in.ec = last.ec;
+  const CycleSettings s = cycleSettings(c);
+  in.stale = last.at <= 0 || c.epoch - last.at > 3 * s.holdMs / 1000;  // three holds: the check has stopped
+  // The EC target: the higher of this phase's and the last phase's, so that a phase that asks for
+  // less does not stop watering on the water still in the tank (RAT-086)
+  in.ecTarget = s.ecTarget;
+  const WaterPlan plan = waterPlan(cfg_, c.epoch);
+  if (plan.source == "plant" && plan.plant && plan.plant->phase > 0 && plan.plant->phase <= static_cast<int>(plan.plant->phases.size())) {
+    const double before = phaseEcTarget(cfg_, plan.plant->phases[static_cast<size_t>(plan.plant->phase - 1)]);
+    if (isNum(before) && (!isNum(in.ecTarget) || before > in.ecTarget)) in.ecTarget = before;
+  }
+  in.phTarget = s.phTarget;
+  in.phTol = s.phTol;
+  in.calibrating = c.probeCalibrating;
+  in.flowDry = holds(rt_, "flow.dry");
+  const RoleValue empty = devices_.value(cfg_, "tank_empty", c.now);
+  in.emptyAssigned = empty.state != "not_assigned";
+  if (empty.state == "ok" && empty.value->is_boolean()) in.empty = empty.value->get<bool>();
+  const RoleValue level = devices_.value(cfg_, "tank_level", c.now);
+  in.levelAssigned = level.state != "not_assigned";
+  if (level.state == "ok" && level.value->is_number()) in.levelL = level.value->get<double>();
+  in.volumeL = cfg_.tank.volumeL;
+  const json outs = outputs_.status(cfg_, devices_, c.now);
+  for (const auto& w : cfg_.watering.circuits)
+    if (outs.contains(waterRole(w.id))) in.outputs[w.id] = outs[waterRole(w.id)];
+  return in;
+}
+
+Result Robot::putWatering(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("reservePct") || !j["reservePct"].is_number()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  next.watering.reservePct = j["reservePct"].get<double>();
+  return saveConfig(next, changed("cfg.what.watering"));
+}
+
+Result Robot::putCircuit(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  json body = j;
+  std::string id = jstr(body, "id");
+  if (id.empty()) {
+    // A new circuit: the next free number
+    for (int n = 1; id.empty(); ++n)
+      if (!cfg_.watering.circuit("w" + std::to_string(n))) id = "w" + std::to_string(n);
+    body["id"] = id;
+  } else if (const WaterCircuitCfg* was = cfg_.watering.circuit(id)) {
+    // A schedule paused stays so, unless the change says otherwise
+    if (!body.contains("paused")) body["paused"] = was->paused;
+  } else {
+    return Result::fail(404, say("water.none"));
+  }
+  WaterCircuitCfg w;
+  try {
+    w = waterCircuitFromJson(body);
+  } catch (...) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  Config next = cfg_;
+  bool found = false;
+  for (auto& x : next.watering.circuits)
+    if (x.id == id) {
+      x = w;
+      found = true;
+    }
+  if (!found) next.watering.circuits.push_back(w);
+  Result r = saveConfig(next, changed("cfg.what.watering"));
+  if (r.status != 200) return r;
+  // A shot of this circuit ends, and what waited for it goes: what it runs by has changed
+  Ctx c = ctx();
+  if (water_.stop(c, outputs_, id, say("water.end.changed"))) saveState(true);
+  water_.forget(id);
+  r.body["id"] = id;
+  return r;
+}
+
+Result Robot::deleteCircuit(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.watering.circuit(id)) return Result::fail(404, say("water.none"));
+  Config next = cfg_;
+  next.watering.circuits.erase(std::remove_if(next.watering.circuits.begin(), next.watering.circuits.end(),
+                                              [&](const WaterCircuitCfg& w) { return w.id == id; }),
+                               next.watering.circuits.end());
+  next.roles.erase(waterRole(id));
+  const Config before = cfg_;
+  Result r = saveConfig(next, changed("cfg.what.watering"));
+  if (r.status != 200) return r;
+  // Its shot ends, booked as the circuit was when it began
+  Ctx c = ctx();
+  water_.stop(c, outputs_, id, say("water.end.removed"));
+  water_.forget(id);
+  Watering::forgetRuntime(rt_, id);
+  saveState(true);
+  reconcileDevices(before);  // its output is let go and switched off
+  return r;
+}
+
+Result Robot::waterNow(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("seconds") || !j["seconds"].is_number()) return Result::fail(422, say("api.bad_input"));
+  if (j.contains("override") && !j["override"].is_boolean()) return Result::fail(422, say("api.bad_input"));
+  Ctx c = ctx();
+  if (auto why = water_.waterNow(c, waterIn(c), id, j["seconds"].get<double>(), jbool(j, "override", false), outputs_))
+    return Result::fail(why->key == "water.none" ? 404 : why->key == "water.no.length" ? 422 : 409, *why);
+  saveState(true);
+  saveEvents();
+  return Result::ok();
+}
+
+Result Robot::stopWater(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Ctx c = ctx();
+  if (!water_.stop(c, outputs_, id, say("water.end.person"))) return Result::fail(409, say("water.none_running"));
+  saveState(true);
+  saveEvents();
+  return Result::ok();
+}
+
+Result Robot::pauseCircuit(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("paused") || !j["paused"].is_boolean()) return Result::fail(422, say("api.bad_input"));
+  if (!cfg_.watering.circuit(id)) return Result::fail(404, say("water.none"));
+  Config next = cfg_;
+  for (auto& w : next.watering.circuits)
+    if (w.id == id) w.paused = j["paused"].get<bool>();
+  Result r = saveConfig(next, changed(j["paused"].get<bool>() ? "cfg.what.water_paused" : "cfg.what.water_resumed"));
+  if (r.status == 200) water_.forget(id);  // resumed, it starts with its next shot
+  return r;
 }
 
 void Robot::fillEnded(bool opened) {

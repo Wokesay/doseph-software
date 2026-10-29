@@ -59,7 +59,7 @@ WatchResult evaluate(const WatchInput& in) {
       add("coupling.link", label, "ok", say("watch.coupling.ok", {{"name", in.peer.name}}));
   }
   // Network devices (SD-132): a bound role that does not work is a problem (RAT-024)
-  for (const auto& r : in.roles) add("role." + r.id, say("role." + r.id), r.ok ? "ok" : "problem", r.text);
+  for (const auto& r : in.roles) add("role." + r.id, r.label.key.empty() ? say("role." + r.id) : r.label, r.ok ? "ok" : "problem", r.text);
   if (const Reading* f = find(in, "flow")) {
     const Msg label = say("watch.flow");
     if (in.stopped || !in.needsFlow) add("flow", label, "neutral", say("watch.flow_not_needed"));
@@ -104,6 +104,7 @@ WatchResult evaluate(const WatchInput& in) {
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));
   if (in.rt.topUp) add("water", say("watch.water"), "problem", say("watch.top_up"));  // SD-115
+  if (in.rt.waterLow) add("water.low", say("watch.watering"), "problem", say("watch.water_low"));  // SD-134
 
   // The recipe in force, the volume and the channels it needs (RAT-015)
   if (!recipe) add("recipe", say("watch.recipe"), "neutral", say("watch.no_recipe"));
