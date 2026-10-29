@@ -515,7 +515,7 @@ test("a lock is set to report only in the settings, with a warning that leak, St
   await expect(row.getByRole("tab", { name: "Lock" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("save-locks")).toBeDisabled();
   await row.getByRole("tab", { name: "Report only" }).click();
-  await expect(card.getByText("Leak, high level, Stop, no dose without flow")).toBeVisible();
+  await expect(card.getByText("Leak, high level, the cable check, Stop, no dose without flow")).toBeVisible();
   await page.getByTestId("save-locks").click();
   await expect(page.getByText("Saved")).toBeVisible();
   await page.reload();
