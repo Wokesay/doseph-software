@@ -145,9 +145,12 @@ jobs:
           if ! grep -q '[^[:space:]]' out/NOTES.md; then
             echo "::error::CHANGELOG.md has no section [$section]"; exit 1
           fi
-          # A prototype says first what it is for (SD-116)
+          # A prototype says first what it is for (SD-116), and that it does not comply with the
+          # Cyber Resilience Act and is made available for testing only (its Art. 4(3), PD-485)
           case "$v" in
-            *-*) { printf '> **Prototype:** for trying the software in the simulator, not for dosing into a real tank.\n\n'; cat out/NOTES.md; } > out/NOTES.new && mv out/NOTES.new out/NOTES.md ;;
+            *-*) { printf '> **Prototype:** for trying the software in the simulator, not for dosing into a real tank.\n>\n> %s\n\n' \
+                     'Prototype for testing only. It does not comply with Regulation (EU) 2024/2847 (Cyber Resilience Act) and will not be made available on the market for purposes other than testing. Each prototype is superseded by the next one.'
+                   cat out/NOTES.md; } > out/NOTES.new && mv out/NOTES.new out/NOTES.md ;;
           esac
           printf '\n---\n**Try it:** download the simulator for your system, unpack it and start it (README.txt in the package). The window shows the address and the demo password.\n\n**Feedback and bugs:** https://github.com/Wokesay/doseph-software/issues/new/choose\n' >> out/NOTES.md
           cat out/dist/SHA256SUMS

@@ -400,12 +400,15 @@ export function Banner(p: { tone?: "info" | "warn" | "bad" | "ok"; children: Com
   );
 }
 
-/** A prototype or beta says it is for testing only; a Stable release shows nothing. */
+/** A prototype or beta says it is for testing only, and that it does not comply with the Cyber
+ *  Resilience Act (its Art. 4(3), PD-485); a Stable release shows nothing. */
 export function TestingNotice() {
   if (!testingOnly.value) return null;
   return (
     <Banner tone="info">
-      <span data-testid="testing-notice">{t("common.testingOnly")}</span>
+      <span data-testid="testing-notice">
+        {t("common.testingOnly")} {t("common.cra")}
+      </span>
     </Banner>
   );
 }

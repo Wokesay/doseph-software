@@ -15,6 +15,11 @@ needed for it.
 > **Status: prototype.** For trying in the simulator only; do not dose
 > into a real tank with it. A prototype comes out weekly while there is
 > something new.
+>
+> Prototype for testing only. It does not comply with Regulation (EU)
+> 2024/2847 (Cyber Resilience Act) and will not be made available on the
+> market for purposes other than testing. Each prototype is superseded by
+> the next one.
 
 ## What the prototype does
 

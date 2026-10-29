@@ -41,6 +41,8 @@ export const deBase = {
   "common.reload": "Seite neu laden",
   "common.version": "Version {v}",
   "common.testingOnly": "Nur zum Testen: Diese Version ist ein Entwicklungsstand und nicht für den Dauerbetrieb freigegeben.",
+  "common.cra":
+    "Sie erfüllt die Verordnung (EU) 2024/2847 (Cyber Resilience Act) nicht und wird nicht für andere Zwecke als Testzwecke auf dem Markt bereitgestellt. Jede Testversion wird durch die nächste abgelöst.",
   "common.justNow": "gerade eben",
   // Number and unit joined by a no-break space
   "common.secondsAgo": "vor {n} s",

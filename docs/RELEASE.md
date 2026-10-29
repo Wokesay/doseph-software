@@ -6,6 +6,14 @@ for dosing into a real tank. One comes out weekly while something new is
 merged, numbered `0.1.0-proto.N` from `0.1.0-proto.5` on. Firmware and
 device releases follow later with their own steps (signed updates).
 
+Every prototype and beta carries the notice of the Cyber Resilience Act
+for software made available for testing (its Art. 4(3), PD-485): it does
+not comply with the regulation and is not made available on the market
+for any other purpose. The notice stands in the README, in the release
+notes (the workflow puts it first), in the package's `README.txt` and in
+the web app next to "For testing only". It adds no restriction to the
+license.
+
 ## Steps
 
 1. **Release pull request** – from `main`:

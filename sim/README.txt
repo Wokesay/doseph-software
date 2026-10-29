@@ -8,6 +8,11 @@ and probes. Nothing is installed; no hardware and no internet are needed.
 It is a prototype: for trying the software, not for dosing into a real
 tank.
 
+Prototype for testing only. It does not comply with Regulation (EU)
+2024/2847 (Cyber Resilience Act) and will not be made available on the
+market for purposes other than testing. Each prototype is superseded by
+the next one.
+
 Start:
   Windows:  double-click doseph-simulator.exe.
             If Windows says "Windows protected your PC":
@@ -45,6 +50,10 @@ Der Simulator ist die Doseph-Software mit nachgebildetem Gerät, Tank,
 Pumpen und Sonden. Nichts wird installiert, es braucht keine Hardware und
 kein Internet. Es ist ein Prototyp: zum Ausprobieren, nicht zum Dosieren
 in einen echten Tank.
+
+Prototyp nur zum Testen. Er erfüllt die Verordnung (EU) 2024/2847 (Cyber
+Resilience Act) nicht und wird nicht für andere Zwecke als Testzwecke auf
+dem Markt bereitgestellt. Jeder Prototyp wird durch den nächsten abgelöst.
 
 Starten:
   Windows:  doseph-simulator.exe doppelklicken. Meldet Windows

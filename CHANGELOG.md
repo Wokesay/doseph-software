@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- Prototypes say that they do not comply with the Cyber Resilience Act
+  and are made available for testing only (PD-485): in the README, the
+  release notes, the package's `README.txt` and the web app's "For
+  testing only" banner.
+- The texts on where canisters stand say "below the device", as the rule
+  is: the siphon alarm's help ("for example on the floor"), the note
+  before a pump head is changed, and the placement step of
+  commissioning.
 - The device's pump lies in the tank (SD-127, from PD-476 and PD-477). It
   is now called the feed pump, and the device profile says where it sits.
   - In the tank it has no priming.
