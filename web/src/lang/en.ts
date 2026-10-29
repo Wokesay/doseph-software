@@ -40,6 +40,8 @@ const base: Record<keyof typeof deBase, string> = {
   "common.reload": "Reload page",
   "common.version": "Version {v}",
   "common.testingOnly": "For testing only: this version is a development build, not released for continuous use.",
+  "common.cra":
+    "It does not comply with Regulation (EU) 2024/2847 (Cyber Resilience Act) and will not be made available on the market for purposes other than testing. Each test version is superseded by the next one.",
   "common.justNow": "just now",
   "common.secondsAgo": "{n} s ago",
   "common.minutesAgo": "{n} min ago",

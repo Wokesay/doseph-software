@@ -437,7 +437,7 @@ constexpr Entry kMessages[] = {
     {"ev.water.top_up.text", "EC rose to {ec:2} mS/cm, above its target of {target:2}, without a nutrient dose since it was within: water is missing. Top up the tank with water; nutrients wait meanwhile, pH is still corrected."},
     {"ev.water.ok.text", "EC is back within its band at {ec:2} mS/cm."},
     {"ev.channel.no_drops.text", "Its pump ran, but nothing dripped at its outlet: the outlet or line is blocked, the canister empty, the tube kinked or the pump head failed. The run was stopped; the channel doses nothing until you release it."},
-    {"ev.channel.siphon.text", "Drops fell at its outlet while its pump stood: the canister stands above the device and siphons. Put it no higher than the device. The channel doses nothing until you release it; the check mixes first."},
+    {"ev.channel.siphon.text", "Drops fell at its outlet while its pump stood: the canister stands too high and siphons. Place every canister below the device, for example on the floor. The channel doses nothing until you release it; the check mixes first."},
     {"ev.probe.start_ph", "pH calibration started"},
     {"ev.probe.start_ec", "EC calibration started"},
     {"ev.probe.saved_ph", "pH probe calibrated"},

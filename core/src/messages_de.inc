@@ -352,7 +352,7 @@ static const struct {
     {"ev.channel.no_drops", "Kanal {channel}: keine Tropfen"},
     {"ev.channel.no_drops.text", "Seine Pumpe lief, aber am Auslass tropfte nichts: Auslass oder Schlauch verstopft, Kanister leer, Schlauch geknickt oder Pumpenkopf defekt. Der Lauf wurde gestoppt; der Kanal dosiert nichts, bis du ihn freigibst."},
     {"ev.channel.siphon", "Kanal {channel}: tropft ohne seine Pumpe"},
-    {"ev.channel.siphon.text", "Am Auslass fielen Tropfen, während seine Pumpe stand: Der Kanister steht höher als das Gerät und hebert. Stell ihn nicht höher als das Gerät. Der Kanal dosiert nichts, bis du ihn freigibst; die Prüfung mischt zuerst."},
+    {"ev.channel.siphon.text", "Am Auslass fielen Tropfen, während seine Pumpe stand: Der Kanister steht zu hoch und hebert. Stell jeden Kanister unter das Gerät, zum Beispiel auf den Boden. Der Kanal dosiert nichts, bis du ihn freigibst; die Prüfung mischt zuerst."},
     {"ev.config.changed", "Einstellungen geändert: {what}"},
     {"ev.config.imported", "Einstellungen aus einer Sicherung wiederhergestellt"},
     {"ev.coupling.agree", "Messwerte stimmen wieder mit {name} überein"},

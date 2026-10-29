@@ -419,7 +419,7 @@ export const msgDe: Record<string, string> = {
   "ev.water.top_up.text": "EC stieg auf {ec:2} mS/cm, über das Ziel von {target:2}, ohne Nährstoffgabe, seit sie im Band war: Es fehlt Wasser. Füll den Tank mit Wasser auf; Nährstoffe warten so lange, pH wird weiter korrigiert.",
   "ev.water.ok.text": "EC ist wieder im Band bei {ec:2} mS/cm.",
   "ev.channel.no_drops.text": "Seine Pumpe lief, aber am Auslass tropfte nichts: Auslass oder Schlauch verstopft, Kanister leer, Schlauch geknickt oder Pumpenkopf defekt. Der Lauf wurde gestoppt; der Kanal dosiert nichts, bis du ihn freigibst.",
-  "ev.channel.siphon.text": "Am Auslass fielen Tropfen, während seine Pumpe stand: Der Kanister steht höher als das Gerät und hebert. Stell ihn nicht höher als das Gerät. Der Kanal dosiert nichts, bis du ihn freigibst; die Prüfung mischt zuerst.",
+  "ev.channel.siphon.text": "Am Auslass fielen Tropfen, während seine Pumpe stand: Der Kanister steht zu hoch und hebert. Stell jeden Kanister unter das Gerät, zum Beispiel auf den Boden. Der Kanal dosiert nichts, bis du ihn freigibst; die Prüfung mischt zuerst.",
   "ev.probe.start_ph": "pH-Kalibrierung begonnen",
   "ev.probe.start_ec": "EC-Kalibrierung begonnen",
   "ev.probe.saved_ph": "pH-Sonde kalibriert",

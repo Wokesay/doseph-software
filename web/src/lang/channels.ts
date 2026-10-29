@@ -56,7 +56,7 @@ export const de = {
   "channels.phDownTaken": "Es gibt schon einen pH−-Kanister: {name}. Es gibt höchstens einen.",
   "channels.noHead": "kein Pumpenkopf – dosiert nichts",
   "channels.headNote":
-    "Bevor du einen Pumpenkopf aufsetzt, abnimmst oder wechselst: Die Kanister dürfen nicht höher stehen als das Gerät, sonst laufen sie von selbst nach. Ein anderer Kopf macht die Einmessung des Kanals ungültig; miss ihn danach neu ein.",
+    "Bevor du einen Pumpenkopf aufsetzt, abnimmst oder wechselst: Die Kanister müssen unter dem Gerät stehen, sonst laufen sie von selbst nach. Ein anderer Kopf macht die Einmessung des Kanals ungültig; miss ihn danach neu ein.",
   "channels.calibrateN": "Kanal {channel} einmessen",
   "channels.primeN": "Kanal {channel}: Schlauch füllen",
   "channels.calibrateIntro": "Füll den Schlauch zuerst, dann halte sein Ende in einen leeren Messbecher (nicht in den Tank). Die Pumpe läuft die eingestellte Zeit; danach trägst du die ml im Becher ein.",
@@ -146,7 +146,7 @@ export const en: Record<keyof typeof de, string> = {
   "channels.phDownTaken": "There already is a pH− canister: {name}. There is one at most.",
   "channels.noHead": "no pump head – doses nothing",
   "channels.headNote":
-    "Before you fit, take off or change a pump head: the canisters must stand no higher than the device, or they run on by themselves. Another head voids the channel's calibration; calibrate it again afterwards.",
+    "Before you fit, take off or change a pump head: the canisters must stand below the device, or they run on by themselves. Another head voids the channel's calibration; calibrate it again afterwards.",
   "channels.calibrateN": "Calibrate channel {channel}",
   "channels.primeN": "Channel {channel}: prime tube",
   "channels.calibrateIntro": "Prime the tube first, then hold its end in an empty measuring cup (not in the tank). The pump runs for the time set; then you enter the ml in the cup.",
