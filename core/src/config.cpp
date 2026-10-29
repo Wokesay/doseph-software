@@ -58,7 +58,8 @@ size_t chars(const std::string& s) {
 // The circuits (SD-134): each shot within its circuit's longest, which stays within what the device
 // takes; a reserve of at least 10 % of the tank
 template <class Err>
-void validateWatering(const WateringCfg& w, Err&& err) {
+void validateWatering(const Config& cfg, Err&& err) {
+  const WateringCfg& w = cfg.watering;
   if (!inRange(w.reservePct, 10, 90)) err(say("cfg.water.reserve", {{"min", 10}, {"max", 90}}));
   if (w.circuits.size() > kMaxCircuits) err(say("cfg.water.too_many", {{"max", kMaxCircuits}}));
   std::set<std::string> ids;
@@ -91,6 +92,8 @@ void validateWatering(const WateringCfg& w, Err&& err) {
     }
     if (isNum(c.rateLpm) && !inRange(c.rateLpm, 0.01, 1000)) err(say("cfg.water.rate", {{"name", name}}));
     if (isNum(c.dailyMaxS) && !inRange(c.dailyMaxS, 1, 24 * 3600)) err(say("cfg.water.daily", {{"name", name}}));
+    // A plant sets a window's shots (SD-134, RAT-076): only a window follows one, and one that is there
+    if (!c.plant.empty() && (c.mode != "window" || !cfg.plant(c.plant))) err(say("cfg.water.plant", {{"name", name}}));
   }
 }
 
@@ -116,6 +119,7 @@ WaterCircuitCfg waterCircuitFromJson(const json& x) {
   w.dailyMaxS = numOrNaN(x, "dailyMaxS");
   if (x.contains("paused") && !x["paused"].is_boolean()) throw std::invalid_argument("paused is not true or false");
   w.paused = jbool(x, "paused", false);
+  w.plant = jstr(x, "plant");
   return w;
 }
 
@@ -161,7 +165,9 @@ json phasesJson(const std::vector<PhaseCfg>& phases) {
                    {"confirm", ph.confirm},
                    {"recipe", ph.recipe},
                    {"ecTarget", numOrNull(ph.ecTarget)},
-                   {"ph", isNum(ph.phLow) && isNum(ph.phHigh) ? json::array({ph.phLow, ph.phHigh}) : json(nullptr)}});
+                   {"ph", isNum(ph.phLow) && isNum(ph.phHigh) ? json::array({ph.phLow, ph.phHigh}) : json(nullptr)},
+                   {"shotsPerDay", ph.shotsPerDay ? json(*ph.shotsPerDay) : json(nullptr)},
+                   {"shotS", numOrNull(ph.shotS)}});
   return out;
 }
 
@@ -182,6 +188,12 @@ std::vector<PhaseCfg> phasesFromJson(const json& j) {
       x.phLow = ph[0].get<double>();
       x.phHigh = ph[1].get<double>();
     }
+    if (p.contains("shotsPerDay") && !p["shotsPerDay"].is_null()) {
+      if (!p["shotsPerDay"].is_number_integer()) throw std::invalid_argument("shots a day is not a whole number");
+      const long long n = p["shotsPerDay"].get<long long>();
+      x.shotsPerDay = n < 0 || n > 100000 ? -1 : static_cast<int>(n);  // out of bounds stays so
+    }
+    x.shotS = numOrNaN(p, "shotS");
     out.push_back(std::move(x));
   }
   return out;
@@ -288,7 +300,7 @@ void to_json(json& j, const Config& c) {
                         {"fromMin", w.fromMin}, {"toMin", w.toMin},        {"shotsPerDay", w.shotsPerDay},
                         {"shotS", w.shotS},     {"times", times},          {"everyMin", w.everyMin},
                         {"longestS", w.longestS}, {"rateLpm", numOrNull(w.rateLpm)}, {"dailyMaxS", numOrNull(w.dailyMaxS)},
-                        {"paused", w.paused}});
+                        {"paused", w.paused},       {"plant", w.plant}});
   }
   j["watering"] = {{"reservePct", c.watering.reservePct}, {"circuits", circuits}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
@@ -573,7 +585,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!inRange(c.refill.maxFillMin, kRefillMinMin, kRefillMaxMin))
     err(say("cfg.refill.max_fill", {{"min", kRefillMinMin}, {"max", kRefillMaxMin}}));
   if (c.circulation.mode != "mixing" && c.circulation.mode != "always") err(say("cfg.circulation.mode"));
-  validateWatering(c.watering, err);
+  validateWatering(c, err);
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
@@ -720,6 +732,10 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
       if (std::isnan(ph.phLow) != std::isnan(ph.phHigh) ||
           (isNum(ph.phLow) && (!inRange(ph.phLow, 4.5, 7.5) || !inRange(ph.phHigh, 4.5, 7.5) || ph.phLow >= ph.phHigh)))
         err(say("cfg.recipe.ph_range", {{"name", ph.name}, {"min", 4.5}, {"max", 7.5}}));
+      if (ph.shotsPerDay && (*ph.shotsPerDay < 1 || *ph.shotsPerDay > 24 * 60))
+        err(say("cfg.phase.shots", {{"name", name}, {"phase", ph.name}, {"max", 24 * 60}}));
+      if (!std::isnan(ph.shotS) && !inRange(ph.shotS, 1, kMaxShotS))
+        err(say("cfg.phase.shot", {{"name", name}, {"phase", ph.name}, {"max", kMaxShotS / 3600}}));
     }
   };
   std::set<std::string> plantIds;

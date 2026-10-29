@@ -1198,3 +1198,12 @@ decisions of their own.
   - The reserve or a float "empty" sets "water low", which a refill
     valve answers with a fill of its own. It clears with a new tank, the
     float "full", or a level probe 10 % of the tank above the reserve.
+  - Only a circuit with a time window follows a plant (#10 step 9.4c). A
+    phase may set shots a day and the length of a shot; what it leaves
+    empty, and everything once the plant no longer runs, is the
+    circuit's own. A phase's shot is never longer than the circuit's
+    longest shot. A plant deleted lets its circuits go. A phase change
+    counts from the next shot that comes due once the robot has moved
+    the plant on (within seconds of midnight); a shot that waits or runs
+    keeps its length. A plant copies its phases when it starts (SD-128),
+    so shots set in a plant recipe reach plants started afterwards.

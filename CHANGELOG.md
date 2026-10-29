@@ -69,6 +69,11 @@ All notable changes to this software. The format follows
     switch over MQTT needs an availability topic.
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
+- A watering circuit with a time window can follow a plant (SD-134): the
+  plant's current phase sets shots a day and the length of a shot, where
+  the phase has them. Both are set per phase in a plant recipe on the
+  Plants page and reach plants started from it afterwards; the circuit's
+  card names the plant and its phase.
 - The page "Watering" (SD-134).
   - It shows the tank's water for watering: whether it is fit, what is
     left to water, the litres watered since the last fill and the reserve,

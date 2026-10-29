@@ -130,6 +130,22 @@ std::optional<double> shotAt(const WaterCircuitCfg& w, int m) {
   return std::nullopt;
 }
 
+const PhaseCfg* followedPhase(const Config& cfg, const WaterCircuitCfg& w) {
+  if (w.plant.empty() || w.mode != "window") return nullptr;
+  const PlantCfg* p = cfg.plant(w.plant);
+  if (!p || !p->running() || p->phase < 0 || p->phase >= static_cast<int>(p->phases.size())) return nullptr;
+  return &p->phases[static_cast<size_t>(p->phase)];
+}
+
+WaterCircuitCfg effectiveCircuit(const Config& cfg, const WaterCircuitCfg& w) {
+  WaterCircuitCfg e = w;
+  if (const PhaseCfg* ph = followedPhase(cfg, w)) {
+    if (ph->shotsPerDay) e.shotsPerDay = *ph->shotsPerDay;
+    if (isNum(ph->shotS)) e.shotS = std::min(ph->shotS, w.longestS);
+  }
+  return e;
+}
+
 std::optional<NextShot> nextShot(const WaterCircuitCfg& w, int m) {
   // In how many minutes from this one, 1 to a day; the shot of this minute was taken already
   auto ahead = [m](int at) { return (at - m + 2 * 1440 - 1) % 1440 + 1; };
@@ -282,9 +298,11 @@ void Watering::tick(Ctx& c, const WaterIn& in, NetOutputs& out) {
   if (leapt) {
     lastMinute_ = minute;
   } else if (minute > lastMinute_) {
+    std::vector<WaterCircuitCfg> eff;
+    for (const auto& w : c.cfg.watering.circuits) eff.push_back(effectiveCircuit(c.cfg, w));
     for (long long m = lastMinute_ + 1; m <= minute; ++m) {
       const int local = localTime(static_cast<Epoch>(m * 60), c.cfg.system.timezone).minuteOfDay;
-      for (const auto& w : c.cfg.watering.circuits) {
+      for (const auto& w : eff) {
         if (w.paused) continue;
         if (const auto s = shotAt(w, local)) {
           if (due_.count(w.id)) skip(c, w, say("water.no.superseded"));
@@ -386,9 +404,10 @@ std::optional<double> Watering::available(const Ctx& c, const WaterIn& in) {
 json Watering::status(const Ctx& c, const WaterIn& in) const {
   json circuits = json::array();
   for (const auto& w : c.cfg.watering.circuits) {
+    const WaterCircuitCfg e = effectiveCircuit(c.cfg, w);
     const auto d = due_.find(w.id);
     // Why it cannot water now: its shot that waits, its schedule's next shot, or by hand any shot
-    double s = d != due_.end() ? d->second.s : w.mode == "window" || w.mode == "interval" ? w.shotS : 1;
+    double s = d != due_.end() ? d->second.s : w.mode == "window" || w.mode == "interval" ? e.shotS : 1;
     if (d == due_.end() && w.mode == "times") {
       int next = 24 * 60;
       for (const auto& t : w.times) {
@@ -400,13 +419,21 @@ json Watering::status(const Ctx& c, const WaterIn& in) const {
     // By hand any shot; whether only the water stands in the way, which a person may water over
     const auto hand = blocked(c, in, w, 1, false);
     const bool anyway = hand && !blocked(c, in, w, 1, true);
-    const auto next = w.paused ? std::nullopt : nextShot(w, in.minuteOfDay);
+    const auto next = w.paused ? std::nullopt : nextShot(e, in.minuteOfDay);
+    // The plant it follows, and its phase where that sets the shots
+    json plant = nullptr;
+    if (!w.plant.empty())
+      if (const PlantCfg* p = c.cfg.plant(w.plant)) {
+        const PhaseCfg* ph = followedPhase(c.cfg, w);
+        plant = {{"id", p->id}, {"name", p->name}, {"phase", ph ? json(ph->name) : json(nullptr)}, {"shotsPerDay", e.shotsPerDay}, {"shotS", e.shotS}};
+      }
     json last = nullptr;
     if (c.rt.watering.is_object() && c.rt.watering.contains("last") && c.rt.watering["last"].contains(w.id)) last = c.rt.watering["last"][w.id];
     circuits.push_back({{"id", w.id},
                         {"running", shot_ && shot_->circuit == w.id},
                         {"due", d != due_.end()},
                         {"paused", w.paused},
+                        {"plant", plant},
                         {"nextAt", next ? json((c.epoch / 60 + next->inMin) * 60) : json(nullptr)},
                         {"nextS", next ? json(next->s) : json(nullptr)},
                         {"dayS", round1(dayRunS(c.rt, in.date, w.id))},

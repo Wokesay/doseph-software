@@ -662,3 +662,35 @@ test("watering: a circuit on the twin's pump is added and given its output; wher
   await expect(page.getByTestId("circuit-state-w1")).toContainText("paused");
   await expect(page.getByTestId("circuit-next-w1")).toHaveCount(0);
 });
+
+test("watering: a circuit with a time window follows a plant, whose phase sets its shots; the phase's shots are set on the Plants page (SD-134)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(
+      async ([m, p, b]) => {
+        const r = await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      },
+      [method, path, body] as const,
+    );
+  const recipe = await call("PUT", "plant-recipes", { name: "Tomatoes", phases: [{ name: "Growth", days: 21, recipe: "two_part" }] });
+  expect(recipe.status).toBe(200);
+  // The phase's shots, set on the Plants page
+  await page.goto("/#/plants");
+  await page.getByRole("button", { name: "Edit: Tomatoes" }).click();
+  await page.locator("input[name=phase-shots-0]").fill("12");
+  await page.locator("input[name=phase-shot-0]").fill("30");
+  await page.getByTestId("save-plant-recipe").click();
+  await expect(page.getByText("Saved").first()).toBeVisible();
+  expect((await call("POST", "plants", { name: "Bed 1", plantRecipe: recipe.body.id })).status).toBe(200);
+  await page.goto("/#/watering");
+  await page.getByTestId("add-circuit").click();
+  const form = page.getByTestId("circuit-form");
+  await form.locator("input[name=circuit-name]").fill("Tent");
+  await form.getByRole("tab", { name: "Time window" }).click();
+  await form.locator("select[name=circuit-plant]").selectOption({ label: "Bed 1" });
+  await page.getByTestId("save-circuit").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("circuit-plant-w1")).toContainText("Bed 1, phase Growth: 12 × 30 s");
+  await expect(page.getByTestId("circuit-next-w1")).toContainText("30 s");
+});

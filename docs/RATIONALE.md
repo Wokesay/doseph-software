@@ -101,7 +101,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** Each watering shot stays small; the daily amount comes from the number of shots. A circuit's schedule of shots in a daily window spreads its shots evenly from the window's start to its end, each of the same length.
 - **Why:** Rock wool cannot take up a large shot at once: the water finds a channel and leaves at the bottom, so the drain looks right while parts of the block stay dry. Few large shots also leave long gaps in which the solution in the block concentrates. The count therefore shapes moisture over the day, and the duration sets the amount.
 - **Evidence:** Observed on the reference installation (2026): the first settings gave shots of 120–200 ml on a 650 ml block, 18–31 % of its volume at once. Shots were then fixed at about 130 ml (about 20 %, 120 s), with 6–9 a day in flowering. Freshly rooted plants got the opposite on purpose: 4 short shots of 36 s, so the block dried in between and the roots grew downwards, since a block that stays wet there risks root rot.
-- **Changed:** A schedule can also be fixed times, an interval or by hand (SD-134). The first-shot factor is dropped. The drain percentage, which set the shot length, waits for a drain measurement (RAT-014). A plant's phase setting the shots and their length follows with the link of circuits to plants.
+- **Changed:** A schedule can also be fixed times, an interval or by hand (SD-134). The first-shot factor is dropped. The drain percentage, which set the shot length, waits for a drain measurement (RAT-014). A circuit with a time window may follow a plant, whose current phase then sets the number of shots and their length (SD-134).
 - **Implemented in:** `core/src/watering.cpp`
 - **Tests:** `tests/core/test_watering.cpp` "Watering: shots in a window are spread from its start to its end; fixed times and an interval give their own (RAT-010, SD-134)"; `tests/core/test_watering.cpp` "Watering: a schedule waters at its times, one circuit after the other; a paused one rests (SD-134, RAT-010)"
 
@@ -640,8 +640,8 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** A phase is a freely named set of parameters. Control, planning and assessment read only the parameters in force, never the phase's name; a check in CI refuses phase names written into the core.
 - **Why:** Logic that keys on names breaks silently when users rename, add or translate phases; phases that only provide parameters keep behaviour explicit and adjustable.
 - **Evidence:** Observed on the reference installation (2026): several control and monitoring paths branched on particular phase names, so behaviour hung on naming, and changing it took a rebuild.
-- **Implemented in:** `core/include/doseph/plants.hpp`, `core/src/plants.cpp`, `tools/arch_check.sh`
-- **Tests:** `tests/core/test_plants.cpp` "Plants: renaming a phase changes nothing the robot does; logic reads a phase's parameters, never its name (RAT-076)"
+- **Implemented in:** `core/include/doseph/plants.hpp`, `core/src/plants.cpp`, `core/src/watering.cpp`, `tools/arch_check.sh`
+- **Tests:** `tests/core/test_plants.cpp` "Plants: renaming a phase changes nothing the robot does; logic reads a phase's parameters, never its name (RAT-076)"; `tests/core/test_watering.cpp` "Watering: a scheduled shot of a circuit that follows a plant runs as long as the phase says; the next phase without shots of its own gives the circuit's back (SD-134, RAT-076)"
 
 ### RAT-077 – Harvest is an event; "completed" is its own state
 

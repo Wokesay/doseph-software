@@ -1166,6 +1166,9 @@ Result Robot::deletePlant(const std::string& id) {
   const std::string name = was->name;
   Config next = cfg_;
   next.plants.erase(std::remove_if(next.plants.begin(), next.plants.end(), [&](const PlantCfg& p) { return p.id == id; }), next.plants.end());
+  // A circuit that followed it keeps its own shots (SD-134)
+  for (auto& w : next.watering.circuits)
+    if (w.plant == id) w.plant.clear();
   return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
 }
 
@@ -2545,8 +2548,9 @@ Result Robot::putCircuit(const json& j) {
       if (!cfg_.watering.circuit("w" + std::to_string(n))) id = "w" + std::to_string(n);
     body["id"] = id;
   } else if (const WaterCircuitCfg* was = cfg_.watering.circuit(id)) {
-    // A schedule paused stays so, unless the change says otherwise
+    // A schedule paused stays so, and a plant followed, unless the change says otherwise
     if (!body.contains("paused")) body["paused"] = was->paused;
+    if (!body.contains("plant")) body["plant"] = was->plant;
   } else {
     return Result::fail(404, say("water.none"));
   }

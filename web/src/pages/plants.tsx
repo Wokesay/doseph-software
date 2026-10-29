@@ -307,6 +307,12 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
               <Field label={t("plants.phHigh")}>
                 <NumberInput value={ph.ph?.[1] ?? null} onValue={(v) => set(i, { ph: v == null ? null : [ph.ph?.[0] ?? v - 0.4, v] })} step={0.1} name={`phase-ph-high-${i}`} />
               </Field>
+              <Field label={t("plants.shotsPerDay")} hint={t("plants.shotsHint")}>
+                <NumberInput value={ph.shotsPerDay ?? null} onValue={(v) => set(i, { shotsPerDay: v == null ? null : Math.round(v) })} min={1} max={1440} name={`phase-shots-${i}`} />
+              </Field>
+              <Field label={t("plants.shotS")}>
+                <NumberInput value={ph.shotS ?? null} onValue={(v) => set(i, { shotS: v })} unit="s" min={1} name={`phase-shot-${i}`} />
+              </Field>
             </div>
             <div class="wrap-row">
               <Toggle checked={ph.confirm} onChange={(v) => set(i, { confirm: v })} label={t("plants.confirm")} />

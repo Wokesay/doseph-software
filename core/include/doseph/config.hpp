@@ -149,6 +149,8 @@ struct WaterCircuitCfg {
   double rateLpm = kNaN;                  // what it gives, for the count; NaN: not known
   double dailyMaxS = kNaN;                // its run time per local day; NaN: none
   bool paused = false;                    // its schedule rests; by hand it still waters
+  std::string plant;                      // window: a plant whose current phase sets shots a day
+                                          // and their length where it has them (RAT-076)
 };
 struct WateringCfg {
   double reservePct = 20;  // what stays in the tank, of its volume; never below 10 % (RAT-067)
@@ -218,6 +220,10 @@ struct PhaseCfg {
   std::string recipe;
   double ecTarget = kNaN;
   double phLow = kNaN, phHigh = kNaN;
+  // Watering (SD-134): shots a day and the length of a shot for a circuit that follows the plant;
+  // nothing and NaN: not set, the circuit's own apply
+  std::optional<int> shotsPerDay;
+  double shotS = kNaN;
 };
 
 // A plant recipe: the phases a plant goes through (SD-128)
@@ -315,8 +321,8 @@ struct Config {
 };
 
 void to_json(json& j, const Config& c);
-// A list of phases in its JSON form ({phases: [{name, days, confirm, recipe, ecTarget, ph}]});
-// reading throws on a structure error
+// A list of phases in its JSON form ({phases: [{name, days, confirm, recipe, ecTarget, ph, shotsPerDay,
+// shotS}]}); reading throws on a structure error
 json phasesJson(const std::vector<PhaseCfg>& phases);
 std::vector<PhaseCfg> phasesFromJson(const json& j);
 // Brings a configuration of an older schema to the current one, one step
