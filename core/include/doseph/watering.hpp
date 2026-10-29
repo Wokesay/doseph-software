@@ -19,11 +19,15 @@ struct Ctx;
 class NetOutputs;
 struct WaterCircuitCfg;
 
-constexpr Ms kWaterOpenMs = kMinute;  // a circuit that did not switch on by then ends its shot
+constexpr Ms kWaterOpenMs = kMinute;      // a circuit that did not say "on" by then ends its shot
+constexpr Epoch kWaterWaitS = 3600;       // a due shot waits this long at most, then it lapses
+constexpr long long kWaterLeapMin = 90;   // the clock leapt further: nothing is made up (R6)
+constexpr double kWaterLowBackPct = 10;   // water is no longer low this far above the reserve, in % of the tank
+
+struct RuntimeState;
 
 // What the robot knows around watering now
 struct WaterIn {
-  int minuteOfDay = -1;     // local
   std::string date;         // local, YYYY-MM-DD: the day of the daily run time
   bool mixing = false;      // a dose, a fill or a mixing wait is under way, or the check has not
                             // measured since: a shot waits (SD-112)
@@ -55,8 +59,13 @@ class Watering {
   // Takes the shots the schedules give, starts one that may, and ends the one that is done or has to
   void tick(Ctx& c, const WaterIn& in, NetOutputs& out);
   bool running() const { return shot_.has_value(); }
-  // A shot cut by a restart: reported, not repeated (R6). True when there was one.
-  static bool reportCut(Ctx& c);
+  // A shot cut by a restart: reported, not repeated (R6), and booked as if it ran until the restart
+  // or its end. True when there was one.
+  static bool reportCut(Ctx& c, const std::string& date);
+  // A circuit changed or removed: what waits for it, and what was skipped, goes
+  void forget(const std::string& circuit);
+  // A circuit removed: its last shot and its run time of the day go with it
+  static void forgetRuntime(RuntimeState& rt, const std::string& circuit);
   // The litres the tank may still give before its reserve; nothing where nothing tells (no count, no
   // level)
   static std::optional<double> available(const Ctx& c, const WaterIn& in);
@@ -68,19 +77,25 @@ class Watering {
   struct Shot {
     std::string circuit;
     Ms since = 0;
-    Ms openedAt = -1;  // when the gateway switched it on
+    Ms sentAt = -1;       // when the gateway switched it on: its length and litres count from then
+    bool opened = false;  // the device said it is on
     double s = 0;
     bool override = false;
     std::string why;   // "schedule" | "hand"
+    std::string date;  // the local day it began: its run time counts there
   };
-  void start(Ctx& c, const WaterCircuitCfg& w, double s, bool override, const std::string& why, NetOutputs& out);
+  struct Due {
+    double s = 0;
+    Epoch at = 0;  // when it came due
+  };
+  void start(Ctx& c, const WaterCircuitCfg& w, double s, bool override, const std::string& why, const std::string& date,
+             NetOutputs& out);
   void end(Ctx& c, NetOutputs& out, Msg how, bool warn);
   void skip(Ctx& c, const WaterCircuitCfg& w, const Msg& why);
   std::optional<Shot> shot_;
-  std::map<std::string, double> due_;           // circuit → the length of its shot that waits
+  std::map<std::string, Due> due_;              // circuit → its shot that waits
   std::map<std::string, std::string> skipped_;  // circuit → why its last shot was skipped
-  int lastMinute_ = -1;
-  std::string date_;  // the local day of the last tick, for the daily run time
+  long long lastMinute_ = -1;                   // the UTC minute the schedules were last taken
 };
 
 // The length of a circuit's shot due at this local minute; nothing when none is

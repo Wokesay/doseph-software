@@ -23,6 +23,8 @@ class SimClock : public doseph::IClock {
   bool secured() const override { return secured_; }
   void setSecured(bool s) { secured_ = s; }
   void advance(doseph::Ms dt) { ms_ += dt; }
+  // The wall clock is set, forward or back (a time server, a person); the monotonic one runs on
+  void stepWall(doseph::Epoch s) { start_ += s; }
 
  private:
   doseph::Epoch start_;

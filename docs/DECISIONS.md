@@ -1173,3 +1173,20 @@ decisions of their own.
   form: RAT-010 (shots), RAT-067 and RAT-068 (minimum level), RAT-084
   (pH not corrected), RAT-086 (water fit for watering). RAT-014 (drain
   percentage) waits for a drain measurement.
+- **Details settled when it was built** (#80, control details by the
+  minimal principle).
+  - Schedules go by each minute of the clock that passes, in the local
+    time of that minute. A clock set back gives no shot twice; one set
+    forward by more than 90 minutes makes nothing up (R6).
+  - A shot due while it cannot start waits at most an hour, then lapses;
+    one still waiting when its circuit's next comes is skipped. Each
+    reason is logged once.
+  - The count of litres has no start until a new tank or the float
+    "full"; before that, a counted circuit does not water (R5). A shot
+    counts from its switch-on, and one cut by a restart counts as run
+    until the restart or its end.
+  - A shot holds only once its output says "on"; switched off at the
+    device, it ends. A circuit changed or removed ends its shot.
+  - The reserve or a float "empty" sets "water low", which a refill
+    valve answers with a fill of its own; it clears once the tank has
+    enough again.

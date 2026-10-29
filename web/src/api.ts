@@ -124,7 +124,7 @@ export type RobotState = {
   // Watering (SD-134): the circuit that waters, the litres given since the tank was full, the
   // reserve and what the tank may still give, whether the water is fit, and each circuit's state
   watering: {
-    running: string | null; override: boolean; givenL: number; reserveL: number | null; availableL: number | null; low: boolean;
+    running: string | null; override: boolean; givenL: number | null; reserveL: number | null; availableL: number | null; low: boolean;
     fit: Msg | null; warning: Msg | null; mixing: boolean;
     circuits: { id: string; running: boolean; due: boolean; dayS: number; last: { at: number; s: number; l: number | null; end: Msg } | null; blocked: Msg | null }[];
   };

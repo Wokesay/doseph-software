@@ -54,6 +54,7 @@ class RefillValve {
   bool asked_ = false;     // "top up water" was raised: a fill waits for it
   bool seenTopUp_ = false;
   bool lastTopUp_ = false;
+  bool lastLow_ = false;   // watering found the tank low (SD-134)
   Ms since_ = -1;          // a fill under way since then
   bool opened_ = false;    // the valve was switched on during this fill
   std::string why_;        // "top_up" | "button"

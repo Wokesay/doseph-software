@@ -20,8 +20,10 @@ using doseph::kSecond;
 
 namespace {
 
-// The twin's pumps as circuits w1 and w2, counted at their real flow (2 L/min)
-void addCircuits(Run& r, json w1 = json::object()) {
+// The twin's pumps as circuits w1 and w2, counted at their real flow (2 L/min). `fresh`: a new tank
+// is announced, which starts the count of litres.
+void addCircuits(Run& r, json w1 = json::object(), bool fresh = true) {
+  if (fresh) r.ok("POST", "tank/new");
   r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-pump.local"}, {"name", "Pumps"}});
   json one = {{"name", "Tent"}, {"mode", "manual"}, {"rateLpm", 2}, {"longestS", 120}};
   one.update(w1);
@@ -47,6 +49,13 @@ std::string blockedKey(Run& r, const std::string& id) {
 int count(Run& r, const std::string& key) {
   int n = 0;
   for (const auto& e : r.events("control")) n += e["title"]["key"] == key;
+  return n;
+}
+// Shots of a circuit skipped for this reason
+int skipped(Run& r, const std::string& circuit, const std::string& why) {
+  int n = 0;
+  for (const auto& e : r.events("control"))
+    n += e["title"]["key"] == "ev.water.skipped" && e["text"]["key"] == why && e["data"]["circuit"] == circuit;
   return n;
 }
 std::string errorKey(const doseph::ApiResponse& a) { return json::parse(a.body)["error"]["key"]; }
@@ -227,7 +236,7 @@ TEST_CASE("Watering: a float \"tank empty\" or a level probe keeps it from an em
   r.ok("PUT", "roles/tank_level", {{"source", "esphome"}, {"device", "d2"}, {"entity", "sensor/tank_level"}});
   r.waitUntil("the level is read", [&] { return watering(r)["availableL"].is_number(); }, 60);
   CHECK(watering(r)["availableL"].get<double>() == doctest::Approx(80.0).epsilon(0.05));
-  r.s.world().tank.volumeL = 22;  // with the 4 L a longest shot of w2 gives: below the 20 L reserve
+  r.s.world().tank.volumeL = 20.02;  // at the reserve of 20 L: not a second more
   r.waitUntil("the level is at the reserve", [&] { return blockedKey(r, "w2") == "water.no.reserve"; }, 60);
   r.act("netOnline", {{"address", "esp-1.local"}, {"online", false}});
   r.waitUntil("the level has no value", [&] { return blockedKey(r, "w2") == "water.no.empty_float" || blockedKey(r, "w2") == "water.no.level"; }, 90);
@@ -291,4 +300,149 @@ TEST_CASE("Watering: only a session or an app token manages circuits and waters;
   }
   CHECK(doseph::permitted(Role::Account, "POST", {"watering", "circuits", "w1", "pause"}));
   CHECK_FALSE(doseph::permitted(Role::Peer, "POST", {"watering", "circuits", "w1", "pause"}));
+}
+
+TEST_CASE("Watering: the count of litres starts with a new tank or the float \"full\"; before either, a counted circuit does not water (RAT-067, R5)") {
+  Run r(harness::device());
+  addCircuits(r, json::object(), false);
+  r.waitUntil("its output is checked", [&] { return blockedKey(r, "w1") == "water.no.count_start"; }, 60);
+  CHECK(watering(r)["givenL"].is_null());
+  CHECK(watering(r)["availableL"].is_null());
+  // The inlet's float, at the twin's line
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-valve.local"}, {"name", "Inlet"}});
+  r.ok("PUT", "roles/tank_full", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
+  r.s.world().tank.volumeL = 106;
+  r.waitUntil("the float says full", [&] { return watering(r)["givenL"] == 0; }, 60);
+  CHECK(blockedKey(r, "w1") != "water.no.count_start");
+  CHECK(watering(r)["availableL"].get<double>() == doctest::Approx(80.0));
+}
+
+TEST_CASE("Watering: water at the reserve asks the refill valve for a fill, and the float \"full\" starts the count anew (SD-134, SD-132)") {
+  Run r(harness::device());
+  // Counted at 60 L/min: the reserve comes after a few shots, the twin's tank loses little
+  addCircuits(r, {{"mode", "interval"}, {"everyMin", 2}, {"shotS", 30}, {"rateLpm", 60}});
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-valve.local"}, {"name", "Inlet"}});
+  r.ok("PUT", "roles/refill_valve", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
+  r.ok("PUT", "roles/tank_full", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}});
+  waitFit(r);
+  r.waitUntil("the reserve stops it", [&] { return watering(r)["low"] == true; }, 30 * 60, 1000);
+  r.waitUntil("a fill opens", [&] { return r.state()["refill"]["filling"] == true; }, 15 * 60);
+  CHECK(r.state()["refill"]["why"] == "top_up");
+  r.waitUntil("the float says full", [&] { return watering(r)["givenL"] == 0; }, 30 * 60);
+  CHECK(watering(r)["low"] == false);
+}
+
+TEST_CASE("Watering: a shot that brings the tank to its reserve ends there, and water is to be topped up until the tank has enough again (RAT-067, RAT-068)") {
+  Run r(harness::device());
+  addCircuits(r, {{"rateLpm", nullptr}, {"longestS", 600}});
+  r.ok("POST", "devices", {{"kind", "esphome"}, {"address", "esp-1.local"}, {"name", "Sensors"}});
+  r.ok("PUT", "roles/tank_level", {{"source", "esphome"}, {"device", "d2"}, {"entity", "sensor/tank_level"}});
+  waitFit(r);
+  r.s.world().tank.volumeL = 24;  // 4 L above the reserve: two minutes of the twin's pump
+  r.waitUntil("the level is read", [&] { return watering(r)["availableL"].is_number() && watering(r)["availableL"].get<double>() < 5; }, 60);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 600}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  r.waitUntil("the reserve ends it", [&] { return !runs(r, 0); }, 300);
+  r.step(2 * kSecond);
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.no.reserve");
+  CHECK(watering(r)["low"] == true);
+  CHECK(r.s.world().tank.volumeL >= 19.0);
+  r.s.world().tank.volumeL = 100;
+  r.waitUntil("water is no longer low", [&] { return watering(r)["low"] == false; }, 60);
+}
+
+TEST_CASE("Watering: a dose that starts ends a running shot, and no shot starts while one runs, not even anyway (RAT-086)") {
+  Run r(harness::device());
+  addCircuits(r, {{"longestS", 3000}, {"rateLpm", 0.1}});
+  waitFit(r);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 3000}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  // A new tank: mixed in, measured, and its EC brought up by a dose
+  r.s.world().tank.ec -= 0.5;
+  r.ok("POST", "tank/new");
+  r.waitUntil("a dose", [&] { return r.phase() == "dose"; }, 45 * 60);
+  r.step(kSecond);
+  const auto anyway = r.call("POST", "watering/circuits/w2/now", {{"seconds", 10}, {"override", true}});
+  CHECK(anyway.status == 409);
+  CHECK(errorKey(anyway) == "water.no.dosing");
+  r.step(2 * kSecond);
+  CHECK_FALSE(runs(r, 0));
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.dose");
+}
+
+TEST_CASE("Watering: a schedule goes by the clock's minutes: set back, no shot comes twice; set forward, nothing missed is made up (SD-134, R6)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "interval"}, {"everyMin", 60}, {"shotS", 20}});
+  waitFit(r);
+  const int before = count(r, "ev.water.shot");
+  r.waitUntil("a shot at the full hour", [&] { return count(r, "ev.water.shot") > before; }, 2 * 3600, 5000);
+  const int one = count(r, "ev.water.shot");
+  // Back by half an hour: the hour comes again, its shot does not
+  r.s.clock().stepWall(-30 * 60);
+  r.step(80 * 60 * kSecond, 2000);
+  CHECK(count(r, "ev.water.shot") == one);
+  r.waitUntil("the next hour's shot", [&] { return count(r, "ev.water.shot") > one; }, 3600, 5000);
+  const int two = count(r, "ev.water.shot");
+  CHECK(two == one + 1);
+  // Forward by 100 minutes, across a full hour: that shot is not made up
+  r.s.clock().stepWall(100 * 60);
+  r.step(2 * 60 * kSecond);
+  CHECK(count(r, "ev.water.shot") == two);
+  CHECK(watering(r)["running"].is_null());
+  CHECK_FALSE(circuitState(r, "w1")["due"].get<bool>());
+}
+
+TEST_CASE("Watering: a shot that still waits when its circuit's next one comes is skipped, and said once (SD-134)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "interval"}, {"everyMin", 1}, {"shotS", 5}});
+  waitFit(r);
+  // w2 by hand, for longer than w1's minutes: w1's shots wait for it
+  std::string why;
+  INFO("refused: " << why);
+  r.waitUntil("w2 may water", [&] {
+    const auto a = r.call("POST", "watering/circuits/w2/now", {{"seconds", 110}});
+    if (a.status != 200) why = errorKey(a);
+    return a.status == 200;
+  }, 120);
+  r.waitUntil("w2 runs", [&] { return runs(r, 1); }, 30);
+  r.waitUntil("w2 ends", [&] { return !runs(r, 1); }, 150);
+  CHECK(skipped(r, "w1", "water.no.superseded") == 1);
+  const int shots = count(r, "ev.water.shot");
+  r.waitUntil("w1 waters again", [&] { return count(r, "ev.water.shot") > shots; }, 120);
+}
+
+TEST_CASE("Watering: a circuit's run time for the day is kept; a shot past it is not made (SD-134)") {
+  Run r(harness::device());
+  addCircuits(r, {{"dailyMaxS", 30}});
+  waitFit(r);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 20}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  r.waitUntil("the shot ends", [&] { return !runs(r, 0) && watering(r)["running"].is_null(); }, 60);
+  CHECK(circuitState(r, "w1")["dayS"].get<double>() == doctest::Approx(20.0).epsilon(0.1));
+  r.waitUntil("its output is off again", [&] { return blockedKey(r, "w1").empty(); }, 30);
+  CHECK(errorKey(r.call("POST", "watering/circuits/w1/now", {{"seconds", 20}})) == "water.no.daily");
+  CHECK(blockedKey(r, "w2").empty());  // each circuit its own
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 5}});  // what is left of the day
+}
+
+TEST_CASE("Watering: a circuit removed while it waters ends its shot and switches its output off (SD-134, R1)") {
+  Run r(harness::device());
+  addCircuits(r);
+  waitFit(r, "w2");
+  r.ok("POST", "watering/circuits/w2/now", {{"seconds", 100}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 1); }, 30);
+  r.ok("DELETE", "watering/circuits/w2");
+  CHECK(watering(r)["running"].is_null());
+  CHECK(count(r, "ev.water.cut") + count(r, "ev.water.shot") == 1);
+  r.waitUntil("the pump stops", [&] { return !runs(r, 1); }, 10);
+  r.step(2 * 60 * kSecond);
+  CHECK_FALSE(runs(r, 1));
+  CHECK(circuitState(r, "w2").is_null());
+  // A circuit changed while it waters ends its shot too
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 100}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  r.ok("PUT", "watering/circuits", {{"id", "w1"}, {"name", "Tent"}, {"mode", "manual"}, {"rateLpm", 2}, {"longestS", 90}});
+  CHECK(watering(r)["running"].is_null());
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.changed");
+  r.waitUntil("the pump stops", [&] { return !runs(r, 0); }, 10);
 }

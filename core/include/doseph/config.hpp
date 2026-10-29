@@ -325,6 +325,7 @@ std::vector<PhaseCfg> phasesFromJson(const json& j);
 // saved again.
 json migrateConfig(json j);
 Config configFromJson(const json& j);  // migrates first; throws on structure errors
+WaterCircuitCfg waterCircuitFromJson(const json& j);  // throws on structure errors
 
 // Checks references and the rules of the domain and of safety; channelCount
 // is how many channels the device has.

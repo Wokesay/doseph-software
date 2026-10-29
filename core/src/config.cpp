@@ -55,29 +55,6 @@ size_t chars(const std::string& s) {
   return static_cast<size_t>(std::count_if(s.begin(), s.end(), [](char ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; }));
 }
 
-WaterCircuitCfg circuitFromJson(const json& x) {
-  if (!x.is_object()) throw std::invalid_argument("a watering circuit is not an object");
-  WaterCircuitCfg w;
-  w.id = jstr(x, "id");
-  w.name = jstr(x, "name");
-  w.mode = jstr(x, "mode", w.mode);
-  w.fromMin = intOr(x, "fromMin", w.fromMin);
-  w.toMin = intOr(x, "toMin", w.toMin);
-  w.shotsPerDay = intOr(x, "shotsPerDay", w.shotsPerDay);
-  if (x.contains("shotS")) w.shotS = numOrNaN(x, "shotS");
-  for (const auto& t : arrayAt(x, "times")) {
-    if (!t.is_object()) throw std::invalid_argument("a watering time is not an object");
-    w.times.push_back({intOr(t, "atMin", -1), numOrNaN(t, "s")});
-  }
-  w.everyMin = intOr(x, "everyMin", w.everyMin);
-  if (x.contains("longestS")) w.longestS = numOrNaN(x, "longestS");
-  w.rateLpm = numOrNaN(x, "rateLpm");
-  w.dailyMaxS = numOrNaN(x, "dailyMaxS");
-  if (x.contains("paused") && !x["paused"].is_boolean()) throw std::invalid_argument("paused is not true or false");
-  w.paused = jbool(x, "paused", false);
-  return w;
-}
-
 // The circuits (SD-134): each shot within its circuit's longest, which stays within what the device
 // takes; a reserve of at least 10 % of the tank
 template <class Err>
@@ -118,6 +95,29 @@ void validateWatering(const WateringCfg& w, Err&& err) {
 }
 
 }  // namespace
+
+WaterCircuitCfg waterCircuitFromJson(const json& x) {
+  if (!x.is_object()) throw std::invalid_argument("a watering circuit is not an object");
+  WaterCircuitCfg w;
+  w.id = jstr(x, "id");
+  w.name = jstr(x, "name");
+  w.mode = jstr(x, "mode", w.mode);
+  w.fromMin = intOr(x, "fromMin", w.fromMin);
+  w.toMin = intOr(x, "toMin", w.toMin);
+  w.shotsPerDay = intOr(x, "shotsPerDay", w.shotsPerDay);
+  if (x.contains("shotS")) w.shotS = numOrNaN(x, "shotS");
+  for (const auto& t : arrayAt(x, "times")) {
+    if (!t.is_object()) throw std::invalid_argument("a watering time is not an object");
+    w.times.push_back({intOr(t, "atMin", -1), numOrNaN(t, "s")});
+  }
+  w.everyMin = intOr(x, "everyMin", w.everyMin);
+  if (x.contains("longestS")) w.longestS = numOrNaN(x, "longestS");
+  w.rateLpm = numOrNaN(x, "rateLpm");
+  w.dailyMaxS = numOrNaN(x, "dailyMaxS");
+  if (x.contains("paused") && !x["paused"].is_boolean()) throw std::invalid_argument("paused is not true or false");
+  w.paused = jbool(x, "paused", false);
+  return w;
+}
 
 const WaterCircuitCfg* WateringCfg::circuit(const std::string& id) const {
   for (const auto& c : circuits)
@@ -435,7 +435,7 @@ Config configFromJson(const json& in) {
   if (const json& f = objectAt(j, "refill"); f.contains("maxFillMin")) c.refill.maxFillMin = numOrNaN(f, "maxFillMin");
   if (const json& w = objectAt(j, "watering"); !w.empty()) {
     if (w.contains("reservePct")) c.watering.reservePct = numOrNaN(w, "reservePct");
-    for (const auto& x : arrayAt(w, "circuits")) c.watering.circuits.push_back(circuitFromJson(x));
+    for (const auto& x : arrayAt(w, "circuits")) c.watering.circuits.push_back(waterCircuitFromJson(x));
   }
   if (const json& f = objectAt(j, "circulation"); f.contains("mode")) {
     if (!f["mode"].is_string()) throw std::invalid_argument("the circulation's mode is not a string");

@@ -41,18 +41,25 @@ const RoleDef* roleDef(const std::string& id) {
   return nullptr;
 }
 
+namespace {
+
+// Each circuit a pulse output: the device switches it off past its longest shot (RAT-019)
+RoleDef circuitRole(const WaterCircuitCfg& c) {
+  return {waterRole(c.id), "output", true, isNum(c.longestS) ? static_cast<Ms>(std::llround(c.longestS * 1000.0)) : 0};
+}
+
+}  // namespace
+
 std::vector<RoleDef> roleDefs(const Config& cfg) {
   std::vector<RoleDef> out = roleDefs();
-  // Each circuit a pulse output: the device switches it off past its longest shot (RAT-019)
-  for (const auto& c : cfg.watering.circuits)
-    out.push_back({waterRole(c.id), "output", true, isNum(c.longestS) ? static_cast<Ms>(std::llround(c.longestS * 1000.0)) : 0});
+  for (const auto& c : cfg.watering.circuits) out.push_back(circuitRole(c));
   return out;
 }
 
 std::optional<RoleDef> roleDef(const Config& cfg, const std::string& id) {
   if (const RoleDef* r = roleDef(id)) return *r;
-  for (const auto& r : roleDefs(cfg))
-    if (r.id == id) return r;
+  if (id.rfind("water.", 0) == 0)
+    if (const WaterCircuitCfg* c = cfg.watering.circuit(id.substr(6))) return circuitRole(*c);
   return std::nullopt;
 }
 

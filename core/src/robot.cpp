@@ -28,6 +28,14 @@ constexpr const char* kDeviceSecretsFile = "devices.json";  // network devices' 
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
 constexpr const char* kEventsLog = "events.log";
+
+// The local day, YYYY-MM-DD
+std::string localDate(Epoch epoch, const std::string& zone) {
+  const LocalTime t = localTime(epoch, zone);
+  char date[16];
+  std::snprintf(date, sizeof date, "%04d-%02d-%02d", t.year, t.month, t.day);
+  return date;
+}
 constexpr const char* kHistoryFile = "history.bin";
 constexpr const char* kHistoryLog = "history.log";
 constexpr Epoch kSampleS = 10;           // history: one sample per 10 s (finest tier)
@@ -356,7 +364,7 @@ void Robot::boot() {
     // never resumed, and its water is mixed in first (SD-132, R6)
     Ctx c = ctx();
     if (RefillValve::reportCut(c)) afterFill();
-    Watering::reportCut(c);  // a shot cut by the restart is reported, not repeated (SD-134)
+    Watering::reportCut(c, localDate(c.epoch, cfg_.system.timezone));  // a shot cut by the restart is reported, not repeated (SD-134)
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
@@ -431,7 +439,8 @@ void Robot::tick() {
     const Phase ph = cycle_.phase();
     if (ph == Phase::Dose || c.refilling) waterChangedAt_ = c.epoch;
     const RoleValue full = devices_.value(cfg_, "tank_full", now);
-    if (full.state == "ok" && full.value->is_boolean() && full.value->get<bool>() && (jnum(rt_.watering, "givenL", 0) > 0 || rt_.waterLow)) {
+    const bool counted = rt_.watering.is_object() && rt_.watering.contains("givenL") && rt_.watering["givenL"] == 0;
+    if (full.state == "ok" && full.value->is_boolean() && full.value->get<bool>() && (!counted || rt_.waterLow)) {
       rt_.watering["givenL"] = 0;
       rt_.waterLow = false;
     }
@@ -2476,11 +2485,7 @@ Result Robot::putCirculation(const json& j) {
 
 WaterIn Robot::waterIn(const Ctx& c) const {
   WaterIn in;
-  const LocalTime t = localTime(c.epoch, cfg_.system.timezone);
-  in.minuteOfDay = t.minuteOfDay;
-  char date[16];
-  std::snprintf(date, sizeof date, "%04d-%02d-%02d", t.year, t.month, t.day);
-  in.date = date;
+  in.date = localDate(c.epoch, cfg_.system.timezone);
   const Phase ph = cycle_.phase();
   const Measured& last = cycle_.last();
   // Mixed in: no dose, fill or mixing wait under way, and the check measured after the last of them
@@ -2525,9 +2530,8 @@ Result Robot::putWatering(const json& j) {
 
 Result Robot::putCircuit(const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
   json body = j;
-  if (!body.is_object()) return Result::fail(422, say("api.bad_input"));
-  Config next = cfg_;
   std::string id = jstr(body, "id");
   if (id.empty()) {
     // A new circuit: the next free number
@@ -2537,46 +2541,47 @@ Result Robot::putCircuit(const json& j) {
   } else if (!cfg_.watering.circuit(id)) {
     return Result::fail(404, say("water.none"));
   }
-  json all = json(next)["watering"]["circuits"];
-  bool found = false;
-  for (auto& x : all)
-    if (jstr(x, "id") == id) {
-      x = body;
-      found = true;
-    }
-  if (!found) all.push_back(body);
+  WaterCircuitCfg w;
   try {
-    json w = json(next)["watering"];
-    w["circuits"] = all;
-    json cfgJson = json(next);
-    cfgJson["watering"] = w;
-    next.watering = configFromJson(cfgJson).watering;
+    w = waterCircuitFromJson(body);
   } catch (...) {
     return Result::fail(422, say("api.bad_input"));
   }
-  // A shot of this circuit ends: what it runs on has changed
-  if (water_.running()) {
-    Ctx c = ctx();
-    water_.stop(c, outputs_, id, say("water.end.changed"));
-  }
+  Config next = cfg_;
+  bool found = false;
+  for (auto& x : next.watering.circuits)
+    if (x.id == id) {
+      x = w;
+      found = true;
+    }
+  if (!found) next.watering.circuits.push_back(w);
   Result r = saveConfig(next, changed("cfg.what.watering"));
-  if (r.status == 200) r.body["id"] = id;
+  if (r.status != 200) return r;
+  // A shot of this circuit ends, and what waited for it goes: what it runs by has changed
+  Ctx c = ctx();
+  if (water_.stop(c, outputs_, id, say("water.end.changed"))) saveState(true);
+  water_.forget(id);
+  r.body["id"] = id;
   return r;
 }
 
 Result Robot::deleteCircuit(const std::string& id) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!cfg_.watering.circuit(id)) return Result::fail(404, say("water.none"));
-  Ctx c = ctx();
-  water_.stop(c, outputs_, id, say("water.end.removed"));
   Config next = cfg_;
   next.watering.circuits.erase(std::remove_if(next.watering.circuits.begin(), next.watering.circuits.end(),
                                               [&](const WaterCircuitCfg& w) { return w.id == id; }),
                                next.watering.circuits.end());
   next.roles.erase(waterRole(id));
   const Config before = cfg_;
+  // Its shot ends first, while its circuit still names it
+  Ctx c = ctx();
+  water_.stop(c, outputs_, id, say("water.end.removed"));
   Result r = saveConfig(next, changed("cfg.what.watering"));
   if (r.status != 200) return r;
+  water_.forget(id);
+  Watering::forgetRuntime(rt_, id);
+  saveState(true);
   reconcileDevices(before);  // its output is let go and switched off
   return r;
 }

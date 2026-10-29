@@ -81,12 +81,15 @@ All notable changes to this software. The format follows
   - A person can water anyway, one shot by hand, which is logged as a
     warning.
   - The tank keeps a reserve (20 % by default): the robot counts the
-    litres given, or reads a float "tank empty" or a level probe, new
-    roles. Below the reserve it raises "top up water", which a refill
-    valve answers.
+    litres given from a new tank or the float "full", or reads a float
+    "tank empty" or a level probe, new roles. At the reserve it says
+    water is low, which a refill valve answers with a fill.
+  - Schedules go by the clock's minutes: a clock set back gives no shot
+    twice, and one set forward makes nothing up. A shot that waits an
+    hour lapses.
   - The device's own auto-off is 1.11 × each circuit's longest shot.
     Stop, maintenance and a hold stop watering; a restart reports a cut
-    shot and does not repeat it.
+    shot, counts it as run until then and does not repeat it.
   - The simulator has two watering pumps, and an ESPHome device whose
     level and float follow the tank.
 - The circulation pump (SD-132, PD-421), the third part of step 9.
