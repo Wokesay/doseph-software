@@ -781,3 +781,19 @@ test("light: a circuit follows a plant, whose phase sets the hours of light and 
   await expect(page.getByTestId("light-plan-l1")).toHaveText("06:00–00:00 (18 h) · 60 %");
   await expect(page.getByTestId("light-next-l1")).toContainText(/^day (ends|begins) at /);
 });
+
+test.describe("a browser in another time zone than the device", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("the times of a plan show on the device's clock, as the plan counts them (SD-134, SD-135)", async ({ page }) => {
+    await login(page);
+    const call = (method: string, path: string, body: unknown = {}) =>
+      page.evaluate(async ([m, p, b]) => (await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).status, [method, path, body] as const);
+    expect(await call("PUT", "watering/circuits", { name: "Tent", mode: "times", times: [{ atMin: 360, s: 30 }], longestS: 60 })).toBe(200);
+    expect(await call("PUT", "lighting/circuits", { name: "Lamps", startMin: 360, hours: 12 })).toBe(200);
+    await page.goto("/#/watering");
+    await expect(page.getByTestId("circuit-next-w1")).toContainText("06:00");
+    await page.goto("/#/light");
+    await expect(page.getByTestId("light-next-l1")).toContainText(/begins at 06:00|ends at 18:00/);
+  });
+});
