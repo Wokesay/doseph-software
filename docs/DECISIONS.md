@@ -1084,3 +1084,92 @@ watch their tanks in their own way.
   warn, and the diagnostics package lists it.
 - **R7 holds.** The frame is the hard limit; a lock above it is a
   setting, and report only goes back to the frame, never below it.
+
+
+## SD-134: Watering from the tank, in any number of circuits
+
+2026-10-29. Step 9 of #10, after the refill valve and the circulation pump
+(SD-132). The owner decided the order (watering before light and climate)
+and the questions below in this session. The rest are control details
+decided here by the minimal principle. Light and climate follow with
+decisions of their own.
+
+- **Circuits.** Any number of watering circuits. Each is a pump or a valve
+  on a Shelly Gen2+ output (SD-132), with a name, a schedule, a pump rate
+  for counting litres, and optionally a plant whose phase sets it.
+  - All water from the same tank. One circuit runs at a time: a shared
+    tank, the pressure, and an exact count of litres. A shot that is due
+    while another runs waits for it.
+  - A ceiling in code keeps the configuration bounded (64 circuits).
+- **When a circuit waters** (decided by the owner: as the user prefers).
+  The schedule is one of:
+  - shots in a daily window: a window (from, to), shots per day and the
+    length of a shot, spread evenly over the window (RAT-010);
+  - fixed times, each with its own length;
+  - an interval: every N minutes, for a length, around the clock;
+  - by hand only.
+  - In every mode a person can water now, one shot of a given length.
+  - A circuit linked to a plant takes shots per day and the length of a
+    shot from the plant's current phase where the phase sets them
+    (RAT-076: parameters, never names).
+- **Water fit for watering** (decided by the owner: a wide band, with an
+  override; RAT-086, RAT-084).
+  - A circuit does not start, and a running one stops, while the tank's
+    pH is below 4.0 or above 8.5, or its EC is more than 1.0 mS/cm above
+    the EC target (the higher of this phase's and the last phase's), and
+    always above 5.0 mS/cm. There is no lower EC bound.
+  - A pH or EC probe without a usable reading, or in a calibration,
+    blocks as well (R5).
+  - After a dose, a fill or a start, watering waits until the water has
+    been mixed in: until the check has measured again after its mixing
+    wait (SD-112). A dose that starts stops a running shot.
+  - pH not corrected does not block watering. It shows as a warning with
+    its reason (RAT-084).
+  - **Override.** A person can water anyway: one shot by hand, after a
+    confirmation that names why the water is not fit. The shot is a
+    warning event. A schedule never overrides, and neither can an account
+    token, MQTT or the coupled device.
+- **An empty tank** (decided by the owner: counting litres, a float as an
+  option, and a level probe provided for; RAT-067, RAT-068).
+  - The robot counts the litres given: each circuit's pump rate, which
+    the user enters or measures into a jug, times its run time. The count
+    starts again when the float says full, or a person announces a new
+    fill.
+  - It waters only while the tank keeps a reserve: 20 % of its volume by
+    default, never below what keeps the feed pump in the water. A shot
+    that would go below the reserve does not start, and "top up water" is
+    raised.
+  - A float switch "tank empty" may be assigned as a role. While it says
+    empty, or has no value, no circuit waters.
+  - A level probe may be assigned as a role "tank level", in litres, from
+    a Shelly, ESPHome or MQTT. With one, the reserve is checked against
+    the level and the count only shows. A level without a value blocks.
+  - No flow at the feed pump (the latch of SD-109) blocks every circuit.
+  - Whether the device itself gets a connector for a level probe is a
+    hardware question for the product side.
+- **Limits** (decided by the owner: set freely by the user).
+  - The user sets the length of a shot and, optionally, a daily run time
+    per circuit. The code has no product limit, only a technical ceiling
+    the device accepts: 24 h per shot.
+  - The robot writes the auto-off into the Shelly at 1.11 × the longest
+    shot the circuit's schedule can give, rounded up to a whole minute
+    (RAT-019), so that a hung robot does not keep watering.
+  - Every switching goes through the gateway (R1), with the read-back of
+    RAT-019.
+- **Off.** Stop, maintenance and a hold of the hardware stop every
+  circuit at once. After a restart every circuit is off (R6). A shot cut
+  by the restart is reported and not repeated; the schedule goes on with
+  its next shot.
+- **The tank stays mixed.** A shot does not start during a fill, a dose
+  or a mixing wait. The circulation pump (SD-132) is not tied to
+  watering.
+- **Who.** Circuits, schedules, the override and "water now" only from a
+  session or an app token. An account token may only pause and resume a
+  circuit's schedule.
+- **Shown.** Each circuit with its next shot, its last shot and why it
+  did not water, the litres given since the last fill, and the reserve.
+  Each shot is an event, with its length, its litres and how it ended.
+- **Rules from practice** that come into force with it, in their Doseph
+  form: RAT-010 (shots), RAT-067 and RAT-068 (minimum level), RAT-084
+  (pH not corrected), RAT-086 (water fit for watering). RAT-014 (drain
+  percentage) waits for a drain measurement.
