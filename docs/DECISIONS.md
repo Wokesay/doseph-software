@@ -993,30 +993,37 @@ watering follow with decisions of their own.
 2026-10-29. Decided by the owner in this session, for operations that
 watch their tanks in their own way.
 
-- **Which locks.** Every latch a person releases, except leak and high
-  level:
+- **Which locks.** Every latch a person releases, except leak, high level
+  and the cable check:
   - no flow after the tries, and a dry run (SD-109, SD-127);
-  - the cable check (SD-127);
   - a tank volume that does not fit the test dose (SD-105);
   - EC or pH without effect (SD-105, RAT-041, RAT-055);
   - an outlet without drops, and drops without a pump (SD-111);
   - the return pump running too long (SD-109);
-  - the refill (SD-132).
+  - the refill (SD-132), once it is built.
 - **The setting.** Each of them is set to "lock" (the default) or
   "report only".
   - With report only, the event and the alarm come as before, with the
-    same level and repetition (SD-123). The robot goes on as if the lock
-    had been released at once.
+    same level and repetition (SD-123), once while the report stands.
+    The robot goes on as if the lock had been released at once. Status
+    shows the report until a person marks it seen.
+  - A latch set while its lock locked holds until it is released. Once a
+    lock locks again, its next latch holds, even while a report of it
+    still stands.
 - **The frame never changes** (PD-459), whatever is set:
   - leak, high level, Stop and a hung controller switch off;
+  - the cable check locks the pump and dosing: a damaged cable in the
+    water may endanger people (decided by the owner);
   - no dose without proven flow (SD-105);
   - one channel at a time, the run time per dose and the daily amount;
   - the Shelly's auto-off and "off after power loss" (SD-132), and the
     longest fill.
 - **Who.** Only signed in in the app or the web app, or with an app
   token. Never through an account token, MQTT or the coupled device.
-  Each change is an event.
-- **Shown.** While any lock is set to report only, the watchdog shows a
-  warning that names it, and the diagnostics package lists it.
+  Each change is an event, also one a backup brings.
+- **Shown.** While any lock is set to report only, the watchdog names it
+  in a note, not as a problem: no alarm, and the problem flag (also over
+  MQTT) stays free for real faults (decided by the owner). The settings
+  warn, and the diagnostics package lists it.
 - **R7 holds.** The frame is the hard limit; a lock above it is a
   setting, and report only goes back to the frame, never below it.

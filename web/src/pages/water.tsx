@@ -4,7 +4,7 @@
 // hardware release (SD-109, SD-110).
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, RefreshCw, ShieldCheck } from "lucide-preact";
-import { post, type Reading } from "../api";
+import { holds, post, type Reading } from "../api";
 import { ago, dateTime, num } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { config, info, refreshConfig, refreshState, state, toast } from "../store";
@@ -20,14 +20,15 @@ function YesNo(p: { value: boolean | null; yes: TextKey; no: TextKey; yesTone?: 
   );
 }
 
-// A lock that stops the water path, in the watchdog's words; it is released under Status
+// A lock that stops the water path, in the watchdog's words; it is released under Status. One that
+// only reports holds nothing: a softer note (SD-133)
 function LockNote(p: { id: string }) {
   const st = state.value!;
   if (!st.latches[p.id]) return null;
   const item = st.watchdog.items.find((i) => i.id === `latch.${p.id}`);
   return (
-    <Banner tone="bad">
-      <span data-testid={`water-latch-${p.id}`}>{item ? msg(item.text) : p.id}</span> <a href="#/">{t("water.releaseOnStatus")}</a>
+    <Banner tone={holds(st.latches[p.id]) ? "bad" : "warn"}>
+      <span data-testid={`water-latch-${p.id}`}>{item ? msg(item.text) : p.id}</span> <a href="#/">{t(holds(st.latches[p.id]) ? "water.releaseOnStatus" : "water.seenOnStatus")}</a>
     </Banner>
   );
 }

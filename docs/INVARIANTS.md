@@ -42,12 +42,12 @@ of its own.
 | A latch only after a dose without effect or a test dose that did not fit; its reason is frozen | RAT-062 | ✓ | `watchdog.cpp` · test_cycle.cpp |
 | The device's feed pump runs for a check and is off in Hold, Wait and Off; no modes | SD-109 | ✓ | `cycle.cpp` · test_cycle.cpp |
 | Flow by the device's method: an outlet level sensor proves it while it reports water and the feed pump runs, a flow meter at 0.5 L/min, each for 10 s | SD-109 | ✓ | `robot.cpp`, `cycle.cpp` · test_cycle.cpp |
-| The feed pump in the tank goes off after 6 s without flow, at its start or later, before the hardware's own cut; a new try in 5 min, and the second try in a row locks it until a person releases it; in the device 2 min and three tries | SD-127 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
+| The feed pump in the tank goes off after 6 s without flow, at its start or later, before the hardware's own cut; a new try in 5 min, and the second try in a row locks it until a person releases it (or reports only, SD-133); in the device 2 min and three tries | SD-127 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | The hardware's cut for no flow stops the check and counts as a try; switching the pump off re-arms it | SD-127 | ✓ | `cycle.cpp`, `robot.cpp`, `hardware.hpp` · test_cycle.cpp |
 | At the end of each check pH and EC with the feed pump running are compared with them standing; a shift beyond 0.1 pH or 0.05 mS/cm is compared once more at once, and confirmed it locks the pump and dosing as a critical alarm until a person releases it | SD-127 | ✓ | `cycle.hpp`, `cycle.cpp`, `alarms.cpp` · test_cycle.cpp |
 | The feed pump's current is learned while it moves water; once it has, below 60 % of it for 2 s it goes off at once as a try without flow | RAT-049 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
 | A probe or channel calibration, or a line fill, stops the check and the feed pump first; the check starts anew once it ends | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
-| A return pump that runs a minute without a pause is dry or blocked: it is held off and latched, everything holds, and a restart holds it off again until a person releases it | SD-109 | ✓ | `hardware.hpp`, `gateway.hpp`, `robot.cpp` · test_scenarios.cpp |
+| A return pump that runs a minute without a pause is dry or blocked: it is held off and latched, everything holds, and a restart holds it off again until a person releases it (or reports only, SD-133) | SD-109 | ✓ | `hardware.hpp`, `gateway.hpp`, `robot.cpp` · test_scenarios.cpp |
 
 ## Dose planning and learning
 
@@ -82,7 +82,7 @@ of its own.
 | A channel's run time into the tank (doses and line fills) per rolling 24 h stays within its head's value and never passes 60 min; a run that would pass it is refused with the reason, the check waits for it, the user may set ml per day below it, and the count survives a restart | SD-113 | ✓ | `hardware.hpp`, `config.hpp`, `config.cpp`, `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_config.cpp, test_scenarios.cpp |
 | A run into the tank needs drops: none within four times a drop's time at the calibrated flow, at least 5 s, from its start or the last drop cuts it and locks the channel; a shorter run is judged at its end plus that time; a Stop is not judged | SD-111 | ✓ | `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | Drops while the pump stands, past 10 s after its run, lock the channel with an alarm, and the check mixes first and learns nothing | SD-111 | ✓ | `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
-| A locked channel doses nothing into the tank until a person releases it; a calibration or line fill into a cup still runs | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A locked channel doses nothing into the tank until a person releases it (or the lock reports only, SD-133); a calibration or line fill into a cup still runs | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
 | After the last run of a dose the pump runs backwards about 0.2 ml, at most 1 s, where it can; the channel's next run first fills the line the same time forwards, unbooked, so the dose stays the planned amount; a run that would be refused is refused before the refill | SD-111 | ✓ | `config.hpp`, `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | Filling a line, where the outlet has a drop sensor, drips into the tank: runs of at most 60 s until the first drops fall, at most 5 min in all; it is journaled and booked like a dose, the check mixes it in first, and a restart reports it cut; without a sensor the line goes into a cup for the time given | SD-111 | ✓ | `journal.hpp`, `gateway.cpp`, `robot.cpp` · test_scenarios.cpp, test_cycle.cpp |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
@@ -185,6 +185,14 @@ of its own.
 | 10 s without the leader's call cut a run it asked for, book it, and refuse new ones until the leader calls again; after a restart the follower waits for a call (R6) | SD-131 | ✓ | `robot.cpp` · test_coupling.cpp |
 | The leader doses a canister on the follower's channel by the follower's calibration and books the result; a run there that does not end in time is booked as run; never more than one channel runs across both, and the follower's own channel jobs wait for the leader's maintenance | SD-131, PD-457 | ✓ | `gateway.cpp`, `robot.cpp`, `cycle.cpp` · test_coupling.cpp |
 | Without the follower its canisters are not planned; the watchdog shows the link and a difference of more than 0.3 pH or 0.2 mS/cm for 10 min between the devices | SD-131 | ✓ | `robot.cpp`, `watchdog.cpp` · test_coupling.cpp |
+
+## Locks that report only (SD-133)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| A lock a person releases may be set to report only; leak, high level and the cable check never, whatever a configuration says. Only a session or an app token sets it, never an account token, MQTT or the coupled device, and each change is an event, also one a backup brings | SD-133, PD-459 | ✓ | `config.cpp`, `api.cpp`, `robot.cpp` · test_locks.cpp |
+| Set to report only, the latch alarms with its own level and holds nothing: the feed pump tries again, an outlet without drops runs to its end and its channel doses on, a tank volume counts as confirmed; the frame (flow before a dose, one channel at a time, run time, daily amount) holds all the same | SD-133 | ✓ | `cycle.cpp`, `gateway.cpp`, `robot.cpp` · test_locks.cpp |
+| While a lock reports only, the watchdog names it in a note, not as a problem; a report is cleared without restarting the check, a latch set while it locked holds until released, and once a lock locks again the next one holds | SD-133, RAT-062 | ✓ | `watchdog.cpp`, `robot.cpp` · test_locks.cpp, robot.spec.ts |
 
 ## History and messages
 

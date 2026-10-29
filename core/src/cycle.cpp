@@ -155,9 +155,16 @@ void MixCycle::noFlow(Ctx& c, Actuators& act, Msg why) {
   const int tries = c.pumpInTank ? kDryTriesTank : kDryTries;
   if (++noFlowTries_ >= tries) {
     noFlowTries_ = 0;
-    c.rt.latches["flow.dry"] = {{"at", c.epoch}, {"tries", tries}};
-    c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", tries}}));
-    wait(c, act, say("cycle.wait.dry"), 0);
+    const json latch = {{"at", c.epoch}, {"tries", tries}};
+    const bool again = reportStands(c.rt, "flow.dry");
+    if (setLatch(c.cfg, c.rt, "flow.dry", latch)) {
+      c.log.add(c.epoch, "alarm", "alarm", say("ev.flow.dry"), say("ev.flow.dry.text", {{"tries", tries}}));
+      wait(c, act, say("cycle.wait.dry"), 0);
+    } else {
+      // Reported only (SD-133): reported once while its report stands, and it tries again as before
+      if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("flow.dry", nullptr), say("ev.lock.reported.text"), latch);
+      wait(c, act, std::move(why));
+    }
   } else {
     wait(c, act, std::move(why));  // the pump off: without flow it may run dry, or spill
   }
@@ -260,7 +267,7 @@ bool MixCycle::cableCheck(Ctx& c, Actuators& act) {
   const json args = {{"phOn", numOrNull(cable_.phOn)}, {"phOff", numOrNull(phOff)}, {"ecOn", numOrNull(cable_.ecOn)}, {"ecOff", numOrNull(ecOff)}};
   json latch = args;
   latch["at"] = c.epoch;
-  c.rt.latches["pump.cable"] = latch;
+  c.rt.latches["pump.cable"] = latch;  // always holds: a damaged cable may endanger people (SD-133)
   c.log.add(c.epoch, "alarm", "alarm", say("ev.pump.cable"), say("ev.pump.cable.text", args), args);
   cable_ = {};
   wait(c, act, say("cycle.wait.cable"), 0);
@@ -414,14 +421,14 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   const RecipeCfg& r = *s.recipe;
   notes_.clear();
   // A test dose that does not fit the entered volume holds every dose until a person looks (SD-105)
-  if (auto v = c.rt.latches.find("tank.volume"); v != c.rt.latches.end()) {
+  if (auto v = c.rt.latches.find("tank.volume"); v != c.rt.latches.end() && holds(c.rt, "tank.volume")) {
     wait(c, act, say("cycle.wait.volume", {{"implied", jnum(v->second, "impliedL")}, {"entered", jnum(v->second, "enteredL")}}), 0);
     return;
   }
   const double ec = measured_.ec, ph = measured_.ph;
   if (isNum(s.ecTarget) && isNum(ec)) watchWater(c, r, ec, s);
   const CanisterCfg* down = c.cfg.phDown();
-  const bool phLatched = c.rt.latches.count("ph.no_effect") > 0;
+  const bool phLatched = holds(c.rt, "ph.no_effect");
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
   // EC aims below its target by what the pH− dose that follows adds (RAT-053). Until the pH− effect
   // is learned it is planned at half the start effect: too little EC is topped up once pH is in its
@@ -435,7 +442,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   // EC first: nutrients move pH, so pH is corrected last (RAT-004, RAT-046)
   if (!isNum(s.ecTarget)) {
     notes_.push_back(say("cycle.note.no_ec_target", {{"name", r.name}}));
-  } else if (c.rt.latches.count("ec.no_effect")) {
+  } else if (holds(c.rt, "ec.no_effect")) {
     notes_.push_back(say("cycle.note.ec_latched"));
   } else if (ec < aim - s.ecTol) {
     if (ecRounds_ >= c.cfg.control.maxEcRounds) {
@@ -729,12 +736,22 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
     settled_ = Settled{kind == Kind::Ec ? "ec" : "ph", doseEndAt_, kind == Kind::Ec ? measured_.ec : measured_.ph};
   const double v = volRound_;
   const double mlPerL = isNum(v) && v > 0 ? mlRound_ / v : kNaN;
+  // Whether it holds; reported only, the entered volume counts as confirmed at once (SD-133)
   auto volumeLatch = [&](double q, const char* which, double observed) {
     const double implied = v / q;
-    c.rt.latches["tank.volume"] = {{"at", c.epoch}, {"enteredL", v}, {"impliedL", std::round(implied)},
-                                   {"kind", which}, {"recipe", roundRecipe_}, {"effect", numOrNull(observed)}};
-    c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.volume"),
-              say("ev.cycle.volume.text", {{"implied", std::round(implied)}, {"entered", v}}));
+    const json latch = {{"at", c.epoch}, {"enteredL", v}, {"impliedL", std::round(implied)},
+                        {"kind", which}, {"recipe", roundRecipe_}, {"effect", numOrNull(observed)}};
+    const bool again = reportStands(c.rt, "tank.volume");
+    if (setLatch(c.cfg, c.rt, "tank.volume", latch)) {
+      c.log.add(c.epoch, "alarm", "alarm", say("ev.cycle.volume"),
+                say("ev.cycle.volume.text", {{"implied", std::round(implied)}, {"entered", v}}));
+      return true;
+    }
+    if (!again)
+      c.log.add(c.epoch, "alarm", "alarm", reportedEvent("tank.volume", nullptr),
+                say("ev.cycle.volume_reported.text", {{"implied", std::round(implied)}, {"entered", v}}), latch);
+    confirmVolume(c.cfg, c.rt, latch);
+    return false;
   };
   if (kind == Kind::Ec) {
     settlePairs(c);
@@ -752,13 +769,15 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
       if (clean_ && isNum(expectedTest_) && expectedTest_ > 0 && rise >= kNoEffectEc) {
         const double q = rise / expectedTest_;
         if (q > kVolumeHigh || q < kVolumeLow) {
-          volumeLatch(q, "ec", isNum(mlPerL) && mlPerL > 0 ? rise / mlPerL : kNaN);
-          wait(c, act, say("cycle.wait.volume", {{"implied", std::round(v / q)}, {"entered", v}}), 0);
-          return;
+          if (volumeLatch(q, "ec", isNum(mlPerL) && mlPerL > 0 ? rise / mlPerL : kNaN)) {
+            wait(c, act, say("cycle.wait.volume", {{"implied", std::round(v / q)}, {"entered", v}}), 0);
+            return;
+          }
+        } else {
+          c.rt.newTank = false;
+          learnIt = true;
+          c.log.add(c.epoch, "control", "info", say("ev.cycle.test_ok"), say("ev.cycle.test_ok.text", {{"entered", v}, {"implied", std::round(v / q)}}));
         }
-        c.rt.newTank = false;
-        learnIt = true;
-        c.log.add(c.epoch, "control", "info", say("ev.cycle.test_ok"), say("ev.cycle.test_ok.text", {{"entered", v}, {"implied", std::round(v / q)}}));
       }
     }
     // A round made smaller for slow pumps that should raise EC by less than 0.06 says too little on
@@ -785,10 +804,12 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
       c.rt.ecEffects[roundRecipe_] = clampEcEffect(judged / judgedMlPerL, recipeEffect(*dosed, kNaN).start);
     if (isNum(judged)) noEffectEc_ = judged < kNoEffectEc ? noEffectEc_ + 1 : 0;
     if (noEffectEc_ >= kNoEffectLatch) {
-      c.rt.latches["ec.no_effect"] = {{"at", c.epoch}};
+      const bool again = reportStands(c.rt, "ec.no_effect");
+      const bool held = setLatch(c.cfg, c.rt, "ec.no_effect", {{"at", c.epoch}});
       noEffectEc_ = 0;
       small_ = {};
-      c.log.add(c.epoch, "alarm", "alarm", say("ev.ec.no_effect"), say("ev.ec.no_effect.text"));
+      if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ec.no_effect"), say("ev.ec.no_effect.text"));
+      else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ec.no_effect", nullptr), say("ev.lock.reported.text"));
     }
   } else if (kind == Kind::Ph) {
     const double drop = before_.ph - measured_.ph;
@@ -800,12 +821,12 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
     } else if (clean_) {
       // The test dose checks one side only: pH− buffers differ widely, so a weaker fall is normal;
       // a fall far stronger than at the strongest measured effect means a smaller tank (SD-105)
-      if (testDose_ && isNum(expectedTest_) && expectedTest_ > 0 && drop > kVolumeHigh * expectedTest_ && drop >= 0.05) {
-        volumeLatch(drop / expectedTest_, "ph", isNum(mlPerL) && mlPerL > 0 ? drop / mlPerL : kNaN);
+      const bool misfit = testDose_ && isNum(expectedTest_) && expectedTest_ > 0 && drop > kVolumeHigh * expectedTest_ && drop >= 0.05;
+      if (misfit && volumeLatch(drop / expectedTest_, "ph", isNum(mlPerL) && mlPerL > 0 ? drop / mlPerL : kNaN)) {
         wait(c, act, say("cycle.wait.volume", {{"implied", std::round(v * expectedTest_ / drop)}, {"entered", v}}), 0);
         return;
       }
-      if (testDose_ && drop >= kNoEffectPh) {
+      if (testDose_ && !misfit && drop >= kNoEffectPh) {
         c.rt.newTank = false;
         c.log.add(c.epoch, "control", "info", say("ev.cycle.test_ok_ph"), say("ev.cycle.test_ok_ph.text", {{"entered", v}}));
       }
@@ -818,9 +839,11 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
         noEffectPh_ = 0;
       }
       if (noEffectPh_ >= kNoEffectLatch) {
-        c.rt.latches["ph.no_effect"] = {{"at", c.epoch}};
+        const bool again = reportStands(c.rt, "ph.no_effect");
+        const bool held = setLatch(c.cfg, c.rt, "ph.no_effect", {{"at", c.epoch}});
         noEffectPh_ = 0;
-        c.log.add(c.epoch, "alarm", "alarm", say("ev.ph.no_effect"), say("ev.ph.no_effect.text"));
+        if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ph.no_effect"), say("ev.ph.no_effect.text"));
+        else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ph.no_effect", nullptr), say("ev.lock.reported.text"));
       }
     }
   }
@@ -879,7 +902,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     return;
   }
   // Tries without flow in a row: the feed pump may run dry; a person releases it (SD-109)
-  if (c.rt.latches.count("flow.dry")) {
+  if (holds(c.rt, "flow.dry")) {
     if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.dry")) {
       restart(c, act, doser);
       wait(c, act, say("cycle.wait.dry"), 0);
@@ -888,7 +911,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   }
   // pH or EC shifted while the feed pump ran: its cable may leak into the water; the pump and
   // dosing stay off until a person releases it (SD-127)
-  if (c.rt.latches.count("pump.cable")) {
+  if (holds(c.rt, "pump.cable")) {
     if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.cable")) {
       restart(c, act, doser);
       wait(c, act, say("cycle.wait.cable"), 0);
@@ -1138,7 +1161,7 @@ json MixCycle::checks(const Ctx& c) const {
   else all.push_back(item(r != nullptr, r ? say("check.recipe", {{"name", r->name}}) : say("cycle.off.no_recipe")));
   const bool volume = isNum(s.volumeL) && s.volumeL > 0;
   all.push_back(item(volume, volume ? say("check.volume", {{"volume", s.volumeL}}) : say("cycle.off.no_volume")));
-  const bool volumeLatch = c.rt.latches.count("tank.volume") > 0;
+  const bool volumeLatch = holds(c.rt, "tank.volume");
   all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
   all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
   const bool busy = c.channelJob || c.probeCalibrating || c.maintenanceUntil > 0;
@@ -1166,7 +1189,7 @@ json MixCycle::checks(const Ctx& c) const {
     ec.push_back(item(empty.empty(), empty.empty() ? say("check.stock_ok") : say("check.stock_empty", {{"name", empty}})));
   }
   ec.push_back(reading(Signal::Ec, "check.ec_ok", "check.ec_bad"));
-  const bool ecLatch = c.rt.latches.count("ec.no_effect") > 0;
+  const bool ecLatch = holds(c.rt, "ec.no_effect");
   ec.push_back(item(!ecLatch, say(ecLatch ? "cycle.note.ec_latched" : "check.no_latch")));
 
   json ph = json::array();
@@ -1192,9 +1215,20 @@ json MixCycle::checks(const Ctx& c) const {
   ph.push_back(item(since >= kEcRestS, since >= kEcRestS ? say("check.rest_over")
                                                         : say("check.rest_left", {{"left", mmss((kEcRestS - since) * kSecond)}})));
   ph.push_back(item(kind_ != Kind::Ec, say(kind_ == Kind::Ec ? "check.ec_first" : "check.ec_done")));
-  const bool phLatch = c.rt.latches.count("ph.no_effect") > 0;
+  const bool phLatch = holds(c.rt, "ph.no_effect");
   ph.push_back(item(!phLatch, say(phLatch ? "cycle.note.ph_latched" : "check.no_latch")));
   return {{"all", all}, {"ec", ec}, {"ph", ph}};
+}
+
+void confirmVolume(const Config& cfg, RuntimeState& rt, const json& latch) {
+  const double effect = jnum(latch, "effect");
+  if (jstr(latch, "kind") == "ec") {
+    if (const RecipeCfg* r = cfg.recipe(jstr(latch, "recipe")); r && isNum(effect))
+      rt.ecEffects[r->id] = clampEcEffect(effect, recipeEffect(*r, kNaN).start);
+  } else if (isNum(effect)) {
+    rt.phEffect = clampEffect(effect, kPhStartEffect);
+  }
+  rt.newTank = false;
 }
 
 json MixCycle::status(const Ctx& c) const {

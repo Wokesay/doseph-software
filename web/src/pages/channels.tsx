@@ -4,7 +4,7 @@
 // path page, in the measuring chamber.
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
-import { del, get, post, type Canister, type Coupling, type Stock } from "../api";
+import { del, get, holds, post, type Canister, type Coupling, type Stock } from "../api";
 import { ago, dateTime, num } from "../format";
 import { msg, t } from "../i18n";
 import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
@@ -347,7 +347,7 @@ function ChannelsCard() {
               <div class="title">
                 {t("channels.channelN", { channel: p.channel })} · {name(p.canister) ?? <span class="muted">{t("channels.empty")}</span>}
               </div>
-              {Object.keys(st.latches).some((id) => id.startsWith(`channel.${p.channel}.`)) && (
+              {Object.entries(st.latches).some(([id, l]) => id.startsWith(`channel.${p.channel}.`) && holds(l)) && (
                 <span data-testid={`locked-${p.channel}`}>
                   <Pill tone="bad">{t("channels.locked")}</Pill>
                 </span>

@@ -34,7 +34,7 @@ constexpr Ms kAfterRunMs = 10 * kSecond;    // drops this long after a run are s
 std::string channelLatch(int channel, const std::string& what) { return "channel." + std::to_string(channel) + "." + what; }
 
 bool channelLocked(const RuntimeState& rt, int channel) {
-  return rt.latches.count(channelLatch(channel, "no_drops")) || rt.latches.count(channelLatch(channel, "siphon"));
+  return holds(rt, channelLatch(channel, "no_drops")) || holds(rt, channelLatch(channel, "siphon"));
 }
 
 // ---------------------------------------------------------------- Actuators
@@ -159,9 +159,13 @@ void Actuators::stopAll() {
 }
 
 void Actuators::lockChannel(const Ctx& c, int channel, const std::string& what) {
-  c.rt.latches[channelLatch(channel, what)] = {{"at", c.epoch}, {"key", "channel." + what}, {"channel", channel}};
-  c.log.add(c.epoch, "alarm", "alarm", say("ev.channel." + what, {{"channel", channel}}), say("ev.channel." + what + ".text"),
-            {{"channel", channel}});
+  const json latch = {{"at", c.epoch}, {"key", "channel." + what}, {"channel", channel}};
+  const bool again = reportStands(c.rt, channelLatch(channel, what));
+  if (setLatch(c.cfg, c.rt, channelLatch(channel, what), latch, "channel." + what))
+    c.log.add(c.epoch, "alarm", "alarm", say("ev.channel." + what, {{"channel", channel}}), say("ev.channel." + what + ".text"),
+              {{"channel", channel}});
+  else if (!again)  // reported only, once while its report stands (SD-133)
+    c.log.add(c.epoch, "alarm", "alarm", reportedEvent("channel." + what, latch), say("ev.lock.reported.text"), {{"channel", channel}});
 }
 
 void Actuators::watchDrops(const Ctx& c) {
@@ -184,7 +188,8 @@ void Actuators::watchDrops(const Ctx& c) {
       if (!runs && w.ended < 0) w.ended = c.now;
       if (runs) {
         if (c.now - w.since <= w.window) continue;
-        hw_.stopAllPumps();  // the doser books what ran and ends the dose
+        // The doser books what ran and ends the dose; reported only, the run goes to its end (SD-133)
+        if (!c.cfg.reportsOnly("channel.no_drops")) hw_.stopAllPumps();
       } else if (w.dripped) {
         watch_.erase(it);  // it dripped: done
         continue;
@@ -198,7 +203,7 @@ void Actuators::watchDrops(const Ctx& c) {
     // Drops while the pump stands, past the run's own: a canister above the device siphons (PD-455)
     const auto last = lastRun_.find(n);
     if (fell && !runs && (last == lastRun_.end() || c.now - last->second > kAfterRunMs) &&
-        !c.rt.latches.count(channelLatch(n, "siphon"))) {
+        !latched(c.cfg, c.rt, channelLatch(n, "siphon"), "channel.siphon")) {
       lockChannel(c, n, "siphon");
       unplanned_ = true;
     }

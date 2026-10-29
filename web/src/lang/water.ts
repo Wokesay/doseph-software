@@ -2,6 +2,7 @@
 // Texts of the water path page: flow, measuring chamber, return and release.
 export const de = {
   "water.releaseOnStatus": "Freigeben unter Status",
+  "water.seenOnStatus": "Nur gemeldet – unter Status als gesehen markieren",
   "water.byTurbine": "Ein Durchflussmesser misst, wie viel Wasser durch das Gerät läuft.",
   "water.byOutlet": "Der Füllstandssensor am Auslass meldet Wasser, solange die Förderpumpe läuft; das gilt als Durchfluss.",
   "water.feedPump": "Förderpumpe",
@@ -38,6 +39,7 @@ export const de = {
 
 export const en: Record<keyof typeof de, string> = {
   "water.releaseOnStatus": "Release it under Status",
+  "water.seenOnStatus": "Reported only – mark it seen under Status",
   "water.byTurbine": "A flow meter measures how much water runs through the device.",
   "water.byOutlet": "The outlet's level sensor reports water while the feed pump runs; that counts as flow.",
   "water.feedPump": "Feed pump",

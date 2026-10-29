@@ -88,6 +88,10 @@ void dropCatchUp(Ctx& c, const Msg& why);
 // A pair part dosing when the robot restarted: what its runs booked counts,
 // a run cut by the restart as if it all went in (SD-114)
 void pairAfterRestart(RuntimeState& rt, const std::vector<JournalRun>& runs);
+// The entered tank volume is confirmed after a test dose that did not fit it (SD-105): the effect
+// the test dose showed is learned, and the tank is no longer new. A person confirms it, or the lock
+// reports only (SD-133).
+void confirmVolume(const Config& cfg, RuntimeState& rt, const json& latch);
 
 class MixCycle {
  public:

@@ -97,6 +97,17 @@ struct ControlCfg {
   int maxPhDoses = 8;
 };
 
+// The locks a person releases that may be set to report only (SD-133), by their kind; a channel's
+// are named by theirs. Leak, high level and the cable check never: they belong to the frame.
+inline const std::vector<std::string>& reportableLocks() {
+  static const std::vector<std::string> kinds = {"flow.dry",         "tank.volume",    "ec.no_effect", "ph.no_effect",
+                                                 "channel.no_drops", "channel.siphon", "hw.return"};
+  return kinds;
+}
+struct LocksCfg {
+  std::vector<std::string> reportOnly;  // kinds set to report only; the rest lock
+};
+
 // Fixed safety limits in code. The configuration may only tighten them (R7);
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
@@ -211,6 +222,7 @@ struct Config {
   ServiceCfg service;
   TankCfg tank;
   ControlCfg control;
+  LocksCfg locks;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
@@ -238,6 +250,8 @@ struct Config {
   // A canister's calibrated flow on whichever device it is: on the coupled one as it said last,
   // while its link is up (SD-131); NaN when unknown
   double canisterFlow(const CanisterCfg& b) const;
+  // Whether a lock of this kind is set to report only (SD-133)
+  bool reportsOnly(const std::string& kind) const;
   // Not stored: the coupled device and its channels' flows as it said last, while its link is up
   std::string peerId;
   std::map<int, double> peerFlows;
@@ -269,7 +283,7 @@ double phTarget(const RecipeCfg& r);
 // Run-time state, stored apart. Survives restarts (latches and jump locks
 // stay, RAT-044, RAT-063).
 struct RuntimeState {
-  std::map<std::string, json> latches;     // latched locks with their reason
+  std::map<std::string, json> latches;     // latched locks with their reason; reportOnly: holds nothing (SD-133)
   std::map<std::string, json> jumpLocks;   // signal → {until, from, to, at} (RAT-039, RAT-044)
   double phEffect = kNaN;                  // learned effect of pH− (pH per ml/L), only from clean doses
   std::map<std::string, double> ecEffects; // learned EC effect per recipe, mS/cm per ml/L of its scaled parts (RAT-057)
@@ -316,6 +330,21 @@ struct RuntimeState {
 };
 void to_json(json& j, const RuntimeState& s);
 RuntimeState runtimeFromJson(const json& j);
+// Whether a latch stands that holds: one set while its lock reported only holds nothing (SD-133).
+// A latch of a kind that may not report only always holds, whatever its entry says.
+bool holds(const RuntimeState& rt, const std::string& id);
+// Whether a latch of this kind stands that a new one must not replace: one that holds, or a report
+// while its kind still reports only. Once the kind locks again, the next one holds (SD-133).
+bool latched(const Config& cfg, const RuntimeState& rt, const std::string& id, const std::string& kind);
+// Whether a report of this latch already stands: its event is not logged again (SD-133)
+bool reportStands(const RuntimeState& rt, const std::string& id);
+// Sets a latch of a kind (its ID where empty). Where that kind is set to report only, the latch
+// is marked so: it is shown and alarms as any other, and holds nothing (SD-133). Returns whether
+// it holds.
+bool setLatch(const Config& cfg, RuntimeState& rt, const std::string& id, json entry, const std::string& kind = "");
+// What the event log and the watchdog say of a latch that reported only: the lock's kind, and its
+// channel where it has one (SD-133)
+Msg reportedEvent(const std::string& kind, const json& latch);
 // A canister's counted level: "unknown", "ok", "low" (below its minimum,
 // RAT-071) or "empty" (at or below zero by the count) (SD-119)
 std::string stockStatus(const CanisterCfg& b, const RuntimeState& rt);
