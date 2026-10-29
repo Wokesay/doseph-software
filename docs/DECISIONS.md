@@ -914,3 +914,109 @@ decided the three questions of this step in this session.
 - **The platform** carries the requests between the devices (R8). The
   simulator uses plain HTTP in the home network; the device will use
   HTTPS with the device security items (#10).
+
+
+## SD-132: Shelly and ESP devices: a refill valve and a circulation pump first
+
+2026-10-29. Step 9 of #10 (Shelly and ESP devices). The owner decided the
+order and the questions of this part in this session. Light, climate and
+watering follow with decisions of their own.
+
+- **Order.** 9.1 the network devices; 9.2 the refill valve (PD-460);
+  9.3 the circulation pump (PD-421); then light, climate and watering,
+  each as a change of its own. Mixing comes first (PD-402).
+- **Switching only through Shelly Gen2+.**
+  - The robot switches network outputs only on Shelly devices of the
+    second generation or later, over their local RPC interface. Their
+    safety settings can be written and read back there.
+  - Gen1 Shelly devices and ESP relays are not switched.
+  - A device is added by its address and known by its own ID. The
+    address is only where it is reached now.
+  - A device with a password: the robot keeps the password apart from
+    the configuration, never in a backup and never shown (as SD-124).
+- **Binding an output to a role** (RAT-019, RAT-060).
+  - The robot writes "off after power loss" into the output.
+  - For a pulse role, such as the refill valve, it also writes an
+    auto-off at 1.11 × the role's longest run, rounded up to a whole
+    minute. A continuous role, such as the circulation pump, gets none.
+  - The role is bound only once both were read back as written.
+  - Before every switch-on the robot reads them back again. If they
+    differ it writes them once more; if they still differ, it does not
+    switch on, and the watchdog says why.
+  - Every output switches only through the gateway (R1).
+- **Values from devices.** A role that reads a value (a float switch, a
+  temperature) takes it from one of these:
+  - a Shelly Gen2+, its inputs and sensors, read every 5 s;
+  - an ESPHome device's web server, read every 5 s;
+  - an MQTT topic on the broker of SD-130 (ESPHome, Tasmota and others),
+    as a plain value or a field of a JSON message.
+  - A polled value is stale 30 s after its last good answer. An MQTT
+    value counts while the broker connection stands and, where the
+    device has one, its availability topic says online.
+  - A role with no device is "not assigned" and never has a value. An
+    assigned device that stops answering is "offline", a problem
+    (RAT-024). A missing value is never 0 (R5).
+- **The refill valve** (PD-460).
+  - It needs a valve output on a Shelly Gen2+ and a float switch in the
+    tank that reports "full", from any of the sources above.
+  - It opens when the robot raises "top up water" (SD-115), or by a
+    button in the app. Not through an account token or MQTT.
+  - It does not open during Stop, maintenance or a hardware hold, before
+    the placement is confirmed, while the float reports full or has no
+    value, or while the refill is latched.
+  - It closes when the float reports full, at the longest fill (15 min
+    by default, 1 to 25 min, RAT-079), on Stop, maintenance or a hold,
+    and when the float loses its value. The Shelly's own auto-off is at
+    28 min.
+  - While it fills, the robot doses nothing and starts no round. Then
+    the next check waits for the mixing wait (SD-112).
+  - A fill that reaches its longest time without "full", or whose float
+    lost its value, latches the refill with an alarm. No fill opens
+    until a person has looked and released it (RAT-031).
+  - After a restart the valve is off and a cut fill is reported, not
+    resumed (R6).
+  - Each fill is an event, with its time and why it ended.
+- **The circulation pump** (PD-421).
+  - A customer's pump in the tank, on a Shelly Gen2+ output.
+  - By default it runs from the start of a dosing round and during a
+    fill until the mixing wait has ended. A setting makes it run always.
+  - It is off during Stop, maintenance and a hardware hold, and after a
+    restart until the robot switches it on again (R6).
+  - It does not shorten the mixing wait; stability decides (#1).
+- **The rules of the grow controller's refill by level** (RAT-001,
+  RAT-030, RAT-038) need a level sensor and stay for later. RAT-031,
+  RAT-032 and RAT-079 apply to the float as above.
+
+
+## SD-133: A lock a person releases may be set to report only
+
+2026-10-29. Decided by the owner in this session, for operations that
+watch their tanks in their own way.
+
+- **Which locks.** Every latch a person releases, except leak and high
+  level:
+  - no flow after the tries, and a dry run (SD-109, SD-127);
+  - the cable check (SD-127);
+  - a tank volume that does not fit the test dose (SD-105);
+  - EC or pH without effect (SD-105, RAT-041, RAT-055);
+  - an outlet without drops, and drops without a pump (SD-111);
+  - the return pump running too long (SD-109);
+  - the refill (SD-132).
+- **The setting.** Each of them is set to "lock" (the default) or
+  "report only".
+  - With report only, the event and the alarm come as before, with the
+    same level and repetition (SD-123). The robot goes on as if the lock
+    had been released at once.
+- **The frame never changes** (PD-459), whatever is set:
+  - leak, high level, Stop and a hung controller switch off;
+  - no dose without proven flow (SD-105);
+  - one channel at a time, the run time per dose and the daily amount;
+  - the Shelly's auto-off and "off after power loss" (SD-132), and the
+    longest fill.
+- **Who.** Only signed in in the app or the web app, or with an app
+  token. Never through an account token, MQTT or the coupled device.
+  Each change is an event.
+- **Shown.** While any lock is set to report only, the watchdog shows a
+  warning that names it, and the diagnostics package lists it.
+- **R7 holds.** The frame is the hard limit; a lock above it is a
+  setting, and report only goes back to the frame, never below it.
