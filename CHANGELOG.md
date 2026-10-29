@@ -30,6 +30,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The decisions for light (SD-135): any number of light circuits on
+  Shelly outputs, switched or dimmed over 0–10 V, with sunrise and sunset
+  per circuit; a plant's phase sets the hours of light and the
+  brightness; after a restart light goes on by its plan, and STOP, a hold
+  and maintenance leave it as the plan says. Built in step 9.5.
 - Light, the robot's side (SD-135), step 9.5; the page follows.
   - Any number of light circuits, each a Shelly switch or a Shelly
     dimmer on a 0–10 V line. A circuit's day begins at its own time and

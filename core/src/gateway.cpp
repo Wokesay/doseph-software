@@ -815,7 +815,7 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
         // A dimmer at another brightness than wanted: set again
         const auto br = dev.brightness(b->device, b->channel, now);
         if (!br || std::fabs(*br - static_cast<double>(sentLevel(o.level))) > 0.5) {
-          // The brightness alone: it switches nothing on (RAT-019)
+          // The brightness alone, and only while on: it is no switch-on (RAT-019)
           dev.rpc(cfg, b->device, "Light.Set", {{"id", id}, {"brightness", sentLevel(o.level)}}, def.id + "|level", now);
           o.lastLevel = now;
         }
