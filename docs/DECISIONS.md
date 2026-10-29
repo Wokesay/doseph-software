@@ -1282,6 +1282,12 @@ by the minimal principle. Climate follows with decisions of its own.
   - *Brightness.* A dimmer takes whole percent; the robot rounds up, so
     the driver's threshold holds. While a light is on, a brightness read
     back otherwise is set again, the brightness alone.
+  - *Ramps.* A dimmer's sunrise and sunset last 15 min unless set
+    (RAT-035). They must fit in its day; a switch has no ramps, and a day
+    of 0 h no light to ramp.
+  - *Rules from practice, also:* RAT-035 (ramps of 15 min unless set,
+    within the day) and RAT-083 (the hours of light are a phase's
+    parameter) come into force with light.
   - *Ramps and a phase.* The ramps are checked against the circuit's own
     hours. A phase with fewer hours may make them overlap: the light then
     rises and falls within its day without reaching full brightness.

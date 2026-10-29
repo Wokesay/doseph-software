@@ -42,7 +42,8 @@ function plan(startMin: number, hours: number): string {
 const ToDevices = () => <a href="#/settings">{t("light.toDevices")}</a>;
 
 function LightForm(p: { circuit: LightCircuit | null; devices: Devices | null; reload: () => unknown; onClose: () => void }) {
-  const blank: Form = { id: "", name: "", dimmed: false, startMin: 360, hours: 18, pct: 100, thresholdPct: 0, sunriseMin: 0, sunsetMin: 0, plant: "" };
+  // Ramps of 15 min unless set (RAT-035)
+  const blank: Form = { id: "", name: "", dimmed: false, startMin: 360, hours: 18, pct: 100, thresholdPct: 0, sunriseMin: 15, sunsetMin: 15, plant: "" };
   const [c, setC] = useState<Form>(p.circuit ? { ...p.circuit, plant: p.circuit.plant ?? "" } : blank);
   const [plants, setPlants] = useState<Plants["plants"]>([]);
   useEffect(() => {

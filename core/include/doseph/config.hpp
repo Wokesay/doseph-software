@@ -173,7 +173,7 @@ struct LightCircuitCfg {
   double hours = 18;           // hours of light, 0 to 24
   double pct = 100;            // a dimmer's brightness by day, 1 to 100 %
   double thresholdPct = 0;     // the lamp driver's switch-on threshold: less is raised to it (RAT-013)
-  int sunriseMin = 0, sunsetMin = 0;  // a dimmer's ramps within the day; 0: hard on and off
+  int sunriseMin = 15, sunsetMin = 15;  // a dimmer's ramps within the day, 15 min unless set (RAT-035); 0: hard on and off
   std::string plant;           // a plant whose current phase sets the hours and the brightness
                                // where it has them (RAT-076)
 };

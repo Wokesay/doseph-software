@@ -50,8 +50,8 @@ All notable changes to this software. The format follows
   - Any number of light circuits, each a Shelly switch or a Shelly
     dimmer on a 0–10 V line. A circuit's day begins at its own time and
     lasts its hours of light; a dimmer rises over its sunrise and falls
-    over its sunset, never below the lamp driver's threshold, and 0 %
-    switches it off.
+    over its sunset, 15 minutes each unless set, never below the lamp
+    driver's threshold, and 0 % switches it off.
   - A circuit may follow a plant, whose phase sets the hours of light and
     the brightness (set per phase).
   - Light follows its plan through a restart, STOP, a hold and

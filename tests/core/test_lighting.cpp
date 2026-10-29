@@ -90,7 +90,7 @@ TEST_CASE("Light: a day from its start for its hours; a dimmer rises over its su
   CHECK_FALSE(doseph::lightAt(l, 21 * kH).on);
 }
 
-TEST_CASE("Light: a circuit that follows a plant takes the hours and the brightness from its current phase where it has them; without a running plant its own (SD-135, RAT-076)") {
+TEST_CASE("Light: a circuit that follows a plant takes the hours and the brightness from its current phase where it has them; without a running plant its own (SD-135, RAT-076, RAT-083)") {
   doseph::Config cfg;
   doseph::PhaseCfg veg, bloom;
   veg.name = "Vegetative";
@@ -212,6 +212,36 @@ TEST_CASE("Light: a sunrise of a whole day, a ramp at the day's end, a threshold
   CHECK_FALSE(doseph::lightAt(l, 6 * kH + 30 * 60).on);
   l.hours = doseph::kNaN;  // refused by the validation; were it here, no day
   CHECK_FALSE(doseph::lightAt(l, 6 * kH).on);
+}
+
+TEST_CASE("Light: a dimmer's sunrise and sunset last 15 min unless set and fit in its day; worked out from the time of day, a ramp keeps its length and goes on through a restart (SD-135, RAT-035)") {
+  Run r(harness::device());
+  // A switch has no ramps, and a day of 0 h no light to ramp: the 15 min need not fit
+  CHECK(r.call("PUT", "lighting/circuits", {{"name", "Shelf"}, {"hours", 0.25}}).status == 200);
+  CHECK(r.call("PUT", "lighting/circuits", {{"name", "Dark"}, {"dimmed", true}, {"hours", 0}}).status == 200);
+  CHECK(r.call("PUT", "lighting/circuits", {{"name", "Short"}, {"dimmed", true}, {"hours", 0.25}}).status == 422);
+  r.ok("DELETE", "lighting/circuits/l1");
+  r.ok("DELETE", "lighting/circuits/l2");
+  // The day begins in this minute: the sunrise runs for 15 min
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-dimmer.local"}, {"name", "Lamps"}});
+  const std::string id = r.ok("PUT", "lighting/circuits", {{"name", "Tent"}, {"dimmed", true}, {"startMin", nowMin(r)}, {"hours", 12}, {"pct", 80}})["id"];
+  const json c = r.ok("GET", "config")["lighting"]["circuits"][0];
+  CHECK(c["sunriseMin"] == 15);
+  CHECK(c["sunsetMin"] == 15);
+  r.ok("PUT", "roles/light." + id, {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  r.waitUntil("on", [&] { return lamp(r).on; }, 60);
+  r.step(7 * 60 * kSecond);  // half way: about 40 %
+  CHECK(lamp(r).brightness >= 30);
+  CHECK(lamp(r).brightness <= 50);
+  // The robot restarts mid-ramp: the lamps stay on, and the ramp goes on where the time of day is
+  r.s.reboot();
+  REQUIRE(r.login("demo-password"));
+  r.step(3 * 60 * kSecond);
+  CHECK(lamp(r).on);
+  CHECK(lamp(r).brightness >= 48);
+  CHECK(lamp(r).brightness <= 66);
+  r.step(6 * 60 * kSecond);  // the sunrise is over after 15 min
+  CHECK(lamp(r).brightness == 80);
 }
 
 TEST_CASE("Light: a hand switch is not resumed after a restart: light is by its plan again, on by day and off at night (SD-135, R6)") {
@@ -372,7 +402,8 @@ TEST_CASE("Light: circuits are checked: a name, a day of 0 to 24 h whose ramps f
   CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"hours", 25}}).status == 422);
   CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"pct", 0}}).status == 422);
   CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"thresholdPct", 60}}).status == 422);
-  CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"hours", 1}, {"sunriseMin", 40}, {"sunsetMin", 30}}).status == 422);
+  CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"dimmed", true}, {"hours", 1}, {"sunriseMin", 40}, {"sunsetMin", 30}}).status == 422);
+  CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"sunriseMin", 241}}).status == 422);
   CHECK(r.call("PUT", "lighting/circuits", {{"name", "A"}, {"plant", "nope"}}).status == 422);
   CHECK(r.call("PUT", "lighting/circuits", {{"id", "l7"}, {"name", "A"}}).status == 404);
   CHECK(r.ok("PUT", "lighting/circuits", {{"name", "A"}})["id"] == "l1");

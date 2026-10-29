@@ -5912,11 +5912,13 @@
           },
           "sunriseMin": {
             "type": "integer",
-            "description": "A dimmer's rise from the day's start, 0 to 240 min"
+            "description": "A dimmer's rise from the day's start, 0 to 240 min; 15 unless set (RAT-035)",
+            "default": 15
           },
           "sunsetMin": {
             "type": "integer",
-            "description": "A dimmer's fall to the day's end, 0 to 240 min"
+            "description": "A dimmer's fall to the day's end, 0 to 240 min; 15 unless set (RAT-035)",
+            "default": 15
           },
           "plant": {
             "type": "string",
