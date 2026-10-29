@@ -6,6 +6,7 @@
 // particular hardware: what the device is, is the product side's.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -142,6 +143,8 @@ class World {
   void fill(double volumeL, double ec, double ph);
   // Fresh tap water into the tank (assumption: EC 0.45, pH 7.6)
   void addWater(double litres);
+  // Water out of the tank, as a watering pump takes it
+  void takeWater(double litres) { tank.volumeL = std::max(0.0, tank.volumeL - std::max(0.0, litres)); }
   json toJson() const;
 
   Tank tank;

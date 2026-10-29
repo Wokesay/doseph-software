@@ -98,11 +98,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-010 – Irrigation is controlled by the number of shots, not the shot size
 
-- **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
-- **Rule:** Each watering shot stays small; the daily amount comes from the number of shots per day, a phase parameter (on rock wool 6 in the vegetative phase, 8–9 in flowering), plus a factor for the first shot and a duration per shot. The drain percentage leads (RAT-014): a drain off its target is corrected through the duration, not the shot count.
+- **Rule:** Each watering shot stays small; the daily amount comes from the number of shots. A circuit's schedule of shots in a daily window spreads its shots evenly from the window's start to its end, each of the same length.
 - **Why:** Rock wool cannot take up a large shot at once: the water finds a channel and leaves at the bottom, so the drain looks right while parts of the block stay dry. Few large shots also leave long gaps in which the solution in the block concentrates. The count therefore shapes moisture over the day, and the duration sets the amount.
 - **Evidence:** Observed on the reference installation (2026): the first settings gave shots of 120–200 ml on a 650 ml block, 18–31 % of its volume at once. Shots were then fixed at about 130 ml (about 20 %, 120 s), with 6–9 a day in flowering. Freshly rooted plants got the opposite on purpose: 4 short shots of 36 s, so the block dried in between and the roots grew downwards, since a block that stays wet there risks root rot.
-- **Later:** step 9 (watering); the shots per day are a phase parameter of step 6.
+- **Changed:** A schedule can also be fixed times, an interval or by hand (SD-134). The first-shot factor is dropped. The drain percentage, which set the shot length, waits for a drain measurement (RAT-014). A plant's phase setting the shots and their length follows with the link of circuits to plants.
+- **Implemented in:** `core/src/watering.cpp`
+- **Tests:** `tests/core/test_watering.cpp` "Watering: shots in a window are spread from its start to its end; fixed times and an interval give their own (RAT-010, SD-134)"; `tests/core/test_watering.cpp` "Watering: a schedule waters at its times, one circuit after the other; a paused one rests (SD-134, RAT-010)"
 
 ### RAT-011 – Top-up mixing doses on the fresh water only
 
@@ -561,19 +562,21 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-067 – Irrigation needs a minimum tank level
 
-- **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
-- **Rule:** Watering has a minimum level in the tank and does not run below it. A watering cycle that would take the tank below it is dropped as a whole and a refill asked for, with at most one notice a day.
+- **Rule:** Watering keeps a reserve in the tank: 20 % of its volume by default, never less than 10 %. A shot that would take the tank below it does not start, and water is to be topped up, with one notice until it is.
 - **Why:** Watering the tank down past the point where pumps, probes and intake are covered means dry running and false readings.
 - **Evidence:** Observed on the reference installation (2026): the limit equalled the circulation pump's dry-run threshold, 5 L in the first tank and 2.5 L in a 60 L drum in which every submerged part is covered from 2.5 L.
-- **Later:** step 9 (watering and a level sensor); for the robot the minimum also has to keep its feed pump in the water.
+- **Changed:** The robot has no level probe of its own. It counts the litres each circuit gives (its flow times its run time) since the tank was last full, or reads a level probe where one is assigned (SD-134). The reserve is a share of the tank, not a fixed number of litres, and "top up water" opens a refill valve where there is one (SD-132).
+- **Implemented in:** `core/src/watering.cpp`, `core/src/robot.cpp`
+- **Tests:** `tests/core/test_watering.cpp` "Watering: the count keeps the reserve: a shot that would go below it is not made, water is to be topped up, and a new tank starts the count anew (RAT-067, SD-134)"
 
 ### RAT-068 – Irrigation pump only with a valid level above the minimum
 
-- **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
-- **Rule:** The gateway switches the watering pump on only with a valid level reading at least 0.5 L above the tank's minimum, and switches a running one off, with a message, when the level falls below the minimum or turns invalid. The water's pH and EC are a second check beside the level (RAT-086).
+- **Rule:** A circuit switches on only while the tank is known to hold water above its reserve: a float switch "tank empty" that says not empty, a level probe above the reserve, or the count of litres given. A float or a level without a value blocks, and a running shot stops when one of them says the tank is at its reserve. Without a float, a level or a known flow, a circuit does not water. The water's pH and EC are a second check beside it (RAT-086).
 - **Why:** Otherwise the pump can run dry, and a level that cannot be read cannot show that water is there.
 - **Evidence:** Observed on the reference installation (2026): watering was blocked when the level minus the planned cycle's volume fell below the minimum; with an unreadable level it watered anyway and reported it, judging a silent stop of watering the greater risk to the plants. Blocking is the stricter choice; a limited emergency watering when plants are too dry, watering without a level sensor and dry-run detection from the current draw (RAT-049) were asked for and not built.
-- **Later:** step 9 (watering).
+- **Changed:** A float switch or the count can take the place of a level reading (SD-134). An unreadable level blocks, as decided there; no watering without a level.
+- **Implemented in:** `core/src/watering.cpp`
+- **Tests:** `tests/core/test_watering.cpp` "Watering: a float "tank empty" or a level probe keeps it from an empty tank; without a value it blocks (RAT-068, R5)"
 
 ### RAT-069 – "Supply" profile for devices with their own thermostat
 
@@ -699,11 +702,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-084 – A skipped pH correction does not stop irrigation, but stays visible
 
-- **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
-- **Rule:** When mixing ends without a pH correction (skipped, held back against overcorrection, the most attempts reached), watering is not blocked. The result names "pH not corrected" and its reason first and shows as a warning, not as success; every way out without a correction carries its reason. The watering check (RAT-086) has a band wide enough that uncorrected tap or RO water does not usually block (tap water above pH 8.5 does).
+- **Rule:** pH outside its range, not corrected, does not block watering. The watering state shows it as a warning, with the measured pH and its target. The band of RAT-086 is wide enough that uncorrected tap water does not usually block (above pH 8.5 it does).
 - **Why:** In substrate a batch with uncorrected pH does less harm than plants drying out; stopping watering does damage of its own, usually when nobody is there to step in. A skipped correction that is not shown makes the run look clean.
 - **Evidence:** Found in a review on the reference installation (2026): a mix that ended without pH correction could still report a normal finish, and most ways of ending without correction gave no reason.
-- **Later:** step 9 (watering). The reason shown for every skipped dose is in force already (RAT-037, RAT-041).
+- **Changed:** The reason for every skipped dose is shown by the check already (RAT-037, RAT-041); watering adds its own warning.
+- **Implemented in:** `core/src/watering.cpp`
+- **Tests:** `tests/core/test_watering.cpp` "Watering: water is fit within a wide band: pH 4.0 to 8.5, EC at most 1.0 above its target and never above 5.0, with a recent reading and no calibration; pH not corrected only warns (RAT-086, RAT-084, R5)"
 
 ### RAT-085 – Mixing to the target EC: the recipe gives ratio and order; a fixed addition goes in per litre of fresh water
 
@@ -715,11 +719,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-086 – Watering stops only on water clearly not fit for it
 
-- **Dropped:** the grow controller only (irrigation); not part of the mixing robot (SD-105).
-- **Rule:** The gateway keeps the watering pump off, and switches a running one off, while the tank's pH is below 4.0 or above 8.5, or its EC is more than 1.0 mS/cm above the EC target (the higher of this phase's and the last phase's), and always above 5.0 mS/cm. There is no lower EC bound. A pH or EC probe without a usable reading, or in a calibration, blocks. After every dosing run and every start watering waits until the dose has mixed in (at least 240 s, 100 s per 20 L in the tank, at most 60 min), and a run that starts stops the watering pump. This holds on every path, by hand too, with no override.
+- **Rule:** No circuit starts, and a running shot stops, while the tank's pH is below 4.0 or above 8.5, or its EC is more than 1.0 mS/cm above the EC target (the higher of this phase's and the last phase's), and always above 5.0 mS/cm. There is no lower EC bound. Water is judged by the check's last measurement: without one, with one older than three holds, or during a probe calibration, it blocks. After a dose or a fill a shot waits until the check has mixed it in and measured again, and a dose that starts stops a running shot. A person may water anyway: one shot by hand, after a confirmation, logged as a warning; a schedule never does.
 - **Why:** The worst case of a fertigation controller is a pump that ran too long or dosed too much. The probes see it, and watering would carry the overdose to the roots. The band is wide on purpose: it catches a gross overdose, not a missed recipe, and a narrow band would block uncorrected tap water and leave plants dry (RAT-084). A reading right after a dose does not show it yet (RAT-052), and a missing reading is never fit (RAT-006).
 - **Evidence:** Calculated from measured rates: one 60 s run of parts A and B together (52.8 and 39.6 ml/min, RAT-054) adds about 1.3 mS/cm in 20 L at 0.275 per ml/L (RAT-055), caught when the tank was within about 0.3 of its target; in 100 L it adds about 0.25 and passes. One 60 s run of pH− at 52.8 ml/min and 5.0 pH per ml/L (RAT-050, measured once) takes 200 L from pH 5.8 to about 4.5, which passes; in 20 L the same run, extended tenfold from that single point, reads below 3 and blocks as implausible (RAT-020) or as a jump (RAT-039). The limits 4.0, 8.5, 1.0 and 5.0 mS/cm and the mixing time's scaling with volume are assumptions.
-- **Later:** step 9 (watering); the robot's mixing wait (SD-112) would set how long watering waits after a dose.
+- **Changed:** The mixing wait is the check's own (SD-112), and the water is judged by its measurement after it, since the probes see the tank only while it measures. The rule allowed no override; the owner decided for one shot by hand (SD-134).
+- **Implemented in:** `core/src/watering.cpp`, `core/src/robot.cpp`
+- **Tests:** `tests/core/test_watering.cpp` "Watering: water is fit within a wide band: pH 4.0 to 8.5, EC at most 1.0 above its target and never above 5.0, with a recent reading and no calibration; pH not corrected only warns (RAT-086, RAT-084, R5)"; `tests/core/test_watering.cpp` "Watering: water not fit keeps a circuit from watering and stops a shot; a person may water anyway, which is a warning (SD-134, RAT-086)"; `tests/core/test_watering.cpp` "Watering: Stop, maintenance and a dose stop a running shot; a restart reports a cut shot and does not repeat it (SD-134, R6, RAT-086)"
 
 ### RAT-087 – A fixed pattern to a target EC never doses more than the recipe's amounts
 

@@ -55,7 +55,77 @@ size_t chars(const std::string& s) {
   return static_cast<size_t>(std::count_if(s.begin(), s.end(), [](char ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; }));
 }
 
+WaterCircuitCfg circuitFromJson(const json& x) {
+  if (!x.is_object()) throw std::invalid_argument("a watering circuit is not an object");
+  WaterCircuitCfg w;
+  w.id = jstr(x, "id");
+  w.name = jstr(x, "name");
+  w.mode = jstr(x, "mode", w.mode);
+  w.fromMin = intOr(x, "fromMin", w.fromMin);
+  w.toMin = intOr(x, "toMin", w.toMin);
+  w.shotsPerDay = intOr(x, "shotsPerDay", w.shotsPerDay);
+  if (x.contains("shotS")) w.shotS = numOrNaN(x, "shotS");
+  for (const auto& t : arrayAt(x, "times")) {
+    if (!t.is_object()) throw std::invalid_argument("a watering time is not an object");
+    w.times.push_back({intOr(t, "atMin", -1), numOrNaN(t, "s")});
+  }
+  w.everyMin = intOr(x, "everyMin", w.everyMin);
+  if (x.contains("longestS")) w.longestS = numOrNaN(x, "longestS");
+  w.rateLpm = numOrNaN(x, "rateLpm");
+  w.dailyMaxS = numOrNaN(x, "dailyMaxS");
+  if (x.contains("paused") && !x["paused"].is_boolean()) throw std::invalid_argument("paused is not true or false");
+  w.paused = jbool(x, "paused", false);
+  return w;
+}
+
+// The circuits (SD-134): each shot within its circuit's longest, which stays within what the device
+// takes; a reserve of at least 10 % of the tank
+template <class Err>
+void validateWatering(const WateringCfg& w, Err&& err) {
+  if (!inRange(w.reservePct, 10, 90)) err(say("cfg.water.reserve", {{"min", 10}, {"max", 90}}));
+  if (w.circuits.size() > kMaxCircuits) err(say("cfg.water.too_many", {{"max", kMaxCircuits}}));
+  std::set<std::string> ids;
+  auto minute = [](int m) { return m >= 0 && m < 24 * 60; };
+  for (const auto& c : w.circuits) {
+    const bool idOk = c.id.size() >= 2 && c.id.size() <= 4 && c.id[0] == 'w' &&
+                      std::all_of(c.id.begin() + 1, c.id.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
+    if (!idOk || !ids.insert(c.id).second) err(say("cfg.water.id", {{"id", c.id}}));
+    if (c.name.empty() || chars(c.name) > 40) err(say("cfg.water.name", {{"max", 40}}));
+    const json name = c.name;
+    if (!inRange(c.longestS, 1, kMaxShotS)) err(say("cfg.water.longest", {{"name", name}, {"max", kMaxShotS / 3600}}));
+    auto shot = [&](double s) { return inRange(s, 1, isNum(c.longestS) ? c.longestS : kMaxShotS); };
+    if (c.mode == "window") {
+      if (!minute(c.fromMin) || !minute(c.toMin)) err(say("cfg.water.window", {{"name", name}}));
+      if (c.shotsPerDay < 1 || c.shotsPerDay > 24 * 60) err(say("cfg.water.shots", {{"name", name}, {"max", 24 * 60}}));
+      if (!shot(c.shotS)) err(say("cfg.water.shot", {{"name", name}}));
+    } else if (c.mode == "times") {
+      if (c.times.empty() || c.times.size() > kMaxWaterTimes) err(say("cfg.water.times", {{"name", name}, {"max", kMaxWaterTimes}}));
+      std::set<int> at;
+      for (const auto& t : c.times)
+        if (!minute(t.atMin) || !at.insert(t.atMin).second || !shot(t.s)) {
+          err(say("cfg.water.time", {{"name", name}}));
+          break;
+        }
+    } else if (c.mode == "interval") {
+      if (c.everyMin < 1 || c.everyMin > 24 * 60) err(say("cfg.water.every", {{"name", name}}));
+      if (!shot(c.shotS)) err(say("cfg.water.shot", {{"name", name}}));
+    } else if (c.mode != "manual") {
+      err(say("cfg.water.mode", {{"name", name}}));
+    }
+    if (isNum(c.rateLpm) && !inRange(c.rateLpm, 0.01, 1000)) err(say("cfg.water.rate", {{"name", name}}));
+    if (isNum(c.dailyMaxS) && !inRange(c.dailyMaxS, 1, 24 * 3600)) err(say("cfg.water.daily", {{"name", name}}));
+  }
+}
+
 }  // namespace
+
+const WaterCircuitCfg* WateringCfg::circuit(const std::string& id) const {
+  for (const auto& c : circuits)
+    if (c.id == id) return &c;
+  return nullptr;
+}
+
+std::string waterRole(const std::string& circuit) { return "water." + circuit; }
 
 Limits Limits::bounded() const {
   Limits b;
@@ -210,6 +280,17 @@ void to_json(json& j, const Config& c) {
   j["locks"] = {{"reportOnly", c.locks.reportOnly}};
   j["refill"] = {{"maxFillMin", numOrNull(c.refill.maxFillMin)}};
   j["circulation"] = {{"mode", c.circulation.mode}};
+  json circuits = json::array();
+  for (const auto& w : c.watering.circuits) {
+    json times = json::array();
+    for (const auto& t : w.times) times.push_back({{"atMin", t.atMin}, {"s", t.s}});
+    circuits.push_back({{"id", w.id},           {"name", w.name},          {"mode", w.mode},
+                        {"fromMin", w.fromMin}, {"toMin", w.toMin},        {"shotsPerDay", w.shotsPerDay},
+                        {"shotS", w.shotS},     {"times", times},          {"everyMin", w.everyMin},
+                        {"longestS", w.longestS}, {"rateLpm", numOrNull(w.rateLpm)}, {"dailyMaxS", numOrNull(w.dailyMaxS)},
+                        {"paused", w.paused}});
+  }
+  j["watering"] = {{"reservePct", c.watering.reservePct}, {"circuits", circuits}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -352,6 +433,10 @@ Config configFromJson(const json& in) {
     c.locks.reportOnly.push_back(x.get<std::string>());
   }
   if (const json& f = objectAt(j, "refill"); f.contains("maxFillMin")) c.refill.maxFillMin = numOrNaN(f, "maxFillMin");
+  if (const json& w = objectAt(j, "watering"); !w.empty()) {
+    if (w.contains("reservePct")) c.watering.reservePct = numOrNaN(w, "reservePct");
+    for (const auto& x : arrayAt(w, "circuits")) c.watering.circuits.push_back(circuitFromJson(x));
+  }
   if (const json& f = objectAt(j, "circulation"); f.contains("mode")) {
     if (!f["mode"].is_string()) throw std::invalid_argument("the circulation's mode is not a string");
     c.circulation.mode = f["mode"].get<std::string>();
@@ -488,6 +573,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!inRange(c.refill.maxFillMin, kRefillMinMin, kRefillMaxMin))
     err(say("cfg.refill.max_fill", {{"min", kRefillMinMin}, {"max", kRefillMaxMin}}));
   if (c.circulation.mode != "mixing" && c.circulation.mode != "always") err(say("cfg.circulation.mode"));
+  validateWatering(c.watering, err);
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
@@ -509,12 +595,12 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     return !t.empty() && t.size() <= 200 && t.find_first_of("+#") == std::string::npos;
   };
   for (const auto& [role, b] : c.roles) {
-    const RoleDef* def = roleDef(role);
+    const auto def = roleDef(c, role);
     if (!def) {
       err(say("cfg.role.unknown", {{"role", role}}));
       continue;
     }
-    const Msg name = say("role." + role);
+    const Msg name = roleLabel(c, role);
     const NetDeviceCfg* d = c.device(b.device);
     if (def->kind == "output" && b.source != "shelly") err(say("cfg.role.output_shelly", {{"role", name}}));
     if (b.source == "shelly" || b.source == "esphome") {
@@ -524,7 +610,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
         err(say("cfg.role.topic", {{"role", name}}));
       // A float switch over MQTT says "not full" only while its sender is seen: a value kept on the
       // broker outlives a sender that stopped, and the float is the valve's limit (RAT-032)
-      else if (role == "tank_full" && b.availability.empty()) err(say("cfg.role.availability", {{"role", name}}));
+      // The same holds for the limits of watering (SD-134)
+      else if ((role == "tank_full" || role == "tank_empty" || role == "tank_level") && b.availability.empty())
+        err(say("cfg.role.availability", {{"role", name}}));
     } else {
       err(say("cfg.role.source", {{"role", name}}));
     }
@@ -684,6 +772,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["ecInBand"] = s.ecInBand;
   j["topUp"] = s.topUp;
   j["refill"] = s.refill;
+  j["watering"] = s.watering;
+  j["waterLow"] = s.waterLow;
   j["settleMin"] = s.settleMin;
   j["alarms"] = s.alarms;
   j["lastReport"] = s.lastReport;
@@ -783,6 +873,8 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("ecInBand") && j["ecInBand"].is_object()) s.ecInBand = j["ecInBand"];
   s.topUp = jbool(j, "topUp", false);
   if (j.contains("refill") && j["refill"].is_object()) s.refill = j["refill"];
+  if (j.contains("watering") && j["watering"].is_object()) s.watering = j["watering"];
+  s.waterLow = jbool(j, "waterLow", false);
   if (j.contains("settleMin") && j["settleMin"].is_array())
     for (const auto& m : j["settleMin"])
       if (m.is_number() && isNum(m.get<double>()) && m.get<double>() >= 0 && s.settleMin.size() < 3) s.settleMin.push_back(m.get<double>());

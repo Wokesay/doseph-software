@@ -206,6 +206,18 @@ of its own.
 | The circulation pump runs while mixing (during a dose, its mixing wait and a fill, never while the check measures) or always; never during Stop, maintenance or a hold, nor on a follower, and after a restart only once switched on again after its check; the mixing wait stays as long | SD-132, R6, RAT-044 | ✓ | `robot.cpp`, `gateway.cpp` · test_circulation.cpp, robot.spec.ts |
 | The longest fill is 1 to 25 min, 15 by default; the device's own auto-off is 28 min | RAT-079 | ✓ | `config.cpp`, `devices.cpp`, `refill.cpp`, `gateway.cpp` · test_refill.cpp, test_devices.cpp |
 
+## Watering (SD-134)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| Any number of circuits, each a Shelly output, one running at a time; a shot by a schedule (shots in a window, fixed times, an interval) or by hand, within the circuit's longest shot (at most 24 h); a paused schedule rests; the device's own auto-off is 1.11 × the longest shot, and the gateway ends a shot past it | SD-134, RAT-019, R1 | ✓ | `watering.cpp`, `gateway.cpp`, `config.cpp` · test_watering.cpp |
+| Shots in a window are spread evenly from its start to its end, each of the same length | RAT-010 | ✓ | `watering.cpp` · test_watering.cpp |
+| A shot that would take the tank below its reserve (20 % by default, never below 10 %) does not start, and water is to be topped up; the count of litres starts anew when the tank is full or new | RAT-067 | ✓ | `watering.cpp`, `robot.cpp` · test_watering.cpp |
+| A circuit waters only while a float "tank empty", a level probe or the count says there is water above the reserve; a float or level without a value blocks, and without any of them a circuit does not water | RAT-068 | ✓ | `watering.cpp` · test_watering.cpp |
+| pH not corrected does not block watering and shows as a warning | RAT-084 | ✓ | `watering.cpp` · test_watering.cpp |
+| Water outside pH 4.0–8.5, EC more than 1.0 above its target or above 5.0, without a recent measurement or during a calibration blocks and stops a shot; a shot waits until a dose or fill is mixed in and measured, and a dose stops it; a person may water anyway, one shot by hand, as a warning | RAT-086 | ✓ | `watering.cpp`, `robot.cpp` · test_watering.cpp |
+| Stop, maintenance and a hold stop every circuit; a restart switches them off, reports a cut shot and does not repeat it; only a session or an app token manages circuits and waters, an account token only pauses a schedule | SD-134, R6, SD-129 | ✓ | `watering.cpp`, `robot.cpp`, `api.cpp` · test_watering.cpp |
+
 ## Locks that report only (SD-133)
 
 | Rule | Rationale | Status | Implementation · tests |

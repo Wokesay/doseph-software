@@ -119,11 +119,20 @@ NetTwin::NetTwin() {
   valve.inputs.push_back(false);
   valve.inlet = true;
   shellies_.push_back(valve);
+  FakeShelly pumps;
+  pumps.address = "shelly-pump.local";
+  pumps.id = "shellypro2-sim000005";
+  pumps.model = "SPSW-202XE16EU";
+  for (int i = 0; i < 2; ++i) pumps.switches.push_back({false, 0, shellySwitchDefaults(false)});
+  pumps.waters = true;
+  shellies_.push_back(pumps);
   FakeEsphome esp;
   esp.address = "esp-1.local";
   esp.name = "tank-sensors";
   esp.entities["binary_sensor/tank_full"] = false;
   esp.entities["sensor/water_temp"] = 21.5;
+  esp.entities["binary_sensor/tank_empty"] = false;
+  esp.entities["sensor/tank_level"] = 100.0;
   esps_.push_back(esp);
 }
 
@@ -163,6 +172,16 @@ FakeShelly* NetTwin::inlet() {
     if (s.inlet) return &s;
   return nullptr;
 }
+
+int NetTwin::watering() const {
+  int n = 0;
+  for (const auto& s : shellies_)
+    if (s.waters && s.online)
+      for (const auto& sw : s.switches) n += sw.on;
+  return n;
+}
+
+FakeEsphome* NetTwin::sensors() { return esps_.empty() ? nullptr : &esps_.front(); }
 
 bool NetTwin::circulating() const {
   for (const auto& s : shellies_)

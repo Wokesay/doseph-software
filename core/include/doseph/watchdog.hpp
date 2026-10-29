@@ -37,6 +37,7 @@ struct WatchInput {
     std::string id;
     bool ok = false;
     Msg text;
+    Msg label{};  // its name; a watering circuit's is its own (SD-134)
   };
   std::vector<Role> roles{};
 };

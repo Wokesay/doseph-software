@@ -26,16 +26,20 @@ struct NetDeviceCfg {
   std::string name;     // the user's name for it
 };
 
-// The roles a device can take, fixed in code. An output is switched only on a Shelly Gen2+; a
-// value comes from any source.
+// The roles a device can take: those fixed in code, and an output for each watering circuit
+// ("water.<id>", SD-134). An output is switched only on a Shelly Gen2+; a value comes from any source.
 struct RoleDef {
-  std::string id;      // "refill_valve", "circulation_pump", "tank_full"
-  std::string kind;    // "output" | "binary"
+  std::string id;      // "refill_valve", "circulation_pump", "tank_full", "tank_empty", "tank_level", "water.<id>"
+  std::string kind;    // "output" | "binary" | "level" (litres)
   bool pulse = false;  // an output with a longest run: the device switches it off on its own
   Ms maxRunMs = 0;     // a pulse output's longest run (hard limit)
 };
-const std::vector<RoleDef>& roleDefs();
+const std::vector<RoleDef>& roleDefs();  // the fixed ones
 const RoleDef* roleDef(const std::string& id);
+std::vector<RoleDef> roleDefs(const Config& cfg);  // with the watering circuits
+std::optional<RoleDef> roleDef(const Config& cfg, const std::string& id);
+// A role's name for people: a circuit's is its own
+Msg roleLabel(const Config& cfg, const std::string& id);
 // The auto-off a pulse output gets in the device: 1.11 × its longest run, rounded up to a whole
 // minute (RAT-019); 0 for a continuous one, which gets none
 int autoOffS(const RoleDef& r);

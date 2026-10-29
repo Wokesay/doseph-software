@@ -9,7 +9,10 @@
 //   shelly-valve.local a Shelly Gen2 relay at the tank's inlet: its output opens the inlet valve,
 //                      and its input is the float switch in the tank, which says full at its
 //                      line; set up so that the float does not switch the valve
-//   esp-1.local        an ESPHome device: binary_sensor/tank_full, sensor/water_temp
+//   shelly-pump.local  a Shelly Gen2 relay with two outputs, each a watering pump that takes water
+//                      from the tank
+//   esp-1.local        an ESPHome device: binary_sensor/tank_full, binary_sensor/tank_empty,
+//                      sensor/water_temp, sensor/tank_level (the tank's litres)
 // A Shelly's settings act as the real one's: the auto-off switches it off, and a power cycle
 // sets its outputs by their initial state.
 #pragma once
@@ -38,6 +41,7 @@ struct FakeShelly {
   bool ignoresConfig = false;  // takes Switch.SetConfig and keeps its settings, as a faulty one might
   bool inlet = false;       // its output opens the tank's inlet, its input 0 is the float switch (SD-132)
   bool circulates = false;  // a circulation pump in the tank is plugged into its output (SD-132)
+  bool waters = false;      // each output is a watering pump that takes water from the tank (SD-134)
   bool floatStuck = false;  // the float switch sticks: it never says full
   // An input changes; out of the box ("follow") it switches its output with it, detached it does not
   void setInput(int n, bool state);
@@ -63,6 +67,8 @@ class NetTwin {
   FakeEsphome* esphome(const std::string& address);
   FakeShelly* inlet();  // the relay at the tank's inlet, where there is one
   bool circulating() const;  // the circulation pump runs
+  int watering() const;      // how many watering pumps run
+  FakeEsphome* sensors();    // the ESPHome device, whose level and floats follow the tank
   doseph::json toJson() const;
   // The simulator panel: a device away or back, an input, an ESPHome value
   bool control(const std::string& action, const doseph::json& body);

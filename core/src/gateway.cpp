@@ -631,7 +631,7 @@ std::string outputKey(const Config& cfg, const RoleBinding& b) {
 }
 
 const RoleBinding* shellyOutput(const Config& cfg, const std::string& role) {
-  const RoleDef* def = roleDef(role);
+  const auto def = roleDef(cfg, role);
   const auto it = cfg.roles.find(role);
   if (!def || def->kind != "output" || it == cfg.roles.end() || it->second.source != "shelly" || !cfg.device(it->second.device)) return nullptr;
   return &it->second;
@@ -653,8 +653,9 @@ bool NetOutputs::limited(const Config& cfg, const NetDevices& dev, const std::st
 }
 
 bool NetOutputs::want(const std::string& role, bool on) {
+  // A fixed output, or a watering circuit's (SD-134); the tick drops what the configuration lacks
   const RoleDef* def = roleDef(role);
-  if (!def || def->kind != "output") return false;
+  if (!(def ? def->kind == "output" : role.rfind("water.", 0) == 0)) return false;
   outs_[role].want = on;
   return true;
 }
@@ -700,7 +701,9 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     }
     ++it;
   }
-  for (const auto& def : roleDefs()) {
+  // Outputs of circuits no longer in the configuration are dropped with their wants
+  for (auto it = outs_.begin(); it != outs_.end();) it = roleDef(cfg, it->first) ? std::next(it) : outs_.erase(it);
+  for (const auto& def : roleDefs(cfg)) {
     if (def.kind != "output") continue;
     Out& o = outs_[def.id];
     const RoleBinding* b = shellyOutput(cfg, def.id);
@@ -719,9 +722,10 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
                        releasing_.end());
     }
     if (!dev.online(b->device, now)) {
-      // Away: its settings may be gone with it (a reset, a power loss); checked again once back. The
-      // refill valve opens again only when wanted anew, with its longest fill from then (RAT-032).
-      if (def.id == "refill_valve") o.want = false;
+      // Away: its settings may be gone with it (a reset, a power loss); checked again once back. A
+      // pulse output (the refill valve, a watering circuit) switches on again only when wanted anew,
+      // with its longest run from then (RAT-032).
+      if (def.pulse) o.want = false;
       o.onAt = -1;
       o.verified = false;
       o.wasOnline = false;
@@ -744,6 +748,8 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     const bool limit = o.want && limited(cfg, dev, def.id, now);
     if (limit) o.want = false;
     if (def.id == "refill_valve" && o.want && o.onAt >= 0 && now - o.onAt >= longestFill(cfg)) o.want = false;
+    // A watering circuit past its longest shot, whatever wants it on (SD-134)
+    if (def.pulse && def.maxRunMs > 0 && o.want && o.onAt >= 0 && now - o.onAt >= def.maxRunMs) o.want = false;
     // A continuous output the device says is off, though the robot switched it on a while ago (a short
     // power cut, a hand at the device): checked again, and on again while wanted. A pulse output an
     // auto-off switched off stays off.
@@ -793,7 +799,7 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
   const size_t bar = a.tag.find('|');
   if (bar == std::string::npos) return;
   const std::string role = a.tag.substr(0, bar), stage = a.tag.substr(bar + 1);
-  const RoleDef* def = roleDef(role);
+  const auto def = roleDef(cfg, role);
   const RoleBinding* b = shellyOutput(cfg, role);
   const auto oit = outs_.find(role);
   if (!def || !b || oit == outs_.end()) return;
@@ -883,7 +889,7 @@ Msg NetOutputs::problem(const std::string& role) const {
 
 json NetOutputs::status(const Config& cfg, const NetDevices& dev, Ms now) const {
   json out = json::object();
-  for (const auto& def : roleDefs()) {
+  for (const auto& def : roleDefs(cfg)) {
     if (def.kind != "output") continue;
     const RoleBinding* b = shellyOutput(cfg, def.id);
     const auto oit = outs_.find(def.id);

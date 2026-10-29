@@ -4169,6 +4169,334 @@
           }
         }
       }
+    },
+    "/watering": {
+      "put": {
+        "operationId": "putWatering",
+        "summary": "Sets the reserve watering keeps in the tank (SD-134, RAT-067)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WateringSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/watering/circuits": {
+      "put": {
+        "operationId": "putCircuit",
+        "summary": "Adds a watering circuit, or changes one by its ID; answers the circuit's ID (SD-134)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaterCircuit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/watering/circuits/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteCircuit",
+        "summary": "Removes a watering circuit and lets its output go (SD-134)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/watering/circuits/{id}/now": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "waterNow",
+        "summary": "Waters now: one shot by hand; with override, also on water not fit for watering, as a warning (SD-134, RAT-086)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "seconds": {
+                    "type": "number"
+                  },
+                  "override": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "seconds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/watering/circuits/{id}/stop": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "stopWater",
+        "summary": "Ends the circuit's shot (SD-134)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/watering/circuits/{id}/pause": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "pauseCircuit",
+        "summary": "Pauses or resumes a circuit's schedule (SD-134)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app",
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paused": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "paused"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4917,6 +5245,20 @@
           },
           "circulation": {
             "$ref": "#/components/schemas/CirculationSettings"
+          },
+          "watering": {
+            "type": "object",
+            "properties": {
+              "reservePct": {
+                "type": "number"
+              },
+              "circuits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WaterCircuit"
+                }
+              }
+            }
           }
         },
         "description": "The configuration: everything a backup holds"
@@ -5258,6 +5600,97 @@
         },
         "required": [
           "mode"
+        ]
+      },
+      "WaterCircuit": {
+        "type": "object",
+        "description": "A watering circuit (SD-134): a pump or a valve on a Shelly output, bound as the role `water.<id>`",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "w1, w2, …; without one a new circuit is made"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "window",
+              "times",
+              "interval",
+              "manual"
+            ]
+          },
+          "fromMin": {
+            "type": "integer",
+            "description": "window: its start, local minute of the day"
+          },
+          "toMin": {
+            "type": "integer",
+            "description": "window: its end"
+          },
+          "shotsPerDay": {
+            "type": "integer"
+          },
+          "shotS": {
+            "type": "number",
+            "description": "window and interval: a shot's length, s"
+          },
+          "times": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "atMin": {
+                  "type": "integer"
+                },
+                "s": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "everyMin": {
+            "type": "integer",
+            "description": "interval, from local midnight; at most a day"
+          },
+          "longestS": {
+            "type": "number",
+            "description": "No shot is longer; at most 24 h. The device's own auto-off is 1.11 × it (RAT-019)."
+          },
+          "rateLpm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "What it gives, for the count of litres; null: not known"
+          },
+          "dailyMaxS": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "WateringSettings": {
+        "type": "object",
+        "properties": {
+          "reservePct": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 90,
+            "description": "What stays in the tank, of its volume (RAT-067)"
+          }
+        },
+        "required": [
+          "reservePct"
         ]
       }
     }

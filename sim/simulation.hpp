@@ -78,6 +78,9 @@ class Simulation {
   // The twin's inlet (SD-132; assumptions): tap water through the valve, and the float switch's line
   static constexpr double kInletLpm = 4.0;
   static constexpr double kFloatAtL = 105.0;
+  // A watering pump's flow, and where the ESPHome's float "tank empty" sits (SD-134; assumptions)
+  static constexpr double kWaterLpm = 2.0;
+  static constexpr double kEmptyAtL = 20.0;
 
  private:
   void build(bool fresh);
