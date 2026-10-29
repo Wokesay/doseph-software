@@ -70,6 +70,8 @@ class Climate {
   struct Room {
     std::map<std::string, Out> outs;
     bool co2High = false;  // above 2,000 ppm, until back below the highest target
+    double pulseFromPpm = kNaN;  // CO2 at the last pulse's start
+    int noRise = 0;              // pulses in a row after which it had not risen
   };
   std::map<std::string, Room> rooms_;
   Ms startMs_ = 0;

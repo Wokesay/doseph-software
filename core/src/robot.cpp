@@ -2759,6 +2759,8 @@ Result Robot::deleteRoom(const std::string& id) {
   Result r = saveConfig(next, changed("cfg.what.climate"));
   if (r.status != 200) return r;
   climate_.forget(id);
+  rt_.latches.erase("climate." + id + ".co2");  // its valve's lock goes with it
+  saveState(true);
   reconcileDevices(before);  // its outputs are let go and switched off
   return r;
 }

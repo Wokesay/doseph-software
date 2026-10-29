@@ -66,9 +66,10 @@ All notable changes to this software. The format follows
     Humidifier and dehumidifier never run together, and the dehumidifier
     rests 5 minutes after it went off. The heater's plug gets a power
     limit.
-  - CO2 only by day, while the exhaust fan is off, in pulses of a minute;
-    above 2,000 ppm the valve closes with an alarm, and it stays closed in
-    maintenance.
+  - CO2 only by day, while the exhaust fan is off, on a fresh value, in
+    pulses of a minute; above 2,000 ppm the valve closes with an alarm,
+    and it stays closed in maintenance. Ten pulses without CO2 rising lock
+    the valve until a person releases it.
   - The fans keep running through STOP, a hold and a restart; STOP
     switches the heater, the humidifier, the dehumidifier and CO2 off.
   - The simulator has a grow room with its devices and sensors.

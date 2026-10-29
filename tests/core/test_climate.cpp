@@ -321,3 +321,76 @@ TEST_CASE("Climate: only a session or an app token manages rooms (SD-136, SD-129
     }
   }
 }
+
+TEST_CASE("Climate: CO2 opens only on a fresh, plausible value; ten pulses without a rise lock the valve until a person releases it; a reading far above 2,000 ppm closes it with an alarm (SD-136)") {
+  Run r(harness::device());
+  addRoom(r, {{"co2Ppm", 1000}});
+  // Below the air outside: a sensor's fault, no value
+  keep(r, 26, 70, 250, 150);
+  CHECK_FALSE(valve(r));
+  CHECK(room(r)["missing"] == json::array({"co2"}));
+  // Pulses that do not raise CO2: an empty bottle; locked after ten, with an alarm
+  int pulses = 0;
+  bool was = false;
+  keepUntil(r, 26, 70, 700, "locked", [&] {
+    if (valve(r) && !was) ++pulses;
+    was = valve(r);
+    return room(r)["co2Locked"] == true;
+  }, 30 * 60);
+  CHECK(pulses == 10);
+  keep(r, 26, 70, 700, 150);
+  CHECK_FALSE(valve(r));
+  bool problem = false;
+  const json wd = r.state()["watchdog"];
+  for (const auto& i : wd["items"]) problem |= i["id"] == "latch.climate.r1.co2" && i["status"] == "problem";
+  CHECK(problem);
+  r.ok("POST", "latches/climate.r1.co2/ack");
+  keepUntil(r, 26, 70, 700, "open again", [&] { return valve(r); }, 90);
+  // Far above the cut, past any sensor's range: closed, with an alarm
+  keepUntil(r, 26, 70, 12000, "closed", [&] { return !valve(r); }, 5);
+  CHECK(room(r)["co2High"] == true);
+}
+
+TEST_CASE("Climate: a dehumidifier that went off at its device rests 5 min from then; a heater's power limit is never above the device's own (SD-136, RAT-034, RAT-069)") {
+  Run r(harness::device());
+  r.s.net().shelly("shelly-climate.local")->switches[2].config["power_limit"] = 300;  // set lower at the device
+  addRoom(r, {{"heaterW", 370}});
+  keepUntil(r, 26, 80, 600, "dehumidifier on", [&] { return dehumidifier(r); }, 7 * 60);
+  keep(r, 26, 80, 600, 40);
+  r.s.net().shelly("shelly-climate.local")->switches[3].on = false;  // a hand at the device, or its own protection
+  keep(r, 26, 80, 600, 4 * 60);
+  CHECK_FALSE(dehumidifier(r));
+  keepUntil(r, 26, 80, 600, "on after its rest", [&] { return dehumidifier(r); }, 90);
+  keepUntil(r, 24, 70, 600, "heater on", [&] { return heater(r); }, 120);
+  CHECK(r.s.net().shelly("shelly-climate.local")->switches[2].config["power_limit"] == 300);
+}
+
+TEST_CASE("Climate: a phase's temperature stays below the room's heat limit; a value over MQTT counts 15 min after it came (SD-136, R5)") {
+  doseph::Config cfg;
+  doseph::PhaseCfg ph;
+  ph.name = "Hot";
+  ph.dayC = 40;
+  doseph::PlantCfg p;
+  p.id = "p1";
+  p.phases = {ph};
+  cfg.plants = {p};
+  doseph::ClimateRoomCfg rc;
+  rc.startMin = 6 * 60;
+  rc.hours = 12;
+  rc.plant = "p1";
+  CHECK(doseph::climateTargets(cfg, rc, 12 * 3600).tempC == 29);  // its heat limit of 30 °C, less a band
+  Run r(harness::device());
+  r.ok("PUT", "climate/rooms", {{"name", "Tent"}, {"startMin", dayStart(r)}, {"hours", 12}});
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-climate.local"}, {"name", "Room relay"}});
+  r.ok("PUT", "roles/climate.r1.heater", {{"source", "shelly"}, {"device", "d1"}, {"channel", 2}});
+  r.ok("PUT", "roles/climate.r1.exhaust", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  r.ok("PUT", "roles/climate.r1.temp", {{"source", "mqtt"}, {"entity", "room/temp"}});
+  r.s.robot().setMqttStatus(true, {});
+  r.s.robot().mqttValue("room/temp", "24");
+  r.waitUntil("heater on", [&] { return heater(r) && !exhaust(r); }, 120);
+  r.step(14 * 60 * kSecond);
+  CHECK(heater(r));
+  r.waitUntil("its value too old: the safe side", [&] { return !heater(r) && exhaust(r); }, 3 * 60);
+  r.s.robot().mqttValue("room/temp", "24");
+  r.waitUntil("heater on again", [&] { return heater(r); }, 120);
+}

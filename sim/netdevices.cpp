@@ -280,7 +280,7 @@ void NetTwin::climate(Ms dt) {
   r.rhPct += s * ((kOutRh - r.rhPct) * k + (8 + 12 * lamps) * kWalls + (humidifier ? 25 * kWalls : 0) - (dehumidifier ? 25 * kWalls : 0));
   r.rhPct = std::clamp(r.rhPct, 5.0, 100.0);
   r.co2Ppm += s * ((kOutPpm - r.co2Ppm) * k - 0.3 * lamps + (valve ? 3.0 : 0));
-  r.co2Ppm = std::max(r.co2Ppm, 300.0);
+  r.co2Ppm = std::max(r.co2Ppm, 0.0);
   if (FakeEsphome* e = esphome("esp-climate.local")) {
     e->entities["sensor/air_temp"] = std::round(r.tempC * 10.0) / 10.0;
     e->entities["sensor/air_rh"] = std::round(r.rhPct);

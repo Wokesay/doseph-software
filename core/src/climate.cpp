@@ -21,8 +21,21 @@ constexpr Ms kSwitchGapMs = kMinute;
 constexpr Ms kDehumidifierRestMs = 5 * kMinute;
 // The CO2 valve opens for a minute at most, then rests a minute; its device closes it on its own (RAT-019)
 constexpr Ms kCo2PulseMs = kMinute;
-// Readings outside these are no value (R5): an assumption of what a room can hold
-constexpr double kTempMinC = -20, kTempMaxC = 60, kCo2MaxPpm = 10000;
+// Readings outside these are no value (R5): an assumption of what a room can hold. CO2 below the
+// air outside is a sensor's fault; far above 2,000 ppm it still closes the valve, with an alarm.
+constexpr double kTempMinC = -20, kTempMaxC = 60, kCo2MinPpm = 300, kCo2MaxPpm = 100000;
+// A value over MQTT counts only this long after it came: a sender that stopped leaves its last one
+// on the broker (SD-136)
+constexpr Ms kMqttAgeMs = 15 * kMinute;
+// The CO2 valve opens only on a value this fresh, from any source
+constexpr Ms kCo2FreshMs = 2 * kMinute;
+// Pulses in a row after which CO2 has not risen by this much lock the valve: an empty bottle, a
+// valve that does not open, a sensor that does not see it (SD-136)
+constexpr int kCo2NoRisePulses = 10;
+constexpr double kCo2RisePpm = 10;
+// A dehumidifier the device reports off this long after it was switched on went off at the device:
+// it rests from then (RAT-034)
+constexpr Ms kOffAtDeviceMs = 30 * kSecond;
 // Two readings of the robot's own sensors further apart than this give no VPD (RAT-017)
 constexpr Ms kVpdPairMs = kMinute;
 
@@ -44,10 +57,19 @@ Air air(const Ctx& c, const NetDevices& dev, const std::string& role, double lo,
   if (rv.state != "ok" || !rv.value || !rv.value->is_number()) return a;
   const double x = rv.value->get<double>();
   if (!std::isfinite(x) || x < lo || x > hi) return a;
+  if (a.mqtt && c.now - rv.at > kMqttAgeMs) return a;
   a.v = x;
   a.at = rv.at;
   return a;
 }
+
+// Whether a room's output is off at its device: bound, and its device says off
+bool saysOff(const Ctx& c, const NetDevices& dev, const std::string& role) {
+  const auto b = c.cfg.roles.find(role);
+  return b != c.cfg.roles.end() && dev.output(b->second.device, b->second.channel, c.now) == false;
+}
+
+std::string co2Latch(const std::string& room) { return "climate." + room + ".co2"; }
 
 // Whether a room's output is off at its device, or has none (SD-136, RAT-034): an output that does
 // not answer may be on
@@ -116,7 +138,10 @@ ClimateTargets climateTargets(const Config& cfg, const ClimateRoomCfg& r, int se
     own.hours = e.hours;
     t.day = lightAt(own, secondOfDay).day;
   }
+  // Never at or above the heat limit, which a phase's target might reach: the heater would warm
+  // what the heat protection dims the light for (SD-136)
   t.tempC = t.day ? e.dayC : e.nightC;
+  if (isNum(t.tempC) && isNum(e.heatC)) t.tempC = std::min(t.tempC, e.heatC - kTempBandC);
   // A VPD target gives the humidity from the target temperature, not the measured one (RAT-009)
   if (e.byVpd && isNum(t.tempC)) {
     t.vpdKpa = e.vpdKpa;
@@ -142,11 +167,17 @@ void Climate::tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& o
     const bool always = effectiveRoom(c.cfg, r).circulateAlways;
     const Air temp = air(c, dev, climateRole(r.id, "temp"), kTempMinC, kTempMaxC);
     const Air rh = air(c, dev, climateRole(r.id, "rh"), 0, 100);
-    const Air co2 = air(c, dev, climateRole(r.id, "co2"), 0, kCo2MaxPpm);
+    const Air co2 = air(c, dev, climateRole(r.id, "co2"), kCo2MinPpm, kCo2MaxPpm);
     const bool fresh = rooms_.find(r.id) == rooms_.end();
     Room& st = rooms_[r.id];
-    // After a start the dehumidifier rests its 5 min first (RAT-034)
-    if (fresh) st.outs["dehumidifier"].changedAt = startMs_;
+    // After a start, or a room added anew, the dehumidifier rests its 5 min first (RAT-034)
+    if (fresh) st.outs["dehumidifier"].changedAt = c.now;
+    // … and after it went off at its device: a power cut, its own protection, a hand there
+    if (Out& de = st.outs["dehumidifier"]; de.on && c.now - de.onSince > kOffAtDeviceMs && saysOff(c, dev, climateRole(r.id, "dehumidifier"))) {
+      de.on = false;
+      de.changedAt = c.now;
+      de.onSince = -1;
+    }
     // A regulated switching waits its gap; one to the safe side never does
     auto set = [&](const char* kind, bool on, bool now = false) {
       Out& o = st.outs[kind];
@@ -199,11 +230,28 @@ void Climate::tick(Ctx& c, int secondOfDay, const NetDevices& dev, NetOutputs& o
       st.co2High = false;
     }
     // Only by day, with a target, while the exhaust fan is off, no one works in the room, nothing
-    // stops and a value read since the start says it is low
-    const bool co2Ok = t.day && isNum(t.co2Ppm) && !on("exhaust") && !c.stopped && !maintenance && !st.co2High && co2.v && co2.at > startMs_;
+    // stops, no lock holds, and a fresh value read since the start says it is low
+    const bool locked = c.rt.latches.count(co2Latch(r.id)) > 0;
+    const bool co2Ok = t.day && isNum(t.co2Ppm) && !on("exhaust") && !c.stopped && !maintenance && !st.co2High && !locked && co2.v &&
+                       co2.at > startMs_ && c.now - co2.at <= kCo2FreshMs;
     Out& valve = st.outs["co2_valve"];
-    if (!co2Ok || *co2.v >= t.co2Ppm || (valve.on && c.now - valve.onSince >= kCo2PulseMs)) set("co2_valve", false, true);
-    else if (*co2.v <= t.co2Ppm - kCo2BandPpm) set("co2_valve", true);
+    if (!co2Ok || *co2.v >= t.co2Ppm || (valve.on && c.now - valve.onSince >= kCo2PulseMs)) {
+      set("co2_valve", false, true);
+      if (co2Ok && *co2.v >= t.co2Ppm) st.noRise = 0;  // reached: the gas comes through
+    } else if (*co2.v <= t.co2Ppm - kCo2BandPpm && !valve.on && c.now - valve.changedAt >= kSwitchGapMs) {
+      // Each pulse is judged at the next: CO2 that has not risen since the last one's start counts
+      st.noRise = std::isnan(st.pulseFromPpm) || *co2.v >= st.pulseFromPpm + kCo2RisePpm ? 0 : st.noRise + 1;
+      if (st.noRise >= kCo2NoRisePulses) {
+        c.rt.latches[co2Latch(r.id)] = {{"at", c.epoch}, {"key", "climate.co2"}, {"name", r.name}, {"pulses", kCo2NoRisePulses}};
+        c.log.add(c.epoch, "alarm", "alarm", say("ev.climate.co2_no_rise", {{"name", r.name}, {"pulses", kCo2NoRisePulses}}),
+                  say("latch.climate.co2", {{"name", r.name}, {"pulses", kCo2NoRisePulses}}), {{"room", r.id}});
+        st.noRise = 0;
+        st.pulseFromPpm = kNaN;
+      } else {
+        st.pulseFromPpm = *co2.v;
+        set("co2_valve", true);
+      }
+    }
 
     for (const auto& kind : climateOutputs()) out.want(climateRole(r.id, kind), on(kind.c_str()));
   }
@@ -216,7 +264,7 @@ json Climate::status(const Ctx& c, int secondOfDay, const NetDevices& dev, const
     const ClimateRoomCfg e = effectiveRoom(c.cfg, r);
     const Air temp = air(c, dev, climateRole(r.id, "temp"), kTempMinC, kTempMaxC);
     const Air rh = air(c, dev, climateRole(r.id, "rh"), 0, 100);
-    const Air co2 = air(c, dev, climateRole(r.id, "co2"), 0, kCo2MaxPpm);
+    const Air co2 = air(c, dev, climateRole(r.id, "co2"), kCo2MinPpm, kCo2MaxPpm);
     const auto st = rooms_.find(r.id);
     json outs = json::object();
     for (const auto& kind : climateOutputs()) {
@@ -245,6 +293,7 @@ json Climate::status(const Ctx& c, int secondOfDay, const NetDevices& dev, const
                    {"air", {{"tempC", orNull(temp.v, 1)}, {"rhPct", orNull(rh.v, 0)}, {"vpdKpa", orNull(vpdOf(temp, rh), 2)}, {"co2Ppm", orNull(co2.v, 0)}}},
                    {"missing", missing},
                    {"co2High", st != rooms_.end() && st->second.co2High},
+                   {"co2Locked", c.rt.latches.count(co2Latch(r.id)) > 0},
                    {"outputs", outs},
                    {"plant", plant}});
   }

@@ -156,8 +156,10 @@ json shellySwitchConfig(const RoleDef& r, const json& current) {
   if (r.pulse) c["auto_off_delay"] = autoOffS(r);
   // A device with an input of its own must not switch the output by it: the robot reads the input
   if (current.is_object() && current.contains("in_mode")) c["in_mode"] = "detached";
-  // A power limit where the role has one and the device can keep it (RAT-069)
-  if (r.powerLimitW > 0 && current.is_object() && current.contains("power_limit")) c["power_limit"] = r.powerLimitW;
+  // A power limit where the role has one and the device can keep it (RAT-069); only ever lower than
+  // the device's, which is its rating or what a person set there
+  if (r.powerLimitW > 0 && current.is_object() && current.contains("power_limit") && current["power_limit"].is_number())
+    c["power_limit"] = std::min(r.powerLimitW, current["power_limit"].get<double>());
   return c;
 }
 
