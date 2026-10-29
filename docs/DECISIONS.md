@@ -956,8 +956,9 @@ watering follow with decisions of their own.
   - An answer counts only for the request it answers.
   - An output let go (its role released or moved, its device removed or
     moved, a backup restored) is switched off, and the off is repeated
-    until the device answers; after a minute an alarm says it may still
-    be on. A want from before never switches a later binding on.
+    until the device answers as itself; after a minute, or at once where
+    another device answers at its address, an alarm says it may still be
+    on. A want from before never switches a later binding on.
   - Every output switches only through the gateway (R1).
 - **Values from devices.** A role that reads a value (a float switch, a
   temperature) takes it from one of these:

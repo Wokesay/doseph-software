@@ -256,6 +256,7 @@ void Robot::boot() {
     // A configuration that cannot be read is kept as a copy and the robot stays stopped (R6)
     if (stateUnknown) store_.write("config.broken.json", *s);
   }
+  const bool configBroken = stateUnknown;
   // Push channels that cannot be read are none: nothing is sent to an address no one checked (SD-124)
   if (auto s = store_.read(kPushFile)) {
     try {
@@ -321,14 +322,21 @@ void Robot::boot() {
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
   act_.stopAll();
   outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
-  {
-    // What is kept of a device the configuration no longer has goes: a later one with its ID starts afresh
-    json kept = devices_.secretsJson();
+  if (!configBroken) {
+    // What is kept of a device the configuration no longer has, or has at another address, goes: a
+    // later one with its ID starts afresh, and no password reaches another host. With a configuration
+    // that could not be read nothing goes: it may come back.
+    json kept;
+    if (auto s = store_.read(kDeviceSecretsFile)) kept = json::parse(*s, nullptr, false);
     bool dropped = false;
-    for (const auto& [id, v] : kept.items())
-      if (!cfg_.device(id)) {
-        devices_.forget(id);
-        dropped = true;
+    if (kept.is_object())
+      for (const auto& [id, v] : kept.items()) {
+        const NetDeviceCfg* d = cfg_.device(id);
+        const std::string at = jstr(v, "address");
+        if (!d || (!at.empty() && at != d->address)) {
+          devices_.forget(id);
+          dropped = true;
+        }
       }
     if (dropped) saveDeviceSecrets();
   }
@@ -2222,7 +2230,14 @@ std::vector<WatchInput::Role> Robot::roleStates(Ms now) const {
   return out;
 }
 
-bool Robot::saveDeviceSecrets() { return store_.write(kDeviceSecretsFile, devices_.secretsJson().dump()); }
+bool Robot::saveDeviceSecrets() {
+  // Each entry with the address it belongs to: a configuration that moved the device without this
+  // file being written after it (a power loss between the two) drops it at the next start
+  json j = devices_.secretsJson();
+  for (auto& [id, v] : j.items())
+    if (const NetDeviceCfg* d = cfg_.device(id)) v["address"] = d->address;
+  return store_.write(kDeviceSecretsFile, j.dump());
+}
 
 // After the configuration changed (a device added or removed, a role bound or released, an import):
 // an output whose binding moved or went is let go and switched off, and a device that went or moved
@@ -2285,7 +2300,9 @@ Result Robot::addDevice(const json& j) {
   const Config before = cfg_;
   Result r = saveConfig(next, say("ev.device.added", {{"name", d.name}}));
   if (r.status != 200) return r;
-  reconcileDevices(before);  // an ID used before starts afresh: nothing it said, no password
+  reconcileDevices(before);
+  devices_.forget(d.id);  // an ID used before starts afresh: nothing it said, no password
+  saveDeviceSecrets();
   return Result::ok({{"id", d.id}});
 }
 
@@ -2303,7 +2320,8 @@ Result Robot::removeDevice(const std::string& id) {
   Result r = saveConfig(next, say("ev.device.removed", {{"name", name}}));
   if (r.status != 200) return r;
   reconcileDevices(before);
-  if (!saveDeviceSecrets()) return Result::fail(500, say("store.failed"));
+  // Removed either way; a password file not written is dropped at the next start, as its device is gone
+  if (!saveDeviceSecrets()) log_.add(clock_.epoch(), "config", "warn", say("store.failed"));
   return r;
 }
 

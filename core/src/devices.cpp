@@ -163,8 +163,13 @@ std::vector<NetAnswer> NetDevices::tick(const Config& cfg, Ms now) {
       ++it;
       continue;
     }
+    if (it->second.kind == "release") {
+      failed.push_back({it->first, it->second.device, "release", false, nullptr, false});
+      it = pending_.erase(it);
+      continue;
+    }
     seen_[it->second.device].problem = say("device.no_answer");
-    if (it->second.kind == "gateway") failed.push_back({it->first, it->second.device, it->second.tag, false, nullptr});
+    if (it->second.kind == "gateway") failed.push_back({it->first, it->second.device, it->second.tag, false, nullptr, false});
     it = pending_.erase(it);
   }
   for (const auto& d : cfg.devices) {
@@ -207,6 +212,15 @@ long long NetDevices::rpcAt(const NetDeviceCfg& d, const std::string& user, cons
   return id;
 }
 
+long long NetDevices::releaseRpc(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& ownId,
+                                const std::string& method, const json& params, Ms now) {
+  NetRequest r = request(d, user, password, "POST", "/rpc", {{"method", method}, {"params", params}});
+  const long long id = r.id;
+  pending_[id] = {d.id, "release", "release", now, ownId};
+  out_.push_back(std::move(r));
+  return id;
+}
+
 std::vector<NetRequest> NetDevices::take() {
   std::vector<NetRequest> out;
   out.swap(out_);
@@ -219,10 +233,16 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   if (it == pending_.end()) return std::nullopt;  // late, after its time ran out
   const Pending p = it->second;
   pending_.erase(it);
+  if (p.kind == "release") {
+    // Apart from what this module keeps of the device, which may be gone or another one by now
+    const bool done = status >= 200 && status < 300 && body.is_object() && !body.contains("error");
+    const bool other = done && !p.ownId.empty() && jstr(body, "src") != p.ownId;
+    return NetAnswer{id, p.device, "release", done && !other, nullptr, other};
+  }
   Seen& s = seen_[p.device];
   auto fail = [&](Msg why) -> std::optional<NetAnswer> {
     s.problem = std::move(why);
-    if (p.kind == "gateway") return NetAnswer{id, p.device, p.tag, false, nullptr};
+    if (p.kind == "gateway") return NetAnswer{id, p.device, p.tag, false, nullptr, s.other};
     return std::nullopt;
   };
   if (status == 0) return fail(say("device.unreachable"));
@@ -277,7 +297,7 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
     s.statusAt = now;
     return std::nullopt;
   }
-  return NetAnswer{id, p.device, p.tag, true, result};
+  return NetAnswer{id, p.device, p.tag, true, result, false};
 }
 
 void NetDevices::mqttConnected(bool on) {
@@ -462,6 +482,16 @@ void NetDevices::setCredentials(const std::string& device, const std::string& us
 
 bool NetDevices::hasPassword(const std::string& device) const { return credentials_.count(device) > 0; }
 
+std::string NetDevices::ownId(const std::string& device) const {
+  const auto it = ownIds_.find(device);
+  return it == ownIds_.end() ? std::string() : it->second;
+}
+
+bool NetDevices::isOther(const std::string& device) const {
+  const auto it = seen_.find(device);
+  return it != seen_.end() && it->second.other;
+}
+
 std::pair<std::string, std::string> NetDevices::credentials(const std::string& device) const {
   const auto it = credentials_.find(device);
   return it == credentials_.end() ? std::pair<std::string, std::string>{} : std::pair<std::string, std::string>{it->second.user, it->second.password};
@@ -498,7 +528,7 @@ void NetDevices::forget(const std::string& device) {
   credentials_.erase(device);
   ownIds_.erase(device);
   for (auto it = pending_.begin(); it != pending_.end();)
-    it = it->second.device == device && it->second.kind != "gateway" ? pending_.erase(it) : std::next(it);
+    it = it->second.device == device && it->second.kind != "gateway" && it->second.kind != "release" ? pending_.erase(it) : std::next(it);
 }
 
 }  // namespace doseph

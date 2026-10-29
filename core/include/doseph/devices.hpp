@@ -89,6 +89,7 @@ struct NetAnswer {
   std::string device, tag;
   bool ok = false;
   json result = nullptr;
+  bool other = false;  // another device answered: what was asked reached the wrong one
 };
 
 // A value of a role, with why there is none
@@ -106,9 +107,11 @@ class NetDevices {
   // A request of the gateway's to a Shelly the configuration names: Switch.Set and the like. Its
   // answer comes back from response() as a NetAnswer with the ID returned here (0: no such device).
   long long rpc(const Config& cfg, const std::string& device, const std::string& method, const json& params, const std::string& tag, Ms now);
-  // The same to a device the configuration may no longer name, with the credentials it had
-  long long rpcAt(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& method,
-                  const json& params, const std::string& tag, Ms now);
+  // A request of the gateway's for an output it let go, to a device the configuration may no longer
+  // name, with the credentials and own ID it had. Its answer counts only from that device, and
+  // touches nothing else this module keeps; it comes back with the tag "release".
+  long long releaseRpc(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& ownId,
+                       const std::string& method, const json& params, Ms now);
   std::vector<NetRequest> take();
   // The platform's answer: status 0 when the device was not reached. An answer for the gateway is
   // returned; the polls are taken in here.
@@ -132,6 +135,10 @@ class NetDevices {
   void setCredentials(const std::string& device, const std::string& user, const std::string& password);
   bool hasPassword(const std::string& device) const;
   std::pair<std::string, std::string> credentials(const std::string& device) const;
+  // The ID a Shelly said it has; "" before it said
+  std::string ownId(const std::string& device) const;
+  // Another device answers at its address
+  bool isOther(const std::string& device) const;
   // The file of what is kept apart from the configuration: passwords, and the ID each Shelly said
   // it has (a device is known by it; its address is only where it is reached now). Never in a
   // backup or an answer of the API (SD-132).
@@ -156,8 +163,9 @@ class NetDevices {
     std::map<std::string, json> entities;     // esphome: entity → {body, at} or {error, at} of its last answer
   };
   struct Pending {
-    std::string device, kind, tag;  // kind: info | status | entity | gateway
+    std::string device, kind, tag;  // kind: info | status | entity | gateway | release
     Ms sent = 0;
+    std::string ownId{};  // release: the device it must be
   };
   struct MqttSeen {
     std::string payload;
@@ -169,6 +177,8 @@ class NetDevices {
   NetRequest request(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& method,
                      const std::string& path, json body);
   NetRequest request(const NetDeviceCfg& d, const std::string& method, const std::string& path, json body);
+  long long rpcAt(const NetDeviceCfg& d, const std::string& user, const std::string& password, const std::string& method, const json& params,
+                  const std::string& tag, Ms now);
   std::map<std::string, Seen> seen_;
   std::map<long long, Pending> pending_;
   std::map<std::string, MqttSeen> mqtt_;

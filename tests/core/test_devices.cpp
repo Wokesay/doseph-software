@@ -551,3 +551,62 @@ TEST_CASE("Devices: a device is added once by its address; a role that is refuse
   CHECK_FALSE(s.robot().wantOutput("tank_full", true));
   CHECK_FALSE(s.robot().wantOutput("heater", true));
 }
+
+TEST_CASE("Devices: a device removed while reachable has its output switched off with no alarm; one moved by an import does not disturb the device now at the new address (SD-132)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  REQUIRE(s.robot().removeDevice("d1").status == 200);
+  s.step(70 * kSecond);
+  CHECK_FALSE(relay->switches[0].on);
+  CHECK(s.robot().events(0, std::numeric_limits<Epoch>::max(), "", 200).dump().find("ev.device.release_failed") == std::string::npos);
+  // Moved by an import: the release goes to the old address, and the device at the new one stays well
+  bindValve(s);
+  s.robot().wantOutput("refill_valve", true);
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
+  json file = s.robot().configJson();
+  file["devices"][0]["address"] = "shelly-plug.local";
+  REQUIRE(s.robot().importConfig(file).status == 200);
+  for (int i = 0; i < 70; ++i) {
+    s.step(kSecond);
+    if (i > 10) REQUIRE(deviceStatus(s, "d1")["online"] == true);
+  }
+  CHECK_FALSE(relay->switches[0].on);
+  CHECK(deviceStatus(s, "d1")["problem"].is_null());
+  CHECK(s.robot().events(0, std::numeric_limits<Epoch>::max(), "", 200).dump().find("ev.device.release_failed") == std::string::npos);
+}
+
+TEST_CASE("Devices: a status that shows the output on before the answer to its switch-on does not switch it off again (SD-132)") {
+  Rig g;
+  g.run(10 * kSecond);
+  REQUIRE(g.out.want("refill_valve", true));
+  // Read-back, then the switch-on goes out; the device's status comes back before its answer
+  std::vector<NetRequest> late;
+  for (int i = 0; i < 20 && late.empty(); ++i) {
+    g.now += kSecond;
+    g.tick();
+    for (int round = 0; round < 10 && !g.queued.empty() && late.empty(); ++round) {
+      const std::vector<NetRequest> batch = g.queued;
+      g.queued.clear();
+      for (const auto& r : batch)
+        if (r.body.value("method", "") == "Switch.Set" && r.body["params"].value("on", false)) {
+          g.relay.handle(r.body, g.now);  // it switches on; its answer is late
+          late.push_back(r);
+        } else {
+          g.deliver(r);
+        }
+    }
+  }
+  REQUIRE(g.relay.switches[0].on);
+  g.now += 5 * kSecond;
+  g.tick();
+  g.answerAll();  // the status says on
+  g.now += 100;
+  g.tick();  // the gateway looks before the switch-on's answer is in
+  for (const auto& r : late) g.deliver(r);
+  g.run(20 * kSecond);
+  CHECK(g.relay.switches[0].on);
+  CHECK(g.out.status(g.cfg, g.dev, g.now)["refill_valve"]["state"] == "on");
+}

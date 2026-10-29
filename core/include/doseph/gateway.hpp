@@ -257,7 +257,7 @@ class NetOutputs {
   };
   struct Release {
     NetDeviceCfg device;
-    std::string user, password;
+    std::string user, password, ownId;
     int channel = 0;
     long long pending = 0;
     Ms lastSent = 0, until = 0;

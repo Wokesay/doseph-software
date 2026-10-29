@@ -680,7 +680,7 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
       continue;
     }
     if (it->pending == 0 && now - it->lastSent >= kNetPollMs) {
-      it->pending = dev.rpcAt(it->device, it->user, it->password, "Switch.Set", {{"id", it->channel}, {"on", false}}, "release", now);
+      it->pending = dev.releaseRpc(it->device, it->user, it->password, it->ownId, "Switch.Set", {{"id", it->channel}, {"on", false}}, now);
       it->lastSent = now;
     }
     ++it;
@@ -697,6 +697,11 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     if (o.key != key) {  // bound anew: off first, then its settings are checked; nothing wanted yet
       o = Out{};
       o.key = key;
+      // An off still going out for this very output, let go before, would undo what it does now
+      const NetDeviceCfg* d = cfg.device(b->device);
+      releasing_.erase(std::remove_if(releasing_.begin(), releasing_.end(),
+                                      [&](const Release& r) { return d && r.device.address == d->address && r.channel == b->channel; }),
+                       releasing_.end());
     }
     if (!dev.online(b->device, now)) {
       // Away: its settings may be gone with it (a reset, a power loss); checked again once back
@@ -715,8 +720,9 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     }
     const auto isOn = dev.output(b->device, b->channel, now);
     const json id = b->channel;
-    // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019)
-    const bool unchecked = isOn == true && !(o.onSent && o.verified);
+    // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019).
+    // A switch-on whose answer is not in yet is the robot's own.
+    const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on"));
     if (force || !o.want || hold || unchecked) {
       // Off at once, and again while the device says on or has not said; a Stop and a start always
       if ((force || isOn != false || o.onSent) && (force || now - o.lastOff >= kNetPollMs)) off(cfg, dev, def.id, o, now);
@@ -739,8 +745,15 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
   if (a.tag == "release") {
     for (auto it = releasing_.begin(); it != releasing_.end(); ++it)
       if (it->pending == a.id) {
-        if (a.ok) releasing_.erase(it);  // the device switched it off
-        else it->pending = 0;            // again at the next poll
+        if (a.ok) {
+          releasing_.erase(it);  // the device switched it off
+        } else if (a.other) {
+          // Another device answers at its address: nothing more goes there, and the alarm says so
+          failedReleases_.push_back(it->device.name);
+          releasing_.erase(it);
+        } else {
+          it->pending = 0;  // again at the next poll
+        }
         return;
       }
     return;
@@ -806,11 +819,17 @@ void NetOutputs::release(const Config& cfg, NetDevices& dev, const std::string& 
   if (!b) return;
   Release r;
   r.device = *cfg.device(b->device);
+  if (dev.isOther(b->device)) {
+    // Another device answers at its address: an off would reach the wrong one
+    failedReleases_.push_back(r.device.name);
+    return;
+  }
   std::tie(r.user, r.password) = dev.credentials(b->device);
+  r.ownId = dev.ownId(b->device);
   r.channel = b->channel;
   r.lastSent = now;
   r.until = now + kMinute;
-  r.pending = dev.rpcAt(r.device, r.user, r.password, "Switch.Set", {{"id", r.channel}, {"on", false}}, "release", now);
+  r.pending = dev.releaseRpc(r.device, r.user, r.password, r.ownId, "Switch.Set", {{"id", r.channel}, {"on", false}}, now);
   releasing_.push_back(std::move(r));
 }
 
@@ -839,8 +858,9 @@ json NetOutputs::status(const Config& cfg, const NetDevices& dev, Ms now) const 
     else if (o.refused) j["state"] = "refused";
     else {
       const auto on = dev.output(b->device, b->channel, now);
-      if (on == true) j["state"] = o.onSent && o.verified ? "on" : "unchecked";
-      else if (!o.stage.empty() || !on) j["state"] = "checking";
+      if (on == true) j["state"] = o.verified && (o.onSent || o.stage == "on") ? "on" : "unchecked";
+      else if (!o.stage.empty()) j["state"] = "checking";
+      else if (!on) j["state"] = "waiting";  // its status not read yet, or stale
       else j["state"] = o.verified ? "off" : "unchecked";
     }
     out[def.id] = j;
