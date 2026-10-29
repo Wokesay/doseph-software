@@ -101,6 +101,7 @@ NetTwin::NetTwin() {
   plug.id = "shellyplusplugs-sim000002";
   plug.model = "SNPL-00112EU";
   plug.switches.push_back({false, 0, shellySwitchDefaults(false)});
+  plug.circulates = true;
   shellies_.push_back(plug);
   FakeShelly old;
   old.address = "shelly-old.local";
@@ -161,6 +162,12 @@ FakeShelly* NetTwin::inlet() {
   for (auto& s : shellies_)
     if (s.inlet) return &s;
   return nullptr;
+}
+
+bool NetTwin::circulating() const {
+  for (const auto& s : shellies_)
+    if (s.circulates && s.online && !s.switches.empty() && s.switches[0].on) return true;
+  return false;
 }
 
 FakeEsphome* NetTwin::esphome(const std::string& address) {

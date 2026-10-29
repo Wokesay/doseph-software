@@ -551,6 +551,23 @@ test("refill: the inlet's relay as the valve and its input as the float; a fill 
   await expect(refill.getByTestId("refill-start")).toBeDisabled();
 });
 
+test("circulation: the twin's plug as the circulation pump; set to always, it runs (SD-132)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("devices");
+  await card.locator("input[name=device-address]").fill("shelly-plug.local");
+  await card.locator("input[name=device-name]").fill("Circulation");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d1")).toContainText("reachable", { timeout: 15000 });
+  await card.getByTestId("role-circulation_pump").locator("select[name=role-device-circulation_pump]").selectOption("d1");
+  await page.getByTestId("save-role-circulation_pump").click();
+  const circulation = page.getByTestId("circulation");
+  await expect(circulation.getByRole("tab", { name: "While mixing" })).toHaveAttribute("aria-selected", "true");
+  await circulation.getByRole("tab", { name: "Always" }).click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(card.getByTestId("role-state-circulation_pump")).toHaveText("on", { timeout: 20000 });
+});
+
 test("a lock is set to report only in the settings, with a warning that leak, Stop and the limits always hold; the watchdog notes it until it locks again (SD-133)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");

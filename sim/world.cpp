@@ -264,9 +264,10 @@ void World::step(Ms dt) {
     if (p.siphon && p.state != 1 && !p.empty && !p.outletBlocked) outOfTip(p, kSiphonMlPerMin * dts / 60.0);
   // Water temperature: a daily curve (assumption)
   tank.temp = 20.5 + 1.5 * std::sin(2 * kPi * static_cast<double>(now_ % 86400000) / 86400000.0);
-  // Mixing: with circulation one turnover is about t63 (assumption; RAT-052 measured t63 26 s at 20.4 L);
-  // without it slow
-  const double tau = flowing() ? std::max(20.0, tank.volumeL / pumpLpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
+  // Mixing: one turnover of the flow, the circulation pump's added, is about t63 (assumption; RAT-052
+  // measured t63 26 s at 20.4 L); without either slow
+  const double lpm = (flowing() ? pumpLpm : 0.0) + (circulation ? kCirculationLpm : 0.0);
+  const double tau = lpm > 0 ? std::max(20.0, tank.volumeL / lpm * 60.0) : 1800.0 * std::max(1.0, tank.volumeL / 20.0);
   const double k = 1.0 - std::exp(-dts / tau);
   tank.ec += tank.pendingEc * k;
   tank.pendingEc *= (1.0 - k);

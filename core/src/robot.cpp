@@ -422,6 +422,7 @@ void Robot::tick() {
   if (wasFilling && !refill_.filling()) fillEnded(opened);
   c.refilling = refill_.filling();
   if (c.refilling != wasFilling) saveState(true);
+  outputs_.want("circulation_pump", circulationWanted(c));
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
@@ -767,6 +768,7 @@ json Robot::state() {
              r["maxFillMin"] = cfg_.refill.maxFillMin;
              return r;
            }()},
+          {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -2423,6 +2425,24 @@ void Robot::afterFill() {
   const Ms now = clock_.nowMs();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   mixFirstNow();
+}
+
+// The circulation pump (SD-132, PD-421): never during Stop, maintenance or a hold; set to always,
+// all the time; otherwise with a dosing round and a fill, until the check has measured again after
+// its mixing wait. It mixes the tank; the mixing wait stays as long as without it (#1).
+bool Robot::circulationWanted(const Ctx& c) const {
+  if (c.stopped || c.maintenanceUntil > 0 || !c.hold.empty()) return false;
+  if (cfg_.circulation.mode == "always") return true;
+  const Phase ph = cycle_.phase();
+  return c.refilling || cycle_.mixPending() || ph == Phase::Dose || ph == Phase::Mix || ph == Phase::Remeasure;
+}
+
+Result Robot::putCirculation(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("mode") || !j["mode"].is_string()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  next.circulation.mode = j["mode"].get<std::string>();
+  return saveConfig(next, changed("cfg.what.circulation"));
 }
 
 void Robot::fillEnded(bool opened) {

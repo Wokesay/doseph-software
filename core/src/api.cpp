@@ -427,6 +427,7 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("PUT", {"refill"})) return fromResult(robot_.putRefill(body));
   if (is("POST", {"refill", "start"})) return fromResult(robot_.startRefill());
   if (is("POST", {"refill", "stop"})) return fromResult(robot_.stopRefill());
+  if (is("PUT", {"circulation"})) return fromResult(robot_.putCirculation(body));
   // Network devices and their roles (SD-132)
   if (is("GET", {"devices"})) return jsonResp(200, robot_.devices());
   if (is("POST", {"devices"})) return fromResult(robot_.addDevice(body));

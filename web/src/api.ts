@@ -119,6 +119,8 @@ export type RobotState = {
   // The refill valve (SD-132): a fill under way and since when, why it was started, whether the float
   // says full, why a fill cannot start now, and the longest fill
   refill: { filling: boolean; asked: boolean; opened: boolean; since: number | null; why: "top_up" | "button" | null; full: boolean | null; blocked: Msg | null; maxFillMin: number };
+  // The circulation pump (SD-132): its mode, and whether the robot wants it on now
+  circulation: { mode: CirculationMode; wanted: boolean };
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   // `head`: the pump head fitted, null without one (SD-108)
@@ -157,6 +159,7 @@ export type Config = {
   locks: { reportOnly: string[] };
   // The refill valve's longest fill, 1 to 25 min (RAT-079)
   refill: { maxFillMin: number };
+  circulation: { mode: CirculationMode };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
   recipes: Recipe[];
@@ -281,6 +284,9 @@ export const del = <T = any>(p: string) => api<T>("DELETE", p);
 export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${action}`, body);
 
 // The locks a person releases that may be set to report only, by their kind (SD-133); as the core's
+/** The circulation pump runs with each dosing round and fill until mixed in, or always (SD-132). */
+export type CirculationMode = "mixing" | "always";
+
 export const REPORTABLE_LOCKS = ["flow.dry", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return", "refill"] as const;
 // Whether a latch holds: one set while its lock reported only holds nothing (SD-133)
 export const holds = (latch: { reportOnly?: boolean } | undefined) => !!latch && !latch.reportOnly;

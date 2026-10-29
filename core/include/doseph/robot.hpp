@@ -121,6 +121,8 @@ class Robot : public RemoteRuns {
   Result startRefill();
   Result stopRefill();
   Result putRefill(const json& j);
+  // The circulation pump (SD-132): {mode: "mixing" | "always"}
+  Result putCirculation(const json& j);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -317,6 +319,7 @@ class Robot : public RemoteRuns {
   void afterFill();
   // A fill ended: the check starts anew, after the water was mixed in where the valve was open
   void fillEnded(bool opened);
+  bool circulationWanted(const Ctx& c) const;
   bool saveDeviceSecrets();
   void reconcileDevices(const Config& before);
   // The roles' states for the watchdog: each bound role, whether it works, and why not

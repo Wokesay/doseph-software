@@ -116,6 +116,13 @@ struct RefillCfg {
   double maxFillMin = 15;
 };
 
+// The circulation pump (SD-132, PD-421): "mixing" runs it with each dosing round and fill until
+// the check has measured again after its mixing wait; "always" runs it all the time. Never during
+// Stop, maintenance or a hold.
+struct CirculationCfg {
+  std::string mode = "mixing";
+};
+
 // Fixed safety limits in code. The configuration may only tighten them (R7);
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
@@ -232,6 +239,7 @@ struct Config {
   ControlCfg control;
   LocksCfg locks;
   RefillCfg refill;
+  CirculationCfg circulation;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;

@@ -253,6 +253,7 @@ void Simulation::step(Ms dt, Ms tick) {
     net_.advance(now);
     // The twin's inlet (SD-132): an open valve lets tap water in, and the float switch says full at
     // its line (assumptions: 4 L/min, the float at 105 L)
+    world_.circulation = net_.circulating();
     if (sim::FakeShelly* v = net_.inlet()) {
       if (v->online && v->switches[0].on) world_.addWater(kInletLpm * static_cast<double>(d) / 60000.0);
       if (!v->floatStuck) v->setInput(0, world_.tank.volumeL >= kFloatAtL);
