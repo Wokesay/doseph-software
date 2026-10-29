@@ -75,6 +75,9 @@ class Simulation {
   std::string demoPassword() const { return opts_.password; }
   double speed = 1.0;
   static constexpr double kMaxSpeed = 600;
+  // The twin's inlet (SD-132; assumptions): tap water through the valve, and the float switch's line
+  static constexpr double kInletLpm = 4.0;
+  static constexpr double kFloatAtL = 105.0;
 
  private:
   void build(bool fresh);

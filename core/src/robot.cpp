@@ -63,6 +63,7 @@ Ctx Robot::ctx() {
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();
   c.channelJob = channelJobActive();
+  c.refilling = refill_.filling();
   // The hardware release (SD-110): a leak and high level hold until a person releases their latch
   const Release r = hw_.release();
   c.pumpCut = r.noFlow;
@@ -349,6 +350,12 @@ void Robot::boot() {
     rt_.stopped = true;
     log_.add(bootEpoch_, "alarm", "alarm", say("ev.boot.state_unknown"), say("ev.boot.state_unknown.text"));
   }
+  {
+    // A fill cut by the restart: the valve is off with every output, the fill is reported and
+    // never resumed, and its water is mixed in first (SD-132, R6)
+    Ctx c = ctx();
+    if (RefillValve::reportCut(c)) cycle_.mixFirst(static_cast<Ms>(cycleSettings(c).mixMin * 60) * kSecond);
+  }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
     if (r.intoTank())
@@ -408,6 +415,12 @@ void Robot::tick() {
   act_.enforce(c);
   // Network devices (SD-132): polled, and their outputs switched only by the gateway (R1)
   for (const auto& a : devices_.tick(cfg_, now)) outputs_.answer(cfg_, devices_, a, now);
+  // The refill valve (SD-132): a fill "top up water" asked for starts, one under way ends when it is
+  // done or has to; the gateway switches the valve
+  const bool wasFilling = refill_.filling();
+  if (refill_.tick(c, refillIn(now), outputs_)) afterFill();
+  c.refilling = refill_.filling();
+  if (c.refilling != wasFilling) saveState(true);
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
@@ -748,6 +761,11 @@ json Robot::state() {
           {"jumpLocks", rt_.jumpLocks},
           {"newTank", rt_.newTank},
           {"topUp", rt_.topUp},  // "top up water" is raised (SD-115)
+          {"refill", [&] {
+             json r = refill_.status(c, refillIn(c.now));
+             r["maxFillMin"] = cfg_.refill.maxFillMin;
+             return r;
+           }()},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -2248,6 +2266,17 @@ bool Robot::saveDeviceSecrets() {
 // to another address or kind is forgotten with its password and the ID it had (SD-132)
 void Robot::reconcileDevices(const Config& before) {
   const Ms now = clock_.nowMs();
+  // A fill whose valve or float changed ends: the new binding starts with nothing wanted
+  auto bound = [](const Config& c, const char* role) {
+    if (!c.roles.count(role)) return json(nullptr);
+    json j = bindingToJson(c.roles.at(role));
+    if (const NetDeviceCfg* d = c.device(c.roles.at(role).device)) j["at"] = deviceToJson(*d);
+    return j;
+  };
+  if (refill_.filling() && (bound(before, "refill_valve") != bound(cfg_, "refill_valve") || bound(before, "tank_full") != bound(cfg_, "tank_full"))) {
+    Ctx c = ctx();
+    if (refill_.stop(c, outputs_, say("refill.end.changed")).value_or(false)) afterFill();
+  }
   for (const auto& def : roleDefs()) {
     if (def.kind != "output") continue;
     const auto was = before.roles.find(def.id);
@@ -2373,6 +2402,53 @@ Result Robot::deleteRole(const std::string& role) {
 bool Robot::wantOutput(const std::string& role, bool on) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   return outputs_.want(role, on);
+}
+
+RefillIn Robot::refillIn(Ms now) const {
+  RefillIn in;
+  const RoleValue v = devices_.value(cfg_, "tank_full", now);
+  in.floatAssigned = v.state != "not_assigned";
+  if (v.state == "ok" && v.value->is_boolean()) in.full = v.value->get<bool>();
+  in.valve = jstr(outputs_.status(cfg_, devices_, now)["refill_valve"], "state");
+  in.busy = doser_.busy() || cycle_.dosing() || channelJobActive() || probe_.has_value();
+  return in;
+}
+
+void Robot::afterFill() {
+  // Fresh water moves pH, EC and the temperature: the jumps are explained (RAT-042), and the check
+  // mixes the water in before it measures (SD-112)
+  const Ms now = clock_.nowMs();
+  for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
+  mixFirstNow();
+}
+
+Result Robot::startRefill() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Ctx c = ctx();
+  if (auto why = refill_.start(c, refillIn(c.now), outputs_)) return Result::fail(409, *why);
+  saveState(true);
+  saveEvents();
+  return Result::ok();
+}
+
+Result Robot::stopRefill() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Ctx c = ctx();
+  const auto opened = refill_.stop(c, outputs_, say("refill.end.person"));
+  if (!opened) return Result::fail(409, say("refill.none"));
+  if (*opened) afterFill();
+  else restartCycle();
+  saveState(true);
+  saveEvents();
+  return Result::ok();
+}
+
+Result Robot::putRefill(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("maxFillMin") || !j["maxFillMin"].is_number()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  next.refill.maxFillMin = j["maxFillMin"].get<double>();
+  return saveConfig(next, changed("cfg.what.refill"));
 }
 
 std::vector<NetRequest> Robot::takeDeviceRequests() {

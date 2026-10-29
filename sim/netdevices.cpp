@@ -63,6 +63,12 @@ json FakeShelly::handle(const json& req, Ms now) {
   return rpcError(req, id, -114, "Method " + method + " not found");
 }
 
+void FakeShelly::setInput(int n, bool state) {
+  if (n < 0 || n >= static_cast<int>(inputs.size())) return;
+  inputs[n] = state;
+  if (n < static_cast<int>(switches.size()) && switches[n].config.value("in_mode", "") == "follow") switches[n].on = state;
+}
+
 void FakeShelly::advance(Ms now) {
   for (auto& s : switches) {
     const bool autoOff = s.config.value("auto_off", false);
@@ -101,6 +107,17 @@ NetTwin::NetTwin() {
   old.id = "shelly1-sim000003";
   old.gen = 1;
   shellies_.push_back(old);
+  FakeShelly valve;
+  valve.address = "shelly-valve.local";
+  valve.id = "shellyplus1-sim000004";
+  valve.model = "SNSW-001X16EU";
+  // Set up by the installer: its input, the float switch, does not switch the valve
+  json valveConfig = shellySwitchDefaults(true);
+  valveConfig["in_mode"] = "detached";
+  valve.switches.push_back({false, 0, valveConfig});
+  valve.inputs.push_back(false);
+  valve.inlet = true;
+  shellies_.push_back(valve);
   FakeEsphome esp;
   esp.address = "esp-1.local";
   esp.name = "tank-sensors";
@@ -140,6 +157,12 @@ FakeShelly* NetTwin::shelly(const std::string& address) {
   return nullptr;
 }
 
+FakeShelly* NetTwin::inlet() {
+  for (auto& s : shellies_)
+    if (s.inlet) return &s;
+  return nullptr;
+}
+
 FakeEsphome* NetTwin::esphome(const std::string& address) {
   for (auto& e : esps_)
     if (e.address == address) return &e;
@@ -153,7 +176,9 @@ json NetTwin::toJson() const {
     for (const auto& x : s.switches) sw.push_back({{"on", x.on}, {"config", x.config}});
     json in = json::array();
     for (bool b : s.inputs) in.push_back(b);
-    shellies.push_back({{"address", s.address}, {"gen", s.gen}, {"online", s.online}, {"switches", sw}, {"inputs", in}});
+    json one = {{"address", s.address}, {"gen", s.gen}, {"online", s.online}, {"switches", sw}, {"inputs", in}};
+    if (s.inlet) one["inlet"] = {{"floatStuck", s.floatStuck}};
+    shellies.push_back(one);
   }
   json esps = json::array();
   for (const auto& e : esps_) esps.push_back({{"address", e.address}, {"online", e.online}, {"entities", e.entities}});
@@ -184,10 +209,15 @@ bool NetTwin::control(const std::string& action, const json& body) {
   if (action == "netInput") {
     FakeShelly* s = shelly(address);
     const int n = body.value("channel", 0);
-    if (!s || n < 0 || n >= static_cast<int>(s->inputs.size())) return false;
-    s->inputs[n] = body.value("state", false);
-    // Out of the box the input switches its output ("follow"); detached it does not
-    if (n < static_cast<int>(s->switches.size()) && s->switches[n].config.value("in_mode", "") == "follow") s->switches[n].on = s->inputs[n];
+    if (!s || s->inlet || n < 0 || n >= static_cast<int>(s->inputs.size())) return false;  // the float follows the tank
+    s->setInput(n, body.value("state", false));
+    return true;
+  }
+  if (action == "netFloat") {
+    // The float switch at the inlet sticks, or is free again
+    FakeShelly* s = inlet();
+    if (!s) return false;
+    s->floatStuck = body.value("stuck", false);
     return true;
   }
   if (action == "netId") {

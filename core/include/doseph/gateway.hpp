@@ -59,6 +59,7 @@ struct Ctx {
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
+  bool refilling = false;         // the refill valve fills the tank: no dose and no round meanwhile (SD-132)
   // What holds every pump below the robot (SD-110): "leak", "high_level" (both latched until a
   // person releases them), "stop_button", "release" (off without a known input); "": nothing
   std::string hold{};
@@ -220,7 +221,9 @@ class Doser {
 // the device still says on. An output bound anew, or whose device was away, or that is on without
 // the robot having switched it after a check, is switched off and checked before it may switch on.
 // An output let go (unbound, rebound, its device removed or moved) is switched off, and the off is
-// repeated until the device answers or a minute has passed.
+// repeated until the device answers or a minute has passed. The refill valve closes on its own
+// limits, whatever wants it open (RAT-032): while the float does not say "not full", and once it
+// has been on for the longest fill.
 class NetOutputs {
  public:
   // False for a role that is not an output
@@ -254,6 +257,7 @@ class NetOutputs {
     Msg problem;
     Ms lastOff = -kNetPollMs;
     Ms retryAt = 0;
+    Ms onAt = -1;  // when the robot last switched it on
   };
   struct Release {
     NetDeviceCfg device;
@@ -264,6 +268,7 @@ class NetOutputs {
   };
   void send(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, const std::string& stage, const std::string& method, const json& params, Ms now);
   void off(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, Ms now);
+  static bool limited(const Config& cfg, const NetDevices& dev, const std::string& role, Ms now);
   std::map<std::string, Out> outs_;
   std::vector<Release> releasing_;
   std::vector<std::string> failedReleases_;

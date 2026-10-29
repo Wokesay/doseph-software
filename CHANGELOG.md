@@ -43,6 +43,23 @@ All notable changes to this software. The format follows
   - Device passwords live apart, never in a backup.
   - The simulator has twins of a Shelly relay, a Shelly plug, a
     first-generation Shelly and an ESPHome device.
+- The refill valve with a float switch (SD-132, PD-460), the second part
+  of step 9.
+  - A fill opens when the robot raises "top up water", once each time,
+    or with "Fill now" under Settings › Network devices. It closes when
+    the float switch says full.
+  - No fill opens during Stop, maintenance or a hold, before the
+    placement is confirmed, or without a float that says "not full".
+  - While it fills, the robot doses nothing; afterwards the check mixes
+    the water in first.
+  - A fill that does not end full within the longest fill (15 min by
+    default, at most 25), or whose float loses its value, locks the
+    refill until a person releases it. This lock may be set to report
+    only.
+  - The gateway keeps the valve closed while the float does not say "not
+    full", and past the longest fill, whatever wants it open.
+  - A restart reports a cut fill and does not resume it.
+  - The simulator has a relay at the tank's inlet with a float switch.
 - A lock a person releases can be set to report only, for operations that
   watch their tanks in their own way (SD-133).
   - It covers no flow and dry run, the tank volume, EC or pH without

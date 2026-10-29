@@ -136,6 +136,8 @@ class World {
   void emptyLine(int pump);
 
   void fill(double volumeL, double ec, double ph);
+  // Fresh tap water into the tank (assumption: EC 0.45, pH 7.6)
+  void addWater(double litres);
   json toJson() const;
 
   Tank tank;

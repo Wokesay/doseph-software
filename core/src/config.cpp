@@ -208,6 +208,7 @@ void to_json(json& j, const Config& c) {
                   {"phMaxMlPerDose", c.control.phMaxMlPerDose}, {"maxEcRounds", c.control.maxEcRounds},
                   {"maxPhDoses", c.control.maxPhDoses}};
   j["locks"] = {{"reportOnly", c.locks.reportOnly}};
+  j["refill"] = {{"maxFillMin", numOrNull(c.refill.maxFillMin)}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -349,6 +350,7 @@ Config configFromJson(const json& in) {
     if (!x.is_string()) throw std::invalid_argument("a lock is not a string");
     c.locks.reportOnly.push_back(x.get<std::string>());
   }
+  if (const json& f = objectAt(j, "refill"); f.contains("maxFillMin")) c.refill.maxFillMin = numOrNaN(f, "maxFillMin");
   const json& l = objectAt(j, "limits");
   if (l.contains("minRunS")) c.limits.minRunS = numOrNaN(l, "minRunS");
   if (l.contains("maxRunS")) c.limits.maxRunS = numOrNaN(l, "maxRunS");
@@ -477,6 +479,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     else if (std::find(all.begin(), all.end(), kind) == all.end()) err(say("cfg.locks.unknown", {{"lock", kind}}));
     else if (!reportOnly.insert(kind).second) err(say("cfg.locks.twice", {{"lock", say("lock." + kind)}}));
   }
+  // The refill valve's longest fill (RAT-079)
+  if (!inRange(c.refill.maxFillMin, kRefillMinMin, kRefillMaxMin))
+    err(say("cfg.refill.max_fill", {{"min", kRefillMinMin}, {"max", kRefillMaxMin}}));
 
   // Network devices and their roles (SD-132): an output only on a Shelly, one role per output
   std::set<std::string> deviceIds;
@@ -669,6 +674,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["dayRuns"] = day;
   j["ecInBand"] = s.ecInBand;
   j["topUp"] = s.topUp;
+  j["refill"] = s.refill;
   j["settleMin"] = s.settleMin;
   j["alarms"] = s.alarms;
   j["lastReport"] = s.lastReport;
@@ -767,6 +773,7 @@ RuntimeState runtimeFromJson(const json& j) {
     }
   if (j.contains("ecInBand") && j["ecInBand"].is_object()) s.ecInBand = j["ecInBand"];
   s.topUp = jbool(j, "topUp", false);
+  if (j.contains("refill") && j["refill"].is_object()) s.refill = j["refill"];
   if (j.contains("settleMin") && j["settleMin"].is_array())
     for (const auto& m : j["settleMin"])
       if (m.is_number() && isNum(m.get<double>()) && m.get<double>() >= 0 && s.settleMin.size() < 3) s.settleMin.push_back(m.get<double>());

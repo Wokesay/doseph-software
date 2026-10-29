@@ -526,6 +526,31 @@ test("network devices: a Shelly is added and becomes reachable; the refill valve
   await expect(card.getByTestId("device-d2")).toContainText("only Gen2 and later are used", { timeout: 15000 });
 });
 
+test("refill: the inlet's relay as the valve and its input as the float; a fill by hand opens the valve and ends when the float says full (SD-132)", async ({ page }) => {
+  await login(page);
+  // Without a recipe the cycle doses nothing that a fill would have to wait for
+  await page.goto("/#/recipe");
+  await page.getByRole("button", { name: "No recipe" }).click();
+  await expect(page.getByText("No recipe in force any more")).toBeVisible();
+  await page.goto("/#/settings");
+  const card = page.getByTestId("devices");
+  await card.locator("input[name=device-address]").fill("shelly-valve.local");
+  await card.locator("input[name=device-name]").fill("Inlet");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d1")).toContainText("reachable", { timeout: 15000 });
+  await card.getByTestId("role-refill_valve").locator("select[name=role-device-refill_valve]").selectOption("d1");
+  await page.getByTestId("save-role-refill_valve").click();
+  await card.getByTestId("role-tank_full").locator("select[name=role-device-tank_full]").selectOption("d1");
+  await page.getByTestId("save-role-tank_full").click();
+  const refill = page.getByTestId("refill");
+  await expect(refill.getByTestId("refill-state")).toContainText("Ready", { timeout: 20000 });
+  await refill.getByTestId("refill-start").click();
+  await expect(refill.getByTestId("refill-state")).toContainText("Filling");
+  await sim(page, "speed", { speed: 10 });
+  await expect(refill.getByTestId("refill-state")).toContainText("the tank is full", { timeout: 30000 });
+  await expect(refill.getByTestId("refill-start")).toBeDisabled();
+});
+
 test("a lock is set to report only in the settings, with a warning that leak, Stop and the limits always hold; the watchdog notes it until it locks again (SD-133)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");
