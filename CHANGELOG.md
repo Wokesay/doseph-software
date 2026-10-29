@@ -30,6 +30,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The decisions for climate (SD-136): per room an exhaust fan, a
+  circulation fan, a heater with its own thermostat, a humidifier, a
+  dehumidifier and a CO2 valve on Shelly outputs; a plant's phase sets
+  temperature, humidity (or VPD) and CO2; day and night follow a light
+  circuit; light is dimmed, then switched off when the room gets too
+  hot; STOP leaves the fans on and switches the rest off. Built in
+  step 9.6.
 - The decisions for light (SD-135): any number of light circuits on
   Shelly outputs, switched or dimmed over 0–10 V, with sunrise and sunset
   per circuit; a plant's phase sets the hours of light and the

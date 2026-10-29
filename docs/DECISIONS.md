@@ -1295,3 +1295,93 @@ by the minimal principle. Climate follows with decisions of its own.
     the switch by hand. It may edit plants and their phases (SD-128), and
     so the hours of light and the brightness a phase sets, within the
     same limits (0 to 24 h, 1 to 100 %).
+
+## SD-136: Climate: fans, heater, humidity and CO2, set by the plant's phase
+
+2026-10-29. Step 9 of #10, after light (SD-135). The owner decided the
+questions below in this session. The rest are control details decided here
+by the minimal principle: a safety frame, not a guard for every case.
+
+- **What** (decided by the owner: fans, a heater, a humidifier and a
+  dehumidifier, and CO2).
+  - Climate is kept per room. A room has at most one output of each kind,
+    each a Shelly Gen2+ output (SD-132): an exhaust fan, a circulation
+    fan, a heater, a humidifier, a dehumidifier and a CO2 valve. Several
+    devices of one kind share an output. A ceiling in code keeps the
+    configuration bounded (8 rooms).
+  - Its sensors are roles like the tank's (SD-132): air temperature, air
+    humidity and CO2, from a Shelly, ESPHome or MQTT. VPD is air VPD from
+    temperature and humidity, with no value when an input is missing
+    (RAT-017).
+  - A heater only with its own thermostat (RAT-069): the robot gives it
+    power when the room is too cold; its thermostat regulates; the plug
+    has no auto-off but a power limit as a net. A heater the robot would
+    regulate on its own needs a latching emergency shutdown (RAT-060) and
+    is not offered.
+  - Humidifier and dehumidifier never run together. Either stays off
+    while the other's output does not answer. A dehumidifier switches on
+    again only 5 min after it went off, also after a Stop or a restart;
+    switching off is never delayed (RAT-034).
+- **Targets** (decided by the owner: temperature, humidity and CO2, or VPD
+  instead of humidity).
+  - A room has its own targets: a temperature by day and by night, a
+    humidity, and a CO2 level by day. A plant's phase sets them where it
+    has them, as for light and watering (RAT-076); the room follows one
+    plant.
+  - Instead of the humidity a room or a phase may give a VPD. The
+    humidity target then follows from the VPD target and the target
+    temperature, not the measured one (RAT-009).
+  - The defaults are those of RAT-009 for a day; by night 4 °C less. The
+    VPD is shown, and outside its corridor (about 1.0 to 1.4 kPa) it is
+    said, not acted on.
+- **Day and night** (decided by the owner: they follow a light circuit).
+  A room names its light circuits; the first one's day is the room's day.
+  A phase that changes the hours of light moves the climate with it.
+  Without a light circuit the room has a start and hours of its own.
+- **Heat protection for light** (decided by the owner: dim first, then
+  off).
+  - Above the room's heat limit, the dimmers of its light circuits go
+    down in steps, never below their driver's threshold (RAT-013).
+  - Above a second limit, 2 °C higher, every light circuit of the room
+    goes off.
+  - Both raise an alarm. Back below the first limit by 1 °C, the light
+    follows its plan again.
+- **STOP, a hold, maintenance and a restart** (decided by the owner: fans
+  on, the rest off at STOP).
+  - The fans keep regulating through all of them: taking heat away
+    protects.
+  - STOP switches the heater, the humidifier, the dehumidifier and the CO2
+    valve off, and they stay off until Resume.
+  - A hold concerns mixing only; climate goes on.
+  - In maintenance the CO2 valve is closed, since someone is in the room.
+  - After a restart climate regulates by its plan again, as light does.
+    The CO2 valve waits for a fresh sensor value, and the dehumidifier for
+    its 5 min.
+- **Control** (control details).
+  - Each output switches on and off around its target with a band, with
+    at least 1 min between two switchings of one output.
+    - The bands are 1 °C for temperature, 5 % for humidity and 100 ppm
+      for CO2.
+    - Too warm or too humid runs the exhaust fan. Too cold runs the
+      heater. Too dry runs the humidifier, and too humid the
+      dehumidifier.
+    - The circulation fan runs by day, or always where set.
+  - CO2 only by day, and only while the exhaust fan is off: the fan has
+    the lead when the room is too warm or too humid.
+    - The valve opens in pulses with an auto-off in its Shelly (RAT-060),
+      so a robot that hangs cannot keep it open.
+    - Above 1,500 ppm no target can be set. Above 2,000 ppm the valve
+      closes and an alarm is raised.
+  - A value that is missing or stale switches nothing on (R5). A device
+    that needs it goes to its safe side: heater, humidifier, dehumidifier
+    and CO2 off; the exhaust fan on, since it does no harm. The watchdog
+    says why.
+- **Who.** Rooms, their devices and targets only from a session or an app
+  token; account tokens reach the targets through a plant's phases, as
+  for light (SD-135).
+- **Rules from practice** that come into force with it, in their Doseph
+  form: RAT-009 (targets and the VPD corridor), RAT-017 (air VPD),
+  RAT-034 (humidifier and dehumidifier, compressor protection) and
+  RAT-069 (the "supply" profile). RAT-060 holds for the outputs (off after
+  a power loss, an auto-off for pulses); a water heater stays unplanned.
+- **Built** in step 9.6: the robot's side, then the page "Climate".
