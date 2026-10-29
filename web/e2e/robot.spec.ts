@@ -380,7 +380,9 @@ test("plants: a plant recipe with phases, a plant started from it sets the water
   await dialog.locator("input[name=phase-name-0]").fill("Young");
   await dialog.locator("input[name=phase-days-0]").fill("10");
   await dialog.locator("input[name=phase-ec-0]").fill("1.2");
-  await dialog.getByTestId("add-phase").click();
+  // The proposal's growth waits for confirmation (SD-138): this one moves on by itself
+  await dialog.getByTestId("phase-0").locator("label.toggle").click();
+  await expect(dialog.getByTestId("phase-0").getByRole("checkbox", { name: "Moves on only once confirmed" })).not.toBeChecked();
   await dialog.locator("input[name=phase-name-1]").fill("Grown");
   await dialog.locator("input[name=phase-days-1]").fill("20");
   await dialog.getByTestId("save-plant-recipe").click();
@@ -895,4 +897,53 @@ test("plants: a running plant's own phases change on the Plants page; the past s
   const after = await call("GET", "plants");
   expect(after.body.plants[0].phases.length).toBe(3);
   expect(after.body.plantRecipes[0].phases.length).toBe(2);
+});
+
+test("plants: a new plant recipe starts from a proposal and says an EC target below the floor of pH dosing; a completed plant shows its record and takes its yield (SD-138, RAT-064)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(
+      async ([m, p, b]) => {
+        const r = await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: m === "GET" ? undefined : JSON.stringify(b) });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      },
+      [method, path, body] as const,
+    );
+  await page.goto("/#/plants");
+  await page.getByTestId("new-plant-recipe").click();
+  await expect(page.locator("input[name=phase-name-0]")).toHaveValue("Growth");
+  await expect(page.locator("input[name=phase-days-0]")).toHaveValue("21");
+  await expect(page.locator("input[name=phase-light-hours-0]")).toHaveValue("18");
+  await expect(page.locator("input[name=phase-name-1]")).toHaveValue("Flowering");
+  await expect(page.locator("input[name=phase-days-1]")).toHaveValue("56");
+  await expect(page.locator("input[name=phase-light-hours-1]")).toHaveValue("12");
+  // An EC target below the floor of pH dosing is said, and goes with it
+  await page.locator("input[name=phase-ec-0]").fill("0.3");
+  await expect(page.getByTestId("phase-ec-floor-0")).toContainText("The EC target 0.3\u00a0mS/cm is below 0.5\u00a0mS/cm, where the device doses no pH−");
+  await page.locator("input[name=phase-ec-0]").fill("1.4");
+  await expect(page.getByTestId("phase-ec-floor-0")).toHaveCount(0);
+  await page.locator("input[name=plant-recipe-name]").fill("Peppers");
+  await page.getByTestId("save-plant-recipe").click();
+  await expect(page.getByText("Saved").first()).toBeVisible();
+  const saved = await call("GET", "plants");
+  const pr = saved.body.plantRecipes.find((r: { name: string }) => r.name === "Peppers");
+  expect(pr.phases.map((x: { name: string; days: number; confirm: boolean; lightHours: number }) => [x.name, x.days, x.confirm, x.lightHours])).toEqual([
+    ["Growth", 21, true, 18],
+    ["Flowering", 56, false, 12],
+  ]);
+  // Completed on its first day: its record, and the yield by hand
+  const plant = await call("POST", "plants", { name: "Bed 1", plantRecipe: pr.id });
+  expect(plant.status).toBe(200);
+  expect((await call("POST", `plants/${plant.body.id}/complete`)).status).toBe(200);
+  await page.reload();
+  await page.locator("summary", { hasText: "Completed" }).click();
+  const row = page.getByTestId(`plant-done-${plant.body.id}`);
+  await expect(row).toContainText("Bed 1, completed on");
+  await expect(row).toContainText("Growth 1\u00a0day");
+  await expect(row).toContainText("Into the tank:");
+  await row.locator(`input[name=plant-yield-${plant.body.id}]`).fill("250");
+  await page.getByTestId(`plant-yield-save-${plant.body.id}`).click();
+  await expect(page.getByText("Yield saved")).toBeVisible();
+  const after = await call("GET", "plants");
+  expect(after.body.plants.find((x: { id: string }) => x.id === plant.body.id).yieldG).toBe(250);
 });

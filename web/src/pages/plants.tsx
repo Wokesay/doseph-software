@@ -4,7 +4,7 @@
 // and the plant recipes their phases come from.
 import { useEffect, useState } from "preact/hooks";
 import { CalendarDays, ListTree, Pencil, Plus, Sprout, Trash2 } from "lucide-preact";
-import { del, get, post, put, type Calendar, type Plant, type PlantPhase, type PlantRecipe, type Plants } from "../api";
+import { del, get, post, put, type Calendar, type Plant, type PlantPhase, type PlantRecipe, type PlantRecord, type Plants } from "../api";
 import { day, num } from "../format";
 import { msg, t } from "../i18n";
 import { activeRecipe, config, recipes, refreshConfig, refreshState, state, toast, toastError } from "../store";
@@ -228,6 +228,69 @@ function StartDialog(p: { data: Plants; onClose: () => void; onDone: (d: Plants)
   );
 }
 
+const amount = (ml: number) => num(ml, ml < 10 ? 1 : 0);
+
+// A completed plant's record, frozen at its end, and its yield by hand (RAT-064, SD-138)
+function RecordLines(p: { rec: PlantRecord }) {
+  const r = p.rec;
+  const known = r.countedFrom != null && !r.countLost;
+  const list = r.canisters
+    .map((c) => (c.unknown ? t("plants.rec.amountUnknown", { name: c.name, ml: amount(c.ml), n: c.unknown }) : t("plants.rec.amount", { name: c.name, ml: amount(c.ml) })))
+    .join(", ");
+  return (
+    <div class="small stack-sm">
+      <div>{t(r.days === 1 ? "plants.rec.span1" : "plants.rec.span", { from: day(r.from), to: day(r.to), days: r.days })}</div>
+      <div>
+        {r.phases
+          .map((ph) => (ph.days == null ? t("plants.rec.phaseUnknown", { name: ph.name }) : t(ph.days === 1 ? "plants.rec.phase1" : "plants.rec.phase", { name: ph.name, days: ph.days })))
+          .join(" → ")}
+        {r.harvestAt ? ` · ${t("plants.rec.harvest", { date: day(r.harvestAt) })}` : ""}
+      </div>
+      {known ? (
+        <>
+          {day(r.countedFrom!) !== day(r.from) && <div class="muted">{t("plants.rec.since", { date: day(r.countedFrom!) })}</div>}
+          <div>{list ? t("plants.rec.amounts", { list }) : t("plants.rec.nothing")}</div>
+          {r.wateredL != null && (r.wateredL > 0 || r.wateredUnknown > 0) && (
+            <div>
+              {r.wateredUnknown ? t("plants.rec.wateredUnknown", { l: num(r.wateredL, 1), n: r.wateredUnknown }) : t("plants.rec.watered", { l: num(r.wateredL, 1) })}
+            </div>
+          )}
+          {r.with.length > 0 && <div class="muted">{t("plants.rec.with", { names: r.with.join(", ") })}</div>}
+        </>
+      ) : (
+        <div class="muted">{r.countLost ? t("plants.rec.lost") : t("plants.rec.notCounted")}</div>
+      )}
+    </div>
+  );
+}
+
+function CompletedPlant(p: { plant: Plant; onChange: (d: Plants) => void }) {
+  const pl = p.plant;
+  const [yieldG, setYieldG] = useState<number | null>(pl.yieldG);
+  const save = async () => {
+    try {
+      p.onChange(await put<Plants>(`/plants/${encodeURIComponent(pl.id)}`, { yieldG }));
+      toast(t("plants.yieldSaved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <div class="item stacked" data-testid={`plant-done-${pl.id}`}>
+      <div class="title">{t("plants.completedOn", { name: pl.name, date: day(pl.completedAt) })}</div>
+      {pl.record && <RecordLines rec={pl.record} />}
+      <Field label={t("plants.yield")} hint={t("plants.yieldHint")}>
+        <NumberInput value={yieldG} onValue={setYieldG} unit="g" min={0} max={1000000} name={`plant-yield-${pl.id}`} />
+      </Field>
+      <div>
+        <Button size="sm" onClick={save} disabled={yieldG === pl.yieldG} aria-label={t("plants.yieldSaveAria", { name: pl.name })} data-testid={`plant-yield-save-${pl.id}`}>
+          {t("plants.yieldSave")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PlantsCard(p: { data: Plants; onChange: (d: Plants) => void }) {
   const [starting, setStarting] = useState(false);
   const running = p.data.plants.filter((x) => x.running);
@@ -256,11 +319,11 @@ function PlantsCard(p: { data: Plants; onChange: (d: Plants) => void }) {
         {done.length > 0 && (
           <details>
             <summary>{t("plants.completed")}</summary>
-            <ul class="small" data-testid="plants-completed">
+            <div class="list" data-testid="plants-completed">
               {done.map((x) => (
-                <li>{t("plants.completedOn", { name: x.name, date: day(x.completedAt) })}</li>
+                <CompletedPlant plant={x} onChange={p.onChange} />
               ))}
-            </ul>
+            </div>
           </details>
         )}
       </div>
@@ -313,12 +376,27 @@ const newPhase = (recipe: string, systemPh: [number, number] | null): PlantPhase
   ph: recipes.value.find((r) => r.id === recipe)?.ph ? null : systemPh,
 });
 
+// A new plant recipe's proposal (RAT-066): growth at 18 h of light until the user confirms, since the
+// switch to 12 h starts flowering; then 56 days of flowering at 12 h, with the second recipe where
+// there is one. The names are labels only (RAT-076).
+const proposal = (systemPh: [number, number] | null): PlantPhase[] => {
+  const first = recipes.value[0]?.id ?? "";
+  const second = recipes.value[1]?.id ?? first;
+  return [
+    { ...newPhase(first, systemPh), name: t("plants.proposeGrowth"), days: 21, confirm: true, lightHours: 18 },
+    { ...newPhase(second, systemPh), name: t("plants.proposeBloom"), days: 56, lightHours: 12 },
+  ];
+};
+
 // The fields of one phase, as a plant recipe and a running plant edit them
 // `plant`: a running plant's own: the hints on plants started from a recipe do not apply
 function PhaseFields(p: { ph: PlantPhase; i: number; set: (i: number, part: Partial<PlantPhase>) => void; plant?: boolean }) {
   const list = recipes.value;
   const { ph, i, set } = p;
   const hint = (key: Parameters<typeof t>[0]) => (p.plant ? undefined : t(key));
+  // Below the EC floor pH is never dosed (RAT-046): said where a phase's target lies there
+  const ec = ph.ecTarget ?? list.find((r) => r.id === ph.recipe)?.ecTarget ?? null;
+  const floor = config.value!.control.ecFloor;
   return (
     <div class="form-grid">
       <Field label={t("plants.phaseName")}>
@@ -334,7 +412,18 @@ function PhaseFields(p: { ph: PlantPhase; i: number; set: (i: number, part: Part
           ))}
         </select>
       </Field>
-      <Field label={t("plants.ecOwn")} hint={t("plants.ecOwnHint")}>
+      <Field
+        label={t("plants.ecOwn")}
+        hint={
+          ec != null && ec < floor ? (
+            <span class="warn-text" data-testid={`phase-ec-floor-${i}`}>
+              {t("plants.ecBelowFloor", { ec: num(ec, 1), floor: num(floor, 1) })}
+            </span>
+          ) : (
+            t("plants.ecOwnHint")
+          )
+        }
+      >
         <NumberInput value={ph.ecTarget} onValue={(v) => set(i, { ecTarget: v })} unit="mS/cm" step={0.1} name={`phase-ec-${i}`} />
       </Field>
       <Field label={t("plants.phLow")} hint={t("plants.phOwnHint")}>
@@ -378,7 +467,8 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
   const list = recipes.value;
   const systemPh = p.data.system ? p.data.systems[p.data.system] : null;
   const [name, setName] = useState(p.recipe?.name ?? "");
-  const [phases, setPhases] = useState<PlantPhase[]>(p.recipe?.phases ?? [newPhase(list[0]?.id ?? "", systemPh)]);
+  const [initial] = useState<PlantPhase[]>(() => p.recipe?.phases ?? proposal(systemPh));
+  const [phases, setPhases] = useState<PlantPhase[]>(initial);
   const set = (i: number, part: Partial<PlantPhase>) => setPhases(phases.map((x, n) => (n === i ? { ...x, ...part } : x)));
   const save = async () => {
     try {
@@ -412,6 +502,7 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
           <input class="input" value={name} maxLength={40} onInput={(e) => setName((e.target as HTMLInputElement).value)} name="plant-recipe-name" />
         </Field>
         <div class="section-title">{t("plants.phases")}</div>
+        {!p.recipe && phases === initial && <p class="muted small">{t("plants.proposal")}</p>}
         {systemPh && p.data.system && (
           <p class="muted small">{t("plants.systemPh", { system: t(`tank.system.${p.data.system}`), low: num(systemPh[0], 1), high: num(systemPh[1], 1) })}</p>
         )}

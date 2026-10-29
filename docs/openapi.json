@@ -1882,7 +1882,7 @@
     "/plants": {
       "get": {
         "operationId": "getPlants",
-        "summary": "Plant recipes, plants and where each stands; the water plan's source",
+        "summary": "Plant recipes, plants and where each stands, a completed plant's record; the water plan's source",
         "tags": [
           "plants"
         ],
@@ -1982,7 +1982,7 @@
     "/plants/{id}": {
       "put": {
         "operationId": "putPlant",
-        "summary": "Changes a plant's name, or a running plant's own phases: the current one and those after it (SD-137)",
+        "summary": "Changes a plant's name, its yield in grams (also once completed; RAT-064), or a running plant's own phases: the current one and those after it (SD-137)",
         "tags": [
           "plants"
         ],
@@ -2221,7 +2221,7 @@
     "/plants/{id}/complete": {
       "post": {
         "operationId": "plantComplete",
-        "summary": "Completes the plant (RAT-077)",
+        "summary": "Completes the plant and freezes its record (RAT-077, RAT-064)",
         "tags": [
           "plants"
         ],

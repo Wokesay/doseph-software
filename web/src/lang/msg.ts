@@ -345,6 +345,7 @@ export const msgDe: Record<string, string> = {
   "plant.leads": "{name} bestimmt das Wasser – ändere stattdessen ihre Phase oder schließ sie ab",
   "plant.start": "Der Start muss heute oder an einem Tag des vergangenen Jahres liegen",
   "plant.harvest_at": "Die Ernte muss zwischen dem Start und jetzt liegen",
+  "plant.yield": "Der Ertrag ist eine Zahl von 0 bis 1.000.000 Gramm",
   "recipe.in_plant": "{name} nutzt dieses Rezept – ändere zuerst ihre Phasen",
   "cfg.plant.phases": "{name}: 1 bis {max} Phasen",
   "cfg.phase.name": "{name}: Jede Phase braucht einen Namen mit bis zu 40 Zeichen",

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 #include "doseph/localtime.hpp"
 #include "doseph/messages.hpp"
@@ -75,6 +76,8 @@ std::vector<std::string> advancePlants(Config& cfg, Epoch now, const std::string
       if (now < end) break;
       p.phase++;
       p.phaseStart = end;
+      p.began.resize(static_cast<size_t>(p.phase) + 1, 0);
+      p.began.back() = end;
       any = true;
     }
     if (any) moved.push_back(p.id);
@@ -160,6 +163,65 @@ json waterPlanJson(const Config& cfg, Epoch now, const std::string& zone) {
   return j;
 }
 
+json countedNow(const RuntimeState::Count& c, Epoch at) {
+  json j = countJson(c);
+  j["at"] = at;
+  return j;
+}
+
+json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count& now, const std::string& zone) {
+  const Epoch end = p.completedAt;
+  const Epoch lastDay = localMidnight(end, zone);
+  json phases = json::array();
+  for (int i = 0; i <= p.phase && i < static_cast<int>(p.phases.size()); ++i) {
+    const auto at = static_cast<size_t>(i);
+    const Epoch from = at < p.began.size() ? p.began[at] : 0;
+    const Epoch to = i < p.phase ? (at + 1 < p.began.size() ? p.began[at + 1] : 0) : localDaysLater(lastDay, 1, zone);
+    phases.push_back({{"name", p.phases[at].name}, {"days", from > 0 && to >= from ? json(daysBetween(from, to)) : json(nullptr)}});
+  }
+  json r = {{"from", p.start},
+            {"to", end},
+            {"days", daysBetween(p.start, lastDay) + 1},
+            {"harvestAt", p.harvestAt ? json(p.harvestAt) : json(nullptr)},
+            {"phases", phases}};
+  // The tank's amounts while it ran: the difference to where they stood at its start
+  const json& c = p.counted;
+  const bool counted = c.is_object() && c.contains("id") && c["id"].is_string();
+  const bool same = counted && !now.id.empty() && c["id"].get<std::string>() == now.id;
+  r["countedFrom"] = counted && c.contains("at") && c["at"].is_number_integer() ? c["at"] : json(nullptr);
+  r["countLost"] = counted && !same;
+  json canisters = json::array();
+  if (same) {
+    const RuntimeState::Count then = countFromJson(c);
+    std::set<std::string> ids;
+    for (const auto& [id, v] : now.ml) ids.insert(id);
+    for (const auto& [id, v] : now.unknown) ids.insert(id);
+    for (const auto& id : ids) {
+      const auto at = [](const auto& m, const std::string& k) { auto it = m.find(k); return it == m.end() ? 0 : it->second; };
+      const double ml = at(now.ml, id) - at(then.ml, id);
+      const int unknown = at(now.unknown, id) - at(then.unknown, id);
+      if (ml <= 0 && unknown <= 0) continue;
+      const CanisterCfg* b = cfg.canister(id);
+      canisters.push_back({{"id", id},
+                           {"name", b ? b->name : id},
+                           {"role", b ? b->role : ""},
+                           {"ml", std::round(std::max(ml, 0.0) * 10) / 10},
+                           {"unknown", std::max(unknown, 0)}});
+    }
+    r["wateredL"] = std::round(std::max(now.wateredL - then.wateredL, 0.0) * 10) / 10;
+    r["wateredUnknown"] = std::max(now.wateredUnknown - then.wateredUnknown, 0);
+  } else {
+    r["wateredL"] = nullptr;
+    r["wateredUnknown"] = 0;
+  }
+  r["canisters"] = canisters;
+  json with = json::array();
+  for (const auto& o : cfg.plants)
+    if (o.id != p.id && o.start <= end && (o.running() || o.completedAt >= p.start)) with.push_back(o.name);
+  r["with"] = with;
+  return r;
+}
+
 json plantsJson(const Config& cfg, Epoch now, const std::string& zone) {
   const PlantCfg* lead = leadingPlant(cfg);
   const Epoch today = localMidnight(now, zone);
@@ -167,6 +229,7 @@ json plantsJson(const Config& cfg, Epoch now, const std::string& zone) {
   json plants = json::array();
   for (const auto& p : cfg.plants) {
     json j = all["plants"][static_cast<size_t>(&p - cfg.plants.data())];
+    j.erase("counted");  // the device's own bookkeeping
     j["running"] = p.running();
     j["leading"] = &p == lead;
     j["day"] = daysBetween(p.start, today) + 1;

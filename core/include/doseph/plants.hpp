@@ -65,6 +65,16 @@ json plantDates(const Config& cfg, Epoch now, Epoch until, const std::string& zo
 // plant's phase with its end
 json waterPlanJson(const Config& cfg, Epoch now, const std::string& zone);
 
+// What the plant was given, frozen when it is completed (RAT-064, SD-138): its days and those of
+// each phase it reached, the harvest, per canister the ml that went into the tank while it ran and
+// the runs whose amount is not known, the litres watering gave, and the other plants on the tank
+// in that time. The amounts are the tank's: plants on one tank share its water. Amounts that were
+// not counted, or whose count was lost, are null (R5).
+json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count& now, const std::string& zone);
+
+// Where the tank's counts stand, kept with a plant at its start
+json countedNow(const RuntimeState::Count& c, Epoch at);
+
 // The plant recipes and plants with where each stands now, for the app
 json plantsJson(const Config& cfg, Epoch now, const std::string& zone);
 

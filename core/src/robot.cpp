@@ -331,6 +331,15 @@ void Robot::boot() {
   clock_.start(rt_.clock, log_.newestTs(), rt_.bootCount);
   bootEpoch_ = clock_.epoch();
   bootMs_ = clock_.nowMs();
+  // The tank's count for the plants' records: a new one where none could be read, with an ID of its
+  // own, so a plant that kept the old one knows its amounts are lost (RAT-064)
+  if (rt_.count.id.empty()) {
+    std::uint8_t b[8];
+    rng_(b, sizeof b);
+    rt_.count = RuntimeState::Count{};
+    rt_.count.id = toHex(b, sizeof b);
+    rt_.count.since = bootEpoch_;
+  }
   climate_.start(bootMs_);  // the dehumidifier rests, and CO2 waits for a value read since (SD-136)
   lastSnapshot_ = bootEpoch_;
   doser_.setBootTag(std::to_string(rt_.bootCount));
@@ -372,6 +381,8 @@ void Robot::boot() {
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
+    // How much went in is not known: the plants' records say so (RAT-064, R5)
+    if (r.intoTank()) rt_.count.unknown[r.canister]++;
     if (r.intoTank())
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
                say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});
@@ -1084,6 +1095,9 @@ Result Robot::startPlant(const json& j) {
   const Epoch at = isNum(start) ? static_cast<Epoch>(start) : now;
   if (at > now || at < now - 365 * 86400) return Result::fail(422, say("plant.start"));
   p.start = p.phaseStart = localMidnight(at, tz);
+  p.began = {p.start};
+  // Its record counts from now: what went in before the device knew of it is not known (RAT-064)
+  p.counted = countedNow(rt_.count, now);
   const bool anyRunning = std::any_of(cfg_.plants.begin(), cfg_.plants.end(), [](const PlantCfg& x) { return x.running(); });
   next.plants.push_back(p);
   // The first running plant leads, and the recipe chosen by hand ends with it
@@ -1113,6 +1127,13 @@ Result Robot::putPlant(const std::string& id, const json& j) {
   if (!p) return Result::fail(404, say("api.not_found"));
   if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
   if (j.contains("name")) p->name = utf8Prefix(jstr(j, "name"), 80);
+  // The yield, by hand: while it runs or after it is completed, and changed later (RAT-064)
+  if (j.contains("yieldG")) {
+    const json& y = j["yieldG"];
+    if (!y.is_null() && (!y.is_number() || !isNum(y.get<double>()) || y.get<double>() < 0 || y.get<double>() > kYieldMaxG))
+      return Result::fail(422, say("plant.yield"));
+    p->yieldG = y.is_null() ? kNaN : y.get<double>();
+  }
   if (j.contains("phases")) {
     // A running plant's own phases (SD-137): the current one and those to come change, those past
     // stay as they were; a completed plant's are its record
@@ -1143,6 +1164,8 @@ Result Robot::plantNext(const std::string& id) {
   // Confirmed today: the next phase's day 1 is today
   p->phase++;
   p->phaseStart = localMidnight(clock_.epoch(), cfg_.system.timezone);
+  p->began.resize(static_cast<size_t>(p->phase) + 1, 0);
+  p->began.back() = p->phaseStart;
   return savePlants(next, say("ev.plant.phase", {{"name", p->name}, {"phase", p->phases[static_cast<size_t>(p->phase)].name}}));
 }
 
@@ -1168,6 +1191,8 @@ Result Robot::plantComplete(const std::string& id) {
   if (!p) return Result::fail(404, say("api.not_found"));
   if (!p->running()) return Result::fail(409, say("plant.not_running"));
   p->completedAt = clock_.epoch();
+  // Its record is frozen now: what follows does not change it (RAT-064)
+  p->record = plantRecord(next, *p, rt_.count, cfg_.system.timezone);
   return savePlants(next, say("ev.plant.completed", {{"name", p->name}}));
 }
 

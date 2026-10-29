@@ -30,6 +30,19 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A plant's record at its end (RAT-064, SD-138). The device counts what
+  goes into the tank: the ml per canister and the litres watered.
+  Completing a plant freezes its record:
+  - its days and each phase's, and the harvest;
+  - the tank's amounts while it ran, and the plants that shared the tank.
+
+  Amounts not counted or lost show as not known, never 0. The yield is
+  entered by hand, also after the end. The Plants page shows both with
+  each completed plant.
+- A new plant recipe starts from a proposal: growth at 18 h of light until
+  confirmed, then 56 days of flowering at 12 h (SD-138). A phase whose EC
+  target lies below the EC floor of pH dosing is said in the editor
+  (RAT-046).
 - A design for the account (`docs/ACCOUNT.md`, step 10 of #10). It keeps
   the device the authority, connects it outbound through a relay that
   does not end TLS, and keeps minimal data. Remote access is off by

@@ -602,6 +602,7 @@ static const struct {
     {"plant.note.phase", "{phase} hat heute begonnen"},
     {"plant.past_phases", "Vergangene Phasen bleiben, wie sie waren"},
     {"plant.start", "Der Start muss heute oder an einem Tag des vergangenen Jahres liegen"},
+    {"plant.yield", "Der Ertrag ist eine Zahl von 0 bis 1.000.000 Gramm"},
     {"probe.action", "Unbekannter Schritt"},
     {"probe.ec_one", "Miss zuerst die Referenzlösung"},
     {"probe.ec_ref", "Die Referenz liegt zwischen 0,1 und 20 mS/cm – ihr Wert bei 25 °C, wie er auf der Flasche steht"},

@@ -11,10 +11,11 @@ decides its own as an SD (`docs/DECISIONS.md`).
 
 **Built since (SD-128):** plant recipes and plants with phases, the water
 plan from the leading plant, phases moving on at local midnight or once
-confirmed, the reminders, the harvest and completing. What is still open
-from below: the end-of-run summary (RAT-064), the start dialog's proposals
-and phase defaults from templates, and the cultivation system and calendar
-(their own changes).
+confirmed, the reminders, the harvest and completing; the cultivation
+system and the calendar; since SD-138 also the record at a plant's end
+(RAT-064) and a new plant recipe's proposal of two phases. What is still
+open from below: the advice to drain at a phase change (RAT-065), and cost
+per canister.
 
 **The grow run.** One run at a time: a name (at most 40 characters), its
 start, a list of at least one phase, the current phase and when it began,

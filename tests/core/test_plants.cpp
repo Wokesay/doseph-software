@@ -5,6 +5,8 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <limits>
+#include <map>
 #include <string>
 
 #include "doseph/alarms.hpp"
@@ -346,4 +348,216 @@ TEST_CASE("Plants: the cultivation system is set per tank from a fixed list; it 
   CHECK(pl["systems"]["soil"][0] == 6.2);
   REQUIRE(s.robot().putTank({{"system", nullptr}}).status == 200);
   CHECK(s.robot().configJson()["tank"]["system"] == "");
+}
+
+TEST_CASE("Plants: a completed plant's record keeps its days and each phase's, the harvest, the ml per canister and the litres watered while it ran, and the plants beside it; a count that was lost or never kept is not known, never 0 (RAT-064, SD-138)") {
+  Config c = withRecipes();
+  c.canisters = {{"a", "Part A", "nutrient", 1, "", "#00c"}, {"down", "pH−", "ph_down", 2, "", "#c00"}};
+  PlantCfg p = plant("p1", kT0, {phase("Growth", 21, false), phase("Bloom", 56, true, "r2")});
+  const Epoch day1 = p.start;
+  p.phase = 1;
+  p.phaseStart = localDaysLater(day1, 21, kZone);
+  p.began = {day1, p.phaseStart};
+  p.harvestAt = localDaysLater(day1, 29, kZone) + 3600;
+  p.completedAt = localDaysLater(day1, 30, kZone) + 7200;  // on its day 31
+  RuntimeState::Count then;
+  then.id = "c0ffee";
+  then.since = 100;
+  then.ml = {{"a", 10}};
+  then.wateredL = 5;
+  p.counted = countedNow(then, day1 + 600);
+  RuntimeState::Count now = then;
+  now.ml = {{"a", 60.04}, {"down", 4}, {"gone", 2}};
+  now.unknown = {{"a", 1}};
+  now.wateredL = 25;
+  now.wateredUnknown = 2;
+  // Another plant on the tank in that time, and one that was completed before it started
+  PlantCfg beside = plant("p2", kT0 + 10 * kDay, {phase("Growth", 21, false)});
+  PlantCfg before = plant("p3", kT0 - 60 * kDay, {phase("Growth", 21, false)});
+  before.completedAt = kT0 - 30 * kDay;
+  c.plants = {p, beside, before};
+
+  json r = plantRecord(c, p, now, kZone);
+  CHECK(r["from"] == day1);
+  CHECK(r["days"] == 31);
+  CHECK(r["harvestAt"] == p.harvestAt);
+  REQUIRE(r["phases"].size() == 2);
+  CHECK(r["phases"][0] == json({{"name", "Growth"}, {"days", 21}}));
+  CHECK(r["phases"][1] == json({{"name", "Bloom"}, {"days", 10}}));
+  CHECK(r["countedFrom"] == day1 + 600);
+  CHECK(r["countLost"] == false);
+  // The tank's amounts while it ran, with the canisters' names and roles as they were at the end; a
+  // run whose amount is not known is counted as such
+  REQUIRE(r["canisters"].size() == 3);
+  CHECK(r["canisters"][0] == json({{"id", "a"}, {"name", "Part A"}, {"role", "nutrient"}, {"ml", 50.0}, {"unknown", 1}}));
+  CHECK(r["canisters"][1] == json({{"id", "down"}, {"name", "pH−"}, {"role", "ph_down"}, {"ml", 4.0}, {"unknown", 0}}));
+  CHECK(r["canisters"][2]["name"] == "gone");  // a canister removed since keeps its ID
+  CHECK(r["wateredL"] == 20.0);
+  CHECK(r["wateredUnknown"] == 2);
+  CHECK(r["with"] == json::array({"Plant p2"}));
+  // The count is kept in the run-time state; one that cannot be read starts again (since 0, then a
+  // new one at the start)
+  const RuntimeState::Count back = countFromJson(countJson(now));
+  CHECK(back.id == "c0ffee");
+  CHECK(back.since == 100);
+  CHECK(back.ml.at("a") == doctest::Approx(60.04));
+  CHECK(back.unknown.at("a") == 1);
+  CHECK(back.wateredUnknown == 2);
+  json damaged = countJson(now);
+  damaged["ml"]["a"] = -3;
+  CHECK(countFromJson(damaged).id.empty());
+  damaged = countJson(now);
+  damaged["wateredL"] = "x";
+  CHECK(countFromJson(damaged).id.empty());
+  damaged = countJson(now);
+  damaged.erase("id");
+  CHECK(countFromJson(damaged).id.empty());
+
+  // The count was lost (a new one since): the amounts are not known, never a difference to nothing
+  RuntimeState::Count fresh;
+  fresh.id = "c0ffee2";  // begun anew, also at the same time: its own ID
+  fresh.since = 100;
+  fresh.ml = {{"a", 1}};
+  r = plantRecord(c, p, fresh, kZone);
+  CHECK(r["countLost"] == true);
+  CHECK(r["canisters"].empty());
+  CHECK(r["wateredL"].is_null());
+  // Started before the device counted: nothing to say about amounts
+  p.counted = nullptr;
+  r = plantRecord(c, p, now, kZone);
+  CHECK(r["countedFrom"].is_null());
+  CHECK(r["countLost"] == false);
+  CHECK(r["wateredL"].is_null());
+  // A plant from before the phases' starts were kept: its first and current phase are known, those
+  // between are not
+  c.plants = {plant("p4", kT0, {phase("A", 3, false), phase("B", 4, false), phase("C", 5, true)})};
+  c.plants[0].phase = 2;
+  c.plants[0].phaseStart = localDaysLater(c.plants[0].start, 7, kZone);
+  json j = c;
+  j["plants"][0].erase("began");
+  const Config cfgBack = configFromJson(j);
+  REQUIRE(cfgBack.plants[0].began.size() == 3);
+  CHECK(cfgBack.plants[0].began[1] == 0);
+  PlantCfg old = cfgBack.plants[0];
+  old.completedAt = localDaysLater(old.start, 9, kZone) + 60;
+  r = plantRecord(cfgBack, old, now, kZone);
+  CHECK(r["phases"][0]["days"].is_null());
+  CHECK(r["phases"][1]["days"].is_null());
+  CHECK(r["phases"][2]["days"] == 3);
+  // A phase confirmed on the day it began lasted 0 days, which is known
+  PlantCfg quick = plant("p5", kT0, {phase("A", 3, true), phase("B", 4, false)});
+  quick.phase = 1;
+  quick.phaseStart = quick.start;
+  quick.began = {quick.start, quick.start};
+  quick.completedAt = localDaysLater(quick.start, 2, kZone) + 60;
+  r = plantRecord(c, quick, now, kZone);
+  CHECK(r["phases"][0]["days"] == 0);
+  CHECK(r["phases"][1]["days"] == 3);
+
+  // On import: a yield out of bounds is refused; a record only of a completed plant and only in its
+  // shape, else none; a current phase that does not exist allocates nothing before it is refused
+  Config imp = withRecipes();
+  imp.plants = {plant("p6", kT0, {phase("A", 3, false)})};
+  imp.plants[0].completedAt = kT0 + kDay;
+  imp.plants[0].record = r;
+  json ij = imp;
+  CHECK(configFromJson(ij).plants[0].record == r);
+  const auto says = [](const Config& x, const std::string& key) {
+    const auto errs = validateConfig(x, 4);
+    return std::any_of(errs.begin(), errs.end(), [&](const Msg& m) { return m.key == key; });
+  };
+  ij["plants"][0]["yieldG"] = -5;
+  CHECK(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["yieldG"] = 2e6;
+  CHECK(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["yieldG"] = 300;
+  CHECK_FALSE(says(configFromJson(ij), "plant.yield"));
+  ij["plants"][0]["record"] = {{"from", 1}};
+  CHECK(configFromJson(ij).plants[0].record.is_null());
+  ij["plants"][0]["record"] = r;
+  ij["plants"][0]["completedAt"] = 0;  // running: no record
+  CHECK(configFromJson(ij).plants[0].record.is_null());
+  ij["plants"][0]["phase"] = 2147483647;
+  ij["plants"][0].erase("began");
+  CHECK(configFromJson(ij).plants[0].began.empty());
+  CHECK(says(configFromJson(ij), "cfg.plant.phase"));
+}
+
+TEST_CASE("Plants over the API: completing a plant freezes its record with what went into the tank while it ran, as the dose events book it; the yield is entered by hand while it runs or later (RAT-064, SD-138)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Lettuce"}, {"phases", json::array({{{"name", "Growth"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  const Epoch started = r.now();
+  Result res = r.startPlant({{"name", "Tray"}, {"plantRecipe", prId}});
+  REQUIRE(res.status == 200);
+  const std::string id = res.body["id"];
+  CHECK(r.plants()["plants"][0]["record"].is_null());
+  CHECK_FALSE(r.plants()["plants"][0].contains("counted"));  // the device's own bookkeeping
+  // The yield by hand: grams, never below 0; null clears it
+  CHECK(r.putPlant(id, {{"yieldG", -1}}).status == 422);
+  CHECK(r.putPlant(id, {{"yieldG", "a lot"}}).status == 422);
+  REQUIRE(r.putPlant(id, {{"yieldG", 120}}).status == 200);
+  CHECK(r.plants()["plants"][0]["yieldG"] == 120);
+  // Mixed to the plant's target: the doses that went into the tank since it started
+  bool held = false;
+  for (int i = 0; i < 8 * 360 && !held; ++i) {
+    s.step(10 * kSecond, 1000);
+    held = r.state()["cycle"]["phase"] == "hold";
+  }
+  REQUIRE(held);
+  std::map<std::string, double> dosed;
+  for (const auto& e : r.events(started, std::numeric_limits<Epoch>::max(), "dose", 1000))
+    if (e["title"]["key"] == "ev.dose") dosed[e["data"]["canister"]] += e["data"]["ml"].get<double>();
+  REQUIRE(dosed["part_a"] > 0);
+  REQUIRE(r.plantComplete(id).status == 200);
+  const json rec = r.plants()["plants"][0]["record"];
+  REQUIRE(rec.is_object());
+  CHECK(rec["countLost"] == false);
+  CHECK(rec["countedFrom"] == started);
+  CHECK(rec["phases"][0]["name"] == "Growth");
+  CHECK(rec["phases"][0]["days"] == 1);
+  std::map<std::string, double> booked;
+  for (const auto& b : rec["canisters"]) booked[b["id"]] = b["ml"].get<double>();
+  for (const auto& [canister, ml] : dosed) CHECK(booked[canister] == doctest::Approx(ml).epsilon(0.01));
+  // After the end: the record stays as it was, the yield can still be entered and changed
+  s.step(30 * kMinute, 1000);
+  REQUIRE(r.putPlant(id, {{"yieldG", 180.5}}).status == 200);
+  CHECK(r.plants()["plants"][0]["yieldG"] == 180.5);
+  CHECK(r.plants()["plants"][0]["record"] == rec);
+  REQUIRE(r.putPlant(id, {{"yieldG", nullptr}}).status == 200);
+  CHECK(r.plants()["plants"][0]["yieldG"].is_null());
+  // The record and the yield survive a restart, in the configuration a backup carries
+  REQUIRE(r.putPlant(id, {{"yieldG", 200}}).status == 200);
+  CHECK(r.configJson()["plants"][0]["record"] == rec);
+  CHECK(r.configJson()["plants"][0]["yieldG"] == 200);
+}
+
+TEST_CASE("Plants over the API: a dose cut by a restart counts in the plant's record as an amount not known, never as nothing; the count keeps its ID across the restart (RAT-064, SD-138, R5)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Lettuce"}, {"phases", json::array({{{"name", "Growth"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  Result res = r.startPlant({{"name", "Tray"}, {"plantRecipe", prId}});
+  REQUIRE(res.status == 200);
+  const std::string id = res.body["id"];
+  bool dosing = false;
+  for (int i = 0; i < 20 * 60 && !dosing; ++i) {
+    s.step(kSecond);
+    dosing = !r.state()["dosing"].is_null();
+  }
+  REQUIRE(dosing);
+  const std::string canister = r.state()["dosing"]["canister"];
+  s.step(3 * kSecond);
+  s.reboot();
+  Robot& again = s.robot();
+  REQUIRE(again.plantComplete(id).status == 200);
+  const json rec = again.plants()["plants"][0]["record"];
+  CHECK(rec["countLost"] == false);
+  bool cut = false;
+  for (const auto& b : rec["canisters"])
+    if (b["id"] == canister) cut = b["unknown"].get<int>() >= 1;
+  CHECK(cut);
 }
