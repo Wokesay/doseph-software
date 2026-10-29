@@ -245,18 +245,22 @@ void Robot::logEvent(const std::string& type, const std::string& sev, Msg title,
 void Robot::boot() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   bool stateUnknown = false;
+  bool configRead = false;
   if (auto s = store_.read(kConfigFile)) {
     try {
       Config c = configFromJson(json::parse(*s));
-      if (validateConfig(c, hw_.channelCount()).empty()) cfg_ = c;
-      else stateUnknown = true;
+      if (validateConfig(c, hw_.channelCount()).empty()) {
+        cfg_ = c;
+        configRead = true;
+      } else {
+        stateUnknown = true;
+      }
     } catch (...) {
       stateUnknown = true;
     }
     // A configuration that cannot be read is kept as a copy and the robot stays stopped (R6)
     if (stateUnknown) store_.write("config.broken.json", *s);
   }
-  const bool configBroken = stateUnknown;
   // Push channels that cannot be read are none: nothing is sent to an address no one checked (SD-124)
   if (auto s = store_.read(kPushFile)) {
     try {
@@ -322,10 +326,10 @@ void Robot::boot() {
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
   act_.stopAll();
   outputs_.allOff();  // the network devices' outputs too, at the first tick, whatever they say (SD-132)
-  if (!configBroken) {
+  if (configRead) {
     // What is kept of a device the configuration no longer has, or has at another address, goes: a
-    // later one with its ID starts afresh, and no password reaches another host. With a configuration
-    // that could not be read nothing goes: it may come back.
+    // later one with its ID starts afresh, and no password reaches another host. Without a
+    // configuration read from the file nothing goes: it may come back.
     json kept;
     if (auto s = store_.read(kDeviceSecretsFile)) kept = json::parse(*s, nullptr, false);
     bool dropped = false;

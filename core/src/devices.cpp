@@ -235,9 +235,10 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   pending_.erase(it);
   if (p.kind == "release") {
     // Apart from what this module keeps of the device, which may be gone or another one by now
-    const bool done = status >= 200 && status < 300 && body.is_object() && !body.contains("error");
-    const bool other = done && !p.ownId.empty() && jstr(body, "src") != p.ownId;
-    return NetAnswer{id, p.device, "release", done && !other, nullptr, other};
+    const bool answered = status >= 200 && status < 300 && body.is_object();
+    const bool other = answered && !p.ownId.empty() && jstr(body, "src") != p.ownId;  // also in an error
+    const bool done = answered && !body.contains("error") && !other;
+    return NetAnswer{id, p.device, "release", done, nullptr, other};
   }
   Seen& s = seen_[p.device];
   auto fail = [&](Msg why) -> std::optional<NetAnswer> {
@@ -527,8 +528,10 @@ void NetDevices::forget(const std::string& device) {
   seen_.erase(device);
   credentials_.erase(device);
   ownIds_.erase(device);
+  // Its requests go too, the gateway's with them: an output bound anew starts its own check. Only
+  // the offs to outputs let go stay, which are answered apart from all this.
   for (auto it = pending_.begin(); it != pending_.end();)
-    it = it->second.device == device && it->second.kind != "gateway" && it->second.kind != "release" ? pending_.erase(it) : std::next(it);
+    it = it->second.device == device && it->second.kind != "release" ? pending_.erase(it) : std::next(it);
 }
 
 }  // namespace doseph
