@@ -89,6 +89,7 @@ std::optional<Msg> tankShort(const Ctx& c, const WaterIn& in, double takeL, bool
     if (*in.levelL - take < reserve) return say("water.no.reserve", {{"reserve", round1(reserve)}});
     return std::nullopt;
   }
+  if (counts && !isNum(reserve) && !in.emptyAssigned) return say("water.no.volume");
   if (counts && isNum(reserve)) {
     // The count starts with a new tank or the float "full"; before, it tells nothing (R5)
     const auto given = givenL(c.rt);
@@ -127,6 +128,30 @@ std::optional<double> shotAt(const WaterCircuitCfg& w, int m) {
   }
   if (w.mode == "interval" && w.everyMin > 0 && m % w.everyMin == 0) return w.shotS;
   return std::nullopt;
+}
+
+std::optional<NextShot> nextShot(const WaterCircuitCfg& w, int m) {
+  // In how many minutes from this one, 1 to a day; the shot of this minute was taken already
+  auto ahead = [m](int at) { return (at - m + 2 * 1440 - 1) % 1440 + 1; };
+  std::optional<NextShot> next;
+  auto take = [&](int at, double s) {
+    const int a = ahead(at);
+    if (!next || a < next->inMin) next = NextShot{a, s};
+  };
+  if (w.mode == "window") {
+    const int span = ((w.toMin - w.fromMin) % 1440 + 1440) % 1440;
+    const int n = w.shotsPerDay;
+    for (int k = 0; k < n; ++k) {
+      const long long off = span == 0 ? static_cast<long long>(k) * 1440 / n : n == 1 ? 0 : static_cast<long long>(k) * span / (n - 1);
+      take(static_cast<int>((w.fromMin + off) % 1440), w.shotS);
+    }
+  } else if (w.mode == "times") {
+    for (const auto& t : w.times) take(t.atMin, t.s);
+  } else if (w.mode == "interval" && w.everyMin > 0) {
+    // The next multiple of the interval, or midnight, where the count starts again
+    next = NextShot{std::min(w.everyMin - m % w.everyMin, 1440 - m), w.shotS};
+  }
+  return next;
 }
 
 std::optional<Msg> Watering::unfit(const WaterIn& in) {
@@ -172,10 +197,13 @@ std::optional<Msg> Watering::waterNow(Ctx& c, const WaterIn& in, const std::stri
     raiseLow(c, *why);
     return why;
   }
-  const auto notFit = in.mixing ? std::optional<Msg>(say("water.no.mixing")) : unfit(in);
+  // Watering anyway is a warning that says why: what is wrong with the water rather than that it is
+  // still being mixed in, and whether it was (SD-134)
+  const auto bad = unfit(in);
+  const auto notFit = bad ? bad : in.mixing ? std::optional<Msg>(say("water.no.mixing")) : std::nullopt;
   start(c, *w, s, override && notFit.has_value(), "hand", in.date, out);
-  // Watering anyway is a warning: the water was not fit, and a person chose to (SD-134)
-  if (shot_->override) c.log.add(c.epoch, "control", "warn", say("ev.water.override", {{"name", w->name}}), *notFit, {{"circuit", w->id}, {"s", s}});
+  if (shot_->override)
+    c.log.add(c.epoch, "control", "warn", say("ev.water.override", {{"name", w->name}}), *notFit, {{"circuit", w->id}, {"s", s}, {"mixing", in.mixing}});
   return std::nullopt;
 }
 
@@ -221,7 +249,7 @@ void Watering::end(Ctx& c, NetOutputs& out, Msg how, bool warn) {
   const double ran = shot.sentAt >= 0 ? static_cast<double>(c.now - shot.sentAt) / 1000.0 : 0;
   const double l = litres(shot.rateLpm, ran);
   book(c.rt, shot.circuit, shot.date, ran, l);
-  section(c.rt, "last")[shot.circuit] = {{"at", c.epoch}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"end", how}};
+  section(c.rt, "last")[shot.circuit] = {{"at", c.epoch}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"end", how}, {"override", shot.override}};
   c.rt.watering["shot"] = nullptr;
   const json name = shot.name;
   const json data = {{"circuit", shot.circuit}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"override", shot.override}};
@@ -338,7 +366,10 @@ bool Watering::reportCut(Ctx& c, const std::string& date) {
   const double ran = jnum(shot, "offS", jnum(shot, "s", 0));
   const double rate = shot.contains("rateLpm") && shot["rateLpm"].is_number() ? shot["rateLpm"].get<double>() : kNaN;
   const std::string day = jstr(shot, "date");
-  book(c.rt, id, day.empty() ? date : day, ran, litres(rate, ran));
+  const double l = litres(rate, ran);
+  book(c.rt, id, day.empty() ? date : day, ran, l);
+  section(c.rt, "last")[id] = {{"at", c.epoch}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"end", say("water.end.restart")},
+                               {"override", jbool(shot, "override", false)}, {"upTo", true}};
   c.log.add(c.epoch, "control", "warn", say("ev.water.cut_restart", {{"name", jstr(shot, "name", id)}}), say("ev.water.cut_restart.text"));
   return true;
 }
@@ -366,20 +397,33 @@ json Watering::status(const Ctx& c, const WaterIn& in) const {
       }
     }
     const auto why = blocked(c, in, w, s, false);
+    // By hand any shot; whether only the water stands in the way, which a person may water over
+    const auto hand = blocked(c, in, w, 1, false);
+    const bool anyway = hand && !blocked(c, in, w, 1, true);
+    const auto next = w.paused ? std::nullopt : nextShot(w, in.minuteOfDay);
     json last = nullptr;
     if (c.rt.watering.is_object() && c.rt.watering.contains("last") && c.rt.watering["last"].contains(w.id)) last = c.rt.watering["last"][w.id];
     circuits.push_back({{"id", w.id},
                         {"running", shot_ && shot_->circuit == w.id},
                         {"due", d != due_.end()},
+                        {"paused", w.paused},
+                        {"nextAt", next ? json((c.epoch / 60 + next->inMin) * 60) : json(nullptr)},
+                        {"nextS", next ? json(next->s) : json(nullptr)},
                         {"dayS", round1(dayRunS(c.rt, in.date, w.id))},
                         {"last", last},
-                        {"blocked", why ? json(*why) : json(nullptr)}});
+                        {"blocked", why ? json(*why) : json(nullptr)},
+                        {"hand", hand ? json(*hand) : json(nullptr)},
+                        {"anyway", anyway}});
   }
   const auto avail = available(c, in);
   const auto given = givenL(c.rt);
   const auto notFit = unfit(in);
   const auto warn = notFit ? std::nullopt : warning(in);
+  // What is left of the running shot, from its switch-on
+  json left = nullptr;
+  if (shot_) left = round1(std::max(0.0, shot_->s - (shot_->sentAt >= 0 ? static_cast<double>(c.now - shot_->sentAt) / 1000.0 : 0)));
   return {{"running", shot_ ? json(shot_->circuit) : json(nullptr)},
+          {"leftS", left},
           {"warning", warn ? json(*warn) : json(nullptr)},
           {"override", shot_ && shot_->override},
           {"givenL", given ? json(round1(*given)) : json(nullptr)},

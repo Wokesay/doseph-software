@@ -124,9 +124,15 @@ export type RobotState = {
   // Watering (SD-134): the circuit that waters, the litres given since the tank was full, the
   // reserve and what the tank may still give, whether the water is fit, and each circuit's state
   watering: {
-    running: string | null; override: boolean; givenL: number | null; reserveL: number | null; availableL: number | null; low: boolean;
+    running: string | null; leftS: number | null; override: boolean; givenL: number | null; reserveL: number | null; availableL: number | null; low: boolean;
     fit: Msg | null; warning: Msg | null; mixing: boolean;
-    circuits: { id: string; running: boolean; due: boolean; dayS: number; last: { at: number; s: number; l: number | null; end: Msg } | null; blocked: Msg | null }[];
+    // `blocked`: why its schedule's next shot cannot start; `hand`: why no shot by hand can, and
+    // `anyway`: only the water stands in the way, which a person may water over (RAT-086)
+    circuits: {
+      id: string; running: boolean; due: boolean; paused: boolean; nextAt: number | null; nextS: number | null; dayS: number;
+      // `upTo`: cut by a restart, it ran this long at most
+      last: { at: number; s: number; l: number | null; end: Msg; override?: boolean; upTo?: boolean } | null; blocked: Msg | null; hand: Msg | null; anyway: boolean;
+    }[];
   };
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;

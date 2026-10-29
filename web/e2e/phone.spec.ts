@@ -29,6 +29,7 @@ test("every page fits a phone and has the Stop", async ({ page, request }) => {
   expect(put).toBe(200);
   for (const path of ["/", "/recipe", "/tank", "/water", "/watering", "/history", "/channels", "/setup", "/settings"]) {
     await page.goto(`/#${path}`);
+    if (path === "/watering") await expect(page.getByTestId("circuit-w1")).toBeVisible();
     await page.waitForTimeout(800);
     expect(await offScreen(page), path).toEqual([]);
     await expect(page.getByTestId("stop")).toBeVisible();

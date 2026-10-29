@@ -609,7 +609,7 @@ test("coupling: this device shows a code for the leader; a pairing that cannot r
   await expect(card.getByTestId("coupled")).toHaveCount(0);
 });
 
-test("watering: a circuit on the twin's pump is added and given its output; where the water is not fit, it waters anyway after a confirmation that names why, and a shot is ended by hand (SD-134, RAT-086)", async ({ page }) => {
+test("watering: a circuit on the twin's pump is added and given its output; where the water is not fit, it waters anyway after a confirmation that names why, and a shot is ended by hand; a change keeps its pause (SD-134, RAT-086)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");
   const card = page.getByTestId("devices");
@@ -622,7 +622,7 @@ test("watering: a circuit on the twin's pump is added and given its output; wher
     page.evaluate(async ([p, b]) => (await fetch(`/api/v1/${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).status, [path, body] as const);
   expect(await call("tank/new")).toBe(200);
   await page.goto("/#/watering");
-  await expect(page.getByTestId("circuits")).toContainText("No circuit yet");
+  await expect(page.getByTestId("circuits")).toContainText("No watering circuit yet");
   await page.getByTestId("add-circuit").click();
   const form = page.getByTestId("circuit-form");
   await form.locator("input[name=circuit-name]").fill("Tent");
@@ -630,6 +630,7 @@ test("watering: a circuit on the twin's pump is added and given its output; wher
   await page.getByTestId("save-circuit").click();
   await form.locator("select[name='role-device-water.w1']").selectOption("d1");
   await page.getByTestId("save-role-water.w1").click();
+  await expect(form.getByTestId("role-state-water.w1")).not.toContainText("not assigned", { timeout: 10000 });
   await page.keyboard.press("Escape");
   const circuit = page.getByTestId("circuit-w1");
   await expect(circuit).toContainText("Pumps, output 0", { timeout: 10000 });
@@ -638,12 +639,26 @@ test("watering: a circuit on the twin's pump is added and given its output; wher
   // person may water anyway, told why
   expect(await call("probe", { action: "start", kind: "ph" })).toBe(200);
   await page.getByTestId("circuit-anyway-w1").click({ timeout: 20000 });
-  await expect(page.getByTestId("anyway-reason")).toHaveText(/mixed in and measured|being calibrated/);
+  await expect(page.getByTestId("anyway-reason")).toHaveText(/mixed and measured|being calibrated/);
   await page.getByTestId("confirm-anyway").click();
-  await expect(page.getByTestId("circuit-state-w1")).toContainText("watering", { timeout: 15000 });
+  await expect(page.getByTestId("circuit-state-w1")).toContainText("watering anyway", { timeout: 15000 });
   await page.getByTestId("circuit-stop-w1").click();
   await expect(page.getByTestId("circuit-last-w1")).toContainText("Stopped by hand", { timeout: 15000 });
-  await expect(page.getByTestId("watering-given")).toContainText("L");
+  await expect(page.getByTestId("circuit-last-w1")).toContainText(/\d\.\d\u00a0L/);
+  await expect(page.getByTestId("circuit-last-w1")).toContainText("watered anyway");
   expect(await call("probe", { action: "cancel" })).toBe(200);
+  // A schedule, paused; a change of the circuit keeps the pause
+  await page.getByTestId("circuit-edit-w1").click();
+  await form.getByRole("tab", { name: "Interval" }).click();
+  await page.getByTestId("save-circuit").click();
+  await expect(page.getByTestId("circuit-schedule-w1")).toContainText("every 4\u00a0h");
+  await expect(page.getByTestId("circuit-next-w1")).toBeVisible();
+  await page.getByTestId("circuit-pause-w1").locator(".toggle").click();
+  await expect(page.getByTestId("circuit-state-w1")).toContainText("paused");
+  await page.getByTestId("circuit-edit-w1").click();
+  await form.locator("input[name=circuit-name]").fill("Tent north");
+  await page.getByTestId("save-circuit").click();
+  await expect(page.getByTestId("circuit-w1")).toContainText("Tent north");
+  await expect(page.getByTestId("circuit-state-w1")).toContainText("paused");
+  await expect(page.getByTestId("circuit-next-w1")).toHaveCount(0);
 });
-

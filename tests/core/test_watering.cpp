@@ -101,6 +101,68 @@ TEST_CASE("Watering: shots in a window are spread from its start to its end; fix
   CHECK_FALSE(doseph::shotAt(w, 0));
 }
 
+TEST_CASE("Watering: a circuit's next shot after a minute: in its window, at its fixed times, by its interval up to midnight; none by hand (SD-134)") {
+  doseph::WaterCircuitCfg w;
+  w.mode = "window";
+  w.fromMin = 8 * 60;
+  w.toMin = 20 * 60;
+  w.shotsPerDay = 7;
+  w.shotS = 90;
+  auto in = [&](int m) { return doseph::nextShot(w, m)->inMin; };
+  CHECK(in(479) == 1);
+  CHECK(in(480) == 120);  // the shot of this minute was taken
+  CHECK(in(1200) == 720);  // tomorrow's first
+  CHECK(doseph::nextShot(w, 0)->s == 90);
+  w.mode = "times";
+  w.times = {{6 * 60, 30}, {18 * 60 + 30, 45}};
+  CHECK(in(400) == 710);
+  CHECK(doseph::nextShot(w, 400)->s == 45);
+  CHECK(in(1200) == 600);
+  CHECK(doseph::nextShot(w, 1200)->s == 30);
+  w.mode = "interval";
+  w.everyMin = 90;
+  w.shotS = 20;
+  CHECK(in(100) == 80);
+  CHECK(in(1430) == 10);  // midnight starts the count again
+  CHECK(in(0) == 90);
+  w.mode = "manual";
+  CHECK_FALSE(doseph::nextShot(w, 0));
+}
+
+TEST_CASE("Watering: the state tells each circuit's next shot, whether it is paused, why no shot by hand can start, and whether only the water stands in the way (SD-134, RAT-086)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "interval"}, {"everyMin", 60}, {"shotS", 20}});
+  waitFit(r);
+  json c = circuitState(r, "w1");
+  const auto now = r.s.clock().epoch();
+  REQUIRE(c["nextAt"].is_number());
+  CHECK(c["nextAt"].get<doseph::Epoch>() > now);
+  CHECK(c["nextAt"].get<doseph::Epoch>() <= now + 3600);
+  CHECK(c["nextAt"].get<doseph::Epoch>() % 60 == 0);
+  CHECK(c["nextS"] == 20);
+  CHECK(c["hand"].is_null());
+  CHECK(c["anyway"] == false);
+  CHECK(circuitState(r, "w2")["nextAt"].is_null());  // by hand only
+  // A probe in a buffer: the water cannot be judged, which a person may water over
+  CHECK(r.s.robot().probe({{"action", "start"}, {"kind", "ph"}}).status == 200);
+  r.step(kSecond);
+  c = circuitState(r, "w1");
+  CHECK(c["hand"]["key"] == "water.no.calibrating");
+  CHECK(c["anyway"] == true);
+  CHECK(r.s.robot().probe({{"action", "cancel"}}).status == 200);
+  // Stopped: no one waters over that
+  r.ok("POST", "stop");
+  r.step(kSecond);
+  c = circuitState(r, "w1");
+  CHECK(c["hand"]["key"] == "water.no.stopped");
+  CHECK(c["anyway"] == false);
+  r.ok("POST", "resume");
+  r.ok("POST", "watering/circuits/w1/pause", {{"paused", true}});
+  c = circuitState(r, "w1");
+  CHECK(c["paused"] == true);
+  CHECK(c["nextAt"].is_null());
+}
+
 TEST_CASE("Watering: water is fit within a wide band: pH 4.0 to 8.5, EC at most 1.0 above its target and never above 5.0, with a recent reading and no calibration; pH not corrected only warns (RAT-086, RAT-084, R5)") {
   doseph::WaterIn in;
   in.stale = false;
@@ -299,6 +361,10 @@ TEST_CASE("Watering: Stop, maintenance and a dose stop a running shot; a restart
   CHECK(count(r, "ev.water.cut_restart") == 1);
   // Booked as if it ran until the device's own auto-off: 3 min at 2 L/min (RAT-019)
   CHECK(watering(r)["givenL"].get<double>() - given == doctest::Approx(6.0));
+  const json last = circuitState(r, "w1")["last"];
+  CHECK(last["end"]["key"] == "water.end.restart");
+  CHECK(last["upTo"] == true);
+  CHECK(last["s"] == 180);
   r.waitUntil("the pump is switched off", [&] { return !runs(r, 0); }, 6);
   r.step(2 * 60 * kSecond);
   CHECK_FALSE(runs(r, 0));

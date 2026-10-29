@@ -70,7 +70,7 @@ export const de = {
   "settings.coupling.end": "Kopplung beenden",
   "settings.coupling.endAsk": "Kopplung mit „{name}“ beenden? Beide Geräte arbeiten dann wieder allein.",
   "settings.coupling.ended": "Kopplung beendet",
-  "settings.devices": "Netzgeräte",
+  "settings.devices": "Netzwerkgeräte",
   "settings.devices.intro": "Shelly-Geräte (ab Gen2) und ESPHome-Geräte im Heimnetz, dazu MQTT-Themen. Geschaltet wird nur an einem Shelly: Doseph stellt vorher „aus nach Stromausfall“ und die Abschaltzeit im Gerät ein und prüft sie vor jedem Einschalten.",
   "settings.devices.kind": "Art",
   "settings.devices.address": "Adresse",

@@ -805,9 +805,11 @@ export function RoleRow(p: { role: string; label?: string; devices: Devices; rel
       </div>
       {problem && <span class="muted small">{msg(problem)}</span>}
       <div class="form-grid">
-        <Field label={t("settings.devices.source")}>
-          <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
-        </Field>
+        {sources.length > 1 && (
+          <Field label={t("settings.devices.source")}>
+            <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
+          </Field>
+        )}
         {b.source !== "mqtt" && (
           <Field label={t("settings.devices.device")}>
             <select class="input" name={`role-device-${p.role}`} value={b.device} onChange={(e) => set({ device: (e.target as HTMLSelectElement).value })}>
