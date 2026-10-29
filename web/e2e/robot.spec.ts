@@ -694,3 +694,82 @@ test("watering: a circuit with a time window follows a plant, whose phase sets i
   await expect(page.getByTestId("circuit-plant-w1")).toContainText("Bed 1, phase Growth: 12 × 30 s");
   await expect(page.getByTestId("circuit-next-w1")).toContainText("30 s");
 });
+
+test("light: a dimmer on the twin is added and given its output; on all day at its brightness, off by hand for a day and back to the plan; a day of 0 h switched on by hand is said (SD-135)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("devices");
+  await card.locator("input[name=device-address]").fill("shelly-dimmer.local");
+  await card.locator("input[name=device-name]").fill("Lamps");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d1")).toContainText("reachable", { timeout: 15000 });
+  await page.goto("/#/light");
+  await expect(page.getByTestId("lights")).toContainText("No light circuit yet");
+  await page.getByTestId("add-light").click();
+  const form = page.getByTestId("light-form");
+  await form.locator("input[name=light-name]").fill("Tent");
+  await form.getByRole("tab", { name: "Dim 0–10 V" }).click();
+  // A day of 24 h: on whatever the time
+  await form.locator("input[name=light-hours]").fill("24");
+  await form.locator("input[name=light-pct]").fill("70");
+  await expect(page.getByTestId("light-preview")).toHaveText("Light all day.");
+  await page.getByTestId("save-light").click();
+  await form.locator("select[name='role-device-light.l1']").selectOption("d1");
+  await page.getByTestId("save-role-light.l1").click();
+  await expect(form.getByTestId("role-state-light.l1")).not.toContainText("not assigned", { timeout: 10000 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("light-state-l1")).toContainText("on, 70 %", { timeout: 30000 });
+  await expect(page.getByTestId("light-output-l1")).toContainText("Lamps, output 0, reads 70 %", { timeout: 15000 });
+  await expect(page.getByTestId("light-plan-l1")).toHaveText("always on (24 h) · 70 %");
+  // Off by hand: a day of 24 h has no change, so for a day; then back to the plan
+  await page.getByTestId("light-off-l1").click();
+  await expect(page.getByTestId("light-state-l1")).toContainText("off");
+  await expect(page.getByTestId("light-state-l1")).toContainText("by hand for a day");
+  await expect(page.getByTestId("light-output-l1")).toHaveText("Lamps, output 0", { timeout: 15000 });
+  await page.getByTestId("light-plan-again-l1").click();
+  await expect(page.getByTestId("light-state-l1")).toContainText("on, 70 %", { timeout: 15000 });
+  await expect(page.getByTestId("light-plan-again-l1")).toHaveCount(0);
+  // A day of 0 h: off; on by hand it is on in the dark period, and says so
+  await page.getByTestId("light-edit-l1").click();
+  await form.locator("input[name=light-hours]").fill("0");
+  await expect(page.getByTestId("light-preview")).toHaveText("Dark all day.");
+  await page.getByTestId("save-light").click();
+  await expect(page.getByTestId("light-state-l1")).toHaveText("off", { timeout: 15000 });
+  await page.getByTestId("light-on-l1").click();
+  await expect(page.getByTestId("light-state-l1")).toContainText("on in the dark period", { timeout: 15000 });
+  await expect(page.getByTestId("light-l1")).toContainText("This can disturb flowering");
+});
+
+test("light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page (SD-135)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(
+      async ([m, p, b]) => {
+        const r = await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      },
+      [method, path, body] as const,
+    );
+  const recipe = await call("PUT", "plant-recipes", { name: "Tomatoes", phases: [{ name: "Growth", days: 21, recipe: "two_part" }] });
+  expect(recipe.status).toBe(200);
+  await page.goto("/#/plants");
+  await page.getByRole("button", { name: "Edit: Tomatoes" }).click();
+  await page.locator("input[name=phase-light-hours-0]").fill("18");
+  await page.locator("input[name=phase-light-pct-0]").fill("60");
+  await page.getByTestId("save-plant-recipe").click();
+  await expect(page.getByText("Saved").first()).toBeVisible();
+  expect((await call("POST", "plants", { name: "Bed 1", plantRecipe: recipe.body.id })).status).toBe(200);
+  await page.goto("/#/light");
+  await page.getByTestId("add-light").click();
+  const form = page.getByTestId("light-form");
+  await form.locator("input[name=light-name]").fill("Tent");
+  await form.getByRole("tab", { name: "Dim 0–10 V" }).click();
+  await form.locator("input[name=light-start]").fill("06:00");
+  await form.locator("input[name=light-hours]").fill("12");
+  await form.locator("select[name=light-plant]").selectOption({ label: "Bed 1" });
+  await page.getByTestId("save-light").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("light-plant-l1")).toHaveText("Bed 1, phase Growth: 18 h, 60 %");
+  await expect(page.getByTestId("light-plan-l1")).toHaveText("06:00–00:00 (18 h) · 60 %");
+  await expect(page.getByTestId("light-next-l1")).toContainText(/^(on|off) at /);
+});

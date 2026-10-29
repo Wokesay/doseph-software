@@ -65,10 +65,11 @@ export type ServiceItem = { id: string; kind: string; channel: number; days: num
 export type ServicePlan = { dates: number[]; items: ServiceItem[] };
 
 // Plants and their phases (SD-128)
-// `shotsPerDay`, `shotS`: for a watering circuit that follows the plant (SD-134); null: the circuit's own
+// `shotsPerDay`, `shotS`: for a watering circuit that follows the plant (SD-134); `lightHours`,
+// `lightPct`: for a light circuit that follows it (SD-135); null: the circuit's own
 export type PlantPhase = {
   name: string; days: number; confirm: boolean; recipe: string; ecTarget: number | null; ph: [number, number] | null;
-  shotsPerDay?: number | null; shotS?: number | null;
+  shotsPerDay?: number | null; shotS?: number | null; lightHours?: number | null; lightPct?: number | null;
 };
 export type PlantRecipe = { id: string; name: string; note: string; phases: PlantPhase[] };
 export type Plant = {
@@ -150,6 +151,15 @@ export type RobotState = {
   catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
   channelJob: ChannelJob | null;
   probe: ProbeSession | null;
+  // Light (SD-135): each circuit, whether it is day by its plan, whether it is on and at what
+  // brightness, its next change (null: none within a day), a switch by hand, the plant it follows
+  // and its output
+  lighting: {
+    id: string; day: boolean; on: boolean; pct: number | null; hours: number; nextChangeAt: number | null;
+    hand: { on: boolean; until: number } | null; darkOn: boolean;
+    plant: { id: string; name: string; phase: string | null; hours: number; pct: number } | null;
+    output: DeviceRole["output"] | null;
+  }[];
   // Maintenance mode until then (epoch seconds); null when off
   maintenanceUntil: number | null;
   eventId: number;
@@ -181,6 +191,7 @@ export type Config = {
   circulation: { mode: CirculationMode };
   // Watering (SD-134): the reserve, and the circuits with their schedules
   watering: { reservePct: number; circuits: WaterCircuit[] };
+  lighting: { circuits: LightCircuit[] };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
   recipes: Recipe[];
@@ -312,6 +323,14 @@ export type WaterCircuit = {
   plant: string;  // window: the plant whose current phase sets shots a day and their length; "": none
 };
 
+/** A light circuit (SD-135): a Shelly switch, or a Shelly dimmer on a 0–10 V line, bound as the role `light.<id>`. */
+export type LightCircuit = {
+  id: string; name: string; dimmed: boolean;
+  startMin: number; hours: number;  // its day: from its start, local time, for its hours of light
+  pct: number; thresholdPct: number; sunriseMin: number; sunsetMin: number;  // a dimmer's brightness, its driver's threshold, its ramps
+  plant: string;  // the plant whose current phase sets the hours and the brightness; "": none
+};
+
 /** The circulation pump runs during a dose, its mixing wait and a fill, or always (SD-132). */
 export type CirculationMode = "mixing" | "always";
 
@@ -341,7 +360,8 @@ export type DeviceRole = {
   pulse: boolean;
   autoOffS: number;
   binding: RoleBinding | null;
-  output?: { state: string; verified: boolean; want: boolean; problem: Msg | null };
+  // `level`, `brightness`: a dimmer's brightness wanted and read back (SD-135)
+  output?: { state: string; verified: boolean; want: boolean; problem: Msg | null; level?: number; brightness?: number | null };
   value?: unknown;
   state?: string;
 };

@@ -35,7 +35,18 @@ All notable changes to this software. The format follows
   per circuit; a plant's phase sets the hours of light and the
   brightness; after a restart light goes on by its plan, and STOP, a hold
   and maintenance leave it as the plan says. Built in step 9.5.
-- Light, the robot's side (SD-135), step 9.5; the page follows.
+- The page Light (SD-135), step 9.5b.
+  - Each light circuit with its state, its plan and next change on the
+    device's clock, a dimmer's brightness as read back, and the plant it
+    follows. A light switched on by hand in the dark period is shown with
+    a warning.
+  - Switch a light on or off until the plan's next change, or back to the
+    plan.
+  - Add a circuit as a switch or a 0–10 V dimmer, with its start, hours
+    of light, brightness, the driver's threshold, sunrise and sunset, and
+    a plant to follow; then assign its Shelly output.
+  - A phase's hours of light and brightness are set on the Plants page.
+- Light, the robot's side (SD-135), step 9.5.
   - Any number of light circuits, each a Shelly switch or a Shelly
     dimmer on a 0–10 V line. A circuit's day begins at its own time and
     lasts its hours of light; a dimmer rises over its sunrise and falls
