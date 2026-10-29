@@ -358,6 +358,12 @@ bool NetTwin::control(const std::string& action, const json& body) {
     s->id = body["id"].get<std::string>();
     return true;
   }
+  if (action == "climateAir") {
+    // The grow room's air set, from where it goes on by its own (SD-136)
+    for (const auto& [key, field] : {std::pair{"tempC", &room_.tempC}, std::pair{"rhPct", &room_.rhPct}, std::pair{"co2Ppm", &room_.co2Ppm}})
+      if (body.contains(key) && body[key].is_number()) *field = body[key].get<double>();
+    return true;
+  }
   if (action == "netValue") {
     FakeEsphome* e = esphome(address);
     const std::string entity = body.value("entity", "");

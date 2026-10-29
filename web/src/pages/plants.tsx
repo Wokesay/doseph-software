@@ -319,6 +319,21 @@ function RecipeEditor(p: { recipe: PlantRecipe | null; data: Plants; onClose: ()
               <Field label={t("plants.lightPct")} hint={t("plants.lightPctHint")}>
                 <NumberInput value={ph.lightPct ?? null} onValue={(v) => set(i, { lightPct: v })} unit="%" min={1} max={100} name={`phase-light-pct-${i}`} />
               </Field>
+              <Field label={t("plants.dayC")} hint={t("plants.climateHint")}>
+                <NumberInput value={ph.dayC ?? null} onValue={(v) => set(i, { dayC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-day-c-${i}`} />
+              </Field>
+              <Field label={t("plants.nightC")}>
+                <NumberInput value={ph.nightC ?? null} onValue={(v) => set(i, { nightC: v })} unit="°C" min={5} max={40} step={0.5} name={`phase-night-c-${i}`} />
+              </Field>
+              <Field label={t("plants.rhPct")}>
+                <NumberInput value={ph.rhPct ?? null} onValue={(v) => set(i, { rhPct: v })} unit="%" min={20} max={95} name={`phase-rh-${i}`} />
+              </Field>
+              <Field label={t("plants.vpdKpa")}>
+                <NumberInput value={ph.vpdKpa ?? null} onValue={(v) => set(i, { vpdKpa: v })} unit="kPa" min={0.2} max={2.5} step={0.05} name={`phase-vpd-${i}`} />
+              </Field>
+              <Field label={t("plants.co2Ppm")}>
+                <NumberInput value={ph.co2Ppm ?? null} onValue={(v) => set(i, { co2Ppm: v == null ? null : Math.round(v) })} unit="ppm" min={400} max={1500} step={50} name={`phase-co2-${i}`} />
+              </Field>
             </div>
             <div class="wrap-row">
               <Toggle checked={ph.confirm} onChange={(v) => set(i, { confirm: v })} label={t("plants.confirm")} />

@@ -797,3 +797,70 @@ test.describe("a browser in another time zone than the device", () => {
     await expect(page.getByTestId("light-next-l1")).toContainText(/begins at 06:00|ends at 18:00/);
   });
 });
+
+test("climate: a room is added and given its exhaust fan and sensors; too warm, the fan runs; CO2 above 2,000 ppm is said (SD-136)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(async ([m, p, b]) => (await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).status, [method, path, body] as const);
+  expect(await call("POST", "devices", { kind: "shelly", address: "shelly-climate.local", name: "Room relay" })).toBe(200);
+  expect(await call("POST", "devices", { kind: "esphome", address: "esp-climate.local", name: "Room sensors" })).toBe(200);
+  await page.goto("/#/climate");
+  await expect(page.getByTestId("rooms")).toContainText("No room yet");
+  await page.getByTestId("add-room").click();
+  const form = page.getByTestId("room-form");
+  await form.locator("input[name=room-name]").fill("Tent");
+  await form.locator("input[name=room-hours]").fill("24");  // a day all day
+  await form.locator("input[name=room-co2]").fill("1000");
+  await page.getByTestId("save-room").click();
+  // Its exhaust fan, assigned in the dialog
+  await form.locator("select[name='role-device-climate.r1.exhaust']").selectOption("d1");
+  await page.getByTestId("save-role-climate.r1.exhaust").click();
+  await expect(form.getByTestId("role-state-climate.r1.exhaust")).not.toContainText("not assigned", { timeout: 10000 });
+  await page.keyboard.press("Escape");
+  for (const [kind, entity] of [["temp", "sensor/air_temp"], ["rh", "sensor/air_rh"], ["co2", "sensor/co2"]])
+    expect(await call("PUT", `roles/climate.r1.${kind}`, { source: "esphome", device: "d2", entity })).toBe(200);
+  await sim(page, "climateAir", { tempC: 31, rhPct: 60, co2Ppm: 700 });
+  await expect(page.getByTestId("room-devices-r1")).toContainText("Exhaust fan: on", { timeout: 30000 });
+  await expect(page.getByTestId("room-temp-r1")).toContainText("target 26 °C");
+  await expect(page.getByTestId("room-co2-r1")).toContainText("target 1,000 ppm");
+  await expect(page.getByTestId("room-state-r1")).toContainText("Day");
+  // CO2 far too high: said
+  await sim(page, "climateAir", { co2Ppm: 3000 });
+  await expect(page.getByTestId("room-r1")).toContainText("CO2 above 2,000 ppm", { timeout: 20000 });
+  // The sensors gone: said what has no value
+  expect(await call("POST", "sim/netOnline", { address: "esp-climate.local", online: false })).toBe(200);
+  await expect(page.getByTestId("room-missing-r1")).toContainText("No air temperature", { timeout: 60000 });
+  await expect(page.getByTestId("room-missing-r1")).toContainText("No CO2 value: the CO2 valve stays closed.");
+});
+
+test("climate: a room follows a plant, whose phase sets its targets; the phase's climate is set on the Plants page (SD-136)", async ({ page }) => {
+  await login(page);
+  const call = (method: string, path: string, body: unknown = {}) =>
+    page.evaluate(
+      async ([m, p, b]) => {
+        const r = await fetch(`/api/v1/${p}`, { method: m, headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      },
+      [method, path, body] as const,
+    );
+  const recipe = await call("PUT", "plant-recipes", { name: "Tomatoes", phases: [{ name: "Growth", days: 21, recipe: "two_part" }] });
+  expect(recipe.status).toBe(200);
+  await page.goto("/#/plants");
+  await page.getByRole("button", { name: "Edit: Tomatoes" }).click();
+  await page.locator("input[name=phase-day-c-0]").fill("24");
+  await page.locator("input[name=phase-vpd-0]").fill("1.2");
+  await page.getByTestId("save-plant-recipe").click();
+  await expect(page.getByText("Saved").first()).toBeVisible();
+  expect((await call("POST", "plants", { name: "Bed 1", plantRecipe: recipe.body.id })).status).toBe(200);
+  await page.goto("/#/climate");
+  await page.getByTestId("add-room").click();
+  const form = page.getByTestId("room-form");
+  await form.locator("input[name=room-name]").fill("Tent");
+  await form.locator("input[name=room-hours]").fill("24");
+  await form.locator("select[name=room-plant]").selectOption({ label: "Bed 1" });
+  await page.getByTestId("save-room").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("room-state-r1")).toContainText("Bed 1, phase Growth");
+  await expect(page.getByTestId("room-temp-r1")).toContainText("target 24 °C");
+  await expect(page.getByTestId("room-rh-r1")).toContainText("from VPD 1.2 kPa");
+});

@@ -19,7 +19,7 @@ type Form = Omit<LightCircuit, "hours" | "pct" | "thresholdPct" | "sunriseMin" |
   hours: number | null; pct: number | null; thresholdPct: number | null; sunriseMin: number | null; sunsetMin: number | null;
 };
 
-const nb = " ";
+const nb = "\u00a0";
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 // A time field's minutes of the day; nothing while it is empty or incomplete
 const minutes = (v: string): number | null => {
@@ -220,6 +220,15 @@ function LightCard(p: { c: LightCircuit; s: Status | undefined; devices: Devices
             <Pill tone="bad">{t(`settings.devices.state.${cannot}`)}</Pill>
           ) : (
             s && (s.on ? <Pill tone="ok">{s.pct != null ? t("light.state.onPct", { pct: pctText(s.pct) }) : t("light.state.on")}</Pill> : <Pill tone="neutral">{t("light.state.off")}</Pill>)
+          )}
+          {s?.heat && (
+            <Pill tone="warn">
+              {s.heat.off
+                ? t("light.state.heatOff")
+                : p.c.dimmed
+                  ? t("light.state.heatDim", { pct: pctText(s.heat.pct) })
+                  : t("light.state.heatSwitched", { off: `${figure((config.value?.climate.rooms.find((r) => r.lights.includes(p.c.id))?.heatC ?? 30) + 2)}${nb}°C` })}
+            </Pill>
           )}
           {s?.hand && <Pill tone="accent">{t(s.nextChangeAt != null ? "light.state.hand" : "light.state.handDay", { at: at(s.hand.until) })}</Pill>}
           {bound && problem && <span class="muted">{msg(problem)}</span>}

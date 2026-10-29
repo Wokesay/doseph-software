@@ -12,6 +12,7 @@ import { de as plants } from "./plants";
 import { de as setup } from "./setup";
 import { de as watering } from "./watering";
 import { de as light } from "./light";
+import { de as climate } from "./climate";
 
 // German texts of the app. Keys are stable; the English table (en.ts)
 // must have every key. Placeholders in {braces}.
@@ -63,6 +64,7 @@ export const deBase = {
   "nav.water": "Wasserweg",
   "nav.watering": "Bewässerung",
   "nav.light": "Licht",
+  "nav.climate": "Klima",
   "nav.history": "Verlauf",
   "nav.channels": "Kanäle",
   "nav.settings": "Einstellungen",
@@ -108,7 +110,7 @@ export const deBase = {
   "shell.stopAll": "Alles stoppen",
   "shell.stopped": "Gestoppt: alles aus",
   "shell.stoppedBar": "Gestoppt – Dosierkanäle und Förderpumpe sind aus und bleiben aus, bis du fortsetzt.",
-  "shell.stopText": "Alle Pumpen, Ventile und Gießkreise gehen sofort aus. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
+  "shell.stopText": "Alle Pumpen, Ventile und Gießkreise gehen sofort aus, ebenso Heizung, Be- und Entfeuchter und CO2-Ventil. Lüfter und Licht laufen weiter. Eine laufende Gabe wird abgebrochen, der Roboter ruht, bis du „Fortsetzen“ wählst.",
   "shell.stopNote": "Messen läuft weiter.",
   "shell.stopSending": "Sende …",
   "shell.stopRetry": "Erneut senden",
@@ -127,4 +129,4 @@ export const deBase = {
 } as const;
 
 // The base texts plus the texts of each area.
-export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup, ...watering, ...light };
+export const de = { ...deBase, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup, ...watering, ...light, ...climate };
