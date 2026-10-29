@@ -69,8 +69,21 @@ All notable changes to this software. The format follows
     switch over MQTT needs an availability topic.
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
+- The page "Watering" (SD-134).
+  - It shows the tank's water for watering: whether it is fit, what is
+    left to water, the litres watered since the last fill and the reserve,
+    which is set at the end of the page.
+  - Each circuit shows its state, schedule, next shot, output, today's run
+    time and its last shot. Circuits are added, changed, paused and
+    deleted there, and given a Shelly output; a change keeps a pause.
+  - "Water now" waters one shot by hand. Where only the water stands in
+    the way, "Water anyway" asks first and names why.
+  - A shot cut by a restart shows as the last shot, and an override says
+    what was wrong with the water, not only that it was being mixed in.
+  - The STOP dialog names the valves and watering circuits too; German
+    says "Netzwerkgeräte" and "Durchfluss".
 - Watering from the tank (SD-134), the fourth part of step 9: the robot's
-  side, through the API; the pages follow.
+  side, through the API.
   - Any number of circuits, each a pump or valve on a Shelly output, one
     at a time. A schedule of shots in a daily window, fixed times, an
     interval, or by hand only; a schedule can be paused.

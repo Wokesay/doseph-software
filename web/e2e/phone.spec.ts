@@ -22,8 +22,14 @@ async function offScreen(page: Page): Promise<string[]> {
 test("every page fits a phone and has the Stop", async ({ page, request }) => {
   await scenario(request, "demo");
   await login(page);
-  for (const path of ["/", "/recipe", "/tank", "/water", "/history", "/channels", "/setup", "/settings"]) {
+  // A watering circuit, so that its card is laid out too
+  const put = await page.evaluate(
+    async () => (await fetch("/api/v1/watering/circuits", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Greenhouse by the south wall", mode: "window", rateLpm: 2 }) })).status,
+  );
+  expect(put).toBe(200);
+  for (const path of ["/", "/recipe", "/tank", "/water", "/watering", "/history", "/channels", "/setup", "/settings"]) {
     await page.goto(`/#${path}`);
+    if (path === "/watering") await expect(page.getByTestId("circuit-w1")).toBeVisible();
     await page.waitForTimeout(800);
     expect(await offScreen(page), path).toEqual([]);
     await expect(page.getByTestId("stop")).toBeVisible();

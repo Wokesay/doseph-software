@@ -12,6 +12,7 @@ import { en as sim } from "./sim";
 import { en as water } from "./water";
 import { en as plants } from "./plants";
 import { en as setup } from "./setup";
+import { en as watering } from "./watering";
 
 const base: Record<keyof typeof deBase, string> = {
   "app.tagline": "Mixing robot for nutrient solution",
@@ -56,6 +57,7 @@ const base: Record<keyof typeof deBase, string> = {
   "nav.plants": "Plants",
   "nav.tank": "Tank",
   "nav.water": "Water path",
+  "nav.watering": "Watering",
   "nav.history": "History",
   "nav.channels": "Channels",
   "nav.settings": "Settings",
@@ -99,7 +101,7 @@ const base: Record<keyof typeof deBase, string> = {
   "shell.stopAll": "Stop everything",
   "shell.stopped": "Stopped: everything off",
   "shell.stoppedBar": "Stopped – dosing channels and feed pump are off and stay off until you resume.",
-  "shell.stopText": "Dosing channels and feed pump go off at once. A running dose is cancelled, the robot rests until you choose \"Resume\".",
+  "shell.stopText": "All pumps, valves and watering circuits go off at once. A running dose is cancelled, the robot rests until you choose \"Resume\".",
   "shell.stopNote": "Measuring goes on.",
   "shell.stopSending": "Sending …",
   "shell.stopRetry": "Send again",
@@ -118,4 +120,4 @@ const base: Record<keyof typeof deBase, string> = {
 };
 
 // The base texts plus the texts of each area.
-export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup };
+export const en: Record<keyof typeof de, string> = { ...base, ...login, ...status, ...recipe, ...tank, ...history, ...channels, ...settings, ...sim, ...water, ...plants, ...setup, ...watering };

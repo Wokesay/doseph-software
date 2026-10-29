@@ -758,7 +758,8 @@ function RefillPanel() {
   );
 }
 
-function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; reload: () => unknown }) {
+// A role bound to a device: a fixed one here, a watering circuit's output on its page (SD-134)
+export function RoleRow(p: { role: string; label?: string; devices: Devices; reload: () => unknown }) {
   const info = p.devices.roles[p.role];
   const output = info?.kind === "output";
   const blank: RoleBinding = { source: "shelly", device: "", channel: 0, entity: "", field: "", invert: false, availability: "" };
@@ -790,7 +791,7 @@ function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; rel
   return (
     <div class="stack-sm" data-testid={`role-${p.role}`}>
       <div class="row" style="justify-content:space-between">
-        <strong>{t(`settings.devices.role.${p.role}` as TextKey)}</strong>
+        <strong>{p.label ?? t(`settings.devices.role.${p.role}` as TextKey)}</strong>
         <span class="small" data-testid={`role-state-${p.role}`}>
           {info?.binding ? (
             <Pill tone={state === "ok" || state === "on" || state === "off" ? "ok" : state === "checking" || state === "waiting" ? "info" : "bad"}>
@@ -804,9 +805,11 @@ function RoleRow(p: { role: (typeof DEVICE_ROLES)[number]; devices: Devices; rel
       </div>
       {problem && <span class="muted small">{msg(problem)}</span>}
       <div class="form-grid">
-        <Field label={t("settings.devices.source")}>
-          <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
-        </Field>
+        {sources.length > 1 && (
+          <Field label={t("settings.devices.source")}>
+            <Seg<RoleSource> value={b.source} onChange={(source) => set({ source, device: "", entity: "", field: "", availability: "" })} options={sources} />
+          </Field>
+        )}
         {b.source !== "mqtt" && (
           <Field label={t("settings.devices.device")}>
             <select class="input" name={`role-device-${p.role}`} value={b.device} onChange={(e) => set({ device: (e.target as HTMLSelectElement).value })}>

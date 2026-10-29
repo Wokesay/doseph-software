@@ -112,4 +112,12 @@ class Watering {
 // The length of a circuit's shot due at this local minute; nothing when none is
 std::optional<double> shotAt(const WaterCircuitCfg& w, int minuteOfDay);
 
+// A circuit's next shot after this local minute: in how many minutes (1 to a day) and how long;
+// nothing by hand only. By the local clock as it is now: a change of the clocks moves it.
+struct NextShot {
+  int inMin = 0;
+  double s = 0;
+};
+std::optional<NextShot> nextShot(const WaterCircuitCfg& w, int minuteOfDay);
+
 }  // namespace doseph
