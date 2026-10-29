@@ -112,7 +112,8 @@ export type RobotState = {
   cycle: Cycle;
   watchdog: Watchdog;
   alarms: Alarm[];
-  latches: Record<string, Record<string, unknown>>;
+  // reportOnly: set while its lock reported only; it holds nothing (SD-133)
+  latches: Record<string, Record<string, unknown> & { reportOnly?: boolean }>;
   jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
   newTank: boolean; topUp: boolean;
   effects: { ph: number | null; ecByRecipe: Record<string, number | null> };
@@ -149,6 +150,8 @@ export type Config = {
   // `system`: the cultivation system (SD-128), "" while none is chosen
   tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null; system: GrowSystem | "" };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
+  // The locks a person releases that only report (SD-133)
+  locks: { reportOnly: string[] };
   limits: { minRunS: number; maxRunS: number; maxPartialRuns: number };
   canisters: Canister[];
   recipes: Recipe[];
@@ -271,3 +274,8 @@ export const del = <T = any>(p: string) => api<T>("DELETE", p);
 
 // The simulator's controls (simulator only)
 export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${action}`, body);
+
+// The locks a person releases that may be set to report only, by their kind (SD-133); as the core's
+export const REPORTABLE_LOCKS = ["flow.dry", "pump.cable", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return"] as const;
+// Whether a latch holds: one set while its lock reported only holds nothing (SD-133)
+export const holds = (latch: { reportOnly?: boolean } | undefined) => !!latch && !latch.reportOnly;

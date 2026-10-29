@@ -422,6 +422,7 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("PUT", {"tank"})) return fromResult(robot_.putTank(body));
   if (is("POST", {"tank", "new"})) return fromResult(robot_.newTank());
   if (is("PUT", {"control"})) return fromResult(robot_.putControl(body));
+  if (is("PUT", {"locks"})) return fromResult(robot_.putLocks(body));
   if (is("POST", {"canisters"})) return fromResult(robot_.putCanister(body));
   if (is("DELETE", {"canisters", "*"})) return fromResult(robot_.deleteCanister(p[1]));
   if (is("POST", {"canisters", "*", "stock"})) return fromResult(robot_.setStock(p[1], body));

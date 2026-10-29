@@ -154,6 +154,8 @@ class Robot : public RemoteRuns {
   Result putService(const json& j);
   Result putTank(const json& j);
   Result putControl(const json& j);
+  // Which locks a person releases only report (SD-133): {reportOnly: [kind]}; each change is an event
+  Result putLocks(const json& j);
   Result newTank();
   Result putCanister(const json& j);
   Result deleteCanister(const std::string& id);

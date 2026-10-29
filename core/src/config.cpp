@@ -151,6 +151,13 @@ double Config::canisterFlow(const CanisterCfg& b) const {
   return it == peerFlows.end() ? kNaN : it->second;
 }
 
+bool Config::reportsOnly(const std::string& kind) const {
+  // Only a lock a person releases, whatever a configuration says: never leak or high level
+  const auto& all = reportableLocks();
+  return std::find(all.begin(), all.end(), kind) != all.end() &&
+         std::find(locks.reportOnly.begin(), locks.reportOnly.end(), kind) != locks.reportOnly.end();
+}
+
 double Config::channelFlow(int channel) const {
   auto it = channels.find(channel);
   return it == channels.end() ? kNaN : it->second.flowMlPerMin;
@@ -192,6 +199,7 @@ void to_json(json& j, const Config& c) {
                   {"maxEcStep", c.control.maxEcStep},           {"ecFloor", c.control.ecFloor},
                   {"phMaxMlPerDose", c.control.phMaxMlPerDose}, {"maxEcRounds", c.control.maxEcRounds},
                   {"maxPhDoses", c.control.maxPhDoses}};
+  j["locks"] = {{"reportOnly", c.locks.reportOnly}};
   j["limits"] = {{"minRunS", c.limits.minRunS}, {"maxRunS", c.limits.maxRunS}, {"maxPartialRuns", c.limits.maxPartialRuns}};
   json canisters = json::array();
   for (const auto& b : c.canisters)
@@ -323,6 +331,10 @@ Config configFromJson(const json& in) {
   num("phMaxMlPerDose", c.control.phMaxMlPerDose);
   c.control.maxEcRounds = intOr(k, "maxEcRounds", c.control.maxEcRounds);
   c.control.maxPhDoses = intOr(k, "maxPhDoses", c.control.maxPhDoses);
+  for (const auto& x : arrayAt(objectAt(j, "locks"), "reportOnly")) {
+    if (!x.is_string()) throw std::invalid_argument("a lock is not a string");
+    c.locks.reportOnly.push_back(x.get<std::string>());
+  }
   const json& l = objectAt(j, "limits");
   if (l.contains("minRunS")) c.limits.minRunS = numOrNaN(l, "minRunS");
   if (l.contains("maxRunS")) c.limits.maxRunS = numOrNaN(l, "maxRunS");
@@ -440,6 +452,13 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!inRange(k.phMaxMlPerDose, 0.5, 20)) err(say("cfg.control.ph_max_ml", {{"min", 0.5}, {"max", 20}}));
   if (k.maxEcRounds < 1 || k.maxEcRounds > 20) err(say("cfg.control.ec_rounds", {{"min", 1}, {"max", 20}}));
   if (k.maxPhDoses < 1 || k.maxPhDoses > 12) err(say("cfg.control.ph_doses", {{"min", 1}, {"max", 12}}));
+  // Only a lock a person releases may report only, each once; never leak or high level (SD-133)
+  std::set<std::string> reportOnly;
+  for (const auto& kind : c.locks.reportOnly) {
+    const auto& all = reportableLocks();
+    if (std::find(all.begin(), all.end(), kind) == all.end() || !reportOnly.insert(kind).second)
+      err(say("cfg.locks.unknown", {{"lock", kind}}));
+  }
 
   const auto& t = c.tank;
   if (isNum(t.volumeL) && !inRange(t.volumeL, 1, 100000)) err(say("cfg.tank.volume", {{"min", 1}, {"max", 100000}}));
@@ -598,6 +617,25 @@ void to_json(json& j, const RuntimeState& s) {
   j["pumpLearnedS"] = s.pumpLearnedS;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
+}
+
+bool holds(const RuntimeState& rt, const std::string& id) {
+  const auto it = rt.latches.find(id);
+  return it != rt.latches.end() && !(it->second.is_object() && jbool(it->second, "reportOnly", false));
+}
+
+bool setLatch(const Config& cfg, RuntimeState& rt, const std::string& id, json entry, const std::string& kind) {
+  const bool report = cfg.reportsOnly(kind.empty() ? id : kind);
+  if (report) entry["reportOnly"] = true;
+  rt.latches[id] = std::move(entry);
+  return !report;
+}
+
+Msg reportedEvent(const std::string& kind, const json& latch) {
+  const Msg lock = say("lock." + kind);
+  if (latch.is_object() && latch.contains("channel") && latch["channel"].is_number_integer())
+    return say("ev.lock.reported_channel", {{"channel", latch["channel"]}, {"lock", lock}});
+  return say("ev.lock.reported", {{"lock", lock}});
 }
 
 Ms RuntimeState::dayRunMs(int channel, Epoch since) const {

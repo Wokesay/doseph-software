@@ -3,7 +3,7 @@
 // locks to release, the monitoring and the latest events.
 import { useEffect, useState } from "preact/hooks";
 import { Activity, BellRing, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
-import { del, get, post, type Alarm, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
+import { del, get, holds, post, type Alarm, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
 import { dateTime, day, duration, num, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast, toastError } from "../store";
@@ -237,7 +237,15 @@ function Locks() {
         {ids.map((id) => (
           <div class="item wrap-row" data-testid={`latch-${id}`}>
             <div class="grow">{text(id)}</div>
-            {id === "tank.volume" ? (
+            {!holds(st.latches[id]) ? (
+              // Its lock only reports (SD-133): nothing is held, and clearing it says it was seen
+              <div class="row-actions">
+                <Pill tone="warn">{t("status.reportedOnly")}</Pill>
+                <Button size="sm" onClick={() => release(id, false, "status.cleared")}>
+                  {t("status.clear")}
+                </Button>
+              </div>
+            ) : id === "tank.volume" ? (
               <div class="row-actions">
                 <a class="btn sm" href="#/tank">
                   {t("status.correctVolume")}
@@ -258,11 +266,11 @@ function Locks() {
   );
 }
 
-async function release(id: string, confirm: boolean) {
+async function release(id: string, confirm: boolean, done: "status.released" | "status.cleared" = "status.released") {
   try {
     await post(`/latches/${encodeURIComponent(id)}/ack`, confirm ? { confirm: true } : {});
     await refreshState();
-    toast(t("status.released"));
+    toast(t(done));
   } catch (e) {
     toastError(e);  // e.g. the device still reports the cause (SD-110)
   }

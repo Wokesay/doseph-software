@@ -507,6 +507,27 @@ test("MQTT is off until switched on; without TLS it only sends values; the passw
   await expect(page.getByTestId("mqtt-status")).toContainText("Topics under doseph/");
 });
 
+test("a lock is set to report only in the settings, with a warning that leak, Stop and the limits always hold; the overview names it until it locks again (SD-133)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("locks");
+  const row = card.getByTestId("lock-flow.dry");
+  await expect(row.getByRole("tab", { name: "Lock" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("save-locks")).toBeDisabled();
+  await row.getByRole("tab", { name: "Report only" }).click();
+  await expect(card.getByText("Leak, high level, Stop, no dose without flow")).toBeVisible();
+  await page.getByTestId("save-locks").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("lock-flow.dry").getByRole("tab", { name: "Report only" })).toHaveAttribute("aria-selected", "true");
+  await page.goto("/#/");
+  await expect(page.getByText("Set to report only: no flow after the tries, or a dry run").first()).toBeVisible({ timeout: 15000 });
+  await page.goto("/#/settings");
+  await page.getByTestId("lock-flow.dry").getByRole("tab", { name: "Lock" }).click();
+  await page.getByTestId("save-locks").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+});
+
 test("coupling: this device shows a code for the leader; a pairing that cannot reach the other device, or reaches this one, says why (SD-131)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");

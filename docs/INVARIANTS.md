@@ -186,6 +186,14 @@ of its own.
 | The leader doses a canister on the follower's channel by the follower's calibration and books the result; a run there that does not end in time is booked as run; never more than one channel runs across both, and the follower's own channel jobs wait for the leader's maintenance | SD-131, PD-457 | ✓ | `gateway.cpp`, `robot.cpp`, `cycle.cpp` · test_coupling.cpp |
 | Without the follower its canisters are not planned; the watchdog shows the link and a difference of more than 0.3 pH or 0.2 mS/cm for 10 min between the devices | SD-131 | ✓ | `robot.cpp`, `watchdog.cpp` · test_coupling.cpp |
 
+## Locks that report only (SD-133)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| A lock a person releases may be set to report only; leak and high level never, whatever a configuration says. Only a session or an app token sets it, never an account token, MQTT or the coupled device, and each change is an event | SD-133, PD-459 | ✓ | `config.cpp`, `api.cpp`, `robot.cpp` · test_locks.cpp |
+| Set to report only, the latch alarms with its own level and holds nothing: the feed pump tries again, an outlet without drops runs to its end and its channel doses on, a tank volume counts as confirmed; the frame (flow before a dose, one channel at a time, run time, daily amount) holds all the same | SD-133 | ✓ | `cycle.cpp`, `gateway.cpp`, `robot.cpp` · test_locks.cpp |
+| While a lock reports only, the watchdog warns and names it; a report is cleared without restarting the check, and a latch set while it locked holds until released | SD-133, RAT-062 | ✓ | `watchdog.cpp`, `robot.cpp` · test_locks.cpp, robot.spec.ts |
+
 ## History and messages
 
 | Rule | Rationale | Status | Implementation · tests |

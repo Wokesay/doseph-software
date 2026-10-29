@@ -22,6 +22,17 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A lock a person releases can be set to report only, for operations that
+  watch their tanks in their own way (SD-133).
+  - It covers no flow and dry run, the cable check, the tank volume, EC or
+    pH without effect, an outlet without drops, drops without a pump and
+    the return pump. Leak and high level always lock.
+  - The alarm comes as before, and the robot goes on. Status shows the
+    report until someone marks it seen.
+  - Only the app sets it, not an account token or MQTT. Each change is an
+    event, and the overview warns while any lock only reports.
+  - Flow before a dose, one channel at a time, the run time and the daily
+    amount always hold.
 - Two devices on one tank can be coupled (SD-131, PD-457).
   - The second device shows a pairing code, valid for 10 minutes. The
     owner enters it with that device's address on the leading device.

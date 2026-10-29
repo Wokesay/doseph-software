@@ -4,7 +4,7 @@
 // The flow through the device is on the water path page.
 import { useEffect, useState } from "preact/hooks";
 import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Sprout, Waves, Wrench } from "lucide-preact";
-import { GROW_SYSTEMS, get, post, put, type GrowSystem, type ServicePlan } from "../api";
+import { GROW_SYSTEMS, get, holds, post, put, type GrowSystem, type ServicePlan } from "../api";
 import { day, num, time } from "../format";
 import { msg, t } from "../i18n";
 import { LIMITS, config, refreshConfig, refreshState, state, toast, toastError } from "../store";
@@ -24,7 +24,7 @@ function VolumeCard() {
   const [vol, setVol] = useState<number | null>(cfg.tank.volumeL);
   const [ask, setAsk] = useState(false);
   const bad = vol !== null && !inRange(vol, LIMITS.volumeL);
-  const latch = st.latches["tank.volume"];
+  const latch = holds(st.latches["tank.volume"]) ? st.latches["tank.volume"] : undefined;
   return (
     <Card title={<Term topic="volume" />} icon={<Waves size={18} />}>
       <div class="stack">

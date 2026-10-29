@@ -2709,6 +2709,53 @@
         }
       }
     },
+    "/locks": {
+      "put": {
+        "operationId": "putLocks",
+        "summary": "Set locks a person releases to lock or to report only (SD-133); each change is an event",
+        "tags": [
+          "control"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Locks"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/canisters": {
       "post": {
         "operationId": "putCanister",
@@ -4084,6 +4131,30 @@
           }
         }
       },
+      "Locks": {
+        "type": "object",
+        "properties": {
+          "reportOnly": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "flow.dry",
+                "pump.cable",
+                "tank.volume",
+                "ec.no_effect",
+                "ph.no_effect",
+                "channel.no_drops",
+                "channel.siphon",
+                "hw.return"
+              ]
+            },
+            "description": "The locks a person releases that only report: their latch alarms as before and holds nothing (SD-133). Leak and high level always hold."
+          }
+        },
+        "required": [
+          "reportOnly"
+        ]
+      },
       "Active": {
         "type": "object",
         "properties": {
@@ -4227,6 +4298,9 @@
           },
           "control": {
             "$ref": "#/components/schemas/Control"
+          },
+          "locks": {
+            "$ref": "#/components/schemas/Locks"
           },
           "canisters": {
             "type": "array",

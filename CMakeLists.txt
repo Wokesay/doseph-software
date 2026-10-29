@@ -129,6 +129,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_mqtt.cpp
     tests/core/test_mqtt_link.cpp
     tests/core/test_coupling.cpp
+    tests/core/test_locks.cpp
     tests/core/test_service.cpp
     tests/core/test_plants.cpp
     tests/core/test_cycle.cpp

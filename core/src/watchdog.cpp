@@ -86,8 +86,17 @@ WatchResult evaluate(const WatchInput& in) {
 
   // Latches hold until a person releases them (RAT-062, RAT-063)
   // A latch's text is its own, or that of its kind where the ID names more (a channel's, SD-111)
-  for (const auto& [id, l] : in.rt.latches)
-    add("latch." + id, say("watch.latch"), "problem", say("latch." + (l.is_object() ? jstr(l, "key", id) : id), l.is_object() ? l : json::object()));
+  // One set while its lock reported only is shown as reported: it alarms the same, and holds nothing (SD-133)
+  for (const auto& [id, l] : in.rt.latches) {
+    const std::string kind = l.is_object() ? jstr(l, "key", id) : id;
+    if (holds(in.rt, id)) add("latch." + id, say("watch.latch"), "problem", say("latch." + kind, l.is_object() ? l : json::object()));
+    else add("latch." + id, say("watch.reported"), "problem", reportedEvent(kind, l));
+  }
+  if (!in.cfg.locks.reportOnly.empty()) {
+    json locks = json::array();
+    for (const auto& kind : in.cfg.locks.reportOnly) locks.push_back(say("lock." + kind));
+    add("locks.report_only", say("watch.locks"), "problem", say("watch.report_only", {{"locks", locks}}));
+  }
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));
   if (in.rt.topUp) add("water", say("watch.water"), "problem", say("watch.top_up"));  // SD-115

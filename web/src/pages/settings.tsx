@@ -3,10 +3,10 @@
 // and what was notified, the password, access tokens, backup and restore,
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
-import { ApiError, del, get, post, put, TOKEN_ROLES, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
+import { Bell, Bug, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { ApiError, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
-import { lang, msg, setLang, t, type Lang } from "../i18n";
+import { lang, msg, setLang, t, type Lang, type TextKey } from "../i18n";
 import { config, info, logoutLocal, refreshConfig, state, toast, toastError } from "../store";
 import { currentTheme, setTheme, type Theme } from "../theme";
 import { Banner, Button, Card, Field, LANGS, Pill, Seg, Toggle } from "../ui";
@@ -538,6 +538,55 @@ function MqttCard() {
   );
 }
 
+// Locks a person releases may only report, for operations that watch in their own way (SD-133).
+// Leak, high level, Stop and the limits always hold; the card says so.
+function LocksCard() {
+  const cfg = config.value!;
+  const [report, setReport] = useState<string[]>(cfg.locks.reportOnly);
+  const set = (kind: string, only: boolean) => setReport(only ? [...report.filter((k) => k !== kind), kind] : report.filter((k) => k !== kind));
+  const same = report.length === cfg.locks.reportOnly.length && report.every((k) => cfg.locks.reportOnly.includes(k));
+  const save = async () => {
+    try {
+      await put("/locks", { reportOnly: REPORTABLE_LOCKS.filter((k) => report.includes(k)) });
+      await refreshConfig();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Card title={t("settings.locks")} icon={<Lock size={18} />}>
+      <div class="stack" data-testid="locks">
+        <p class="muted small">{t("settings.locks.intro")}</p>
+        <div class="list">
+          {REPORTABLE_LOCKS.map((kind) => (
+            <div class="item wrap-row" data-testid={`lock-${kind}`}>
+              <div class="grow" id={`lock-${kind}`}>
+                {t(`settings.locks.${kind}` as TextKey)}
+              </div>
+              <Seg
+                value={report.includes(kind) ? "report" : "lock"}
+                onChange={(v) => set(kind, v === "report")}
+                labelledBy={`lock-${kind}`}
+                options={[
+                  ["lock", t("settings.locks.lock")],
+                  ["report", t("settings.locks.report")],
+                ]}
+              />
+            </div>
+          ))}
+        </div>
+        {report.length > 0 && <Banner tone="warn">{t("settings.locks.warning")}</Banner>}
+        <div>
+          <Button variant="primary" onClick={save} disabled={same} data-testid="save-locks">
+            {t("common.save")}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // Access tokens (SD-129): for an app, the account and a coupled device. Each has a role that says
 // what it may do; the token is shown once, the robot keeps only its hash.
 function TokensCard() {
@@ -814,6 +863,7 @@ export function SettingsPage() {
       <CouplingCard />
       <PasswordCard />
       <TokensCard />
+      <LocksCard key={`l${rev}`} />
       <BackupCard />
       <ReportCard />
       <Card title={t("settings.about")}>

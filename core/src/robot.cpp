@@ -67,7 +67,7 @@ Ctx Robot::ctx() {
   c.pumpCut = r.noFlow;
   c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
            : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
-           : rt_.latches.count("hw.return")                    ? "return"
+           : holds(rt_, "hw.return")                           ? "return"
            : r.stopButton                                      ? "stop_button"
            : !r.on                                             ? "release"
                                                                : "";
@@ -317,7 +317,7 @@ void Robot::boot() {
   doser_.setBootTag(std::to_string(rt_.bootCount));
   // After a start everything is off; interrupted runs are reported, not resumed (R6, RAT-007)
   act_.stopAll();
-  if (rt_.latches.count("hw.return")) act_.allowReturnPump(false);  // the device forgot it (SD-109)
+  if (holds(rt_, "hw.return")) act_.allowReturnPump(false);  // the device forgot it (SD-109)
   if (stateUnknown) {
     rt_.stopped = true;
     log_.add(bootEpoch_, "alarm", "alarm", say("ev.boot.state_unknown"), say("ev.boot.state_unknown.text"));
@@ -449,9 +449,13 @@ void Robot::watchRelease(Epoch epoch) {
   const Release r = hw_.release();
   auto latch = [&](const char* id, const char* title) {
     if (rt_.latches.count(id)) return;
-    act_.stopAll();
-    rt_.latches[id] = {{"at", epoch}};
-    log_.add(epoch, "alarm", "alarm", say(title), say(std::string(title) + ".text"));
+    // Leak and high level always hold; the return pump may report only (SD-133)
+    if (setLatch(cfg_, rt_, id, {{"at", epoch}})) {
+      act_.stopAll();
+      log_.add(epoch, "alarm", "alarm", say(title), say(std::string(title) + ".text"));
+    } else {
+      log_.add(epoch, "alarm", "alarm", reportedEvent(id, nullptr), say("ev.lock.reported.text"));
+    }
     saveState(true);
   };
   if (r.leak) latch("hw.leak", "ev.hw.leak");
@@ -465,8 +469,8 @@ void Robot::watchRelease(Epoch epoch) {
     returnSince_ = -1;
   }
   if (returnSince_ >= 0 && now - returnSince_ >= kReturnMaxMs && !rt_.latches.count("hw.return")) {
-    act_.allowReturnPump(false);
     latch("hw.return", "ev.hw.return");
+    if (holds(rt_, "hw.return")) act_.allowReturnPump(false);
   }
   if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
   stopButtonSeen_ = r.stopButton;
@@ -1158,6 +1162,27 @@ Result Robot::putControl(const json& j) {
   if (j.contains("maxEcRounds") && j["maxEcRounds"].is_number_integer()) next.control.maxEcRounds = j["maxEcRounds"].get<int>();
   if (j.contains("maxPhDoses") && j["maxPhDoses"].is_number_integer()) next.control.maxPhDoses = j["maxPhDoses"].get<int>();
   return saveConfig(next, changed("cfg.what.control"));
+}
+
+Result Robot::putLocks(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.contains("reportOnly") || !j["reportOnly"].is_array()) return Result::fail(422, say("api.bad_input"));
+  Config next = cfg_;
+  next.locks.reportOnly.clear();
+  for (const auto& x : j["reportOnly"]) {
+    if (!x.is_string()) return Result::fail(422, say("api.bad_input"));
+    next.locks.reportOnly.push_back(x.get<std::string>());
+  }
+  const Config was = cfg_;
+  Result r = saveConfig(next, std::nullopt);
+  if (r.status != 200) return r;
+  // Each change is an event; one to report only is a warning, since the robot then goes on (SD-133)
+  for (const auto& kind : reportableLocks()) {
+    const bool before = was.reportsOnly(kind), now = cfg_.reportsOnly(kind);
+    if (now && !before) log_.add(clock_.epoch(), "config", "warn", say("ev.locks.report_only", {{"lock", say("lock." + kind)}}));
+    if (before && !now) log_.add(clock_.epoch(), "config", "info", say("ev.locks.lock", {{"lock", say("lock." + kind)}}));
+  }
+  return r;
 }
 
 Result Robot::newTank() {
@@ -2160,24 +2185,24 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   const Release rel = hw_.release();
   if ((id == "hw.leak" && rel.leak) || (id == "hw.high_level" && rel.highLevel))
     return Result::fail(409, say("latch.cause_present"));
-  if (id == "tank.volume") {
-    // Only a person who confirms the entered volume releases it; a new volume releases it too (putTank)
+  // Only a person who confirms the entered volume releases it; a new volume releases it too
+  // (putTank). One that reported only was taken as confirmed when it was set (SD-133).
+  if (id == "tank.volume" && holds(rt_, id)) {
     if (!jbool(body, "confirm", false)) return Result::fail(422, say("latch.volume_confirm"));
-    const json l2 = it->second;
-    const double effect = jnum(l2, "effect");
-    if (jstr(l2, "kind") == "ec") {
-      if (const RecipeCfg* r = cfg_.recipe(jstr(l2, "recipe")); r && isNum(effect))
-        rt_.ecEffects[r->id] = clampEcEffect(effect, recipeEffect(*r, kNaN).start);
-    } else if (isNum(effect)) {
-      rt_.phEffect = clampEffect(effect, kPhStartEffect);
-    }
-    rt_.newTank = false;
+    confirmVolume(cfg_, rt_, it->second);
   }
   const json args = it->second.is_object() ? it->second : json::object();
+  const bool held = holds(rt_, id);
   rt_.latches.erase(it);
   if (id == "hw.return") {
-    act_.allowReturnPump(true);  // it runs by the level again; on and on once more, it latches again
+    if (held) act_.allowReturnPump(true);  // it runs by the level again; on and on once more, it latches again
     returnSince_ = -1;
+  }
+  if (!held) {
+    // A report seen: it held nothing, so the check goes on undisturbed (SD-133)
+    log_.add(clock_.epoch(), "unblock", "notice", say("ev.lock.cleared"), reportedEvent(jstr(args, "key", id), args));
+    saveState(true);
+    return Result::ok();
   }
   log_.add(clock_.epoch(), "unblock", "notice", say("ev.latch.released"), say("latch." + jstr(args, "key", id), args));
   restartCycle();
