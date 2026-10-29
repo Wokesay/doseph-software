@@ -929,20 +929,26 @@ watering follow with decisions of their own.
   - The robot switches network outputs only on Shelly devices of the
     second generation or later, over their local RPC interface. Their
     safety settings can be written and read back there.
-  - Gen1 Shelly devices and ESP relays are not switched.
+  - Gen1 Shelly devices and ESP relays are not switched. A Shelly
+    without the RPC interface counts as the first generation.
   - A device is added by its address and known by its own ID. The
     address is only where it is reached now.
   - A device with a password: the robot keeps the password apart from
     the configuration, never in a backup and never shown (as SD-124).
 - **Binding an output to a role** (RAT-019, RAT-060).
-  - The robot writes "off after power loss" into the output.
+  - The robot writes "off after power loss" and "never on by itself"
+    into the output. Where the device has an input of its own, the input
+    is detached from the output: the robot reads it as a value.
   - For a pulse role, such as the refill valve, it also writes an
     auto-off at 1.11 × the role's longest run, rounded up to a whole
     minute. A continuous role, such as the circulation pump, gets none.
   - The role is bound only once both were read back as written.
   - Before every switch-on the robot reads them back again. If they
     differ it writes them once more; if they still differ, it does not
-    switch on, and the watchdog says why.
+    switch on, and the watchdog says why. It tries again after a minute.
+  - An output bound anew, or whose device was away, is switched off and
+    its settings are checked before it may switch on. Off goes at once,
+    and again while the device still says on.
   - Every output switches only through the gateway (R1).
 - **Values from devices.** A role that reads a value (a float switch, a
   temperature) takes it from one of these:

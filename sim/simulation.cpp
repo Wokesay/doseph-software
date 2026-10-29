@@ -244,6 +244,13 @@ void Simulation::step(Ms dt, Ms tick) {
     const Ms d = std::min(dt, tick);
     clock_->advance(d);
     robot_->tick();
+    // The network devices' twins answer at once, as a device in the home network would (SD-132)
+    const Ms now = clock_->nowMs();
+    for (const auto& r : robot_->takeDeviceRequests()) {
+      const auto [status, body] = net_.answer(r, now);
+      robot_->deviceResponse(r.id, status, body);
+    }
+    net_.advance(now);
     dt -= d;
   }
 }
@@ -280,7 +287,7 @@ void Simulation::loadScenario(const std::string& name) {
 
 json Simulation::simState() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return {{"world", world_.toJson()}, {"speed", speed}, {"scenario", opts_.scenario}};
+  return {{"world", world_.toJson()}, {"net", net_.toJson()}, {"speed", speed}, {"scenario", opts_.scenario}};
 }
 
 json Simulation::control(const std::string& action, const json& b) {
@@ -327,6 +334,8 @@ json Simulation::control(const std::string& action, const json& b) {
     auto& slot = kind == "ec" ? world_.ecBuffer : world_.phBuffer;
     if (doseph::isNum(v)) slot = v;
     else slot.reset();
+  } else if (action == "netOnline" || action == "netInput" || action == "netValue") {
+    if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
   } else if (action == "reboot") reboot(static_cast<Ms>(num("outageS", 0) * 1000));
   else if (action == "fastForward") fastForward(std::clamp(num("hours", 1), 0.0, 48.0));
   else if (action == "scenario") loadScenario(doseph::jstr(b, "name", "demo"));

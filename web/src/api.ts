@@ -279,3 +279,30 @@ export const sim = (action: string, body: unknown = {}) => api("POST", `/sim/${a
 export const REPORTABLE_LOCKS = ["flow.dry", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return"] as const;
 // Whether a latch holds: one set while its lock reported only holds nothing (SD-133)
 export const holds = (latch: { reportOnly?: boolean } | undefined) => !!latch && !latch.reportOnly;
+
+// Network devices and the roles bound to them (SD-132)
+export type NetDevice = {
+  id: string;
+  kind: "shelly" | "esphome";
+  address: string;
+  name: string;
+  online: boolean;
+  hasPassword: boolean;
+  ownId: string | null;
+  problem: Msg | null;
+  switches: { channel: number; on: boolean }[];
+  inputs: { channel: number; state: boolean }[];
+};
+export type RoleSource = "shelly" | "esphome" | "mqtt";
+export type RoleBinding = { source: RoleSource; device: string; channel: number; entity: string; field: string; invert: boolean; availability: string };
+export type DeviceRole = {
+  kind: "output" | "binary";
+  pulse: boolean;
+  autoOffS: number;
+  binding: RoleBinding | null;
+  output?: { state: string; verified: boolean; want: boolean; problem: Msg | null };
+  value?: unknown;
+  state?: string;
+};
+export type Devices = { devices: NetDevice[]; roles: Record<string, DeviceRole>; mqttTopics: string[] };
+export const DEVICE_ROLES = ["refill_valve", "circulation_pump", "tank_full"] as const;

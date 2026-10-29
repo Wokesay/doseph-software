@@ -507,6 +507,25 @@ test("MQTT is off until switched on; without TLS it only sends values; the passw
   await expect(page.getByTestId("mqtt-status")).toContainText("Topics under doseph/");
 });
 
+test("network devices: a Shelly is added and becomes reachable; the refill valve is assigned to its output and checked; a first-generation Shelly says why it is not used (SD-132)", async ({ page }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  const card = page.getByTestId("devices");
+  await card.locator("input[name=device-address]").fill("shelly-1.local");
+  await card.locator("input[name=device-name]").fill("Valve");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d1")).toContainText("reachable", { timeout: 15000 });
+  const role = card.getByTestId("role-refill_valve");
+  await role.locator("select[name=role-device-refill_valve]").selectOption("d1");
+  await page.getByTestId("save-role-refill_valve").click();
+  await expect(card.getByTestId("role-state-refill_valve")).toContainText("off, ready", { timeout: 15000 });
+  await expect(role).toContainText("Auto-off in the device: 28");
+  await card.locator("input[name=device-address]").fill("shelly-old.local");
+  await card.locator("input[name=device-name]").fill("Old");
+  await page.getByTestId("add-device").click();
+  await expect(card.getByTestId("device-d2")).toContainText("only Gen2 and later are used", { timeout: 15000 });
+});
+
 test("a lock is set to report only in the settings, with a warning that leak, Stop and the limits always hold; the watchdog notes it until it locks again (SD-133)", async ({ page }) => {
   await login(page);
   await page.goto("/#/settings");

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "doseph/common.hpp"
+#include "doseph/devices.hpp"
 
 namespace doseph {
 
@@ -235,6 +236,9 @@ struct Config {
   std::map<int, ChannelCal> channels;
   // The commissioning steps the user confirmed or skipped (SD-129)
   std::map<std::string, SetupMark> setup;
+  // Network devices and the roles bound to them (SD-132)
+  std::vector<NetDeviceCfg> devices;
+  std::map<std::string, RoleBinding> roles;
   // Probe calibrations: pH {points: [[raw, ref], [raw, ref]], zeroMv, at},
   // EC {factor, at}; null when not calibrated (RAT-025)
   json phCal = nullptr, ecCal = nullptr;
@@ -244,6 +248,7 @@ struct Config {
   const RecipeCfg* recipe(const std::string& id) const;
   const PlantRecipeCfg* plantRecipe(const std::string& id) const;
   const PlantCfg* plant(const std::string& id) const;
+  const NetDeviceCfg* device(const std::string& id) const;
   // The pH− canister on a channel; there is one at most (SD-108)
   const CanisterCfg* phDown() const;
   double channelFlow(int channel) const;  // NaN when not calibrated

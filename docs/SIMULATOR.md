@@ -90,6 +90,7 @@ http://localhost:5173 (the API is passed through).
 | Outlets | a drop sensor at each outlet counts drops of 0.05 ml; a line pulled back (at most 2 ml) fills first on the next run; faults: outlet blocked (the pump runs, nothing drips), a canister above the device that siphons 0.6 ml/min while its pump stands |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |
 | Probes | pH and EC with their own errors, measured noise (RAT-082); faults: offline, frozen, jump, dry EC; calibration solutions |
+| Network devices | twins the simulation answers itself, without a network (SD-132): `shelly-1.local`, a Shelly Gen2 relay with one output and one input that out of the box restores its last state after a power loss and is switched by its input; `shelly-plug.local`, a Shelly Gen2 plug without an input; `shelly-old.local`, a first-generation Shelly without the RPC interface; `esp-1.local`, an ESPHome device with `binary_sensor/tank_full` and `sensor/water_temp` (21.5). A Shelly's settings act as the real one's: its auto-off switches it off, and back from a power loss its outputs follow their initial state |
 
 The panel in the web app (button "Simulator") shows the true tank and
 switches the faults; `POST /api/v1/sim/<action>` does the same for tests.
@@ -105,3 +106,11 @@ head, `"head": ""` takes it off (SD-108). `lineEmpty` with
 `{"channel": 4}` fills a channel's line with air, as after a canister
 change: it holds 6 ml (an **assumption**), which a run fills before the
 outlet drips (SD-111).
+The network devices' twins (SD-132): `netOnline` with
+`{"address": "shelly-1.local", "online": false}` takes a device away, as a
+power loss would, and `true` brings it back; `netInput` with
+`{"address": "shelly-1.local", "channel": 0, "state": true}` sets a
+Shelly's input; `netValue` with `{"address": "esp-1.local", "entity":
+"binary_sensor/tank_full", "value": true}` sets an ESPHome value. The
+simulator's MQTT link also subscribes to the topics roles read, without
+TLS, since values need none (SD-130).

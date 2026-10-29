@@ -10,6 +10,7 @@
 #include <string>
 
 #include "doseph/api.hpp"
+#include "netdevices.hpp"
 #include "simhw.hpp"
 
 namespace sim {
@@ -65,6 +66,7 @@ class Simulation {
   doseph::Robot& robot() { return *robot_; }
   doseph::Api& api() { return *api_; }
   World& world() { return world_; }
+  NetTwin& net() { return net_; }
   SimHardware& hardware() { return *hw_; }
   SimClock& clock() { return *clock_; }
   doseph::IStorage& storage() { return *store_; }
@@ -82,6 +84,7 @@ class Simulation {
   Options opts_;
   std::recursive_mutex mtx_;
   World world_;
+  NetTwin net_;
   std::unique_ptr<SimClock> clock_;
   std::unique_ptr<SimHardware> hw_;
   std::unique_ptr<doseph::IStorage> store_;
