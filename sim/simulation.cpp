@@ -251,6 +251,13 @@ void Simulation::step(Ms dt, Ms tick) {
       robot_->deviceResponse(r.id, status, body);
     }
     net_.advance(now);
+    // The twin's inlet (SD-132): an open valve lets tap water in, and the float switch says full at
+    // its line (assumptions: 4 L/min, the float at 105 L)
+    if (sim::FakeShelly* v = net_.inlet()) {
+      if (v->online && v->switches[0].on) world_.addWater(kInletLpm * static_cast<double>(d) / 60000.0);
+      if (!v->floatStuck) v->setInput(0, world_.tank.volumeL >= kFloatAtL);
+      else v->setInput(0, false);
+    }
     dt -= d;
   }
 }
@@ -297,15 +304,8 @@ json Simulation::control(const std::string& action, const json& b) {
   auto num = [&](const char* k, double d) { return doseph::jnum(b, k, d); };
   if (action == "speed") speed = std::clamp(num("speed", 1), 0.0, kMaxSpeed);
   else if (action == "fill") world_.fill(num("volumeL", 100), num("ec", 0.45), num("ph", 7.6));
-  else if (action == "topup") {
-    // Fresh tap water into the tank (assumption: EC 0.45, pH 7.6)
-    const double v = world_.tank.volumeL, add = std::max(0.0, num("litres", 10));
-    if (v + add > 0) {
-      world_.tank.ec = (world_.tank.ec * v + 0.45 * add) / (v + add);
-      world_.tank.ph = (world_.tank.ph * v + 7.6 * add) / (v + add);
-      world_.tank.volumeL = v + add;
-    }
-  } else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
+  else if (action == "topup") world_.addWater(num("litres", 10));
+  else if (action == "flowFault") world_.flowFault = doseph::jstr(b, "fault");
   else if (action == "cableFault") world_.cableFault = doseph::jbool(b, "on", false);
   else if (action == "pumpLpm") world_.pumpLpm = std::clamp(num("lpm", 12), 0.0, 200.0);
   else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
@@ -336,7 +336,8 @@ json Simulation::control(const std::string& action, const json& b) {
     auto& slot = kind == "ec" ? world_.ecBuffer : world_.phBuffer;
     if (doseph::isNum(v)) slot = v;
     else slot.reset();
-  } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable") {
+  } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable" ||
+             action == "netFloat") {
     if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
   } else if (action == "reboot") reboot(static_cast<Ms>(num("outageS", 0) * 1000));
   else if (action == "fastForward") fastForward(std::clamp(num("hours", 1), 0.0, 48.0));

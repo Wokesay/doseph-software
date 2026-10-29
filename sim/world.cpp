@@ -80,6 +80,14 @@ void World::fill(double volumeL, double ec, double ph) {
   phTrail_.clear();
 }
 
+void World::addWater(double litres) {
+  const double v = tank.volumeL, add = std::max(0.0, litres);
+  if (v + add <= 0) return;
+  tank.ec = (tank.ec * v + 0.45 * add) / (v + add);
+  tank.ph = (tank.ph * v + 7.6 * add) / (v + add);
+  tank.volumeL = v + add;
+}
+
 void World::outOfTip(Pump& p, double ml) {
   if (ml <= 0) return;
   // The drop sensor counts each drop that falls through the air gap

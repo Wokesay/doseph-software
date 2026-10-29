@@ -4007,6 +4007,121 @@
           }
         }
       }
+    },
+    "/refill": {
+      "put": {
+        "operationId": "putRefill",
+        "summary": "Sets the refill valve's longest fill (SD-132, RAT-079)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefillSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/refill/start": {
+      "post": {
+        "operationId": "startRefill",
+        "summary": "Fill now: opens the refill valve until the float switch says full (SD-132); 409 says why it cannot start now",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/refill/stop": {
+      "post": {
+        "operationId": "stopRefill",
+        "summary": "Ends the fill under way and closes the refill valve (SD-132)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4471,7 +4586,8 @@
                 "ph.no_effect",
                 "channel.no_drops",
                 "channel.siphon",
-                "hw.return"
+                "hw.return",
+                "refill"
               ]
             },
             "description": "The locks a person releases that only report: their latch alarms as before and holds nothing (SD-133). Leak, high level and the cable check always lock."
@@ -4748,6 +4864,9 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/RoleBinding"
             }
+          },
+          "refill": {
+            "$ref": "#/components/schemas/RefillSettings"
           }
         },
         "description": "The configuration: everything a backup holds"
@@ -5061,6 +5180,20 @@
             "description": "While coupled: whether the other device was heard within 10 s, when, what the follower said last, and the run asked for"
           }
         }
+      },
+      "RefillSettings": {
+        "type": "object",
+        "properties": {
+          "maxFillMin": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 25,
+            "description": "The longest fill, min (RAT-079); a fill that reaches it without the float saying full latches the refill (RAT-031)"
+          }
+        },
+        "required": [
+          "maxFillMin"
+        ]
       }
     }
   }

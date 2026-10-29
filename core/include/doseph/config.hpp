@@ -102,11 +102,18 @@ struct ControlCfg {
 // are named by theirs. Leak, high level and the cable check never: they belong to the frame.
 inline const std::vector<std::string>& reportableLocks() {
   static const std::vector<std::string> kinds = {"flow.dry",         "tank.volume",    "ec.no_effect", "ph.no_effect",
-                                                 "channel.no_drops", "channel.siphon", "hw.return"};
+                                                 "channel.no_drops", "channel.siphon", "hw.return",    "refill"};
   return kinds;
 }
 struct LocksCfg {
   std::vector<std::string> reportOnly;  // kinds set to report only; the rest lock
+};
+
+// The refill valve (SD-132): its longest fill, 1 to 25 min (RAT-079). A fill that reaches it
+// without the float saying full latches the refill (RAT-031).
+constexpr double kRefillMinMin = 1, kRefillMaxMin = 25;
+struct RefillCfg {
+  double maxFillMin = 15;
 };
 
 // Fixed safety limits in code. The configuration may only tighten them (R7);
@@ -224,6 +231,7 @@ struct Config {
   TankCfg tank;
   ControlCfg control;
   LocksCfg locks;
+  RefillCfg refill;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
@@ -311,6 +319,9 @@ struct RuntimeState {
   // no dose went in since; null otherwise. `topUp`: "top up water" is raised.
   json ecInBand = nullptr;
   bool topUp = false;
+  // A fill of the refill valve under way: {since, why}; kept so that a restart reports it, and
+  // never resumes it (SD-132, R6)
+  json refill = nullptr;
   // The settling times of the last three clean doses, min (SD-112): a large tank waits 1.5 × the longest
   std::vector<double> settleMin;
   // Alarms (SD-123): watchdog item → {since, raised, level, sent, round, ackUntil, reported};

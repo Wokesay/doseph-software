@@ -267,19 +267,21 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-031 – No automatic restart after a refill fault
 
-- **Dropped:** the grow controller only (tank refill); not part of the mixing robot (SD-105).
-- **Rule:** When the inlet is shut for a fault – level not valid, capacity reached, valve open too long, a fill after which the level did not rise, or two fills in a row whose rise could not be checked – a latch is set, its reason and time frozen. A start whose saved run-time state cannot be read sets the same latch, since nobody knows whether one stood; the first real fault replaces that reason once. Refilling stays blocked until a person has looked and released it, and the first fill after a release waits until the level reading has settled, since the person may have worked on the tank. A valve found open while the latch stands is closed again.
+- **Rule:** When the refill valve is closed for a fault – the float switch did not say full within the longest fill, the float lost its value during a fill, or the valve stopped answering while it was open – the refill latches, with its reason and time. No fill opens until a person has looked and released it, and the valve stays closed meanwhile. Where the refill is set to report only (SD-133), the fault alarms once and holds nothing.
 - **Why:** An automatic restart comes exactly when the cause is still unknown – a known cause would have been fixed. Letting water run unattended then risks a flood; the safe way is a person who starts the refill and watches it.
 - **Evidence:** —
-- **Later:** step 9 (refill valve).
+- **Changed:** A float switch takes the place of the level reading (SD-132), so the faults are the ones a float can show, plus a valve that stops answering. A start whose saved state cannot be read already stops the whole robot (RAT-063) and sets no latch of its own here. A fill after a release does not wait for a reading to settle: a float has none.
+- **Implemented in:** `core/src/refill.cpp`, `core/src/robot.cpp`
+- **Tests:** `tests/core/test_refill.cpp` "Refill: a fill that reaches its longest time without "full" closes the valve and latches the refill; no fill opens until a person releases it (RAT-031, RAT-079)"; `tests/core/test_refill.cpp` "Refill: a float that loses its value during a fill closes the valve and latches the refill (RAT-031, R5)"; `tests/core/test_refill.cpp` "Refill: a valve that stops answering while it is open latches the refill (RAT-031)"; `tests/core/test_refill.cpp` "Refill: set to report only, a fill that ends without "full" is reported and holds nothing (SD-133, RAT-031)"
 
 ### RAT-032 – The inlet's emergency limit follows the valve, not the job
 
-- **Dropped:** the grow controller only (tank refill (inlet valve)); not part of the mixing robot (SD-105).
-- **Rule:** Whenever the inlet valve is open – by the refill, by hand or any other way – the gateway closes it at the tank's capacity, when the level reading turns invalid, or when it has been open longer than allowed. Without a valid level the inlet does not open at all.
+- **Rule:** Whenever the refill valve is to be open – by the refill, by hand or any other way – the gateway keeps it closed unless the float switch says "not full", closes it when the float says full or loses its value, and closes it once it has been open for the longest fill. A valve closed so opens again only when it is wanted anew.
 - **Why:** An overflow guard that lives only in the refill routine leaves a valve opened any other way without supervision, and the switching device's own auto-off may act too late.
 - **Evidence:** Calculated on the reference installation (2026): a valve opened by hand had no level supervision, only the device's 30 min auto-off. The inlet delivered about 43 L in 30 min, so a fill starting at 120 L would have overflowed the 150 L tank before the auto-off acted.
-- **Later:** step 9 (refill valve).
+- **Changed:** The float switch takes the place of the level reading and the tank's capacity (SD-132).
+- **Implemented in:** `core/src/gateway.cpp`
+- **Tests:** `tests/core/test_refill.cpp` "Refill: the gateway opens the valve only while the float says "not full", closes it at full or past the longest fill, whatever wants it open; closed so, it opens only when wanted anew (RAT-032)"
 
 ### RAT-033 – Narrow control band, wider alarm band
 
@@ -654,13 +656,14 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Evidence:** Measured on the reference installation (60 L drum, 2026): 1.9607 V = 0 L, 1.9871 V = 1.0 L, 2.0114 V = 2.0 L, 2.0198 V = 2.5 L, 2.1291 V = 10 L, segment slopes 37.9, 41.2, 59.5 and 68.6 L/V. A two-point line read 3.5 L at a real 2.5 L and 32.6 L at a real 36 L. The thresholds were set to 2.5 L off and 3 L on, since every submerged part is covered from 2.5 L. A check at a real 10 L still read 0.4–0.5 L high (cause unknown), so points should be checked again.
 - **Later:** step 9 (level sensor).
 
-### RAT-079 – Inlet valve: 25 min maximum, emergency limit by level
+### RAT-079 – Inlet valve: 25 min maximum, the float as the emergency limit
 
-- **Dropped:** the grow controller only (inlet valve); not part of the mixing robot (SD-105).
-- **Rule:** The inlet valve stays open at most 25 min; the refill limits more tightly (15 min by default). The plug's own auto-off sits a little above the software limit (28 min: 1.11 ×, rounded up to whole minutes), so the device acts only when the controller fails. A level-based emergency limit is needed all the same (RAT-032).
+- **Rule:** The inlet valve stays open at most 25 min; the refill limits more tightly (15 min by default, 1 to 25 min). The device's own auto-off sits a little above the software limit (28 min: 1.11 ×, rounded up to whole minutes), so the device acts only when the controller fails. The float switch is the emergency limit all the same (RAT-032).
 - **Why:** If the controller fails, the device must still close the valve, yet within the auto-off time the valve can deliver more water than the tank holds.
 - **Evidence:** Observed on the reference installation (2026): after a switch to a 60 L drum (overflow at 55 L) the old emergency limit of 140 L could never be reached, and only timers and a 30 min device auto-off bounded the inlet – about 46 L per run. The limits then became 45 L, a 25 min software cap and a 25 min device auto-off.
-- **Later:** step 9 (refill valve).
+- **Changed:** The float switch takes the place of the level-based emergency limit (SD-132).
+- **Implemented in:** `core/include/doseph/config.hpp`, `core/src/config.cpp`, `core/src/devices.cpp`, `core/src/refill.cpp`, `core/src/gateway.cpp`
+- **Tests:** `tests/core/test_refill.cpp` "Refill: a fill that reaches its longest time without "full" closes the valve and latches the refill; no fill opens until a person releases it (RAT-031, RAT-079)"; `tests/core/test_devices.cpp` "Devices: a Shelly output gets off after power loss, never on by itself, not switched by its own input, and a pulse role an auto-off at 1.11 times its longest run (SD-132, RAT-019)"
 
 ### RAT-080 – Mixing order is recipe data; CalMag EC effect
 

@@ -47,11 +47,16 @@ const json* item(const json& watchdog, const std::string& id) {
   return nullptr;
 }
 
-// Adds the relay of the twin and binds the refill valve to its output
+// Adds the relay of the twin and binds the refill valve to its output, and the float switch, which
+// the valve needs (RAT-032), to its input: it says "not full"
 void bindValve(sim::Simulation& s) {
   REQUIRE(s.robot().addDevice({{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Valve"}}).status == 200);
   REQUIRE(s.robot().putRole("refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
+  REQUIRE(s.robot().putRole("tank_full", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
   s.step(kSecond);  // the gateway takes the binding up; a want from before it counts for nothing
+  // A want while the float has no value yet is dropped (RAT-032)
+  for (int i = 0; i < 30 && role(s, "tank_full")["state"] != "ok"; ++i) s.step(kSecond);
+  REQUIRE(role(s, "tank_full")["state"] == "ok");
 }
 
 }  // namespace
@@ -218,8 +223,12 @@ TEST_CASE("Devices: a device away is offline; back after a power loss its settin
   REQUIRE(it);
   CHECK((*it)["status"] == "problem");
   // Back: its initial state "off" holds after the power loss, and the robot checks before it switches on again
+  // The float on its input went with it, so the valve opens only when wanted anew (RAT-032)
   s.control("netOnline", {{"address", "shelly-1.local"}, {"online", true}});
   CHECK_FALSE(relay->switches[0].on);
+  s.step(20 * kSecond);
+  CHECK_FALSE(relay->switches[0].on);
+  s.robot().wantOutput("refill_valve", true);
   REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 30));
   // The robot restarts: everything off, nothing resumed
   s.reboot();
@@ -328,6 +337,7 @@ struct Rig {
   Rig() {
     cfg.devices = {{"d1", "shelly", "a.local", "Valve"}};
     cfg.roles["refill_valve"] = {"shelly", "d1", 0, "", "", false, ""};
+    cfg.roles["tank_full"] = {"shelly", "d1", 1, "", "", false, ""};  // the float: not full
     relay.address = "a.local";
     relay.id = "shellyplus2pm-rig";
     for (int i = 0; i < 2; ++i)
@@ -511,12 +521,15 @@ TEST_CASE("Devices: a Shelly input is as old as the device's last status, whatev
 
 TEST_CASE("Devices: MQTT values count only while connected: after an outage or a change of the MQTT settings, a value counts once it comes again (SD-132, R5)") {
   sim::Simulation s(demo());
-  REQUIRE(s.robot().putRole("tank_full", {{"source", "mqtt"}, {"entity", "tank/full"}}).status == 200);
+  REQUIRE(s.robot().putRole("tank_full", {{"source", "mqtt"}, {"entity", "tank/full"}, {"availability", "tank/status"}}).status == 200);
   s.robot().setMqttStatus(true, {});
+  s.robot().mqttValue("tank/status", "online");
   s.robot().mqttValue("tank/full", "ON");
   CHECK(role(s, "tank_full")["value"] == true);
   s.robot().setMqttStatus(false, say("mqtt.lost"));
   s.robot().setMqttStatus(true, {});
+  CHECK(role(s, "tank_full")["state"] == "offline");  // its availability has not come again
+  s.robot().mqttValue("tank/status", "online");
   CHECK(role(s, "tank_full")["state"] == "waiting");
   s.robot().mqttValue("tank/full", "ON");
   CHECK(role(s, "tank_full")["value"] == true);

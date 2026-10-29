@@ -16,6 +16,7 @@
 #include "doseph/coupling.hpp"
 #include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
+#include "doseph/refill.hpp"
 #include "doseph/service.hpp"
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
@@ -116,6 +117,10 @@ class Robot : public RemoteRuns {
   // Logic says what it wants of an output role; the gateway decides (R1). False for a role that is
   // not an output.
   bool wantOutput(const std::string& role, bool on);
+  // The refill valve (SD-132): a person's "Fill now" and stop, and its longest fill {maxFillMin}
+  Result startRefill();
+  Result stopRefill();
+  Result putRefill(const json& j);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -306,6 +311,12 @@ class Robot : public RemoteRuns {
   MqttSettings mqtt_;
   NetDevices devices_;
   NetOutputs outputs_;
+  RefillValve refill_;
+  RefillIn refillIn(Ms now) const;
+  // A fill in which the valve was open ended: its water is mixed in first, and the readings may jump
+  void afterFill();
+  // A fill ended: the check starts anew, after the water was mixed in where the valve was open
+  void fillEnded(bool opened);
   bool saveDeviceSecrets();
   void reconcileDevices(const Config& before);
   // The roles' states for the watchdog: each bound role, whether it works, and why not

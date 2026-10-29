@@ -90,7 +90,7 @@ http://localhost:5173 (the API is passed through).
 | Outlets | a drop sensor at each outlet counts drops of 0.05 ml; a line pulled back (at most 2 ml) fills first on the next run; faults: outlet blocked (the pump runs, nothing drips), a canister above the device that siphons 0.6 ml/min while its pump stands |
 | Liquids | pH−, Part A and B, CalMag with their effects on EC and pH (RAT-053, RAT-055, RAT-080) |
 | Probes | pH and EC with their own errors, measured noise (RAT-082); faults: offline, frozen, jump, dry EC; calibration solutions |
-| Network devices | twins the simulation answers itself, without a network (SD-132): `shelly-1.local`, a Shelly Gen2 relay with one output and one input that out of the box restores its last state after a power loss and is switched by its input; `shelly-plug.local`, a Shelly Gen2 plug without an input; `shelly-old.local`, a first-generation Shelly without the RPC interface; `esp-1.local`, an ESPHome device with `binary_sensor/tank_full` and `sensor/water_temp` (21.5). A Shelly's settings act as the real one's: its auto-off switches it off, and back from a power loss its outputs follow their initial state |
+| Network devices | twins the simulation answers itself, without a network (SD-132): `shelly-1.local`, a Shelly Gen2 relay with one output and one input that out of the box restores its last state after a power loss and is switched by its input; `shelly-plug.local`, a Shelly Gen2 plug without an input; `shelly-old.local`, a first-generation Shelly without the RPC interface; `shelly-valve.local`, a Shelly Gen2 relay at the tank's inlet, set up so that its input does not switch it: its output lets tap water into the tank at 4 L/min (EC 0.45, pH 7.6; **assumptions**) and its input is the float switch, which says full from 105 L (an **assumption**); `esp-1.local`, an ESPHome device with `binary_sensor/tank_full` and `sensor/water_temp` (21.5). A Shelly's settings act as the real one's: its auto-off switches it off, and back from a power loss its outputs follow their initial state |
 
 The panel in the web app (button "Simulator") shows the true tank and
 switches the faults; `POST /api/v1/sim/<action>` does the same for tests.
@@ -114,6 +114,9 @@ to it; `netId` with `{"address": "shelly-1.local", "id": "…"}` puts
 another device at the address; `netInput` with
 `{"address": "shelly-1.local", "channel": 0, "state": true}` sets a
 Shelly's input, which switches its output while it is not detached; `netValue` with `{"address": "esp-1.local", "entity":
-"binary_sensor/tank_full", "value": true}` sets an ESPHome value. The
+"binary_sensor/tank_full", "value": true}` sets an ESPHome value;
+`netFloat` with `{"stuck": true}` makes the inlet's float switch stick, so
+that it never says full (RAT-031); the inlet's float follows the tank and
+takes no `netInput`. The
 simulator's MQTT link also subscribes to the topics roles read, without
 TLS, since values need none (SD-130).

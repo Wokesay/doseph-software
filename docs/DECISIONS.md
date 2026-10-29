@@ -995,6 +995,30 @@ watering follow with decisions of their own.
   - After a restart the valve is off and a cut fill is reported, not
     resumed (R6).
   - Each fill is an event, with its time and why it ended.
+- **The refill valve's details** (9.2, decided here by the minimal
+  principle).
+  - "Top up water" asks for one fill each time it is raised. The request
+    waits while a dose or a channel job runs, while the valve is checked
+    and while the float has no value. It lapses during Stop, maintenance
+    or a hold, while the refill is latched, when the float says full, and
+    when "top up water" goes. One that stands when the robot starts asks
+    for none (R6).
+  - The button starts a fill at once, or says why it cannot. It waits for
+    nothing.
+  - The gateway keeps the valve closed unless the float says "not full",
+    whatever wants it open (RAT-032). A want it cannot follow for the
+    float, a valve it closed at the longest fill, and a valve whose device
+    was away open again only when wanted anew.
+  - A float switch over MQTT needs an availability topic: a value kept on
+    the broker would outlive a sender that stopped, and the float is the
+    valve's limit.
+  - A valve that has not opened a minute after the start ends the fill
+    without a latch; the watchdog says why. A valve that stops answering
+    while it is open latches the refill (RAT-031).
+  - A person's stop, and a change of the valve's or the float's binding,
+    end a fill without a latch. During a fill a backup is not restored,
+    and the longest fill does not change.
+  - The refill's latch may report only (SD-133).
 - **The circulation pump** (PD-421).
   - A customer's pump in the tank, on a Shelly Gen2+ output.
   - By default it runs from the start of a dosing round and during a

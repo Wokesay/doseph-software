@@ -873,9 +873,9 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   }
   const CycleSettings s = cycleSettings(c);
   // A probe in a buffer, or a channel calibrated or its line filled: the check and the feed pump
-  // stop first and start anew once it ends (SD-109)
-  if (c.probeCalibrating || c.channelJob) {
-    const char* key = c.probeCalibrating ? "cycle.wait.calibrating" : "cycle.wait.channel_job";
+  // stop first and start anew once it ends (SD-109). So too while the refill valve fills (SD-132).
+  if (c.probeCalibrating || c.channelJob || c.refilling) {
+    const char* key = c.probeCalibrating ? "cycle.wait.calibrating" : c.channelJob ? "cycle.wait.channel_job" : "cycle.wait.refill";
     if (!(phase_ == Phase::Wait && line_.key == key)) {
       restart(c, act, doser);
       wait(c, act, say(key), 0);
@@ -1164,9 +1164,12 @@ json MixCycle::checks(const Ctx& c) const {
   const bool volumeLatch = holds(c.rt, "tank.volume");
   all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
   all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
-  const bool busy = c.channelJob || c.probeCalibrating || c.maintenanceUntil > 0;
+  const bool busy = c.channelJob || c.probeCalibrating || c.refilling || c.maintenanceUntil > 0;
   all.push_back(item(!busy, c.maintenanceUntil > 0 ? say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}})
-                            : say(c.probeCalibrating ? "check.probe_job" : c.channelJob ? "check.channel_job" : "check.no_job")));
+                            : say(c.probeCalibrating ? "check.probe_job"
+                                  : c.channelJob     ? "check.channel_job"
+                                  : c.refilling      ? "cycle.wait.refill"
+                                                     : "check.no_job")));
 
   json ec = json::array();
   if (r) {

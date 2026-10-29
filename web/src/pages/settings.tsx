@@ -545,6 +545,7 @@ function DevicesCard() {
   const [kind, setKind] = useState<"shelly" | "esphome">("shelly");
   const [address, setAddress] = useState("");
   const [name, setName] = useState("");
+  const [login, setLogin] = useState<{ id: string; user: string; password: string } | null>(null);
   const load = () => get<Devices>("/devices").then(setD).catch(() => {});
   useEffect(() => {
     load();
@@ -574,7 +575,6 @@ function DevicesCard() {
       toastError(e);
     }
   };
-  const [login, setLogin] = useState<{ id: string; user: string; password: string } | null>(null);
   const saveLogin = async () => {
     if (!login) return;
     try {
@@ -661,8 +661,68 @@ function DevicesCard() {
         {DEVICE_ROLES.map((r) => (
           <RoleRow key={`${r}${JSON.stringify(d.roles[r]?.binding)}`} role={r} devices={d} reload={load} />
         ))}
+        {d.roles.refill_valve?.binding && <RefillPanel />}
       </div>
     </Card>
+  );
+}
+
+// The refill valve (SD-132): whether a fill runs or why it cannot start, "Fill now" and stop, and
+// the longest fill. A fill also starts on its own when "top up water" is raised.
+function RefillPanel() {
+  const r = state.value!.refill;
+  const [max, setMax] = useState(String(config.value!.refill.maxFillMin));
+  const act = async (path: string) => {
+    try {
+      await post(path);
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const save = async () => {
+    try {
+      await put("/refill", { maxFillMin: Number(max.replace(",", ".")) });
+      await refreshConfig();
+      toast(t("settings.saved"));
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <div class="stack-sm" data-testid="refill">
+      <div class="section-title">{t("settings.refill")}</div>
+      <p class="muted small">{t("settings.refill.intro")}</p>
+      <div class="row" style="justify-content:space-between">
+        <span class="small" data-testid="refill-state">
+          {r.filling ? (
+            <Pill tone="info">{t(r.opened ? "settings.refill.filling" : "settings.refill.opening")}</Pill>
+          ) : r.blocked ? (
+            <span class="muted">{msg(r.blocked)}</span>
+          ) : (
+            <Pill tone="ok">{t("settings.refill.ready")}</Pill>
+          )}
+        </span>
+        {r.filling ? (
+          <Button size="sm" onClick={() => act("/refill/stop")} data-testid="refill-stop">
+            {t("settings.refill.stop")}
+          </Button>
+        ) : (
+          <Button size="sm" variant="primary" onClick={() => act("/refill/start")} disabled={!!r.blocked} data-testid="refill-start">
+            {t("settings.refill.start")}
+          </Button>
+        )}
+      </div>
+      <div class="form-grid">
+        <Field label={t("settings.refill.maxFill")} hint={t("settings.refill.maxFillHint")}>
+          <input class="input" name="refill-max" inputMode="decimal" value={max} onInput={(e) => setMax((e.target as HTMLInputElement).value)} />
+        </Field>
+      </div>
+      <div>
+        <Button size="sm" onClick={save} data-testid="save-refill">
+          {t("common.save")}
+        </Button>
+      </div>
+    </div>
   );
 }
 

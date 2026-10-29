@@ -5,6 +5,9 @@
 //                      restores its last state after a power loss and its input switches it
 //   shelly-plug.local  a Shelly Gen2 plug: one output, no input
 //   shelly-old.local   a Shelly of the first generation, which has no RPC interface
+//   shelly-valve.local a Shelly Gen2 relay at the tank's inlet: its output opens the inlet valve,
+//                      and its input is the float switch in the tank, which says full at its
+//                      line; set up so that the float does not switch the valve
 //   esp-1.local        an ESPHome device: binary_sensor/tank_full, sensor/water_temp
 // A Shelly's settings act as the real one's: the auto-off switches it off, and a power cycle
 // sets its outputs by their initial state.
@@ -32,6 +35,10 @@ struct FakeShelly {
   std::vector<Switch> switches;
   std::vector<bool> inputs;
   bool ignoresConfig = false;  // takes Switch.SetConfig and keeps its settings, as a faulty one might
+  bool inlet = false;       // its output opens the tank's inlet, its input 0 is the float switch (SD-132)
+  bool floatStuck = false;  // the float switch sticks: it never says full
+  // An input changes; out of the box ("follow") it switches its output with it, detached it does not
+  void setInput(int n, bool state);
   // The RPC's answer body: {"id", "src", "result"} or {"id", "src", "error"}
   doseph::json handle(const doseph::json& request, doseph::Ms now);
   void advance(doseph::Ms now);  // the auto-off acts
@@ -52,6 +59,7 @@ class NetTwin {
   void advance(doseph::Ms now);
   FakeShelly* shelly(const std::string& address);
   FakeEsphome* esphome(const std::string& address);
+  FakeShelly* inlet();  // the relay at the tank's inlet, where there is one
   doseph::json toJson() const;
   // The simulator panel: a device away or back, an input, an ESPHome value
   bool control(const std::string& action, const doseph::json& body);
