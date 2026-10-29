@@ -1006,13 +1006,18 @@ watering follow with decisions of their own.
   - The button starts a fill at once, or says why it cannot. It waits for
     nothing.
   - The gateway keeps the valve closed unless the float says "not full",
-    whatever wants it open (RAT-032). A valve it closed for the float, or
-    at the longest fill, opens again only when wanted anew.
+    whatever wants it open (RAT-032). A want it cannot follow for the
+    float, a valve it closed at the longest fill, and a valve whose device
+    was away open again only when wanted anew.
+  - A float switch over MQTT needs an availability topic: a value kept on
+    the broker would outlive a sender that stopped, and the float is the
+    valve's limit.
   - A valve that has not opened a minute after the start ends the fill
     without a latch; the watchdog says why. A valve that stops answering
     while it is open latches the refill (RAT-031).
   - A person's stop, and a change of the valve's or the float's binding,
-    end a fill without a latch.
+    end a fill without a latch. During a fill a backup is not restored,
+    and the longest fill does not change.
   - The refill's latch may report only (SD-133).
 - **The circulation pump** (PD-421).
   - A customer's pump in the tank, on a Shelly Gen2+ output.

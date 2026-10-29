@@ -54,6 +54,9 @@ void bindValve(sim::Simulation& s) {
   REQUIRE(s.robot().putRole("refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
   REQUIRE(s.robot().putRole("tank_full", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}}).status == 200);
   s.step(kSecond);  // the gateway takes the binding up; a want from before it counts for nothing
+  // A want while the float has no value yet is dropped (RAT-032)
+  for (int i = 0; i < 30 && role(s, "tank_full")["state"] != "ok"; ++i) s.step(kSecond);
+  REQUIRE(role(s, "tank_full")["state"] == "ok");
 }
 
 }  // namespace
@@ -518,12 +521,15 @@ TEST_CASE("Devices: a Shelly input is as old as the device's last status, whatev
 
 TEST_CASE("Devices: MQTT values count only while connected: after an outage or a change of the MQTT settings, a value counts once it comes again (SD-132, R5)") {
   sim::Simulation s(demo());
-  REQUIRE(s.robot().putRole("tank_full", {{"source", "mqtt"}, {"entity", "tank/full"}}).status == 200);
+  REQUIRE(s.robot().putRole("tank_full", {{"source", "mqtt"}, {"entity", "tank/full"}, {"availability", "tank/status"}}).status == 200);
   s.robot().setMqttStatus(true, {});
+  s.robot().mqttValue("tank/status", "online");
   s.robot().mqttValue("tank/full", "ON");
   CHECK(role(s, "tank_full")["value"] == true);
   s.robot().setMqttStatus(false, say("mqtt.lost"));
   s.robot().setMqttStatus(true, {});
+  CHECK(role(s, "tank_full")["state"] == "offline");  // its availability has not come again
+  s.robot().mqttValue("tank/status", "online");
   CHECK(role(s, "tank_full")["state"] == "waiting");
   s.robot().mqttValue("tank/full", "ON");
   CHECK(role(s, "tank_full")["value"] == true);

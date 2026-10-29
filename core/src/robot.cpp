@@ -354,7 +354,7 @@ void Robot::boot() {
     // A fill cut by the restart: the valve is off with every output, the fill is reported and
     // never resumed, and its water is mixed in first (SD-132, R6)
     Ctx c = ctx();
-    if (RefillValve::reportCut(c)) cycle_.mixFirst(static_cast<Ms>(cycleSettings(c).mixMin * 60) * kSecond);
+    if (RefillValve::reportCut(c)) afterFill();
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
@@ -418,7 +418,8 @@ void Robot::tick() {
   // The refill valve (SD-132): a fill "top up water" asked for starts, one under way ends when it is
   // done or has to; the gateway switches the valve
   const bool wasFilling = refill_.filling();
-  if (refill_.tick(c, refillIn(now), outputs_)) afterFill();
+  const bool opened = refill_.tick(c, refillIn(now), outputs_);
+  if (wasFilling && !refill_.filling()) fillEnded(opened);
   c.refilling = refill_.filling();
   if (c.refilling != wasFilling) saveState(true);
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
@@ -1494,7 +1495,7 @@ Result Robot::importConfig(const json& j) {
   if (!next.ecCal.is_null())
     if (auto e = SensorTruth::checkEc(next.ecCal)) errs.push_back(say("cfg.calibration.ec", {{"reason", *e}}));
   if (!errs.empty()) return Result::fail(422, errs.front(), {{"errors", errs}});
-  if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing()) return Result::fail(409, say("config.busy"));
+  if (channelJobActive() || probe_ || doser_.busy() || cycle_.dosing() || refill_.filling()) return Result::fail(409, say("config.busy"));
   // The lock against a second first setup never comes from a file
   next.system.passwordSet = cfg_.system.passwordSet || auth_.hasPassword();
   // Nor what the owner confirmed of commissioning: placement is physical, so a restored or new
@@ -2275,7 +2276,7 @@ void Robot::reconcileDevices(const Config& before) {
   };
   if (refill_.filling() && (bound(before, "refill_valve") != bound(cfg_, "refill_valve") || bound(before, "tank_full") != bound(cfg_, "tank_full"))) {
     Ctx c = ctx();
-    if (refill_.stop(c, outputs_, say("refill.end.changed")).value_or(false)) afterFill();
+    if (const auto opened = refill_.stop(c, outputs_, say("refill.end.changed"))) fillEnded(*opened);
   }
   for (const auto& def : roleDefs()) {
     if (def.kind != "output") continue;
@@ -2409,7 +2410,9 @@ RefillIn Robot::refillIn(Ms now) const {
   const RoleValue v = devices_.value(cfg_, "tank_full", now);
   in.floatAssigned = v.state != "not_assigned";
   if (v.state == "ok" && v.value->is_boolean()) in.full = v.value->get<bool>();
-  in.valve = jstr(outputs_.status(cfg_, devices_, now)["refill_valve"], "state");
+  const json valve = outputs_.status(cfg_, devices_, now)["refill_valve"];
+  in.valve = jstr(valve, "state");
+  in.switchedOn = jbool(valve, "switchedOn", false);
   in.busy = doser_.busy() || cycle_.dosing() || channelJobActive() || probe_.has_value();
   return in;
 }
@@ -2420,6 +2423,12 @@ void Robot::afterFill() {
   const Ms now = clock_.nowMs();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   mixFirstNow();
+}
+
+void Robot::fillEnded(bool opened) {
+  // The check held while it filled: it starts anew, and mixes first where water may have gone in
+  if (opened) afterFill();
+  else restartCycle();
 }
 
 Result Robot::startRefill() {
@@ -2436,8 +2445,7 @@ Result Robot::stopRefill() {
   Ctx c = ctx();
   const auto opened = refill_.stop(c, outputs_, say("refill.end.person"));
   if (!opened) return Result::fail(409, say("refill.none"));
-  if (*opened) afterFill();
-  else restartCycle();
+  fillEnded(*opened);
   saveState(true);
   saveEvents();
   return Result::ok();
@@ -2446,6 +2454,7 @@ Result Robot::stopRefill() {
 Result Robot::putRefill(const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!j.contains("maxFillMin") || !j["maxFillMin"].is_number()) return Result::fail(422, say("api.bad_input"));
+  if (refill_.filling()) return Result::fail(409, say("refill.no.filling"));  // its limit stays as it began
   Config next = cfg_;
   next.refill.maxFillMin = j["maxFillMin"].get<double>();
   return saveConfig(next, changed("cfg.what.refill"));

@@ -26,7 +26,7 @@ const RoleBinding* bindingOf(const Config& cfg, const std::string& role) {
 
 const std::vector<RoleDef>& roleDefs() {
   static const std::vector<RoleDef> defs = {
-      {"refill_valve", "output", true, 25 * kMinute},  // the longest fill (SD-132)
+      {"refill_valve", "output", true, static_cast<Ms>(kRefillMaxMin * kMinute)},  // the longest fill (RAT-079)
       {"circulation_pump", "output", false, 0},        // runs for hours: no auto-off (RAT-019)
       {"tank_full", "binary", false, 0},               // the float switch in the tank (PD-460)
   };

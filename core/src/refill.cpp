@@ -42,6 +42,7 @@ std::optional<bool> RefillValve::stop(Ctx& c, NetOutputs& out, Msg why) {
 }
 
 void RefillValve::open(Ctx& c, NetOutputs& out, const std::string& why) {
+  asked_ = false;  // a fill by hand answers a request too: a stop does not bring it back
   since_ = c.now;
   opened_ = false;
   why_ = why;
@@ -92,7 +93,7 @@ bool RefillValve::tick(Ctx& c, const RefillIn& in, NetOutputs& out) {
     if (c.maintenanceUntil > 0) return end(c, out, "", say("refill.end.maintenance"));
     if (!c.hold.empty()) return end(c, out, "", say("refill.end.hold"));
     if (in.valve == "not_assigned") return end(c, out, "", say("refill.end.unassigned"));
-    if (in.valve == "on") opened_ = true;
+    if (in.valve == "on" || in.switchedOn) opened_ = true;
     // The valve cannot be reached while it may be open: a person looks (RAT-031)
     if (opened_ && in.valve == "offline") return end(c, out, "valve", {});
     if (!in.full) return end(c, out, opened_ ? "float" : "", say("refill.end.float"));
@@ -105,7 +106,6 @@ bool RefillValve::tick(Ctx& c, const RefillIn& in, NetOutputs& out) {
   if (!asked_) return false;
   const auto why = blocked(c, in);
   if (!why) {
-    asked_ = false;
     open(c, out, "top_up");
     return false;
   }

@@ -545,7 +545,7 @@ test("refill: the inlet's relay as the valve and its input as the float; a fill 
   const refill = page.getByTestId("refill");
   await expect(refill.getByTestId("refill-state")).toContainText("Ready", { timeout: 20000 });
   await refill.getByTestId("refill-start").click();
-  await expect(refill.getByTestId("refill-state")).toContainText("Filling");
+  await expect(refill.getByTestId("refill-state")).toContainText("Filling", { timeout: 15000 });
   await sim(page, "speed", { speed: 10 });
   await expect(refill.getByTestId("refill-state")).toContainText("the tank is full", { timeout: 30000 });
   await expect(refill.getByTestId("refill-start")).toBeDisabled();

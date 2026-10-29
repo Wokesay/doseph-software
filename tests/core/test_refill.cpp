@@ -8,6 +8,7 @@
 
 #include <string>
 
+#include "doseph/api.hpp"
 #include "harness.hpp"
 
 using harness::Run;
@@ -31,6 +32,10 @@ bool logged(Run& r, const std::string& type, const std::string& key) {
   for (const auto& e : r.events(type))
     if (e["title"]["key"] == key) return true;
   return false;
+}
+bool mixesFirst(Run& r) {
+  const json c = r.state()["cycle"];
+  return c["mixPending"] == true || (c["phase"] == "mix" && c["progress"]["first"] == true);
 }
 
 // Waits until a fill may start (no dose under way, the valve checked), then starts one
@@ -59,10 +64,7 @@ TEST_CASE("Refill: a fill by hand opens the valve after its check and closes it 
   CHECK(refill(r)["filling"] == false);
   CHECK(logged(r, "control", "ev.refill.done"));
   CHECK_FALSE(r.state()["latches"].contains("refill"));
-  r.waitUntil("the check mixes the water in first", [&] {
-    const json c = r.state()["cycle"];
-    return c["mixPending"] == true || (c["phase"] == "mix" && c["progress"]["first"] == true);
-  }, 60);
+  r.waitUntil("the check mixes the water in first", [&] { return mixesFirst(r); }, 60);
   // Full now: a fill by hand says why not
   const auto again = r.call("POST", "refill/start");
   CHECK(again.status == 409);
@@ -184,20 +186,80 @@ TEST_CASE("Refill: the gateway opens the valve only while the float says \"not f
   CHECK_FALSE(open(r));
 }
 
-TEST_CASE("Refill: a restart during a fill leaves the valve off, reports the cut fill and does not resume it (SD-132, R6)") {
+TEST_CASE("Refill: a restart of the robot during a fill switches the valve off, reports the cut fill, mixes first and does not resume it (SD-132, R6)") {
   Run r(harness::device());
   bindInlet(r);
   r.s.world().tank.volumeL = 80;
   startFill(r);
   r.waitUntil("the valve opens", [&] { return open(r); }, 30);
-  inlet(r).switches[0].on = false;  // the power went for the whole house: the relay comes back off
-  r.s.reboot();
+  r.s.reboot();  // the robot alone: the relay keeps its power, and is on
   REQUIRE(r.login("demo-password"));
-  r.step(2 * kSecond);
   CHECK(logged(r, "control", "ev.refill.cut"));
+  CHECK(mixesFirst(r));
+  r.waitUntil("the valve is switched off", [&] { return !open(r); }, 6);
   CHECK(refill(r)["filling"] == false);
   r.step(60 * kSecond);
   CHECK_FALSE(open(r));
+}
+
+TEST_CASE("Refill: a valve that does not open ends the fill without a latch, and the check goes on (SD-132, RAT-019)") {
+  Run r(harness::device());
+  bindInlet(r);
+  r.s.world().tank.volumeL = 90;
+  r.waitUntil("a fill may start", [&] { return refill(r)["blocked"].is_null(); }, 900);
+  // Its settings changed in the maker's app since the check, and it no longer takes them
+  inlet(r).switches[0].config["initial_state"] = "restore_last";
+  inlet(r).ignoresConfig = true;
+  r.ok("POST", "refill/start");
+  r.waitUntil("the fill ends", [&] { return refill(r)["filling"] == false; }, 90);
+  CHECK_FALSE(open(r));
+  CHECK_FALSE(r.state()["latches"].contains("refill"));
+  CHECK(logged(r, "control", "ev.refill.ended"));
+  r.step(3 * kSecond);
+  CHECK(r.line() != "cycle.wait.refill");
+}
+
+TEST_CASE("Refill: a change of the float's binding during a fill ends it without a latch; a backup is not restored during a fill (SD-132)") {
+  Run r(harness::device());
+  bindInlet(r);
+  r.ok("POST", "devices", {{"kind", "esphome"}, {"address", "esp-1.local"}, {"name", "Sensors"}});
+  r.s.world().tank.volumeL = 80;
+  startFill(r);
+  r.waitUntil("the valve opens", [&] { return open(r); }, 30);
+  CHECK(r.call("POST", "config/import", r.ok("GET", "config")).status == 409);
+  CHECK(r.call("PUT", "refill", {{"maxFillMin", 5}}).status == 409);  // its limit stays as it began
+  r.ok("PUT", "roles/tank_full", {{"source", "esphome"}, {"device", "d2"}, {"entity", "binary_sensor/tank_full"}});
+  r.step(2 * kSecond);
+  CHECK_FALSE(open(r));
+  CHECK(refill(r)["filling"] == false);
+  CHECK_FALSE(r.state()["latches"].contains("refill"));
+  r.waitUntil("the check mixes the water in first", [&] { return mixesFirst(r); }, 30);
+}
+
+TEST_CASE("Refill: a valve that stops answering while it is open latches the refill (RAT-031)") {
+  Run r(harness::device());
+  // The float on a device of its own, which stays: it says "not full" all along
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-valve.local"}, {"name", "Inlet"}});
+  r.ok("POST", "devices", {{"kind", "esphome"}, {"address", "esp-1.local"}, {"name", "Sensors"}});
+  r.ok("PUT", "roles/refill_valve", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  r.ok("PUT", "roles/tank_full", {{"source", "esphome"}, {"device", "d2"}, {"entity", "binary_sensor/tank_full"}});
+  r.s.world().tank.volumeL = 80;
+  startFill(r);
+  r.waitUntil("the valve opens", [&] { return open(r); }, 30);
+  r.act("netReachable", {{"address", "shelly-valve.local"}, {"reachable", false}});
+  r.waitUntil("the fill ends", [&] { return refill(r)["filling"] == false; }, 90);
+  const json st = r.state();
+  REQUIRE(st["latches"].contains("refill"));
+  CHECK(st["latches"]["refill"]["reason"]["key"] == "refill.why_latch.valve");
+}
+
+TEST_CASE("Refill: only a session or an app token starts, stops or sets a fill; never an account token or the coupled device (SD-132, SD-129)") {
+  for (const char* m : {"POST", "PUT"})
+    for (const std::vector<std::string> p : {std::vector<std::string>{"refill", "start"}, {"refill", "stop"}, {"refill"}}) {
+      CHECK(doseph::permitted(doseph::Role::App, m, p));
+      CHECK_FALSE(doseph::permitted(doseph::Role::Account, m, p));
+      CHECK_FALSE(doseph::permitted(doseph::Role::Peer, m, p));
+    }
 }
 
 TEST_CASE("Refill: set to report only, a fill that ends without \"full\" is reported and holds nothing (SD-133, RAT-031)") {

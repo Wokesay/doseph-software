@@ -516,6 +516,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     } else if (b.source == "mqtt") {
       if (!topicOk(b.entity) || (!b.availability.empty() && !topicOk(b.availability)) || chars(b.field) > 60)
         err(say("cfg.role.topic", {{"role", name}}));
+      // A float switch over MQTT says "not full" only while its sender is seen: a value kept on the
+      // broker outlives a sender that stopped, and the float is the valve's limit (RAT-032)
+      else if (role == "tank_full" && b.availability.empty()) err(say("cfg.role.availability", {{"role", name}}));
     } else {
       err(say("cfg.role.source", {{"role", name}}));
     }

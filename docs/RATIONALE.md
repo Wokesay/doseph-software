@@ -272,7 +272,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Evidence:** —
 - **Changed:** A float switch takes the place of the level reading (SD-132), so the faults are the ones a float can show, plus a valve that stops answering. A start whose saved state cannot be read already stops the whole robot (RAT-063) and sets no latch of its own here. A fill after a release does not wait for a reading to settle: a float has none.
 - **Implemented in:** `core/src/refill.cpp`, `core/src/robot.cpp`
-- **Tests:** `tests/core/test_refill.cpp` "Refill: a fill that reaches its longest time without "full" closes the valve and latches the refill; no fill opens until a person releases it (RAT-031, RAT-079)"; `tests/core/test_refill.cpp` "Refill: a float that loses its value during a fill closes the valve and latches the refill (RAT-031, R5)"; `tests/core/test_refill.cpp` "Refill: set to report only, a fill that ends without "full" is reported and holds nothing (SD-133, RAT-031)"
+- **Tests:** `tests/core/test_refill.cpp` "Refill: a fill that reaches its longest time without "full" closes the valve and latches the refill; no fill opens until a person releases it (RAT-031, RAT-079)"; `tests/core/test_refill.cpp` "Refill: a float that loses its value during a fill closes the valve and latches the refill (RAT-031, R5)"; `tests/core/test_refill.cpp` "Refill: a valve that stops answering while it is open latches the refill (RAT-031)"; `tests/core/test_refill.cpp` "Refill: set to report only, a fill that ends without "full" is reported and holds nothing (SD-133, RAT-031)"
 
 ### RAT-032 – The inlet's emergency limit follows the valve, not the job
 

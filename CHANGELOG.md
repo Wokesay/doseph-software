@@ -57,7 +57,8 @@ All notable changes to this software. The format follows
     refill until a person releases it. This lock may be set to report
     only.
   - The gateway keeps the valve closed while the float does not say "not
-    full", and past the longest fill, whatever wants it open.
+    full", and past the longest fill, whatever wants it open. A float
+    switch over MQTT needs an availability topic.
   - A restart reports a cut fill and does not resume it.
   - The simulator has a relay at the tank's inlet with a float switch.
 - A lock a person releases can be set to report only, for operations that

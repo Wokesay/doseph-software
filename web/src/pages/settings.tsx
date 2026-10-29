@@ -694,7 +694,13 @@ function RefillPanel() {
       <p class="muted small">{t("settings.refill.intro")}</p>
       <div class="row" style="justify-content:space-between">
         <span class="small" data-testid="refill-state">
-          {r.filling ? <Pill tone="info">{t("settings.refill.filling")}</Pill> : r.blocked ? <span class="muted">{msg(r.blocked)}</span> : <Pill tone="ok">{t("settings.refill.ready")}</Pill>}
+          {r.filling ? (
+            <Pill tone="info">{t(r.opened ? "settings.refill.filling" : "settings.refill.opening")}</Pill>
+          ) : r.blocked ? (
+            <span class="muted">{msg(r.blocked)}</span>
+          ) : (
+            <Pill tone="ok">{t("settings.refill.ready")}</Pill>
+          )}
         </span>
         {r.filling ? (
           <Button size="sm" onClick={() => act("/refill/stop")} data-testid="refill-stop">

@@ -24,6 +24,7 @@ struct RefillIn {
   std::optional<bool> full;   // the float: full or not; none without a value (R5)
   bool floatAssigned = false;
   std::string valve;          // the valve's state at the gateway: not_assigned | off | on | checking | …
+  bool switchedOn = false;    // the gateway switched it on, though its device may not have said so yet
   bool busy = false;          // a dose, a channel job or a probe calibration is under way
 };
 
@@ -37,12 +38,12 @@ class RefillValve {
   // fill is under way; otherwise whether the valve was open
   std::optional<bool> stop(Ctx& c, NetOutputs& out, Msg why);
   // Starts a fill "top up water" asked for, and ends one that is done or has to end. Returns true
-  // when a fill ended in which the valve was open: the check mixes first (SD-112).
+  // when a fill ended in which the valve was switched on: the check mixes first (SD-112).
   bool tick(Ctx& c, const RefillIn& in, NetOutputs& out);
   bool filling() const { return since_ >= 0; }
   // A fill cut by a restart: reported, never resumed (R6). True when there was one.
   static bool reportCut(Ctx& c);
-  // {filling, since, why, opened, asked, blocked}
+  // {filling, asked, opened, since, why, full, blocked}
   json status(const Ctx& c, const RefillIn& in) const;
 
  private:
@@ -54,7 +55,7 @@ class RefillValve {
   bool seenTopUp_ = false;
   bool lastTopUp_ = false;
   Ms since_ = -1;          // a fill under way since then
-  bool opened_ = false;    // the valve said on during this fill
+  bool opened_ = false;    // the valve was switched on during this fill
   std::string why_;        // "top_up" | "button"
 };
 

@@ -315,6 +315,8 @@ class Robot : public RemoteRuns {
   RefillIn refillIn(Ms now) const;
   // A fill in which the valve was open ended: its water is mixed in first, and the readings may jump
   void afterFill();
+  // A fill ended: the check starts anew, after the water was mixed in where the valve was open
+  void fillEnded(bool opened);
   bool saveDeviceSecrets();
   void reconcileDevices(const Config& before);
   // The roles' states for the watchdog: each bound role, whether it works, and why not

@@ -639,6 +639,12 @@ const RoleBinding* shellyOutput(const Config& cfg, const std::string& role) {
 
 }  // namespace
 
+// The refill valve's longest fill within its hard limit (R7, RAT-079)
+Ms NetOutputs::longestFill(const Config& cfg) {
+  const double min = isNum(cfg.refill.maxFillMin) ? std::min(cfg.refill.maxFillMin, kRefillMaxMin) : kRefillMaxMin;
+  return static_cast<Ms>(std::llround(min * 60.0)) * kSecond;
+}
+
 // The refill valve without a float that says "not full" (RAT-032)
 bool NetOutputs::limited(const Config& cfg, const NetDevices& dev, const std::string& role, Ms now) {
   if (role != "refill_valve") return false;
@@ -713,7 +719,10 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
                        releasing_.end());
     }
     if (!dev.online(b->device, now)) {
-      // Away: its settings may be gone with it (a reset, a power loss); checked again once back
+      // Away: its settings may be gone with it (a reset, a power loss); checked again once back. The
+      // refill valve opens again only when wanted anew, with its longest fill from then (RAT-032).
+      if (def.id == "refill_valve") o.want = false;
+      o.onAt = -1;
       o.verified = false;
       o.wasOnline = false;
       o.onSent = false;
@@ -733,11 +742,8 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     // that says "not full", and closed once it has been on for the longest fill. Closed so, it
     // opens again only when wanted anew.
     const bool limit = o.want && limited(cfg, dev, def.id, now);
-    if (limit && (o.onSent || o.stage == "on")) o.want = false;
-    if (def.id == "refill_valve" && o.want) {
-      const Ms longest = static_cast<Ms>(std::llround(cfg.refill.maxFillMin * 60.0)) * kSecond;
-      if (o.onAt >= 0 && now - o.onAt >= longest) o.want = false;
-    }
+    if (limit) o.want = false;
+    if (def.id == "refill_valve" && o.want && o.onAt >= 0 && now - o.onAt >= longestFill(cfg)) o.want = false;
     // On without the robot having switched it after a check: off first, whatever is wanted (RAT-019).
     // A switch-on whose answer is not in yet is the robot's own.
     const bool unchecked = isOn == true && !(o.verified && (o.onSent || o.stage == "on"));
@@ -831,7 +837,8 @@ void NetOutputs::answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, 
     o.stage.clear();
     o.onSent = true;
     // Not wanted any more while it switched on: off at once
-    if (!o.want || hold_ || limited(cfg, dev, role, now)) off(cfg, dev, role, o, now);
+    if (limited(cfg, dev, role, now)) o.want = false;
+    if (!o.want || hold_) off(cfg, dev, role, o, now);
   }
 }
 
@@ -874,7 +881,10 @@ json NetOutputs::status(const Config& cfg, const NetDevices& dev, Ms now) const 
     const auto oit = outs_.find(def.id);
     const Out none;
     const Out& o = oit == outs_.end() || !b || oit->second.key != outputKey(cfg, *b) ? none : oit->second;
-    json j = {{"want", o.want}, {"verified", o.verified}, {"problem", o.problem.key.empty() ? json(nullptr) : json(o.problem)}};
+    json j = {{"want", o.want},
+              {"verified", o.verified},
+              {"switchedOn", o.onSent || o.stage == "on"},
+              {"problem", o.problem.key.empty() ? json(nullptr) : json(o.problem)}};
     if (!b) j["state"] = "not_assigned";
     else if (!dev.online(b->device, now)) j["state"] = "offline";
     else if (o.refused) j["state"] = "refused";

@@ -239,7 +239,7 @@ class NetOutputs {
   std::vector<std::string> takeFailedReleases();
   // Why an output does not switch, where it does not
   Msg problem(const std::string& role) const;
-  // Each output role: {state, want, verified, problem}; state: not_assigned | offline | checking |
+  // Each output role: {state, want, verified, switchedOn, problem}; state: not_assigned | offline | checking |
   // unchecked | refused | off | on. Only "off" and "on" are ready.
   json status(const Config& cfg, const NetDevices& dev, Ms now) const;
 
@@ -269,6 +269,7 @@ class NetOutputs {
   void send(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, const std::string& stage, const std::string& method, const json& params, Ms now);
   void off(const Config& cfg, NetDevices& dev, const std::string& role, Out& o, Ms now);
   static bool limited(const Config& cfg, const NetDevices& dev, const std::string& role, Ms now);
+  static Ms longestFill(const Config& cfg);
   std::map<std::string, Out> outs_;
   std::vector<Release> releasing_;
   std::vector<std::string> failedReleases_;
