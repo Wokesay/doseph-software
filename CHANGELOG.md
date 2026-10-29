@@ -43,6 +43,13 @@ All notable changes to this software. The format follows
   confirmed, then 56 days of flowering at 12 h (SD-138). A phase whose EC
   target lies below the EC floor of pH dosing is said in the editor
   (RAT-046).
+- A design for the account (`docs/ACCOUNT.md`, step 10 of #10). It keeps
+  the device the authority, connects it outbound through a relay that
+  does not end TLS, and keeps minimal data. Remote access is off by
+  default, signs in with passkeys and gets at most the account role. It
+  names the ways to push through the account, who must be trusted, and
+  what drives the running costs. Nothing is built yet; the scope is a
+  product question.
 - A running plant's own phases (SD-137): on the Plants page, "Phases"
   edits the current phase and those after it for that plant alone; the
   phases already past stay, and its plant recipe stays a template.
