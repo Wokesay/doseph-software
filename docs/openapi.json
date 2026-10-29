@@ -4497,6 +4497,174 @@
           }
         }
       }
+    },
+    "/lighting/circuits": {
+      "put": {
+        "operationId": "putLight",
+        "summary": "Adds a light circuit, or changes one by its ID (SD-135)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightCircuit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/lighting/circuits/{id}": {
+      "delete": {
+        "operationId": "deleteLight",
+        "summary": "Removes a light circuit; its output is let go and switched off (SD-135)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/lighting/circuits/{id}/hand": {
+      "post": {
+        "operationId": "lightHand",
+        "summary": "Switches a light on or off by hand until its plan's next change; null: back to the plan (SD-135)",
+        "tags": [
+          "devices"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "on": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "on"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5109,6 +5277,20 @@
               "null"
             ],
             "description": "The length of a shot, s, 1 s to 24 h; never longer than the circuit's longest shot; null: the circuit's own"
+          },
+          "lightHours": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "For a light circuit that follows the plant (SD-135): hours of light, 0 to 24; null: the circuit's own"
+          },
+          "lightPct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "For a dimmed light circuit that follows the plant: brightness, 1 to 100 %; null: the circuit's own"
           }
         }
       },
@@ -5691,6 +5873,54 @@
           "plant": {
             "type": "string",
             "description": "window: the plant whose current phase sets shots a day and their length where it has them (SD-134); empty: none"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "LightCircuit": {
+        "type": "object",
+        "description": "A light circuit (SD-135): a Shelly switch or a dimmer on a 0–10 V line, bound as the role `light.<id>`",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "l1, l2, …; without one a new circuit is made"
+          },
+          "name": {
+            "type": "string"
+          },
+          "dimmed": {
+            "type": "boolean",
+            "description": "A dimmer (Shelly \"Light\"); otherwise a switch"
+          },
+          "startMin": {
+            "type": "integer",
+            "description": "The day's start, local minute of the day"
+          },
+          "hours": {
+            "type": "number",
+            "description": "Hours of light, 0 to 24"
+          },
+          "pct": {
+            "type": "number",
+            "description": "A dimmer's brightness by day, 1 to 100 %"
+          },
+          "thresholdPct": {
+            "type": "number",
+            "description": "The lamp driver's switch-on threshold, 0 to 50 %; less is raised to it (RAT-013)"
+          },
+          "sunriseMin": {
+            "type": "integer",
+            "description": "A dimmer's rise from the day's start, 0 to 240 min"
+          },
+          "sunsetMin": {
+            "type": "integer",
+            "description": "A dimmer's fall to the day's end, 0 to 240 min"
+          },
+          "plant": {
+            "type": "string",
+            "description": "A plant whose current phase sets the hours and the brightness where it has them; empty: none"
           }
         },
         "required": [

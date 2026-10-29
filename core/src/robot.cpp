@@ -449,6 +449,8 @@ void Robot::tick() {
     if (water_.running() != wasWatering) saveState(true);
   }
   outputs_.want("circulation_pump", circulationWanted(c));
+  // Light by its plan or a person's hand, through Stop, holds and maintenance (SD-135)
+  light_.tick(c, secondOfDay(c.epoch), outputs_);
   outputs_.tick(cfg_, devices_, rt_.stopped || !c.hold.empty(), now);
   for (const auto& name : outputs_.takeFailedReleases())
     log_.add(epoch, "alarm", "alarm", say("ev.device.release_failed", {{"name", name}}), say("ev.device.release_failed.text"));
@@ -796,6 +798,7 @@ json Robot::state() {
            }()},
           {"circulation", {{"mode", cfg_.circulation.mode}, {"wanted", circulationWanted(c)}}},
           {"watering", water_.status(c, waterIn(c))},
+          {"lighting", Lighting::status(c, secondOfDay(c.epoch), outputs_.status(cfg_, devices_, c.now))},
           {"effects", {{"ph", numOrNull(rt_.phEffect)}, {"ecByRecipe", ecEffects}}},
           {"dosing", dosing},
           {"channels", channels},
@@ -1169,6 +1172,8 @@ Result Robot::deletePlant(const std::string& id) {
   // A circuit that followed it keeps its own shots (SD-134)
   for (auto& w : next.watering.circuits)
     if (w.plant == id) w.plant.clear();
+  for (auto& lc : next.lighting.circuits)
+    if (lc.plant == id) lc.plant.clear();
   return savePlants(next, say("ev.plant.deleted", {{"name", name}}));
 }
 
@@ -1547,6 +1552,8 @@ Result Robot::importConfig(const json& j) {
   water_.reset();
   for (const auto& w : before.watering.circuits)
     if (!cfg_.watering.circuit(w.id)) Watering::forgetRuntime(rt_, w.id);
+  for (const auto& lc : before.lighting.circuits)
+    if (!cfg_.lighting.circuit(lc.id)) Lighting::forget(rt_, lc.id);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)
@@ -2630,6 +2637,75 @@ Result Robot::pauseCircuit(const std::string& id, const json& j) {
   Result r = saveConfig(next, changed(j["paused"].get<bool>() ? "cfg.what.water_paused" : "cfg.what.water_resumed"));
   if (r.status == 200) water_.forget(id);  // resumed, it starts with its next shot
   return r;
+}
+
+int Robot::secondOfDay(Epoch epoch) const {
+  // Zones are whole minutes off UTC: the seconds are UTC's
+  return localTime(epoch, cfg_.system.timezone).minuteOfDay * 60 + static_cast<int>(((epoch % 60) + 60) % 60);
+}
+
+Result Robot::putLight(const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object()) return Result::fail(422, say("api.bad_input"));
+  json body = j;
+  std::string id = jstr(body, "id");
+  if (id.empty()) {
+    // A new circuit: the next free number
+    for (int n = 1; id.empty(); ++n)
+      if (!cfg_.lighting.circuit("l" + std::to_string(n))) id = "l" + std::to_string(n);
+    body["id"] = id;
+  } else if (const LightCircuitCfg* was = cfg_.lighting.circuit(id)) {
+    // A plant followed stays so, unless the change says otherwise
+    if (!body.contains("plant")) body["plant"] = was->plant;
+  } else {
+    return Result::fail(404, say("light.none"));
+  }
+  LightCircuitCfg lc;
+  try {
+    lc = lightCircuitFromJson(body);
+  } catch (...) {
+    return Result::fail(422, say("api.bad_input"));
+  }
+  Config next = cfg_;
+  bool found = false;
+  for (auto& x : next.lighting.circuits)
+    if (x.id == id) {
+      x = lc;
+      found = true;
+    }
+  if (!found) next.lighting.circuits.push_back(lc);
+  Result r = saveConfig(next, changed("cfg.what.lighting"));
+  if (r.status == 200) r.body["id"] = id;
+  return r;
+}
+
+Result Robot::deleteLight(const std::string& id) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!cfg_.lighting.circuit(id)) return Result::fail(404, say("light.none"));
+  Config next = cfg_;
+  next.lighting.circuits.erase(std::remove_if(next.lighting.circuits.begin(), next.lighting.circuits.end(),
+                                              [&](const LightCircuitCfg& lc) { return lc.id == id; }),
+                               next.lighting.circuits.end());
+  next.roles.erase(lightRole(id));
+  const Config before = cfg_;
+  Result r = saveConfig(next, changed("cfg.what.lighting"));
+  if (r.status != 200) return r;
+  Lighting::forget(rt_, id);
+  saveState(true);
+  reconcileDevices(before);  // its output is let go and switched off
+  return r;
+}
+
+Result Robot::lightHand(const std::string& id, const json& j) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!j.is_object() || !j.contains("on") || !(j["on"].is_boolean() || j["on"].is_null())) return Result::fail(422, say("api.bad_input"));
+  Ctx c = ctx();
+  const std::optional<bool> on = j["on"].is_null() ? std::nullopt : std::optional<bool>(j["on"].get<bool>());
+  if (!Lighting::hand(c, id, on, secondOfDay(c.epoch))) return Result::fail(404, say("light.none"));
+  light_.tick(c, secondOfDay(c.epoch), outputs_);
+  saveState(true);
+  saveEvents();
+  return Result::ok();
 }
 
 void Robot::fillEnded(bool opened) {

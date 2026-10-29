@@ -437,6 +437,9 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("POST", {"watering", "circuits", "*", "now"})) return fromResult(robot_.waterNow(p[2], body));
   if (is("POST", {"watering", "circuits", "*", "stop"})) return fromResult(robot_.stopWater(p[2]));
   if (is("POST", {"watering", "circuits", "*", "pause"})) return fromResult(robot_.pauseCircuit(p[2], body));
+  if (is("PUT", {"lighting", "circuits"})) return fromResult(robot_.putLight(body));
+  if (is("DELETE", {"lighting", "circuits", "*"})) return fromResult(robot_.deleteLight(p[2]));
+  if (is("POST", {"lighting", "circuits", "*", "hand"})) return fromResult(robot_.lightHand(p[2], body));
   // Network devices and their roles (SD-132)
   if (is("GET", {"devices"})) return jsonResp(200, robot_.devices());
   if (is("POST", {"devices"})) return fromResult(robot_.addDevice(body));

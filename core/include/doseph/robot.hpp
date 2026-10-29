@@ -17,6 +17,7 @@
 #include "doseph/mqtt.hpp"
 #include "doseph/push.hpp"
 #include "doseph/refill.hpp"
+#include "doseph/lighting.hpp"
 #include "doseph/watering.hpp"
 #include "doseph/service.hpp"
 #include "doseph/clock.hpp"
@@ -132,6 +133,11 @@ class Robot : public RemoteRuns {
   Result waterNow(const std::string& id, const json& j);
   Result stopWater(const std::string& id);
   Result pauseCircuit(const std::string& id, const json& j);
+  // Light (SD-135): a circuit (a new one without an ID) and its removal; switching by hand {on:
+  // true | false | null}, null back to the plan
+  Result putLight(const json& j);
+  Result deleteLight(const std::string& id);
+  Result lightHand(const std::string& id, const json& j);
 
   // ---- Access tokens (SD-129): only the owner manages them
   json tokens() const;
@@ -330,6 +336,8 @@ class Robot : public RemoteRuns {
   void fillEnded(bool opened);
   bool circulationWanted(const Ctx& c) const;
   Watering water_;
+  Lighting light_;
+  int secondOfDay(Epoch epoch) const;  // local
   Epoch waterChangedAt_ = 0;  // the last dose or fill: the water is judged by a check after it
   WaterIn waterIn(const Ctx& c) const;
   bool saveDeviceSecrets();

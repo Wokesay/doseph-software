@@ -223,11 +223,15 @@ class Doser {
 // An output let go (unbound, rebound, its device removed or moved) is switched off, and the off is
 // repeated until the device answers or a minute has passed. The refill valve closes on its own
 // limits, whatever wants it open (RAT-032): while the float does not say "not full", and once it
-// has been on for the longest fill.
+// has been on for the longest fill. Light (SD-135) is neither held nor forced off by a Stop: it
+// follows its plan, and one found on after a restart is checked while it stays on. A dimmer is a
+// Shelly "Light": it switches on at its brightness, and a brightness read back otherwise is set again.
 class NetOutputs {
  public:
   // False for a role that is not an output
   bool want(const std::string& role, bool on);
+  // A dimmer's brightness while on, 1 to 100 % (SD-135)
+  void wantLevel(const std::string& role, double pct);
   // A Stop or a start: nothing wanted, and every bound output gets an off at the next tick, whatever
   // it said last (R6, RAT-036)
   void allOff();
@@ -258,9 +262,12 @@ class NetOutputs {
     Ms lastOff = -kNetPollMs;
     Ms retryAt = 0;
     Ms onAt = -1;  // when the robot last switched it on
+    double level = 100;  // a dimmer's brightness wanted, %
+    Ms lastLevel = -kNetPollMs;
   };
   struct Release {
     NetDeviceCfg device;
+    std::string comp = "Switch";  // "Light" for a dimmer
     std::string user, password, ownId;
     int channel = 0;
     long long pending = 0;

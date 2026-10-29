@@ -37,6 +37,13 @@ struct FakeShelly {
     doseph::json config;  // as Switch.GetConfig gives it
   };
   std::vector<Switch> switches;
+  // A dimmer on a 0–10 V line (SD-135): on and its brightness, as Light.GetStatus gives them
+  struct Light {
+    bool on = false;
+    double brightness = 100;
+    doseph::json config;  // as Light.GetConfig gives it
+  };
+  std::vector<Light> lights;
   std::vector<bool> inputs;
   bool ignoresConfig = false;  // takes Switch.SetConfig and keeps its settings, as a faulty one might
   bool inlet = false;       // its output opens the tank's inlet, its input 0 is the float switch (SD-132)

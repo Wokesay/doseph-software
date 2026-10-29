@@ -160,6 +160,30 @@ struct WateringCfg {
 // The output role of a circuit: "water.<id>"
 std::string waterRole(const std::string& circuit);
 
+// Light (SD-135): any number of circuits, each a Shelly output switched on and off or a dimmer on
+// a 0–10 V line. A circuit's day begins at its own local time and lasts its hours of light; a
+// dimmer rises over its sunrise and falls over its sunset within the day.
+constexpr size_t kMaxLights = 16;
+constexpr int kMaxRampMin = 240;
+struct LightCircuitCfg {
+  std::string id;              // l1, l2, …
+  std::string name;
+  bool dimmed = false;         // a dimmer (Shelly "Light"); otherwise a switch, on or off
+  int startMin = 6 * 60;       // the day's start, local minute of the day
+  double hours = 18;           // hours of light, 0 to 24
+  double pct = 100;            // a dimmer's brightness by day, 1 to 100 %
+  double thresholdPct = 0;     // the lamp driver's switch-on threshold: less is raised to it (RAT-013)
+  int sunriseMin = 0, sunsetMin = 0;  // a dimmer's ramps within the day; 0: hard on and off
+  std::string plant;           // a plant whose current phase sets the hours and the brightness
+                               // where it has them (RAT-076)
+};
+struct LightingCfg {
+  std::vector<LightCircuitCfg> circuits;
+  const LightCircuitCfg* circuit(const std::string& id) const;
+};
+// The output role of a light circuit: "light.<id>"
+std::string lightRole(const std::string& circuit);
+
 // Fixed safety limits in code. The configuration may only tighten them (R7);
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
@@ -224,6 +248,9 @@ struct PhaseCfg {
   // nothing and NaN: not set, the circuit's own apply
   std::optional<int> shotsPerDay;
   double shotS = kNaN;
+  // Light (SD-135): hours of light and a dimmer's brightness for a light circuit that follows the
+  // plant; nothing: the circuit's own apply
+  std::optional<double> lightHours, lightPct;
 };
 
 // A plant recipe: the phases a plant goes through (SD-128)
@@ -282,6 +309,7 @@ struct Config {
   RefillCfg refill;
   CirculationCfg circulation;
   WateringCfg watering;
+  LightingCfg lighting;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
@@ -332,6 +360,7 @@ std::vector<PhaseCfg> phasesFromJson(const json& j);
 json migrateConfig(json j);
 Config configFromJson(const json& j);  // migrates first; throws on structure errors
 WaterCircuitCfg waterCircuitFromJson(const json& j);  // throws on structure errors
+LightCircuitCfg lightCircuitFromJson(const json& j);  // throws on structure errors
 
 // Checks references and the rules of the domain and of safety; channelCount
 // is how many channels the device has.
@@ -378,6 +407,8 @@ struct RuntimeState {
   // `waterLow`: a shot would go below the reserve, so water is to be topped up.
   json watering = json::object();
   bool waterLow = false;
+  // Light switched by hand (SD-135): {circuit: {on, until}}, until the plan's next change (epoch)
+  json lighting = json::object();
   // The settling times of the last three clean doses, min (SD-112): a large tank waits 1.5 × the longest
   std::vector<double> settleMin;
   // Alarms (SD-123): watchdog item → {since, raised, level, sent, round, ackUntil, reported};

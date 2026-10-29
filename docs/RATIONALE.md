@@ -123,11 +123,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-013 – Dimming never goes below the lamp's switch-on threshold
 
-- **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with light (SD-135). The threshold is a setting of each light circuit, and the ramps of sunrise and sunset never go below it.
 - **Rule:** A dimming value below the lamp driver's switch-on threshold is raised to the threshold; 0 means off and switches the light relay off as well (RAT-029). The threshold is a setting of the light schedule.
 - **Why:** An LED driver lights only above a minimum dimming level and goes dark again a little below it. Between the two, relay and dimmer both look right while the lamps stay dark, and no check notices. The threshold belongs to the driver and its dimming line, so it is measured again whenever either changes.
 - **Evidence:** Measured on the reference installation (2026): a first threshold of about 10 % turned out to come from a wiring fault that held the 0–10 V dimming line at about 7 V. Correctly wired, the lamps came on at 9 % and went out at 6 %.
-- **Later:** step 9 (light).
+- **Implemented in:** `core/src/lighting.cpp`
+- **Tests:** `tests/core/test_lighting.cpp` "Light: a day from its start for its hours; a dimmer rises over its sunrise and falls over its sunset, never below the driver's threshold, and is off at night (SD-135, RAT-013, RAT-029)"; `tests/core/test_lighting.cpp` "Light: the sunrise raises the brightness from the driver's threshold, and night switches the lamps off (SD-135, RAT-013, RAT-029)"
 
 ### RAT-014 – Drain percentage leads irrigation; substrate readings inform only
 
@@ -252,11 +253,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-029 – Dimming to zero also switches the light relay off
 
-- **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with light (SD-135): a dimmer's "on" and its brightness are one Shelly component, so 0 % switches it off.
 - **Rule:** Dimming to 0 means off, and the light relay then switches off too, so relay state and light agree; a value between 0 and the switch-on threshold is raised to the threshold (RAT-013).
 - **Why:** With the relay left on and the dimmer at zero, "relay on" and "lamp lit" disagree: a check based on the relay raises a false critical alarm for light in the dark period, and only power measurement shows whether a lamp really shines.
 - **Evidence:** Measured on the reference installation (2026): with the relays on and the dimmer at 0 V the lamps drew 0–1.3 W and gave no light. A check on power (alarm above 10 W) rightly stayed quiet, while one on the relay state raised a false "light in the dark period" alarm all night.
-- **Later:** step 9 (light).
+- **Implemented in:** `core/src/lighting.cpp`, `core/src/gateway.cpp`
+- **Tests:** `tests/core/test_lighting.cpp` "Light: a day from its start for its hours; a dimmer rises over its sunrise and falls over its sunset, never below the driver's threshold, and is off at night (SD-135, RAT-013, RAT-029)"; `tests/core/test_lighting.cpp` "Light: the sunrise raises the brightness from the driver's threshold, and night switches the lamps off (SD-135, RAT-013, RAT-029)"
 
 ### RAT-030 – Refill supervision respects the probe's blind zone and judges the rate over a window
 
