@@ -1207,3 +1207,55 @@ decisions of their own.
     the plant on (within seconds of midnight); a shot that waits or runs
     keeps its length. A plant copies its phases when it starts (SD-128),
     so shots set in a plant recipe reach plants started afterwards.
+
+## SD-135: Light, on a schedule and dimmed, set by the plant's phase
+
+2026-10-29. Step 9 of #10, after watering (SD-134). The owner decided the
+questions below in this session. The rest are control details decided here
+by the minimal principle. Climate follows with decisions of its own.
+
+- **What** (decided by the owner: on and off, and dimming over 0–10 V).
+  - Any number of light circuits, as with watering; a ceiling in code
+    keeps the configuration bounded (16). Each is a Shelly Gen2+ output
+    (SD-132): a switch for on and off, or a dimmer with a 0–10 V line for
+    the brightness in %.
+  - A circuit's day starts at its own local time and lasts its hours of
+    light. The time it starts stays with the circuit, so the day does not
+    wander when the hours change.
+  - Brightness below the lamp driver's switch-on threshold is raised to
+    the threshold; 0 % switches the light's relay off as well (RAT-013,
+    RAT-029). The threshold is a setting of the circuit.
+  - Light runs for hours: its output gets no auto-off in the device
+    (RAT-019). Every switching goes through the gateway with its
+    read-back (R1); for a dimmer the brightness is read back too.
+- **Sunrise and sunset** (decided by the owner: set per circuit). A
+  circuit has a duration for each, 0 for hard on and off. The ramps lie
+  within the day: the light rises from the start of the day and falls
+  until its end.
+- **The plant's phase** (decided by the owner: hours and brightness).
+  A light circuit may follow a plant; while the plant runs, its current
+  phase sets the hours of light and the brightness where it has them,
+  otherwise the circuit's own apply (RAT-076: parameters, never names).
+  This is the pattern of watering (SD-134). A plant deleted lets its
+  circuits go.
+- **After a restart** (decided by the owner: on by the plan). The robot
+  switches each light as its plan wants it now: on by day, off by night,
+  and reports the restart. Light does no harm by being on or off at its
+  planned time, so R6 holds: what can do harm (pumps, valves) stays off.
+  A Shelly is off after a power loss (RAT-019) until the robot switches
+  it.
+- **STOP, a hold and maintenance** (decided by the owner: light always
+  by the plan). None of them switches the light. The STOP dialog names
+  pumps, valves and watering circuits only.
+- **By hand.** A person may switch a light on or off; it holds until the
+  plan's next change (the next start or end of the day). A light switched
+  on by hand in the dark period is shown as such.
+- **Heat** (decided by the owner: with the climate step). Light gets no
+  protection against heat now; it is built with the climate, where the
+  room temperature gets a role.
+- **Who.** Light circuits, their plans and switching by hand only from a
+  session or an app token.
+- **Rules from practice** that come into force with it, in their Doseph
+  form: RAT-013 (the driver's threshold) and RAT-029 (0 % switches the
+  relay off). Both were dropped for the mixing robot alone (SD-105) and
+  are taken up again.
