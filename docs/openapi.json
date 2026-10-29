@@ -4268,16 +4268,6 @@
       }
     },
     "/watering/circuits/{id}": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
       "delete": {
         "operationId": "deleteCircuit",
         "summary": "Removes a watering circuit and lets its output go (SD-134)",
@@ -4287,6 +4277,16 @@
         "x-roles": [
           "owner",
           "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4315,16 +4315,6 @@
       }
     },
     "/watering/circuits/{id}/now": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
       "post": {
         "operationId": "waterNow",
         "summary": "Waters now: one shot by hand; with override, also on water not fit for watering, as a warning (SD-134, RAT-086)",
@@ -4334,6 +4324,16 @@
         "x-roles": [
           "owner",
           "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -4386,16 +4386,6 @@
       }
     },
     "/watering/circuits/{id}/stop": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
       "post": {
         "operationId": "stopWater",
         "summary": "Ends the circuit's shot (SD-134)",
@@ -4405,6 +4395,16 @@
         "x-roles": [
           "owner",
           "app"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4430,16 +4430,6 @@
       }
     },
     "/watering/circuits/{id}/pause": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
       "post": {
         "operationId": "pauseCircuit",
         "summary": "Pauses or resumes a circuit's schedule (SD-134)",
@@ -4450,6 +4440,16 @@
           "owner",
           "app",
           "account"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
