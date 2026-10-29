@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "doseph/config.hpp"
+#include "doseph/devices.hpp"
 #include "doseph/gateway.hpp"
 #include "doseph/localtime.hpp"
 #include "doseph/messages.hpp"
@@ -49,15 +50,20 @@ double dayRunS(const RuntimeState& rt, const std::string& date, const std::strin
   return jnum(d["runS"], circuit.c_str(), 0);
 }
 
-// A shot's litres and run time, booked to the count and to the local day it began (SD-134)
+// A shot's litres and run time, booked to the count and to the local day it began (SD-134). Water
+// of a circuit whose flow is not known leaves the count without a value (R5).
 void book(RuntimeState& rt, const std::string& circuit, const std::string& date, double s, double l) {
-  if (const auto g = givenL(rt); g && isNum(l)) rt.watering["givenL"] = *g + l;
+  if (const auto g = givenL(rt)) {
+    if (isNum(l)) rt.watering["givenL"] = *g + l;
+    else if (s > 0) rt.watering["givenL"] = nullptr;
+  }
   json& day = section(rt, "day");
   if (jstr(day, "date") != date) {
     // A shot from the day before leaves today's run time alone
     if (jstr(day, "date") > date) return;
     day = {{"date", date}, {"runS", json::object()}};
   }
+  if (!day["runS"].is_object()) day["runS"] = json::object();
   day["runS"][circuit] = jnum(day["runS"], circuit.c_str(), 0) + s;
 }
 
@@ -65,7 +71,8 @@ double reserveL(const Config& cfg, const WaterIn& in) {
   return isNum(in.volumeL) ? in.volumeL * cfg.watering.reservePct / 100.0 : kNaN;
 }
 
-double litres(const WaterCircuitCfg& w, double s) { return isNum(w.rateLpm) ? w.rateLpm * s / 60.0 : kNaN; }
+double litres(double rateLpm, double s) { return isNum(rateLpm) ? rateLpm * s / 60.0 : kNaN; }
+double litres(const WaterCircuitCfg& w, double s) { return litres(w.rateLpm, s); }
 
 // Why the tank cannot give `takeL` more litres now: an empty float, a level or the count below the
 // reserve (RAT-067, RAT-068); nothing where it can. `counts`: the circuit's litres are known.
@@ -193,10 +200,15 @@ void Watering::forgetRuntime(RuntimeState& rt, const std::string& circuit) {
 
 void Watering::start(Ctx& c, const WaterCircuitCfg& w, double s, bool override, const std::string& why, const std::string& date,
                      NetOutputs& out) {
-  shot_ = Shot{w.id, c.now, -1, false, s, override, why, date};
+  shot_ = Shot{w.id, w.name, w.rateLpm, c.now, -1, false, s, override, why, date};
   due_.erase(w.id);
   skipped_.erase(w.id);
-  section(c.rt, "shot") = {{"circuit", w.id}, {"since", c.epoch}, {"s", s}, {"override", override}, {"why", why}, {"date", date}};
+  // The most it may run with the robot down: the device's own auto-off (RAT-019)
+  const auto def = roleDef(c.cfg, waterRole(w.id));
+  const int offS = def ? autoOffS(*def) : 0;
+  section(c.rt, "shot") = {{"circuit", w.id},  {"name", w.name},  {"rateLpm", isNum(w.rateLpm) ? json(w.rateLpm) : json(nullptr)},
+                           {"since", c.epoch}, {"s", s},          {"offS", offS > 0 ? json(offS) : json(nullptr)},
+                           {"override", override}, {"why", why}, {"date", date}};
   out.want(waterRole(w.id), true);
 }
 
@@ -204,14 +216,14 @@ void Watering::end(Ctx& c, NetOutputs& out, Msg how, bool warn) {
   const Shot shot = *shot_;
   shot_.reset();
   out.want(waterRole(shot.circuit), false);
-  const WaterCircuitCfg* w = c.cfg.watering.circuit(shot.circuit);
-  // From the switch-on, before the device said so: the count errs towards less water left
+  // From the switch-on, before the device said so: the count errs towards less water left. As the
+  // circuit was when the shot began: a change books it as it ran.
   const double ran = shot.sentAt >= 0 ? static_cast<double>(c.now - shot.sentAt) / 1000.0 : 0;
-  const double l = w ? litres(*w, ran) : kNaN;
+  const double l = litres(shot.rateLpm, ran);
   book(c.rt, shot.circuit, shot.date, ran, l);
   section(c.rt, "last")[shot.circuit] = {{"at", c.epoch}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"end", how}};
   c.rt.watering["shot"] = nullptr;
-  const json name = w ? json(w->name) : json(shot.circuit);
+  const json name = shot.name;
   const json data = {{"circuit", shot.circuit}, {"s", round1(ran)}, {"l", isNum(l) ? json(round1(l)) : json(nullptr)}, {"override", shot.override}};
   if (warn) c.log.add(c.epoch, "control", "warn", say("ev.water.cut", {{"name", name}, {"s", round1(ran)}}), std::move(how), data);
   else c.log.add(c.epoch, "control", "info", say("ev.water.shot", {{"name", name}, {"s", round1(ran)}}), std::move(how), data);
@@ -232,11 +244,14 @@ void Watering::tick(Ctx& c, const WaterIn& in, NetOutputs& out) {
   if (c.rt.waterLow && in.levelAssigned && in.levelL && isNum(reserve) && *in.levelL >= reserve + in.volumeL * kWaterLowBackPct / 100.0)
     c.rt.waterLow = false;
 
-  // The schedules, by each minute of UTC passed and the local minute it was. After a start, or a
-  // clock that leapt forward, nothing missed is made up (R6); a clock set back waits until it is past
-  // the last minute taken, so no shot comes twice.
+  // The schedules, by each minute of UTC passed and the local minute it was. After a start, a clock
+  // set or lost, or one that leapt further than kWaterLeapMin either way, the schedules start from
+  // the new time and nothing missed is made up (R6); a clock set back less far waits until it is
+  // past the last minute taken, so no shot comes twice.
   const long long minute = static_cast<long long>(c.epoch) / 60;
-  if (lastMinute_ < 0 || minute - lastMinute_ > kWaterLeapMin) {
+  const bool leapt = lastMinute_ < 0 || in.clockSecured != secured_ || std::llabs(minute - lastMinute_) > kWaterLeapMin;
+  secured_ = in.clockSecured;
+  if (leapt) {
     lastMinute_ = minute;
   } else if (minute > lastMinute_) {
     for (long long m = lastMinute_ + 1; m <= minute; ++m) {
@@ -277,7 +292,7 @@ void Watering::tick(Ctx& c, const WaterIn& in, NetOutputs& out) {
     if (st == "on") shot_->opened = true;
     const double ran = shot_->sentAt >= 0 ? static_cast<double>(c.now - shot_->sentAt) / 1000.0 : 0;
     // What it gave so far counts against the reserve; a level probe sees it itself
-    const auto shortOf = tankShort(c, in, in.levelAssigned ? 0 : litres(*w, ran), isNum(w->rateLpm));
+    const auto shortOf = tankShort(c, in, in.levelAssigned ? 0 : litres(shot_->rateLpm, ran), isNum(shot_->rateLpm));
     if (c.stopped) return end(c, out, say("water.end.stopped"), true);
     if (c.maintenanceUntil > 0) return end(c, out, say("water.end.maintenance"), true);
     if (!c.hold.empty()) return end(c, out, say("water.end.hold"), true);
@@ -292,8 +307,9 @@ void Watering::tick(Ctx& c, const WaterIn& in, NetOutputs& out) {
       raiseLow(c, *shortOf);
       return end(c, out, *shortOf, true);
     }
+    // Its length from the switch-on, whether or not the device has said "on" since
+    if (shot_->sentAt >= 0 && ran >= shot_->s) return end(c, out, say("water.end.done"), false);
     if (!shot_->opened && c.now - shot_->since >= kWaterOpenMs) return end(c, out, say("water.end.not_open"), true);
-    if (shot_->opened && ran >= shot_->s) return end(c, out, say("water.end.done"), false);
     return;
   }
 
@@ -317,14 +333,13 @@ bool Watering::reportCut(Ctx& c, const std::string& date) {
   const json shot = c.rt.watering["shot"];
   c.rt.watering["shot"] = nullptr;
   const std::string id = jstr(shot, "circuit");
-  const WaterCircuitCfg* w = c.cfg.watering.circuit(id);
-  // It may have run until the restart or its end, whichever came first: booked so, the count errs
-  // towards less water left
-  const double since = jnum(shot, "since", static_cast<double>(c.epoch));
-  const double ran = std::max(0.0, std::min(jnum(shot, "s", 0), static_cast<double>(c.epoch) - since));
+  // With the robot down, the device ran until its own auto-off at most; the clock after a start may
+  // not tell how long that was. Booked so, the count errs towards less water left.
+  const double ran = jnum(shot, "offS", jnum(shot, "s", 0));
+  const double rate = shot.contains("rateLpm") && shot["rateLpm"].is_number() ? shot["rateLpm"].get<double>() : kNaN;
   const std::string day = jstr(shot, "date");
-  if (w) book(c.rt, id, day.empty() ? date : day, ran, litres(*w, ran));
-  c.log.add(c.epoch, "control", "warn", say("ev.water.cut_restart", {{"name", w ? json(w->name) : json(id)}}), say("ev.water.cut_restart.text"));
+  book(c.rt, id, day.empty() ? date : day, ran, litres(rate, ran));
+  c.log.add(c.epoch, "control", "warn", say("ev.water.cut_restart", {{"name", jstr(shot, "name", id)}}), say("ev.water.cut_restart.text"));
   return true;
 }
 
@@ -341,8 +356,15 @@ json Watering::status(const Ctx& c, const WaterIn& in) const {
   json circuits = json::array();
   for (const auto& w : c.cfg.watering.circuits) {
     const auto d = due_.find(w.id);
-    // Why it cannot water now: its shot that waits, its schedule's shot, or by hand any shot at all
-    const double s = d != due_.end() ? d->second.s : w.mode == "window" || w.mode == "interval" ? w.shotS : 1;
+    // Why it cannot water now: its shot that waits, its schedule's next shot, or by hand any shot
+    double s = d != due_.end() ? d->second.s : w.mode == "window" || w.mode == "interval" ? w.shotS : 1;
+    if (d == due_.end() && w.mode == "times") {
+      int next = 24 * 60;
+      for (const auto& t : w.times) {
+        const int in_ = ((t.atMin - in.minuteOfDay) % (24 * 60) + 24 * 60) % (24 * 60);
+        if (in_ < next) next = in_, s = t.s;
+      }
+    }
     const auto why = blocked(c, in, w, s, false);
     json last = nullptr;
     if (c.rt.watering.is_object() && c.rt.watering.contains("last") && c.rt.watering["last"].contains(w.id)) last = c.rt.watering["last"][w.id];

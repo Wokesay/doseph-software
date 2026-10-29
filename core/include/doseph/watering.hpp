@@ -21,7 +21,8 @@ struct WaterCircuitCfg;
 
 constexpr Ms kWaterOpenMs = kMinute;      // a circuit that did not say "on" by then ends its shot
 constexpr Epoch kWaterWaitS = 3600;       // a due shot waits this long at most, then it lapses
-constexpr long long kWaterLeapMin = 90;   // the clock leapt further: nothing is made up (R6)
+constexpr long long kWaterLeapMin = 90;   // the clock leapt further, either way: the schedules start
+                                          // from the new time, nothing is made up (R6)
 constexpr double kWaterLowBackPct = 10;   // water is no longer low this far above the reserve, in % of the tank
 
 struct RuntimeState;
@@ -29,6 +30,8 @@ struct RuntimeState;
 // What the robot knows around watering now
 struct WaterIn {
   std::string date;         // local, YYYY-MM-DD: the day of the daily run time
+  int minuteOfDay = 0;      // local
+  bool clockSecured = true; // the time is set; when it becomes so, or is lost, the clock leaps
   bool mixing = false;      // a dose, a fill or a mixing wait is under way, or the check has not
                             // measured since: a shot waits (SD-112)
   bool dosing = false;      // a dose runs: a running shot stops (RAT-086)
@@ -62,8 +65,13 @@ class Watering {
   // A shot cut by a restart: reported, not repeated (R6), and booked as if it ran until the restart
   // or its end. True when there was one.
   static bool reportCut(Ctx& c, const std::string& date);
-  // A circuit changed or removed: what waits for it, and what was skipped, goes
+  // A circuit changed, paused or removed: what waits for it, and what was skipped, goes
   void forget(const std::string& circuit);
+  // A configuration imported: what waits for any circuit goes
+  void reset() {
+    due_.clear();
+    skipped_.clear();
+  }
   // A circuit removed: its last shot and its run time of the day go with it
   static void forgetRuntime(RuntimeState& rt, const std::string& circuit);
   // The litres the tank may still give before its reserve; nothing where nothing tells (no count, no
@@ -76,6 +84,8 @@ class Watering {
  private:
   struct Shot {
     std::string circuit;
+    std::string name;        // as it was when the shot began: a change books it as it ran
+    double rateLpm = kNaN;
     Ms since = 0;
     Ms sentAt = -1;       // when the gateway switched it on: its length and litres count from then
     bool opened = false;  // the device said it is on
@@ -96,6 +106,7 @@ class Watering {
   std::map<std::string, Due> due_;              // circuit → its shot that waits
   std::map<std::string, std::string> skipped_;  // circuit → why its last shot was skipped
   long long lastMinute_ = -1;                   // the UTC minute the schedules were last taken
+  bool secured_ = false;                        // the clock was secured then
 };
 
 // The length of a circuit's shot due at this local minute; nothing when none is

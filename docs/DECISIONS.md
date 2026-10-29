@@ -1176,17 +1176,25 @@ decisions of their own.
 - **Details settled when it was built** (#80, control details by the
   minimal principle).
   - Schedules go by each minute of the clock that passes, in the local
-    time of that minute. A clock set back gives no shot twice; one set
-    forward by more than 90 minutes makes nothing up (R6).
+    time of that minute. A clock set back by up to 90 minutes gives no
+    shot twice. A clock set or lost after a start, or one that leaps
+    further either way, starts the schedules from the new time and
+    makes nothing up (R6): a long wait or a burst of shots would do
+    more harm than one shot again. On the night the clocks go back, the
+    repeated hour's shots come twice; on the night they go forward, the
+    skipped hour's do not come.
   - A shot due while it cannot start waits at most an hour, then lapses;
     one still waiting when its circuit's next comes is skipped. Each
-    reason is logged once.
+    reason is logged once. A paused circuit forgets what waited.
   - The count of litres has no start until a new tank or the float
-    "full"; before that, a counted circuit does not water (R5). A shot
-    counts from its switch-on, and one cut by a restart counts as run
-    until the restart or its end.
-  - A shot holds only once its output says "on"; switched off at the
-    device, it ends. A circuit changed or removed ends its shot.
+    "full"; before that, a counted circuit does not water (R5). Water of
+    a circuit whose flow is not known leaves the count without a value
+    until it starts again. A shot counts from its switch-on, as the
+    circuit was when it began. One cut by a restart counts as run until
+    the device's own auto-off, the most it can have run.
+  - A shot holds only once its output says "on", and ends at its length
+    from the switch-on; switched off at the device, it ends. A circuit
+    changed or removed ends its shot; a change keeps a pause.
   - The reserve or a float "empty" sets "water low", which a refill
-    valve answers with a fill of its own; it clears once the tank has
-    enough again.
+    valve answers with a fill of its own. It clears with a new tank, the
+    float "full", or a level probe 10 % of the tank above the reserve.

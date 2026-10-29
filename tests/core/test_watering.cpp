@@ -11,6 +11,7 @@
 
 #include "doseph/api.hpp"
 #include "doseph/config.hpp"
+#include "doseph/localtime.hpp"
 #include "doseph/watering.hpp"
 #include "harness.hpp"
 
@@ -175,14 +176,26 @@ TEST_CASE("Watering: a schedule waters at its times, one circuit after the other
   r.ok("PUT", "watering/circuits", {{"id", "w2"}, {"name", "Greenhouse"}, {"mode", "interval"}, {"everyMin", 10}, {"shotS", 20}, {"rateLpm", 2}, {"longestS", 120}});
   waitFit(r);
   const int before = count(r, "ev.water.shot");
-  r.step(25 * 60 * kSecond, 1000);
-  const int shots = count(r, "ev.water.shot") - before;
-  CHECK(shots >= 4);  // both circuits, at least twice each, one after the other
+  int both = 0, one = 0, two = 0;
+  for (int i = 0; i < 25 * 60; ++i) {
+    r.step(kSecond);
+    both += runs(r, 0) && runs(r, 1);
+    one += runs(r, 0);
+    two += runs(r, 1);
+  }
+  CHECK(count(r, "ev.water.shot") - before >= 4);  // both circuits, at least twice each
+  CHECK(one > 0);
+  CHECK(two > 0);
+  CHECK(both == 0);  // one after the other
   r.ok("POST", "watering/circuits/w1/pause", {{"paused", true}});
   r.ok("POST", "watering/circuits/w2/pause", {{"paused", true}});
+  r.waitUntil("a shot under way ends", [&] { return watering(r)["running"].is_null(); }, 60);
   const int paused = count(r, "ev.water.shot");
+  // A change of the circuit keeps it paused
+  r.ok("PUT", "watering/circuits", {{"id", "w1"}, {"name", "Tent"}, {"mode", "interval"}, {"everyMin", 5}, {"shotS", 20}, {"rateLpm", 2}, {"longestS", 120}});
   r.step(25 * 60 * kSecond, 1000);
   CHECK(count(r, "ev.water.shot") == paused);
+  CHECK(r.ok("GET", "config")["watering"]["circuits"][0]["paused"] == true);
 }
 
 TEST_CASE("Watering: water not fit keeps a circuit from watering and stops a shot; a person may water anyway, which is a warning (SD-134, RAT-086)") {
@@ -194,11 +207,27 @@ TEST_CASE("Watering: water not fit keeps a circuit from watering and stops a sho
   r.waitUntil("the check finds it", [&] { return blockedKey(r, "w1") == "water.no.ec" || blockedKey(r, "w1") == "water.no.ec_max"; }, 3 * 3600, 2000);
   const auto refused = r.call("POST", "watering/circuits/w1/now", {{"seconds", 20}});
   CHECK(refused.status == 409);
+  CHECK(errorKey(refused) == blockedKey(r, "w1"));
   r.ok("POST", "watering/circuits/w1/now", {{"seconds", 20}, {"override", true}});
   r.waitUntil("the pump runs anyway", [&] { return runs(r, 0); }, 30);
   CHECK(watering(r)["override"] == true);
   CHECK(count(r, "ev.water.override") == 1);
   r.waitUntil("the shot ends", [&] { return !runs(r, 0); }, 60);
+  r.step(2 * kSecond);
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.done");  // the water was not fit all along
+}
+
+TEST_CASE("Watering: water that is no longer fit stops a shot that is not an override (RAT-086)") {
+  Run r(harness::device());
+  addCircuits(r);
+  waitFit(r);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 100}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  // A probe goes into a buffer: the water cannot be judged
+  CHECK(r.s.robot().probe({{"action", "start"}, {"kind", "ph"}}).status == 200);
+  r.waitUntil("the shot ends", [&] { return !runs(r, 0); }, 10);
+  r.step(2 * kSecond);
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.no.calibrating");
 }
 
 TEST_CASE("Watering: the count keeps the reserve: a shot that would go below it is not made, water is to be topped up, and a new tank starts the count anew (RAT-067, SD-134)") {
@@ -262,11 +291,14 @@ TEST_CASE("Watering: Stop, maintenance and a dose stop a running shot; a restart
   CHECK_FALSE(runs(r, 0));
   r.ok("POST", "maintenance", {{"minutes", 0}});
   waitFit(r);
+  const double given = watering(r)["givenL"].get<double>();
   r.ok("POST", "watering/circuits/w1/now", {{"seconds", 100}});
   r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
   r.s.reboot();  // the robot alone: the pump keeps its power
   REQUIRE(r.login("demo-password"));
   CHECK(count(r, "ev.water.cut_restart") == 1);
+  // Booked as if it ran until the device's own auto-off: 3 min at 2 L/min (RAT-019)
+  CHECK(watering(r)["givenL"].get<double>() - given == doctest::Approx(6.0));
   r.waitUntil("the pump is switched off", [&] { return !runs(r, 0); }, 6);
   r.step(2 * 60 * kSecond);
   CHECK_FALSE(runs(r, 0));
@@ -353,9 +385,9 @@ TEST_CASE("Watering: a shot that brings the tank to its reserve ends there, and 
 
 TEST_CASE("Watering: a dose that starts ends a running shot, and no shot starts while one runs, not even anyway (RAT-086)") {
   Run r(harness::device());
-  addCircuits(r, {{"longestS", 3000}, {"rateLpm", 0.1}});
+  addCircuits(r, {{"longestS", 2 * 3600}, {"rateLpm", 0.1}});
   waitFit(r);
-  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 3000}});
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 2 * 3600}});
   r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
   // A new tank: mixed in, measured, and its EC brought up by a dose
   r.s.world().tank.ec -= 0.5;
@@ -395,20 +427,25 @@ TEST_CASE("Watering: a schedule goes by the clock's minutes: set back, no shot c
 TEST_CASE("Watering: a shot that still waits when its circuit's next one comes is skipped, and said once (SD-134)") {
   Run r(harness::device());
   addCircuits(r, {{"mode", "interval"}, {"everyMin", 1}, {"shotS", 5}});
+  r.ok("PUT", "watering/circuits", {{"id", "w2"}, {"name", "Greenhouse"}, {"mode", "manual"}, {"rateLpm", 2}, {"longestS", 300}});
   waitFit(r);
-  // w2 by hand, for longer than w1's minutes: w1's shots wait for it
+  // A shot of w1 first: a reason is said once until its circuit waters again
+  const int shots = count(r, "ev.water.shot");
+  r.waitUntil("w1 waters", [&] { return count(r, "ev.water.shot") > shots && watering(r)["running"].is_null(); }, 120);
+  // w2 by hand, across three of w1's minutes: w1's shots wait for it
+  const int before = skipped(r, "w1", "water.no.superseded");
   std::string why;
   INFO("refused: " << why);
   r.waitUntil("w2 may water", [&] {
-    const auto a = r.call("POST", "watering/circuits/w2/now", {{"seconds", 110}});
+    const auto a = r.call("POST", "watering/circuits/w2/now", {{"seconds", 180}});
     if (a.status != 200) why = errorKey(a);
     return a.status == 200;
   }, 120);
   r.waitUntil("w2 runs", [&] { return runs(r, 1); }, 30);
-  r.waitUntil("w2 ends", [&] { return !runs(r, 1); }, 150);
-  CHECK(skipped(r, "w1", "water.no.superseded") == 1);
-  const int shots = count(r, "ev.water.shot");
-  r.waitUntil("w1 waters again", [&] { return count(r, "ev.water.shot") > shots; }, 120);
+  r.waitUntil("w2 ends", [&] { return !runs(r, 1); }, 200);
+  CHECK(skipped(r, "w1", "water.no.superseded") - before == 1);
+  const int after = count(r, "ev.water.shot");
+  r.waitUntil("w1 waters again", [&] { return count(r, "ev.water.shot") > after; }, 120);
 }
 
 TEST_CASE("Watering: a circuit's run time for the day is kept; a shot past it is not made (SD-134)") {
@@ -431,8 +468,10 @@ TEST_CASE("Watering: a circuit removed while it waters ends its shot and switche
   waitFit(r, "w2");
   r.ok("POST", "watering/circuits/w2/now", {{"seconds", 100}});
   r.waitUntil("the pump runs", [&] { return runs(r, 1); }, 30);
+  r.step(30 * kSecond);
   r.ok("DELETE", "watering/circuits/w2");
   CHECK(watering(r)["running"].is_null());
+  CHECK(watering(r)["givenL"].get<double>() >= 1.0);  // its 30 s at 2 L/min stay counted
   CHECK(count(r, "ev.water.cut") + count(r, "ev.water.shot") == 1);
   r.waitUntil("the pump stops", [&] { return !runs(r, 1); }, 10);
   r.step(2 * 60 * kSecond);
@@ -445,4 +484,74 @@ TEST_CASE("Watering: a circuit removed while it waters ends its shot and switche
   CHECK(watering(r)["running"].is_null());
   CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.changed");
   r.waitUntil("the pump stops", [&] { return !runs(r, 0); }, 10);
+}
+
+TEST_CASE("Watering: water of a circuit whose flow is not known leaves the count without a value; the float \"tank empty\" guards it then (R5, RAT-068)") {
+  Run r(harness::device());
+  addCircuits(r, {{"rateLpm", nullptr}});
+  r.ok("POST", "devices", {{"kind", "esphome"}, {"address", "esp-1.local"}, {"name", "Sensors"}});
+  r.ok("PUT", "roles/tank_empty", {{"source", "esphome"}, {"device", "d2"}, {"entity", "binary_sensor/tank_empty"}});
+  waitFit(r);
+  CHECK(watering(r)["givenL"] == 0);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 20}});
+  r.waitUntil("the shot ends", [&] { return circuitState(r, "w1")["last"].is_object() && watering(r)["running"].is_null(); }, 60);
+  CHECK(watering(r)["givenL"].is_null());
+  CHECK(watering(r)["availableL"].is_null());
+  r.waitUntil("its output is off again", [&] { return blockedKey(r, "w2").empty(); }, 30);  // the float says there is water
+  r.ok("POST", "tank/new");
+  CHECK(watering(r)["givenL"] == 0);
+}
+
+TEST_CASE("Watering: a schedule starts afresh when the clock is set after a start, or set back far: the shots of the time it did not know are not made up (SD-134, R6)") {
+  Run r(harness::device());
+  addCircuits(r, {{"mode", "interval"}, {"everyMin", 60}, {"shotS", 20}});
+  waitFit(r);
+  // To 20 past a full hour, some hours back: the schedule starts from there, as it does nothing
+  // until the next full hour
+  const doseph::Epoch e = r.s.clock().epoch();
+  r.s.clock().stepWall(-(e % 3600) + 20 * 60 - 3 * 3600);
+  r.step(2 * 60 * kSecond);
+  const int shots = count(r, "ev.water.shot"), skips = count(r, "ev.water.skipped");
+  // A power cut of 45 min; the robot starts without a time server and goes on from its last time,
+  // across no full hour
+  r.s.clock().setSecured(false);
+  r.s.reboot(45 * 60 * kSecond);
+  REQUIRE(r.login("demo-password"));
+  r.step(5 * kSecond);
+  // The time server answers: the clock leaps across the full hour, whose shot does not come
+  r.s.clock().setSecured(true);
+  r.step(2 * 60 * kSecond);
+  CHECK(count(r, "ev.water.shot") == shots);
+  CHECK(count(r, "ev.water.skipped") == skips);
+  CHECK_FALSE(circuitState(r, "w1")["due"].get<bool>());
+  CHECK(watering(r)["running"].is_null());
+}
+
+TEST_CASE("Watering: a shot switched off at the device ends there (SD-134, RAT-019)") {
+  Run r(harness::device());
+  addCircuits(r);
+  waitFit(r);
+  r.ok("POST", "watering/circuits/w1/now", {{"seconds", 100}});
+  r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
+  r.step(10 * kSecond);  // the robot has read it on
+  r.s.net().shelly("shelly-pump.local")->switches[0].on = false;  // a hand at the device
+  r.waitUntil("the shot ends", [&] { return watering(r)["running"].is_null(); }, 15);
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.output_off");
+}
+
+TEST_CASE("Watering: a due shot that waits an hour lapses; the next comes by the schedule (SD-134)") {
+  Run r(harness::device());
+  addCircuits(r);
+  r.ok("PUT", "watering/circuits", {{"id", "w2"}, {"name", "Greenhouse"}, {"mode", "manual"}, {"rateLpm", 0.1}, {"longestS", 3 * 3600}});
+  r.s.world().tank.volumeL = 400;  // the twin's pump takes 2 L/min whatever the count says
+  waitFit(r);
+  // w1 at fixed times in two minutes' time; w2 waters by hand for longer than an hour before
+  const std::string zone = r.ok("GET", "config")["system"]["timezone"];
+  const int now = doseph::localTime(r.s.clock().epoch(), zone).minuteOfDay;
+  r.ok("PUT", "watering/circuits", {{"id", "w1"}, {"name", "Tent"}, {"mode", "times"}, {"times", {{{"atMin", (now + 2) % 1440}, {"s", 20}}}}, {"rateLpm", 2}, {"longestS", 120}});
+  r.ok("POST", "watering/circuits/w2/now", {{"seconds", 2 * 3600}});
+  r.waitUntil("w1 is due", [&] { return circuitState(r, "w1")["due"] == true; }, 4 * 60);
+  r.waitUntil("it lapses", [&] { return skipped(r, "w1", "water.no.waited") == 1; }, 3700, 5000);
+  CHECK_FALSE(circuitState(r, "w1")["due"].get<bool>());
+  CHECK(watering(r)["running"] == "w2");
 }

@@ -85,11 +85,12 @@ All notable changes to this software. The format follows
     "tank empty" or a level probe, new roles. At the reserve it says
     water is low, which a refill valve answers with a fill.
   - Schedules go by the clock's minutes: a clock set back gives no shot
-    twice, and one set forward makes nothing up. A shot that waits an
-    hour lapses.
+    twice, and a clock set after a start, or one that leaps far, makes
+    nothing up. A shot that waits an hour lapses.
   - The device's own auto-off is 1.11 × each circuit's longest shot.
     Stop, maintenance and a hold stop watering; a restart reports a cut
-    shot, counts it as run until then and does not repeat it.
+    shot, counts it as run until the device's auto-off and does not
+    repeat it.
   - The simulator has two watering pumps, and an ESPHome device whose
     level and float follow the tank.
 - The circulation pump (SD-132, PD-421), the third part of step 9.

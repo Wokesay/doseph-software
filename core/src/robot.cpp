@@ -1540,6 +1540,10 @@ Result Robot::importConfig(const json& j) {
   // The network devices' outputs off, and what moved or went is let go (SD-132)
   outputs_.allOff();
   reconcileDevices(before);
+  // Watering starts from the new schedules; a circuit that went takes its records with it (SD-134)
+  water_.reset();
+  for (const auto& w : before.watering.circuits)
+    if (!cfg_.watering.circuit(w.id)) Watering::forgetRuntime(rt_, w.id);
   // What EC control learned stays for a recipe the robot had and the file keeps, as an edit
   // would leave it (RAT-085); one the file leaves out or brings new starts afresh
   for (const auto& old : before.recipes)
@@ -2486,6 +2490,8 @@ Result Robot::putCirculation(const json& j) {
 WaterIn Robot::waterIn(const Ctx& c) const {
   WaterIn in;
   in.date = localDate(c.epoch, cfg_.system.timezone);
+  in.minuteOfDay = localTime(c.epoch, cfg_.system.timezone).minuteOfDay;
+  in.clockSecured = clock_.secured();
   const Phase ph = cycle_.phase();
   const Measured& last = cycle_.last();
   // Mixed in: no dose, fill or mixing wait under way, and the check measured after the last of them
@@ -2538,7 +2544,10 @@ Result Robot::putCircuit(const json& j) {
     for (int n = 1; id.empty(); ++n)
       if (!cfg_.watering.circuit("w" + std::to_string(n))) id = "w" + std::to_string(n);
     body["id"] = id;
-  } else if (!cfg_.watering.circuit(id)) {
+  } else if (const WaterCircuitCfg* was = cfg_.watering.circuit(id)) {
+    // A schedule paused stays so, unless the change says otherwise
+    if (!body.contains("paused")) body["paused"] = was->paused;
+  } else {
     return Result::fail(404, say("water.none"));
   }
   WaterCircuitCfg w;
@@ -2574,11 +2583,11 @@ Result Robot::deleteCircuit(const std::string& id) {
                                next.watering.circuits.end());
   next.roles.erase(waterRole(id));
   const Config before = cfg_;
-  // Its shot ends first, while its circuit still names it
-  Ctx c = ctx();
-  water_.stop(c, outputs_, id, say("water.end.removed"));
   Result r = saveConfig(next, changed("cfg.what.watering"));
   if (r.status != 200) return r;
+  // Its shot ends, booked as the circuit was when it began
+  Ctx c = ctx();
+  water_.stop(c, outputs_, id, say("water.end.removed"));
   water_.forget(id);
   Watering::forgetRuntime(rt_, id);
   saveState(true);
@@ -2614,7 +2623,9 @@ Result Robot::pauseCircuit(const std::string& id, const json& j) {
   Config next = cfg_;
   for (auto& w : next.watering.circuits)
     if (w.id == id) w.paused = j["paused"].get<bool>();
-  return saveConfig(next, changed(j["paused"].get<bool>() ? "cfg.what.water_paused" : "cfg.what.water_resumed"));
+  Result r = saveConfig(next, changed(j["paused"].get<bool>() ? "cfg.what.water_paused" : "cfg.what.water_resumed"));
+  if (r.status == 200) water_.forget(id);  // resumed, it starts with its next shot
+  return r;
 }
 
 void Robot::fillEnded(bool opened) {
