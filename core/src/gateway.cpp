@@ -733,10 +733,12 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
     if (o.key != key) {  // bound anew: off first, then its settings are checked; nothing wanted yet
       o = Out{};
       o.key = key;
-      // An off still going out for this very output, let go before, would undo what it does now
+      // An off still going out for this very output, let go before, would undo what it does now. One
+      // for the other component on its channel (a switch made a dimmer) goes on until answered.
       const NetDeviceCfg* d = cfg.device(b->device);
+      const std::string comp = component(cfg, def.id);
       releasing_.erase(std::remove_if(releasing_.begin(), releasing_.end(),
-                                      [&](const Release& r) { return d && r.device.address == d->address && r.channel == b->channel; }),
+                                      [&](const Release& r) { return d && r.device.address == d->address && r.channel == b->channel && r.comp == comp; }),
                        releasing_.end());
     }
     if (!dev.online(b->device, now)) {
@@ -812,7 +814,7 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) {
       } else if (def.dimmer && o.onSent && isOn == true && now - o.lastLevel >= kNetPollMs) {
         // A dimmer at another brightness than wanted: set again
         const auto br = dev.brightness(b->device, b->channel, now);
-        if (!br || std::fabs(*br - o.level) > 0.5) {
+        if (!br || std::fabs(*br - static_cast<double>(sentLevel(o.level))) > 0.5) {
           // The brightness alone: it switches nothing on (RAT-019)
           dev.rpc(cfg, b->device, "Light.Set", {{"id", id}, {"brightness", sentLevel(o.level)}}, def.id + "|level", now);
           o.lastLevel = now;

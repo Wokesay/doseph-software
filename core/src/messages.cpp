@@ -552,6 +552,7 @@ constexpr Entry kMessages[] = {
     {"device.not_dimmer", "This output is a switch, not a dimmer: set the light circuit to on and off"},
     {"device.is_dimmer", "This output is a dimmer: set the light circuit to dimmed"},
     {"device.other", "Another device answers at this address ({id}): remove it and add it again if it was replaced"},
+    {"device.twice", "This device is already added as {name}: remove one of the two"},
     {"device.no_entity", "The device has no entity {entity}"},
     {"device.switch_on_failed", "The output could not be switched on"},
     {"watch.role.unchecked", "On or not checked: switched off and checked first"},

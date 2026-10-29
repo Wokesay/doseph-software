@@ -310,6 +310,39 @@ TEST_CASE("Light: a circuit changed between switch and dimmer lets its old outpu
   CHECK_FALSE(lamp(r).on);
 }
 
+TEST_CASE("Light: a switch made a dimmer while its relay does not answer: the relay's off goes on until it answers (SD-135, R1)") {
+  Run r(harness::device());
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Relay"}});
+  const int start = ((nowMin(r) - 30) % 1440 + 1440) % 1440;
+  r.ok("PUT", "lighting/circuits", {{"name", "Shelf"}, {"startMin", start}, {"hours", 6}});
+  r.ok("PUT", "roles/light.l1", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  sim::FakeShelly* relay = r.s.net().shelly("shelly-1.local");
+  r.waitUntil("on by day", [&] { return relay->switches[0].on; }, 60);
+  relay->reachable = false;
+  r.ok("PUT", "lighting/circuits", {{"id", "l1"}, {"name", "Shelf"}, {"dimmed", true}, {"startMin", start}, {"hours", 6}});
+  r.step(8 * kSecond);
+  CHECK(relay->switches[0].on);
+  relay->reachable = true;
+  r.waitUntil("off once it answers", [&] { return !relay->switches[0].on; }, 30);
+}
+
+TEST_CASE("Light: a brightness the dimmer holds is not set again, also one between whole percent (SD-135)") {
+  Run r(harness::device());
+  r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-dimmer.local"}, {"name", "Lamps"}});
+  r.ok("PUT", "lighting/circuits", {{"name", "Tent"}, {"dimmed", true}, {"startMin", ((nowMin(r) - 60) % 1440 + 1440) % 1440}, {"hours", 12}, {"pct", 40.3}});
+  r.ok("PUT", "roles/light.l1", {{"source", "shelly"}, {"device", "d1"}, {"channel", 0}});
+  r.waitUntil("on at 41 %", [&] { return lamp(r).on && lamp(r).brightness == 41; }, 60);  // up: whole percent
+  r.step(15 * kSecond);
+  const int sets = lamp(r).sets;
+  r.step(60 * kSecond);
+  CHECK(lamp(r).sets == sets);
+  CHECK(lamp(r).brightness == 41);
+  // Set otherwise at the dimmer: set again, the brightness alone
+  lamp(r).brightness = 70;
+  r.waitUntil("set again", [&] { return lamp(r).brightness == 41; }, 30);
+  CHECK(lamp(r).on);
+}
+
 TEST_CASE("Light: a switched light on a relay is on by day and off by night; a light removed lets its output go (SD-135)") {
   Run r(harness::device());
   r.ok("POST", "devices", {{"kind", "shelly"}, {"address", "shelly-1.local"}, {"name", "Relay"}});

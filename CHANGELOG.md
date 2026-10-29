@@ -57,7 +57,8 @@ All notable changes to this software. The format follows
     auto-off into it, and reads them back. It checks them again before
     every switch-on and refuses where they do not hold.
   - A Shelly is known by its own ID: another device answering at its
-    address is not used.
+    address is not used, nor one device added a second time by another
+    address.
   - The outputs switch only through the gateway. A Stop or a restart
     switches them off; an output that is let go is switched off until
     its device answers, with an alarm after a minute.

@@ -438,6 +438,38 @@ TEST_CASE("Devices: a device that answers as another one is not it: it is offlin
   CHECK(deviceStatus(s, "d1")["ownId"] == "shellyplusplugs-heater");
 }
 
+TEST_CASE("Devices: one device added twice, by two addresses, switches nothing under the later entry, which says so, also as light through a Stop; the first entry removed, the later one is it (SD-132, SD-135)") {
+  sim::Simulation s(demo());
+  bindValve(s);
+  sim::FakeShelly* relay = s.net().shelly("shelly-1.local");
+  relay->aliases.push_back("192.168.1.10");  // the same relay by its IP
+  REQUIRE(runUntil(s, [&] { return deviceStatus(s, "d1")["ownId"] == "shellyplus1-sim000001"; }, 15));
+  REQUIRE(s.robot().addDevice({{"kind", "shelly"}, {"address", "192.168.1.10"}, {"name", "Valve by IP"}}).status == 200);
+  REQUIRE(runUntil(s, [&] { return deviceStatus(s, "d2")["problem"]["key"] == "device.twice"; }, 30));
+  CHECK(deviceStatus(s, "d2")["problem"]["args"]["name"] == "Valve");
+  CHECK(deviceStatus(s, "d2")["online"] == false);
+  CHECK(deviceStatus(s, "d1")["online"] == true);
+  // A light all day on the valve's output by the later entry: never switched on, not even through a
+  // Stop, which leaves light on; the valve's own limit stays (RAT-032)
+  REQUIRE(s.robot().putLight({{"name", "Shelf"}, {"hours", 24}}).status == 200);
+  REQUIRE(s.robot().putRole("light.l1", {{"source", "shelly"}, {"device", "d2"}, {"channel", 0}}).status == 200);
+  REQUIRE(s.robot().stop(say("stop.app")).status == 200);
+  bool on = false;
+  for (int i = 0; i < 60; ++i) {
+    s.step(kSecond);
+    on |= relay->switches[0].on;
+  }
+  CHECK_FALSE(on);
+  CHECK(role(s, "light.l1")["output"]["state"] == "offline");
+  CHECK(relay->switches[0].config["auto_off"] == true);
+  // The first entry removed: the later one is the device, and the light goes on
+  REQUIRE(s.robot().resume().status == 200);
+  REQUIRE(s.robot().removeDevice("d1").status == 200);
+  REQUIRE(runUntil(s, [&] { return deviceStatus(s, "d2")["online"] == true; }, 30));
+  CHECK(deviceStatus(s, "d2")["ownId"] == "shellyplus1-sim000001");
+  REQUIRE(runUntil(s, [&] { return relay->switches[0].on; }, 60));
+}
+
 TEST_CASE("Devices: an import that drops or moves a binding switches the output off; a device that went or moved is forgotten with its password; a want from before never switches a later binding on (SD-132, R6)") {
   sim::Simulation s(demo());
   bindValve(s);

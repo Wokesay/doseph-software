@@ -93,6 +93,7 @@ json FakeShelly::handle(const json& req, Ms now) {
     Light* l = li();
     if (!l || (params.contains("on") && !params["on"].is_boolean()) || (params.contains("brightness") && !params["brightness"].is_number()))
       return rpcError(req, id, -103, "Invalid argument");
+    ++l->sets;
     if (params.contains("on")) l->on = params["on"].get<bool>();
     if (params.contains("brightness")) l->brightness = std::clamp(params["brightness"].get<double>(), 0.0, 100.0);
     return result(json::object());
@@ -212,7 +213,7 @@ void NetTwin::advance(Ms now) {
 
 FakeShelly* NetTwin::shelly(const std::string& address) {
   for (auto& s : shellies_)
-    if (s.address == address) return &s;
+    if (s.address == address || std::find(s.aliases.begin(), s.aliases.end(), address) != s.aliases.end()) return &s;
   return nullptr;
 }
 

@@ -266,7 +266,6 @@ std::vector<NetRequest> NetDevices::take() {
 }
 
 std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, int status, const json& body, Ms now) {
-  (void)cfg;
   const auto it = pending_.find(id);
   if (it == pending_.end()) return std::nullopt;  // late, after its time ran out
   const Pending p = it->second;
@@ -303,6 +302,16 @@ std::optional<NetAnswer> NetDevices::response(const Config& cfg, long long id, i
   if (!body.is_object()) return fail(say("device.unreadable"));
   // Known by its own ID: another device at its address is not it (SD-132)
   const std::string src = jstr(body, "src");
+  // One device under two entries (by two addresses): the later one switches nothing, so two roles
+  // never share an output unseen, one of them perhaps light, which a Stop leaves on (SD-135)
+  if (!src.empty())
+    for (const auto& [entry, own] : ownIds_)
+      if (entry != p.device && own == src)
+        if (const NetDeviceCfg* first = cfg.device(entry)) {
+          s.other = true;
+          s.status = nullptr;
+          return fail(say("device.twice", {{"name", first->name}}));
+        }
   const auto known = ownIds_.find(p.device);
   if (known != ownIds_.end() && !known->second.empty() && src != known->second) {
     s.other = true;

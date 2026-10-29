@@ -336,6 +336,7 @@ static const struct {
     {"device.shelly_gen1", "Ein Shelly der ersten Generation: Nur Gen2 und neuer werden genutzt"},
     {"device.switch_failed", "Der Ausgang ließ sich nicht ausschalten"},
     {"device.switch_on_failed", "Der Ausgang ließ sich nicht einschalten"},
+    {"device.twice", "Dieses Gerät ist schon als {name} hinzugefügt: Entferne einen der beiden Einträge"},
     {"device.unreachable", "Das Gerät ist nicht erreichbar"},
     {"device.unreadable", "Die Antwort des Geräts ist nicht lesbar"},
     {"dose.aborted", "{name}: gestoppt – {reason}"},

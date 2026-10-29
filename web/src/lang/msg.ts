@@ -534,6 +534,7 @@ export const msgDe: Record<string, string> = {
   "device.not_dimmer": "Dieser Ausgang ist ein Schalter, kein Dimmer: Stell den Lichtkreis auf an und aus",
   "device.is_dimmer": "Dieser Ausgang ist ein Dimmer: Stell den Lichtkreis auf gedimmt",
   "device.other": "An dieser Adresse antwortet ein anderes Gerät ({id}): Entferne es und füge es neu hinzu, wenn es getauscht wurde",
+  "device.twice": "Dieses Gerät ist schon als {name} hinzugefügt: Entferne einen der beiden Einträge",
   "device.no_entity": "Das Gerät hat keine Entität {entity}",
   "device.switch_on_failed": "Der Ausgang ließ sich nicht einschalten",
   "watch.role.unchecked": "An oder nicht geprüft: wird ausgeschaltet und zuerst geprüft",
