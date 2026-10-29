@@ -53,6 +53,26 @@ All notable changes to this software. The format follows
     of light, brightness, the driver's threshold, sunrise and sunset, and
     a plant to follow; then assign its Shelly output.
   - A phase's hours of light and brightness are set on the Plants page.
+- Climate, the robot's side (SD-136), step 9.6; the page follows.
+  - Up to 8 rooms, each with an exhaust fan, a circulation fan, a heater
+    with its own thermostat, a humidifier, a dehumidifier and a CO2 valve
+    on Shelly outputs, and air temperature, humidity and CO2 from a
+    Shelly, ESPHome or MQTT. A room's day is its first light circuit's.
+  - Targets for temperature by day and by night, humidity (or a VPD in
+    its place) and CO2 by day; a plant's phase sets them where it has
+    them. The VPD is shown.
+  - Each device switches around its target, at most once a minute. A
+    missing value switches nothing on, and the exhaust fan runs then.
+    Humidifier and dehumidifier never run together, and the dehumidifier
+    rests 5 minutes after it went off. The heater's plug gets a power
+    limit.
+  - CO2 only by day, while the exhaust fan is off, on a fresh value, in
+    pulses of a minute; above 2,000 ppm the valve closes with an alarm,
+    and it stays closed in maintenance. Ten pulses without CO2 rising lock
+    the valve until a person releases it.
+  - The fans keep running through STOP, a hold and a restart; STOP
+    switches the heater, the humidifier, the dehumidifier and CO2 off.
+  - The simulator has a grow room with its devices and sensors.
 - Light, the robot's side (SD-135), step 9.5.
   - Any number of light circuits, each a Shelly switch or a Shelly
     dimmer on a 0–10 V line. A circuit's day begins at its own time and

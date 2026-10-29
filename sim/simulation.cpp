@@ -254,6 +254,7 @@ void Simulation::step(Ms dt, Ms tick) {
     // The twin's inlet (SD-132): an open valve lets tap water in, and the float switch says full at
     // its line (assumptions: 4 L/min, the float at 105 L)
     world_.circulation = net_.circulating();
+    net_.climate(d);  // the grow room's air (SD-136)
     // Watering pumps take water, and the ESPHome's level and float "tank empty" follow the tank
     world_.takeWater(net_.watering() * kWaterLpm * static_cast<double>(d) / 60000.0);
     if (sim::FakeEsphome* e = net_.sensors()) {

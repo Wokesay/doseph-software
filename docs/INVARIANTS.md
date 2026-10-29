@@ -236,6 +236,21 @@ of its own.
 | By hand on or off until the plan's next change, also one a changed plan brings; not resumed after a restart; on by hand at night is said; only a session or an app token manages light | SD-135, SD-129 | ✓ | `lighting.cpp`, `robot.cpp`, `api.cpp` · test_lighting.cpp |
 | The page Light shows each circuit's state, or that it has no output or one that cannot switch, and offers no switch by hand without an output; its plan and next change on the device's clock, a dimmer's brightness read back, a switch by hand and, with a warning, a light on in the dark period; a phase's hours of light and brightness are set on the Plants page | SD-135 | ✓ | `light.tsx`, `plants.tsx` · robot.spec.ts, phone.spec.ts |
 
+## Climate (SD-136)
+
+| Rule | Rationale | Status | Implementation · tests |
+|---|---|---|---|
+| At most 8 rooms, each with at most one Shelly output of each kind (exhaust fan, circulation fan, heater, humidifier, dehumidifier, CO2 valve) and sensors for air temperature, humidity and CO2 from a Shelly, ESPHome or MQTT; a room's day is its first light circuit's, each light circuit in one room only | SD-136 | ✓ | `config.cpp`, `devices.cpp`, `climate.cpp` · test_climate.cpp |
+| The targets are a room's own or its plant's phase's where it has them: temperature by day and night, humidity or a VPD in its place, CO2 by day; the defaults, and a VPD target giving the humidity at the target temperature | RAT-009 | ✓ | `climate.cpp`, `config.hpp` · test_climate.cpp |
+| VPD is air VPD from temperature and humidity, with no value when an input is missing or two readings of the robot's own sensors lie more than a minute apart | RAT-017 | ✓ | `climate.cpp` · test_climate.cpp |
+| Each output switches around its target with a band (1 °C, 5 %, 100 ppm), at most once a minute; a switching to the safe side never waits | SD-136 | ✓ | `climate.cpp` · test_climate.cpp |
+| A value missing or out of its bounds, or over MQTT older than 15 min, switches nothing on: heater, humidifier, dehumidifier and CO2 off, the exhaust fan on | SD-136, R5 | ✓ | `climate.cpp` · test_climate.cpp |
+| Humidifier and dehumidifier never run together, nor while the other's output may be on; the dehumidifier starts only 5 min after it went off, also at its device and after a start | RAT-034 | ✓ | `climate.cpp` · test_climate.cpp |
+| The heater has its own thermostat: it gets power when the room is too cold, never for a target at its room's heat limit, no auto-off, and a power limit a fifth above its power where its device keeps one, never above the device's own | RAT-069 | ✓ | `climate.cpp`, `devices.cpp` · test_climate.cpp |
+| CO2 only by day, with a target, while the exhaust fan is off, outside maintenance and on a value of at least 300 ppm read since the start and within 2 min, in pulses of a minute with an auto-off in the device; no target above 1,500 ppm; above 2,000 ppm the valve closes with an alarm; ten pulses without a rise lock it until a person releases it | SD-136, RAT-019 | ✓ | `climate.cpp`, `config.cpp` · test_climate.cpp |
+| The fans keep their rule through a Stop, a hold and a restart; a Stop switches heater, humidifier, dehumidifier and CO2 off until Resume; a hold of the pumps does not | SD-136, R6 | ✓ | `gateway.cpp`, `climate.cpp` · test_climate.cpp |
+| Only a session or an app token manages rooms; a room removed lets its outputs go | SD-136, SD-129 | ✓ | `api.cpp`, `robot.cpp` · test_climate.cpp |
+
 ## Locks that report only (SD-133)
 
 | Rule | Rationale | Status | Implementation · tests |

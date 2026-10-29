@@ -1385,3 +1385,21 @@ by the minimal principle: a safety frame, not a guard for every case.
   RAT-069 (the "supply" profile). RAT-060 holds for the outputs (off after
   a power loss, an auto-off for pulses); a water heater stays unplanned.
 - **Built** in step 9.6: the robot's side, then the page "Climate".
+- **Details from building it** (step 9.6, control details by the minimal
+  principle).
+  - *CO2.* The valve opens only on a value younger than 2 min. A reading
+    below 300 ppm, under the air outside, is no value; any reading above
+    2,000 ppm closes the valve with its alarm. Ten pulses in a row after
+    which CO2 has not risen by 10 ppm lock the valve, with an alarm, until
+    a person releases it: an empty bottle, a valve that does not open, or
+    a sensor that does not see the gas.
+  - *Values over MQTT* count for 15 min after they came: a sender that
+    stopped leaves its last value on the broker.
+  - *The dehumidifier's rest* starts also when its device reports it off
+    (a power cut, its own protection, a hand there), and when a room is
+    added anew.
+  - *A phase's temperature target* stays 1 °C below the room's heat limit,
+    so the heater never warms what the heat protection dims the light for.
+  - *The heater's power limit* is never written above the device's own,
+    its rating or what a person set there. A limit stays on an output that
+    later takes another role; it is reset at the device.

@@ -184,6 +184,38 @@ struct LightingCfg {
 // The output role of a light circuit: "light.<id>"
 std::string lightRole(const std::string& circuit);
 
+// Climate (SD-136): rooms, each with an exhaust fan, a circulation fan, a heater with its own
+// thermostat, a humidifier, a dehumidifier and a CO2 valve, each on a Shelly output, and sensors for
+// air temperature, humidity and CO2. A room's day is its first light circuit's.
+constexpr size_t kMaxRooms = 8;
+constexpr double kCo2MaxTargetPpm = 1500;  // no CO2 target above it
+constexpr double kCo2CutPpm = 2000;        // above it the valve closes, with an alarm
+struct ClimateRoomCfg {
+  std::string id;                   // r1, r2, …
+  std::string name;
+  std::vector<std::string> lights;  // its light circuits; the first one's day is the room's
+  int startMin = 6 * 60;            // without a light circuit: its day's start, local minute of the day
+  double hours = 18;                // … and its hours
+  double dayC = 26, nightC = 22;    // temperature targets by day and by night (RAT-009)
+  bool byVpd = false;               // humidity led by a VPD target: the humidity target follows from it (RAT-009)
+  double rhPct = 70;                // humidity target, %
+  double vpdKpa = 1.0;              // VPD target, kPa, where it leads
+  double co2Ppm = kNaN;             // CO2 target by day, ppm; NaN: no CO2
+  double heatC = 30;                // heat protection for light: its first limit; the second is 2 °C higher
+  double heaterW = kNaN;            // the heater's power, W: its plug's power limit is a fifth above it (RAT-069); NaN: not set
+  bool circulateAlways = false;     // the circulation fan runs at night too
+  std::string plant;                // a plant whose current phase sets the targets where it has them (RAT-076)
+};
+struct ClimateCfg {
+  std::vector<ClimateRoomCfg> rooms;
+  const ClimateRoomCfg* room(const std::string& id) const;
+};
+// A room's role of a kind: "climate.<room>.<kind>"; the outputs exhaust, circulation, heater,
+// humidifier, dehumidifier, co2_valve, and the sensors temp, rh, co2
+std::string climateRole(const std::string& room, const std::string& kind);
+const std::vector<std::string>& climateOutputs();
+const std::vector<std::string>& climateSensors();
+
 // Fixed safety limits in code. The configuration may only tighten them (R7);
 // gateway and planning always use `bounded()`.
 constexpr double kHardMinRunS = 1.0;    // shorter runs are not dosed (RAT-050)
@@ -251,6 +283,9 @@ struct PhaseCfg {
   // Light (SD-135): hours of light and a dimmer's brightness for a light circuit that follows the
   // plant; nothing: the circuit's own apply
   std::optional<double> lightHours, lightPct;
+  // Climate (SD-136): the targets for a room that follows the plant; a VPD leads the humidity in
+  // place of a humidity; nothing: the room's own apply
+  std::optional<double> dayC, nightC, rhPct, vpdKpa, co2Ppm;
 };
 
 // A plant recipe: the phases a plant goes through (SD-128)
@@ -310,6 +345,7 @@ struct Config {
   CirculationCfg circulation;
   WateringCfg watering;
   LightingCfg lighting;
+  ClimateCfg climate;
   Limits limits;
   std::vector<CanisterCfg> canisters;
   std::vector<RecipeCfg> recipes;
@@ -361,6 +397,7 @@ json migrateConfig(json j);
 Config configFromJson(const json& j);  // migrates first; throws on structure errors
 WaterCircuitCfg waterCircuitFromJson(const json& j);  // throws on structure errors
 LightCircuitCfg lightCircuitFromJson(const json& j);  // throws on structure errors
+ClimateRoomCfg climateRoomFromJson(const json& j);    // throws on structure errors
 
 // Checks references and the rules of the domain and of safety; channelCount
 // is how many channels the device has.

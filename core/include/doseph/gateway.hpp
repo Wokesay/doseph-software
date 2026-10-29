@@ -234,11 +234,14 @@ class NetOutputs {
   bool want(const std::string& role, bool on);
   // A dimmer's brightness while on, 1 to 100 % (SD-135)
   void wantLevel(const std::string& role, double pct);
-  // A Stop or a start: nothing wanted, and every bound output but light gets an off at the next tick,
-  // whatever it said last (R6, RAT-036); light follows its plan (SD-135)
+  // A Stop or a start: nothing wanted, and every bound output but light and a room's fans gets an off
+  // at the next tick, whatever it said last (R6, RAT-036); light follows its plan, the fans their rule
+  // (SD-135, SD-136)
   void allOff();
-  // `hold`: nothing may switch on now (Stop, a hold of every pump)
-  void tick(const Config& cfg, NetDevices& dev, bool hold, Ms now);
+  // `stopped`: a Stop holds every output but light and a room's fans; `hold`: a hold of every pump
+  // holds what is neither light nor a room's (SD-135, SD-136)
+  void tick(const Config& cfg, NetDevices& dev, bool stopped, bool hold, Ms now);
+  void tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) { tick(cfg, dev, hold, hold, now); }
   void answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, Ms now);
   void release(const Config& cfg, NetDevices& dev, const std::string& role, Ms now);
   // Releases whose off no device confirmed within a minute, by the name of the device
@@ -282,7 +285,9 @@ class NetOutputs {
   std::map<std::string, Out> outs_;
   std::vector<Release> releasing_;
   std::vector<std::string> failedReleases_;
-  bool hold_ = false;
+  // Whether a Stop or a hold of every pump holds an output of this kind
+  bool heldBy(const RoleDef& def) const { return def.light || def.fan ? false : def.climate ? stopped_ : stopped_ || hold_; }
+  bool stopped_ = false, hold_ = false;
   bool forceOff_ = false;
 };
 

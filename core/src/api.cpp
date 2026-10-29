@@ -440,6 +440,8 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("PUT", {"lighting", "circuits"})) return fromResult(robot_.putLight(body));
   if (is("DELETE", {"lighting", "circuits", "*"})) return fromResult(robot_.deleteLight(p[2]));
   if (is("POST", {"lighting", "circuits", "*", "hand"})) return fromResult(robot_.lightHand(p[2], body));
+  if (is("PUT", {"climate", "rooms"})) return fromResult(robot_.putRoom(body));
+  if (is("DELETE", {"climate", "rooms", "*"})) return fromResult(robot_.deleteRoom(p[2]));
   // Network devices and their roles (SD-132)
   if (is("GET", {"devices"})) return jsonResp(200, robot_.devices());
   if (is("POST", {"devices"})) return fromResult(robot_.addDevice(body));

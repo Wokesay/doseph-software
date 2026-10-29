@@ -26,16 +26,23 @@ struct NetDeviceCfg {
   std::string name;     // the user's name for it
 };
 
-// The roles a device can take: those fixed in code, and an output for each watering circuit
-// ("water.<id>", SD-134). An output is switched only on a Shelly Gen2+; a value comes from any source.
+// The roles a device can take: those fixed in code, an output for each watering circuit
+// ("water.<id>", SD-134) and light circuit ("light.<id>", SD-135), and a room's outputs and sensors
+// ("climate.<room>.<kind>", SD-136). An output is switched only on a Shelly Gen2+; a value comes
+// from any source.
 struct RoleDef {
-  std::string id;      // "refill_valve", "circulation_pump", "tank_full", "tank_empty", "tank_level", "water.<id>"
-  std::string kind;    // "output" | "binary" | "level" (litres)
+  std::string id;      // "refill_valve", "circulation_pump", "tank_full", "tank_empty", "tank_level", "water.<id>", …
+  std::string kind;    // "output" | "binary" | "level" (litres) | "temp" (°C) | "rh" (%) | "co2" (ppm)
   bool pulse = false;  // an output with a longest run: the device switches it off on its own
   Ms maxRunMs = 0;     // a pulse output's longest run (hard limit)
   bool light = false;  // a light circuit's (SD-135): no Stop, hold or maintenance switches it
   bool dimmer = false; // on a Shelly "Light" component with a brightness, not a "Switch"
+  bool fan = false;    // a room's fan (SD-136): no Stop, hold or maintenance switches it either
+  bool climate = false;  // a room's other output (SD-136): Stop switches it off, a hold of the pumps does not
+  double powerLimitW = 0;  // written into the device where it has one: a net for a thermostat that sticks (RAT-069)
 };
+// Whether a Stop leaves an output to its rule: light and a room's fans (SD-135, SD-136)
+bool throughStop(const std::string& role);
 const std::vector<RoleDef>& roleDefs();  // the fixed ones
 const RoleDef* roleDef(const std::string& id);
 std::vector<RoleDef> roleDefs(const Config& cfg);  // with the watering circuits

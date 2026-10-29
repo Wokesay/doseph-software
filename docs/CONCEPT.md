@@ -58,7 +58,7 @@ device's own.
 | R1 | Only the gateway switches pumps. |
 | R2 | The watchdog reads only the read model and the configuration. |
 | R5 | A missing value is never 0 and never a dose. |
-| R6 | After a crash or restart everything is off; the robot reports and does not resume a dose. Light alone follows its plan, without a hand switch (SD-135). |
+| R6 | After a crash or restart everything is off; the robot reports and does not resume a dose. Light follows its plan, without a hand switch (SD-135), and a room's climate its rules: the fans at once, CO2 only with a value read since the start (SD-136). |
 | R7 | Settings only tighten within hard limits. |
 | R8 | One event loop with an injected clock. |
 
