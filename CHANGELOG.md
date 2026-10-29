@@ -113,6 +113,8 @@ All notable changes to this software. The format follows
   - Each circuit shows its state, schedule, next shot, output, today's run
     time and its last shot. Circuits are added, changed, paused and
     deleted there, and given a Shelly output; a change keeps a pause.
+  - The next shot shows on the device's clock, as the schedule counts it,
+    also where the browser is in another time zone.
   - "Water now" waters one shot by hand. Where only the water stands in
     the way, "Water anyway" asks first and names why.
   - A shot cut by a restart shows as the last shot, and an override says
