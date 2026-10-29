@@ -305,11 +305,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-035 – Light ramps of 15 minutes inside the light period
 
-- **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with light (SD-135). The ramps are a dimmer's; a switch has none.
 - **Rule:** Sunrise and sunset ramps last 15 min by default and lie inside the light period. A ramp is worked out from the time of day, so it keeps its set length and goes on correctly after a restart.
 - **Why:** Light before or after the light period lengthens the day the plants see, since they respond to dim light too, which matters in flowering. Without ramps the climate control meets the lamps' full heat at once. Short ramps inside the period cost little light. Stepping the dimmer minute by minute did not keep the set length.
 - **Evidence:** Observed on the reference installation (2026): a sunrise set to 30 min was over in 9 min, because per-minute steps were rounded to whole percent. Calculated there: 15-min ramps inside the window lose at most 1.7 % of the daily light integral in flowering (about 0.7 mol/m²/d), against about 5 % (about 2.1 mol/m²/d) with 30- and 60-min ramps; the lamps' heat load was about 500 W.
-- **Later:** step 9 (light).
+- **Implemented in:** `core/src/lighting.cpp`, `core/src/config.cpp`
+- **Tests:** `tests/core/test_lighting.cpp` "Light: a dimmer's sunrise and sunset last 15 min unless set and fit in its day; worked out from the time of day, a ramp keeps its length and goes on through a restart (SD-135, RAT-035)"
 
 ### RAT-036 – Stop is an active, idempotent shutdown
 
@@ -697,11 +698,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-083 – Light hours are a phase parameter, and phase guidance shows live values
 
-- **Dropped:** the grow controller only (light); not part of the mixing robot (SD-105).
+- **Changed:** Dropped for the mixing robot alone (SD-105), taken up again with light (SD-135). A phase may also set the brightness; a light circuit follows a plant's current phase (RAT-076).
 - **Rule:** The light hours per day are a parameter of each phase (typically 18 h vegetative, 12 h flowering). Guidance that explains a phase shows its duration and targets from these parameters, never as numbers fixed in the text. A phase's planned values are kept apart from the targets in force of the running phase.
 - **Why:** Numbers written into help texts go stale as soon as the user changes a phase, and the guidance then contradicts what the controller does.
 - **Evidence:** Observed on the reference installation (2026): the phase guide read duration and targets live from the phase parameters, so it showed even temporary test values as they were.
-- **Later:** step 6 (phase parameters and their guidance); the light hours act once light comes with step 9.
+- **Implemented in:** `core/src/lighting.cpp`, `core/src/config.cpp`, `web/src/pages/light.tsx`
+- **Tests:** `tests/core/test_lighting.cpp` "Light: a circuit that follows a plant takes the hours and the brightness from its current phase where it has them; without a running plant its own (SD-135, RAT-076, RAT-083)"; `web/e2e/robot.spec.ts` "light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page; without an output it says so and offers no switch by hand (SD-135, RAT-083)"
 
 ### RAT-084 – A skipped pH correction does not stop irrigation, but stays visible
 

@@ -114,8 +114,9 @@ void validateLighting(const Config& cfg, Err&& err) {
     if (!inRange(c.hours, 0, 24)) err(say("cfg.light.hours", {{"name", name}}));
     if (!inRange(c.pct, 1, 100)) err(say("cfg.light.pct", {{"name", name}}));
     if (!inRange(c.thresholdPct, 0, 50)) err(say("cfg.light.threshold", {{"name", name}, {"max", 50}}));
+    // The ramps fit in a dimmer's day; a switch has none, and a day of 0 h no light to ramp
     if (c.sunriseMin < 0 || c.sunsetMin < 0 || c.sunriseMin > kMaxRampMin || c.sunsetMin > kMaxRampMin ||
-        (isNum(c.hours) && c.sunriseMin + c.sunsetMin > c.hours * 60))
+        (c.dimmed && isNum(c.hours) && c.hours > 0 && c.sunriseMin + c.sunsetMin > c.hours * 60))
       err(say("cfg.light.ramps", {{"name", name}, {"max", kMaxRampMin}}));
     if (!c.plant.empty() && !cfg.plant(c.plant)) err(say("cfg.light.plant", {{"name", name}}));
   }
@@ -158,8 +159,8 @@ LightCircuitCfg lightCircuitFromJson(const json& x) {
   if (x.contains("hours")) l.hours = numOrNaN(x, "hours");
   if (x.contains("pct")) l.pct = numOrNaN(x, "pct");
   if (x.contains("thresholdPct")) l.thresholdPct = numOrNaN(x, "thresholdPct");
-  l.sunriseMin = intOr(x, "sunriseMin", 0);
-  l.sunsetMin = intOr(x, "sunsetMin", 0);
+  l.sunriseMin = intOr(x, "sunriseMin", l.sunriseMin);
+  l.sunsetMin = intOr(x, "sunsetMin", l.sunsetMin);
   l.plant = jstr(x, "plant");
   return l;
 }

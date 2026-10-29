@@ -744,7 +744,7 @@ test("light: a dimmer on the twin is added and given its output; on all day at i
   await expect(page.getByTestId("light-l1")).not.toContainText("dark period");
 });
 
-test("light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page; without an output it says so and offers no switch by hand (SD-135)", async ({ page }) => {
+test("light: a circuit follows a plant, whose phase sets the hours of light and the brightness; the phase's light is set on the Plants page; without an output it says so and offers no switch by hand (SD-135, RAT-083)", async ({ page }) => {
   await login(page);
   const call = (method: string, path: string, body: unknown = {}) =>
     page.evaluate(
