@@ -30,6 +30,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The decisions for light (SD-135): any number of light circuits on
+  Shelly outputs, switched or dimmed over 0–10 V, with sunrise and sunset
+  per circuit; a plant's phase sets the hours of light and the
+  brightness; after a restart light goes on by its plan, and STOP, a hold
+  and maintenance leave it as the plan says. Built in step 9.5.
 - Network devices (SD-132), the first part of step 9.
   - Shelly devices of the second generation and later, and ESPHome
     devices, are added by their address under Settings. Each shows
