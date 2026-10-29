@@ -209,6 +209,21 @@ TEST_CASE("Plants over the API: a plant started from a plant recipe copies its p
   CHECK(r.plants()["plants"][0]["phase"] == 1);
   CHECK(r.state()["cycle"]["settings"]["ecTarget"] == 1.6);
   CHECK(r.plantNext(p1).status == 409);
+  // Its own phases change (SD-137): the current one and those after it; the past stay as they were
+  json phases = r.plants()["plants"][0]["phases"];
+  phases[1]["ecTarget"] = 1.4;
+  phases[1]["days"] = 30;
+  phases.push_back({{"name", "Flush"}, {"days", 7}, {"recipe", "two_part"}});
+  REQUIRE(r.putPlant(p1, {{"phases", phases}}).status == 200);
+  CHECK(r.plants()["plants"][0]["phases"].size() == 3);
+  CHECK(r.plants()["plants"][0]["phases"][1]["days"] == 30);
+  CHECK(r.state()["cycle"]["settings"]["ecTarget"] == 1.4);  // the current phase's target, now
+  CHECK(r.plantNext(p1).status == 200);                      // a phase after it again
+  json past = r.plants()["plants"][0]["phases"];
+  past[0]["days"] = 22;
+  CHECK(r.putPlant(p1, {{"phases", past}}).status == 409);
+  CHECK(r.putPlant(p1, {{"phases", json::array({past[0], past[1]})}}).status == 409);  // the current one stays
+  CHECK(r.plants()["plants"][0]["phase"] == 2);
   // A second plant: the first still leads; leading passes on request
   res = r.startPlant({{"name", "Bed 2"}, {"plantRecipe", prId}, {"start", kT0 - 30 * kDay}});
   REQUIRE(res.status == 200);
@@ -225,6 +240,9 @@ TEST_CASE("Plants over the API: a plant started from a plant recipe copies its p
   REQUIRE(r.plantComplete(p1).status == 200);
   CHECK(r.plants()["lead"] == p2);
   CHECK(r.plantNext(p1).status == 409);
+  // A completed plant's phases are its record; its name may still change
+  CHECK(r.putPlant(p1, {{"phases", r.plants()["plants"][0]["phases"]}}).status == 409);
+  CHECK(r.putPlant(p1, {{"name", "Bed 1 (2027)"}}).status == 200);
   // The last plant completed: the robot holds, no old hand choice comes back
   REQUIRE(r.plantComplete(p2).status == 200);
   CHECK(r.plants()["plan"]["source"] == "");

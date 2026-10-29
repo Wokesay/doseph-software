@@ -1982,7 +1982,7 @@
     "/plants/{id}": {
       "put": {
         "operationId": "putPlant",
-        "summary": "Changes a plant's name or phases",
+        "summary": "Changes a plant's name, or a running plant's own phases: the current one and those after it (SD-137)",
         "tags": [
           "plants"
         ],
