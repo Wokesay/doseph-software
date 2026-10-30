@@ -14,11 +14,17 @@ type World = {
   channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
   output: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
-  returnFault: string; leak: boolean; stopButton: boolean; released: boolean; cableFault: boolean;
+  returnFault: string; leak: boolean; stopButton: boolean; released: boolean; cableFault: boolean; faults: string[];
   phBuffer: number | null; ecBuffer: number | null; liquids: Record<string, string>;
 };
 
 type Channel = World["channels"][number];
+// What the device's protection can report (SD-141), by the IDs the firmware uses
+const HW_FAULTS = [
+  "self_test.switch_off", "board_description", "power_trip.dosing", "power_trip.pump", "power_trip.return", "safety_cycle",
+  "supply", "current_limit.dosing", "pump_protection.pump", "pump_protection.return", "stop_mismatch", "not_off",
+  "leak_sensor_open", "moisture", "board_hot", "safety_restart",
+];
 // A channel's faults as they are, so a button changes only its own
 const faults = (p: Channel) => ({ channel: p.channel, blocked: p.blocked, empty: p.empty, outletBlocked: p.outletBlocked, siphon: p.siphon });
 
@@ -155,6 +161,23 @@ export function SimPanel() {
         <label class="row small">
           <input type="checkbox" checked={!!w?.stopButton} onChange={(e) => act("stopButton", { pressed: (e.target as HTMLInputElement).checked })} /> {t("sim.stopButton")}
         </label>
+        <Field label={t("sim.hwFault")}>
+          <select
+            value={w?.faults?.[0] ?? ""}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              act("faults", { ids: v ? [v] : [] });
+            }}
+            data-testid="sim-hw-fault"
+          >
+            <option value="">{t("sim.fault.none")}</option>
+            {HW_FAULTS.map((f) => (
+              <option value={f} key={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
       <div class="stack-sm">
         <div class="section-title">{t("sim.probes")}</div>

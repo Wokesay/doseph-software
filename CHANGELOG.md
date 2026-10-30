@@ -7,6 +7,21 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- What the device's own protection reports (SD-141).
+  - A failed self-test, a board description that is not valid, a tripped
+    power limit and repeated safety restarts hold every pump until a
+    start that clears them, with a critical alarm that names the part and
+    what to do.
+  - A supply out of range, a current limit, a pump's protection, a stop
+    button whose channels disagree, an output that does not switch off, an
+    open leak sensor and moisture latch until a person releases them once
+    the device no longer reports them.
+  - A hot board and a restart by the safety supervisor are warnings.
+  - Where the device does not test its protection itself, every start
+    asks for a check by hand under Status before anything doses into the
+    tank.
+  - In the simulator panel, "Report of the device's protection" sets one.
+
 - The advice to drain when the water plan's EC target falls by more than
   0.2 mS/cm (RAT-065, SD-140).
   - Another nutrient means draining.

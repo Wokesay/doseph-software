@@ -1055,6 +1055,7 @@ void to_json(json& j, const RuntimeState& s) {
 bool holds(const RuntimeState& rt, const std::string& id) {
   const auto it = rt.latches.find(id);
   if (it == rt.latches.end()) return false;
+  if (id == kSafetyRestartNote) return false;  // a note a person marks as seen (SD-141)
   const json& l = it->second;
   if (!l.is_object() || !jbool(l, "reportOnly", false)) return true;
   // A damaged state may say so of any latch: only a kind that may report only is taken at its word

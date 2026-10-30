@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "doseph/coupling.hpp"
+#include "doseph/faults.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
 
@@ -98,7 +99,8 @@ WatchResult evaluate(const WatchInput& in) {
   // One set while its lock reported only is shown as reported: it alarms the same, and holds nothing (SD-133)
   for (const auto& [id, l] : in.rt.latches) {
     const std::string kind = l.is_object() ? jstr(l, "key", id) : id;
-    if (holds(in.rt, id)) add("latch." + id, say("watch.latch"), "problem", say("latch." + kind, l.is_object() ? l : json::object()));
+    if (id == kSafetyRestartNote) add("latch." + id, say("watch.hw"), "problem", say("latch." + kind, l.is_object() ? l : json::object()));
+    else if (holds(in.rt, id)) add("latch." + id, say("watch.latch"), "problem", say("latch." + kind, l.is_object() ? l : json::object()));
     else add("latch." + id, say("watch.reported"), "problem", reportedEvent(kind, l));
   }
   // Locks set to report only are a note, not a problem: no alarm, and the problem flag stays free
@@ -107,6 +109,13 @@ WatchResult evaluate(const WatchInput& in) {
     json locks = json::array();
     for (const auto& kind : in.cfg.locks.reportOnly) locks.push_back(say("lock." + kind));
     add("locks.report_only", say("watch.locks"), "neutral", say("watch.report_only", {{"locks", locks}}));
+  }
+  // The device's protection (SD-141): a fault that holds while reported, and a warning; a latched
+  // one is listed with the latches
+  for (const auto& f : in.faults) {
+    const FaultInfo i = classifyFault(f);
+    if (i.kind == FaultInfo::Kind::Latch || i.reason == "safety_restart") continue;
+    add(i.id(), say("watch.hw"), "problem", say("latch.hw." + i.reason, faultArgs(i, f)));
   }
   // The hardware release, where no latch already says it (SD-110)
   if (in.hold == "stop_button" || in.hold == "release") add("release", say("watch.release"), "problem", say("watch.hold." + in.hold));

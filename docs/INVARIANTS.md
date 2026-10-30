@@ -76,6 +76,11 @@ of its own.
 | The hardware release holds every pump: a run or the feed pump is refused with the input that holds it, and the cycle waits with it | SD-110 | ✓ | `gateway.hpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp`, `watchdog.cpp` · test_scenarios.cpp |
 | A leak or high level latches; a person releases the latch only once the device no longer reports the cause, and a restart never releases it | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
 | The stop button on the device is the Stop of the app: it holds across a restart until Resume in the app | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
+| A fault of the device's protection stops every pump at its first report; a failed self-test, an invalid board description, a power trip, repeated safety restarts and an unknown fault hold while reported, with a critical alarm naming the part | SD-141 | ✓ | `hardware.hpp`, `faults.cpp`, `robot.cpp`, `gateway.cpp`, `cycle.cpp`, `watchdog.cpp`, `alarms.cpp` · test_faults.cpp |
+| Supply, current limit, pump protection, stop mismatch, an output not off, an open leak sensor and moisture latch; a person releases them only once the device no longer reports them, never across a restart | SD-141 | ✓ | `robot.cpp` · test_faults.cpp |
+| A hot board and a restart by the safety supervisor hold nothing; the restart stays as a note until seen | SD-141 | ✓ | `config.cpp`, `watchdog.cpp`, `robot.cpp` · test_faults.cpp |
+| Where the device does not test its protection itself, every start locks doses into the tank until a person releases the check by hand; runs into a cup still go | SD-141 | ✓ | `robot.cpp`, `gateway.cpp`, `cycle.cpp` · test_faults.cpp |
+| A slot's pump direction stays in the driver: never read by the core, never shown | SD-141 | ✓ | `hardware.hpp`, `hardware.cpp` · test_faults.cpp |
 | A calibration belongs to the pump head it was measured with: another head, none fitted or none recorded voids it, and the channel doses nothing until it is calibrated again | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
 | A channel without a pump head runs nothing, not even into a cup | SD-108 | ✓ | `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | One pH− canister at most; the rest are nutrients | SD-108 | ✓ | `config.cpp` · test_config.cpp |

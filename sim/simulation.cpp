@@ -182,6 +182,7 @@ void Simulation::build(bool fresh) {
   clock_ = std::make_unique<SimClock>(start);
   doseph::Profile profile = exampleProfile(opts_.profile).value_or(*exampleProfile("home"));
   if (!opts_.pumpIn.empty()) profile.pumpIn = opts_.pumpIn;
+  if (!opts_.selfTest.empty()) profile.selfTest = opts_.selfTest;
   world_.reset(static_cast<int>(profile.channels.size()));
   for (size_t i = 0; i < profile.channels.size(); ++i) world_.pumps[i].head = world_.pumps[i].flowHead = profile.channels[i].head;
   world_.returnByPump = profile.returnBy == "pump";
@@ -309,6 +310,9 @@ void Simulation::reboot(Ms outageMs) {
   world_.output = false;
   world_.returnLocked = false;
   world_.stopAllPumps();
+  // A restart switches a tripped rail on again, and the start that follows is a normal one (SD-141)
+  auto& fs = world_.faults;
+  fs.erase(std::remove_if(fs.begin(), fs.end(), [](const std::string& f) { return f.rfind("power_trip", 0) == 0 || f == "safety_restart"; }), fs.end());
   robot_.reset();
   api_.reset();
   if (outageMs > 0) {
@@ -347,6 +351,12 @@ json Simulation::control(const std::string& action, const json& b) {
   else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
   else if (action == "leak") world_.leak = doseph::jbool(b, "on", false);
   else if (action == "stopButton") world_.stopButton = doseph::jbool(b, "pressed", false);
+  else if (action == "faults") {  // what the device's protection reports (SD-141)
+    world_.faults.clear();
+    if (b.contains("ids") && b["ids"].is_array())
+      for (const auto& f : b["ids"])
+        if (f.is_string() && world_.faults.size() < 8) world_.faults.push_back(f.get<std::string>().substr(0, 48));
+  }
   else if (action == "probeFault") world_.probeFault = doseph::jstr(b, "fault");
   else if (action == "channelFault") {
     const int n = static_cast<int>(num("channel", 0));

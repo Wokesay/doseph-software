@@ -500,6 +500,9 @@ void to_json(json& j, const RuntimeState& s);
 RuntimeState runtimeFromJson(const json& j);
 // Whether a latch stands that holds: one set while its lock reported only holds nothing (SD-133).
 // A latch of a kind that may not report only always holds, whatever its entry says.
+// The note that the safety supervisor restarted the device: listed with the latches until a person
+// has seen it, and holds nothing (SD-141)
+inline constexpr const char* kSafetyRestartNote = "hw.safety_restart";
 bool holds(const RuntimeState& rt, const std::string& id);
 // Whether a latch of this kind stands that a new one must not replace: one that holds, or a report
 // while its kind still reports only. Once the kind locks again, the next one holds (SD-133).

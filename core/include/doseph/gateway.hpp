@@ -61,8 +61,12 @@ struct Ctx {
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
   bool refilling = false;         // the refill valve fills the tank: no dose and no round meanwhile (SD-132)
   // What holds every pump below the robot (SD-110): "leak", "high_level" (both latched until a
-  // person releases them), "stop_button", "release" (off without a known input); "": nothing
+  // person releases them), a fault of the device's protection by its lock reason ("self_test",
+  // "power_trip", …, SD-141), "return", "stop_button", "release" (off without a known input); "": nothing
   std::string hold{};
+  // A device that does not test its protection itself, after a start: nothing doses into the tank
+  // until a person confirmed the check by hand (SD-141)
+  bool protectionCheck = false;
   // Coupled as the follower (SD-131): the leader plans. This device runs its feed pump while the
   // leader's runs, to measure and to let the leader's runs through, and doses only on its request.
   bool follower = false;

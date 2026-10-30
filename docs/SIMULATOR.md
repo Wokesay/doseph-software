@@ -102,7 +102,9 @@ The water path's faults are in the panel and in the API: `flowFault` with
 `{"fault": "dry"}`, `returnFault` with `{"fault": "blocked"}` or
 `{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
 `{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and
-`siphon`. `channelHead` with `{"channel": 2, "head": "M"}` fits another
+`siphon`. `faults` with `{"ids": ["power_trip.dosing"]}` sets what the
+device's protection reports (SD-141); a restart of the twin clears a
+power trip and a safety restart. `channelHead` with `{"channel": 2, "head": "M"}` fits another
 head, `"head": ""` takes it off (SD-108). `lineEmpty` with
 `{"channel": 4}` fills a channel's line with air, as after a canister
 change: it holds 6 ml (an **assumption**), which a run fills before the

@@ -5017,6 +5017,32 @@
           },
           "example": {
             "type": "boolean"
+          },
+          "board": {
+            "enum": [
+              "signed",
+              "own"
+            ],
+            "description": "The board description: signed by the maker, or one of the owner's own (SD-141)"
+          },
+          "selfTest": {
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "description": "Whether the device tests its protection at every start, or a person checks it by hand (SD-141)"
+          },
+          "pumpSpeed": {
+            "enum": [
+              "fixed",
+              "adjustable"
+            ]
+          },
+          "returnFeedback": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "description": "What the device has (SD-108)"

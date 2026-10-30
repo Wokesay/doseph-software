@@ -43,6 +43,10 @@ struct ChannelCaps {
   bool dropSensor = false;  // drops at the outlet are seen
   bool reverse = false;     // the pump can run backwards, to pull the line back (SD-111)
   double dailyMaxMin = kNaN;  // the head's run time per 24 h (SD-113); NaN: the code's ceiling alone
+  // The slot's pump delivers with its motor turning the other way (SD-141). The driver turns
+  // "forwards" and "backwards" into the motor's direction; the core never reads it, and it is
+  // never shown.
+  bool inverted = false;
 };
 
 // What a channel's drop sensor has seen (SD-111): the drops counted since the
@@ -64,6 +68,16 @@ struct Profile {
   std::vector<std::string> network;   // "wifi", "lan"
   double pumpLpmLow = kNaN;           // the low end of the feed pump's delivery, L/min (SD-109)
   bool example = false;               // an example profile: its numbers are assumptions
+  // The board description the profile comes from (SD-141): "signed" by the maker, or "own", one
+  // the maker did not sign (shown as such, like own firmware). One missing, invalid or not
+  // matching the hardware found is a fault (Release::faults).
+  std::string board = "signed";
+  // Whether the device tests its protection itself at every start ("auto"), or a person checks it
+  // by hand ("manual", a prototype): then the robot doses on its own only once a person confirmed
+  // the check after the start (SD-141)
+  std::string selfTest = "auto";
+  std::string pumpSpeed = "fixed";    // the feed pump's speed: "fixed", "adjustable"
+  std::string returnFeedback;         // how a return pump is seen to run: "current", "" (none)
 };
 
 // The hardware release (SD-110): below the firmware, a leak, high level in
@@ -77,6 +91,18 @@ struct Release {
   // No flow within the hardware's window (PD-477): it switched the feed pump and dosing off and
   // holds them off until the feed pump is switched off again (SD-127)
   bool noFlow = false;
+  // What the device's own protection reports, by ID (SD-141). The robot holds every pump while one
+  // stands, and reports it; it never overrides it. Ended by a start that passes, while reported:
+  //   "self_test.<part>"            the test at the start failed: switch_off, pump_protection, supply
+  //   "board_description"           the board description is missing, invalid or does not match
+  //   "power_trip.<rail>"           a supply rail switched off: dosing, pump, return
+  //   "safety_cycle"                the safety supervisor restarts the device again and again
+  // Latched until a person releases it, once no longer reported:
+  //   "supply", "current_limit.<rail>", "pump_protection.<pump|return>", "stop_mismatch",
+  //   "not_off", "leak_sensor_open", "moisture"
+  // Warnings, which hold nothing: "board_hot"; "safety_restart" (this start came from the safety
+  // supervisor; the device reports it from the start on). Any other ID holds while reported.
+  std::vector<std::string> faults{};
 };
 
 // The water path as the device's sensors see it (SD-109); nullopt where the
