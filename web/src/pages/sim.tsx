@@ -11,7 +11,11 @@ import { Button, Field, NumberInput, Seg } from "../ui";
 
 type World = {
   tank: { volumeL: number; ec: number; ph: number; temp: number; pendingEc: number; pendingPh: number };
-  channels: { channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number }[];
+  channels: {
+    channel: number; liquid: string; head: string; outletBlocked: boolean; siphon: boolean; drops: number; lineMl: number; trueFlow: number; blocked: boolean; empty: boolean; state: string; cupMl: number;
+    intake: "canister" | "water"; light: boolean; lineHolds: "air" | "concentrate" | "water";
+  }[];
+  calWater: { ml: number; cylinderMl: number; scaleG: number };
   output: boolean; pumpLpm: number; flowing: boolean; flowFault: string; probeFault: string;
   primed: boolean; outletWet: boolean; chamberL: number; highLevel: boolean; returnByPump: boolean; returnPump: boolean;
   returnFault: string; leak: boolean; stopButton: boolean; released: boolean; cableFault: boolean; faults: string[];
@@ -27,6 +31,33 @@ const HW_FAULTS = [
 ];
 // A channel's faults as they are, so a button changes only its own
 const faults = (p: Channel) => ({ channel: p.channel, blocked: p.blocked, empty: p.empty, outletBlocked: p.outletBlocked, siphon: p.siphon });
+
+/** The person's hands in a pump calibration (SD-143): an intake into the water or back, and what the
+ *  cylinder and the scale read */
+function PumpCalTwin(p: { w: World; act: (action: string, body?: object) => Promise<void> }) {
+  const pc = state.value?.pumpCalibration;
+  const n = pc && !["done", "failed", "cancelled"].includes(pc.step) ? pc.channel : null;
+  const ch = n ? p.w.channels[n - 1] : null;
+  return (
+    <div class="stack-sm">
+      <div class="section-title">{t("sim.pumpCal")}</div>
+      <p class="small muted">
+        {t("sim.calWater", { cylinder: num(p.w.calWater.cylinderMl, 1), scale: num(p.w.calWater.scaleG, 1) })}
+        {ch && ` · ${t("sim.calLine", { channel: n!, holds: t(`sim.line.${ch.lineHolds}` as TextKey) })}`}
+      </p>
+      <div class="row">
+        {ch && (
+          <Button size="sm" onClick={() => p.act("intake", { channel: n, where: ch.intake === "water" ? "canister" : "water" })} data-testid="sim-intake">
+            {t(ch.intake === "water" ? "sim.intakeToCanister" : "sim.intakeToWater", { channel: n! })}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => p.act("calWater", { ml: 100 })}>
+          {t("sim.calRefill")}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function SimPanel() {
   const [open, setOpen] = useState(false);
@@ -212,6 +243,7 @@ export function SimPanel() {
         </div>
         {w && (w.phBuffer !== null || w.ecBuffer !== null) && <p class="small warn-text">{t("sim.inBuffer")}</p>}
       </div>
+      {w && <PumpCalTwin w={w} act={act} />}
       {w && (
         <div class="stack-sm">
           <div class="section-title">{t("sim.channels")}</div>

@@ -104,7 +104,7 @@ test("a new tank volume makes the next dose a test dose", async ({ page }) => {
   await expect(page.getByTestId("save-waits")).toBeDisabled();
 });
 
-test("a channel is calibrated: run into a cup, enter the ml", async ({ page }) => {
+test("a channel is calibrated from the intake side: back into the canister, water from the cylinder, two readings, back into the canister (SD-143)", async ({ page }) => {
   await login(page);
   // Without a recipe the cycle doses nothing that a calibration would have to wait for
   await page.goto("/#/recipe");
@@ -112,13 +112,36 @@ test("a channel is calibrated: run into a cup, enter the ml", async ({ page }) =
   await expect(page.getByText("No recipe in force any more")).toBeVisible();
   await page.goto("/#/channels");
   await page.getByTestId("calibrate-4").click();
-  await page.locator("input[name=seconds]").fill("10");
-  await page.getByTestId("job-start").click();
+  await page.getByTestId("cal-start").click();
   await sim(page, "speed", { speed: 10 });
-  await expect(page.locator("input[name=ml]")).toBeVisible({ timeout: 30_000 });
-  await page.locator("input[name=ml]").fill("8");
-  await page.getByTestId("job-result").click();
-  await expect(page.getByTestId("job-done")).toContainText("Channel 4: 48.0 ml/min saved");
+  const step = page.getByTestId("cal-step");
+  const cylinder = () => page.evaluate(async () => (await (await fetch("/api/v1/sim")).json()).world.calWater.cylinderMl as number);
+  await expect(step).toHaveAttribute("data-step", "to_water", { timeout: 30_000 });
+  await expect(page.getByTestId("cal-message")).toContainText("measuring cylinder");
+  await sim(page, "intake", { channel: 4, where: "water" });
+  await page.getByTestId("cal-next").click();
+  await expect(step).toHaveAttribute("data-step", "reading", { timeout: 60_000 });
+  const message = page.getByTestId("cal-message");
+  const enter = async (value: number) => {
+    await page.locator("input[name=reading]").fill(String(value));
+    await page.getByTestId("cal-reading").click();
+  };
+  await enter(await cylinder());
+  await expect(message).toContainText("after run 1", { timeout: 60_000 });
+  // A typo is refused with its cause, and may be corrected
+  await enter((await cylinder()) - 60);
+  await expect(page.getByTestId("cal-error")).toContainText("a typo in the reading");
+  await enter(await cylinder());
+  await expect(message).toContainText("after run 2", { timeout: 60_000 });
+  await enter(await cylinder());
+  await expect(page.getByTestId("cal-runs")).toContainText("Run 2:");
+  await expect(step).toHaveAttribute("data-step", "to_canister", { timeout: 60_000 });
+  await sim(page, "intake", { channel: 4, where: "canister" });
+  await page.getByTestId("cal-next").click();
+  await expect(step).toHaveAttribute("data-step", "done", { timeout: 60_000 });
+  await expect(page.getByTestId("cal-message")).toContainText("Channel 4 calibrated:");
+  await page.getByTestId("cal-close").click();
+  await expect(page.getByTestId("head-4")).toContainText("ml/min");
 });
 
 test("another pump head voids a channel's calibration; without a head the channel runs nothing (SD-108)", async ({ page }) => {

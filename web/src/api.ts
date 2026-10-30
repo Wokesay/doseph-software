@@ -116,6 +116,15 @@ export type ChannelJob = {
   seconds: number; actualS: number; ml: number | null; message: Msg; at: number;
 };
 
+// A pump calibration by the user (SD-143): its step, and whether it is the person's turn
+export type PumpCalibration = {
+  channel: number; method: "cylinder" | "scale";
+  step: "reverse" | "to_water" | "prime" | "reading" | "run" | "empty" | "to_canister" | "fill" | "done" | "failed" | "cancelled";
+  waiting: boolean; readings: number[]; runs: { s: number; drops: number; flowMlPerMin: number | null }[];
+  flowMlPerMin: number | null; nominalMlPerMin: number | null; message: Msg; at: number;
+  waitingFor: Msg | null;  // why the step's run has not started yet: no flow, a hold
+};
+
 export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawPh: number | null; rawEc: number | null; temp: number | null };
 
 export type RobotState = {
@@ -166,6 +175,7 @@ export type RobotState = {
   // What a pair still misses after a round cut short; the next nutrient round doses it first (SD-114)
   catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
   channelJob: ChannelJob | null;
+  pumpCalibration: PumpCalibration | null;
   probe: ProbeSession | null;
   // Light (SD-135): each circuit, whether it is day by its plan, whether it is on and at what
   // brightness, its next change (null: none within a day), a switch by hand, the plant it follows

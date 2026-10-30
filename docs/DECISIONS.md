@@ -1766,9 +1766,14 @@ principle; numbers marked as assumptions hold until the bench test.
   assumptions. Every pump of the twin's examples now runs both ways, as
   the device's do (SD-142).
 - **Who.** The owner and the owner's app; not an account.
+- **The web app's guide.** Channels › Calibrate shows the device's step,
+  the step number, the person's button (in the water, back in the
+  canister) or the field for the reading, a refused reading's cause, and
+  each run's rate. The simulator panel moves the intake and shows what the
+  cylinder and the scale read.
 - **Not yet built.** These follow as their own changes:
-  - **The web app's guide.** It also removes the old calibration into a
-    cup, which this replaces.
+  - **The old calibration into a cup leaves the API.** The web app no
+    longer offers it.
   - **The triggers.** A new head of the same size asks "new head?"; a
     new intake line recommends a calibration; a reminder comes with the
     probe calibration; a consumption check proposes a corrected rate
