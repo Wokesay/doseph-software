@@ -291,6 +291,7 @@ class Robot : public RemoteRuns {
   void sampleHistory(Epoch epoch);
   void watchRelease(Epoch epoch);
   std::string faultHold(const std::vector<std::string>& faults) const;
+  void applyReturnPump();
   void checkHeads(Epoch epoch);
   void mixFirstNow();
   void learnSettling(const MixCycle::Settled& st, Epoch epoch);

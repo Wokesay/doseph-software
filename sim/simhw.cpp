@@ -12,6 +12,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     p.line = "home";
     p.variant = "Home (example)";
     p.channels.assign(4, {"brushed", "S", true, true, 40});
+    p.channels[1].inverted = p.channels[3].inverted = true;  // two of four run the other way (which ones: an assumption)
     p.flow = "outlet_level";
     p.pumpIn = "tank";
     p.returnBy = "gravity";
@@ -23,6 +24,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     p.line = "pro";
     p.variant = "Pro (example)";
     p.channels.assign(6, {"brushless", "M", true, false, 20});
+    p.channels[1].inverted = p.channels[3].inverted = true;  // an assumption, as for Home
     p.flow = "turbine";
     p.pumpIn = "tank";
     p.returnBy = "pump";

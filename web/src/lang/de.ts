@@ -118,7 +118,7 @@ export const deBase = {
   "shell.stopFailed": "Der Stopp kam nicht an",
   "shell.stopHint": "Im Notfall zieh den Stecker des Roboters – dann ist alles aus.",
   "shell.liveTitle": "Live-Verbindung zum Roboter",
-  "shell.offlineTitle": "Keine Verbindung zum Roboter – er arbeitet weiter",
+  "shell.offlineTitle": "Keine Verbindung zum Roboter. Fehlt nur das Netz, arbeitet er weiter. Bleibt er unerreichbar: Prüfe, ob er Strom hat und an seinem eigenen Netzteil hängt – mit einem falschen ist er ganz aus.",
   "shell.offlineBar": "Keine Verbindung zum Roboter – die Werte sind nicht aktuell. Er arbeitet weiter.",
   "shell.watchdogStale": "Überwachung ohne Bewertung",
   "shell.connecting": "Verbinde mit dem Roboter …",

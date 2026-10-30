@@ -184,7 +184,10 @@ void Simulation::build(bool fresh) {
   if (!opts_.pumpIn.empty()) profile.pumpIn = opts_.pumpIn;
   if (!opts_.selfTest.empty()) profile.selfTest = opts_.selfTest;
   world_.reset(static_cast<int>(profile.channels.size()));
-  for (size_t i = 0; i < profile.channels.size(); ++i) world_.pumps[i].head = world_.pumps[i].flowHead = profile.channels[i].head;
+  for (size_t i = 0; i < profile.channels.size(); ++i) {
+    world_.pumps[i].head = world_.pumps[i].flowHead = profile.channels[i].head;
+    world_.pumps[i].inverted = profile.channels[i].inverted;  // mounted as the board description says (SD-141)
+  }
   world_.returnByPump = profile.returnBy == "pump";
   world_.pumpInTank = profile.pumpIn != "device";
   // Tap water in a 100 L tank (assumption): EC 0.45 mS/cm, pH 7.6

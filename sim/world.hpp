@@ -44,6 +44,10 @@ struct Pump {
   Ms lastDropMs = -1;
   double dropAcc = 0;          // what came out since the last whole drop, ml
   bool backwards = false;      // the run in progress pulls back
+  // The pump is mounted so that it delivers with its motor turning the other way (SD-141): the
+  // board description says so, and the driver turns the motor accordingly
+  bool inverted = false;
+  bool motorReverse = false;   // the motor of the run in progress turns the other way
   // Run state
   std::string jobId;
   Ms requested = 0, elapsed = 0;
@@ -136,7 +140,9 @@ class World {
   std::vector<Pump> pumps;
   // What a pump moves with the head fitted now, ml/min: nothing without one
   static double flowOf(const Pump& p);
-  bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards = false);
+  // `motorReverse`: the motor turns the other way; whether that delivers or pulls back depends on
+  // how the pump is mounted (Pump::inverted)
+  bool startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool motorReverse = false);
   doseph::RunStatus runStatus(int pump) const;
   void stopAllPumps();
   // A new canister, or a line taken off: the whole line is air and fills before it drips (SD-111)

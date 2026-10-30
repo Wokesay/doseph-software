@@ -124,6 +124,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_auth.cpp
     tests/core/test_reset.cpp
     tests/core/test_faults.cpp
+    tests/core/test_platform.cpp
     tests/core/test_history.cpp
     tests/core/test_localtime.cpp
     tests/core/test_messages.cpp

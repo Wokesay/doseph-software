@@ -7,6 +7,18 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The firmware platform's rules in the core and the twin (SD-142).
+  - Each slot's pump turns as the board description says; the twin mounts
+    two slots the other way.
+  - The tries without flow are kept across a restart.
+  - The return pump keeps running on high level so the chamber drains; a
+    Stop holds it off until Resume, and so does a latched fault that
+    names it.
+  - The history and the event log are written whole only between dosing
+    runs.
+  - A Stop pressed before a factory reset holds after it.
+  - The hint for a lost connection names a wrong power supply.
+
 - What the device's own protection reports (SD-141).
   - A failed self-test, a board description that is not valid, a tripped
     power limit and repeated safety restarts hold every pump until a

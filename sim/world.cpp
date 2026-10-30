@@ -123,7 +123,7 @@ double World::pumpA() const {
   return dry ? 0.32 : flowFault == "hose" ? 0.86 : 0.80;
 }
 
-bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool backwards) {
+bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err, bool motorReverse) {
   if (pump < 1 || pump > static_cast<int>(pumps.size())) {
     err = "no such pump";
     return false;
@@ -143,7 +143,8 @@ bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err
     return false;
   }
   p.jobId = jobId;
-  p.backwards = backwards;
+  p.motorReverse = motorReverse;
+  p.backwards = motorReverse != p.inverted;
   p.requested = ms;
   p.elapsed = 0;
   p.state = 1;
@@ -220,8 +221,9 @@ void World::step(Ms dt) {
   const double in = flowing() ? pumpLpm / 60.0 : 0.0;  // L/s
   double out = 0;
   if (returnByPump) {
-    if (chamberL >= kReturnOnL) returnPumpOn = !leak;
-    if (chamberL <= kReturnOffL || leak || returnLocked) returnPumpOn = false;
+    // It runs by the level, also on high level; the stop button, a leak and its lock switch it off (SD-142)
+    if (chamberL >= kReturnOnL) returnPumpOn = !leak && !stopButton;
+    if (chamberL <= kReturnOffL || leak || stopButton || returnLocked) returnPumpOn = false;
     if (returnPumpOn && returnFault != "failed") out = 1.6 * std::max(pumpLpm, 6.0) / 60.0;
   } else if (chamberL > kWeirL && returnFault != "blocked") {
     out = 2.0 * std::max(pumpLpm, 6.0) / 60.0;

@@ -1642,3 +1642,44 @@ by the owner.
   rest of the product input (the pump direction in the twin, the no-flow
   count across a restart, the return pump on high level, flash writes,
   Stop across a factory reset) follows in its own change.
+
+## SD-142: The firmware platform's rules in the core and the twin
+
+2026-10-30. The second part of the firmware platform from the product input
+of 29 and 30 Oct in #10. These are details decided here by the minimal
+principle.
+
+- **Pump direction per slot.** The board description says for each slot
+  whether its pump delivers with the motor turning the other way. The core
+  asks only for "forwards" (deliver) or "backwards" (pull back). The driver
+  turns that into the motor's direction for the slot, so a pull-back after
+  a dose always turns against the slot's delivery. The direction is never
+  shown. The twin's example profiles mount slots 2 and 4 the other way
+  (which ones is an assumption), and the twin pumps by how a slot is
+  mounted, so a driver that ignored it would dose backwards.
+- **Tries without flow across a restart.** The count of feed pump starts
+  in a row without flow is kept in the run-time state. A restart no longer
+  starts it afresh before the lock: 2 tries with the pump in the tank, 3
+  with it in the device (SD-109, SD-127). The hardware's own cut after its
+  window counts as one try. Only flow proven resets it.
+- **The return pump.** It runs by the chamber's level on its own, also on
+  high level, so the chamber drains. It is held off by:
+  - a Stop, from the app or the stop button, until Resume;
+  - a leak and the safety supervisor (the hardware);
+  - its own lock for running on and on (SD-109);
+  - a latched fault of the device's protection that names it (SD-141),
+    until a person releases it.
+- **Large writes between runs.** The robot writes the history and the event
+  log whole only while no dosing pump runs. Small writes that safety needs
+  stay at once: the journal entry before a dose (SD-106), a latch, the
+  state. Writing in small pieces with the safety supervisor running is the
+  device's.
+- **Stop across a factory reset.** A Stop pressed before a factory reset
+  holds after it until Resume in the app. The function button never
+  releases a Stop.
+- **A device that does not answer.** The web app's hint for a lost
+  connection names a wrong power supply: with one, the device is
+  completely off and cannot report.
+- **Not here.** The pump calibration by the user and the channel lights,
+  progress for large tanks and the calibration texts each follow as a
+  package of their own.

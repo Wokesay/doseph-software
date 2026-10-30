@@ -172,7 +172,8 @@ void Robot::factoryReset(const std::string& by) {
   if (halted()) return;
   const Ms now = clock_.nowMs();
   // A start that finds this mark finishes the reset before anything else
-  store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "pending"}}.dump());
+  // A Stop pressed before is kept: it holds after the reset until Resume in the app (SD-142)
+  store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "pending"}, {"stopped", rt_.stopped}}.dump());
   // Everything off first (R6): the pumps at once, every network device's output, light and a room's
   // fans too, until its device confirms it or a minute has passed; the coupled device learns it as
   // when the coupling ends, or loses the link and stops dosing (SD-131)
@@ -197,7 +198,8 @@ void Robot::finishFactoryReset() {
   const std::string by = resetting_ ? resetting_->by : "device";
   // Every file but the mark goes; the mark then says it is done. A clearing that fails leaves the
   // mark pending, and the next start does it again
-  if (store_.clear(kResetFile)) store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "done"}}.dump());
+  if (store_.clear(kResetFile))
+    store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "done"}, {"stopped", rt_.stopped}}.dump());
   store_.seal(kResetFile);
   resetting_.reset();
   restartWanted_ = true;
@@ -470,7 +472,7 @@ void Robot::boot() {
       }
     if (dropped) saveDeviceSecrets();
   }
-  if (holds(rt_, "hw.return")) act_.allowReturnPump(false);  // the device forgot it (SD-109)
+  applyReturnPump();  // the device forgot it (SD-109, SD-142)
   if (stateUnknown) {
     rt_.stopped = true;
     log_.add(bootEpoch_, "alarm", "alarm", say("ev.boot.state_unknown"), say("ev.boot.state_unknown.text"));
@@ -512,6 +514,10 @@ void Robot::boot() {
     const std::string by = j.is_object() ? jstr(j, "by") : "";
     if (j.is_object() && jstr(j, "state") == "done") {
       log_.add(bootEpoch_, "system", "notice", say("ev.system.factory_reset"), say(by == "owner" ? "ev.system.factory_reset.owner" : "ev.system.factory_reset.device"));
+      if (jbool(j, "stopped", false)) {
+        rt_.stopped = true;  // the Stop holds on (SD-142)
+        applyReturnPump();
+      }
       store_.remove(kResetFile);
     } else {
       resetPending = by.empty() ? "device" : by;
@@ -681,7 +687,9 @@ void Robot::tick() {
   }
   saveState();
   saveEvents();
-  if (epoch - lastSnapshot_ >= kSnapshotS) snapshot(epoch);
+  // A large write waits while a dosing pump runs (SD-142): the device writes its flash in small pieces
+  // only between runs
+  if (epoch - lastSnapshot_ >= kSnapshotS && !act_.channelRunning()) snapshot(epoch);
 }
 
 // The hardware release (SD-110): a leak and high level switch everything off and latch until a
@@ -711,7 +719,7 @@ void Robot::watchRelease(Epoch epoch) {
   }
   if (returnSince_ >= 0 && now - returnSince_ >= kReturnMaxMs && !latched(cfg_, rt_, "hw.return", "hw.return")) {
     latch("hw.return", "ev.hw.return");
-    if (holds(rt_, "hw.return")) act_.allowReturnPump(false);
+    applyReturnPump();
   }
   if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
   stopButtonSeen_ = r.stopButton;
@@ -738,12 +746,23 @@ void Robot::watchRelease(Epoch epoch) {
       entry["fault"] = i.reason;
       if (i.reason == "safety_restart") entry["note"] = true;  // holds nothing
       setLatch(cfg_, rt_, i.id(), std::move(entry));
+      applyReturnPump();
       saveState(true);
     }
     if (!warning) act_.stopAll();
     if (!quiet) log_.add(epoch, "alarm", warning ? "warn" : "alarm", say("ev.hw.fault", {{"name", say("lock.hw." + i.reason)}}), say("latch.hw." + i.reason, args));
   }
   faultsSeen_ = std::move(seen);
+}
+
+// The return pump runs by the chamber's level on its own, also on high level, so the chamber
+// drains (SD-142). A Stop holds it off, and so do its own lock for running on and on (SD-109) and a
+// latched fault of the device's protection that names it, until a person releases them.
+void Robot::applyReturnPump() {
+  bool held = rt_.stopped || holds(rt_, "hw.return");
+  for (const auto& [id, l] : rt_.latches)
+    if (l.is_object() && !jstr(l, "fault").empty() && id.size() > 7 && id.compare(id.size() - 7, 7, ".return") == 0 && holds(rt_, id)) held = true;
+  act_.allowReturnPump(!held);
 }
 
 // The first fault of the device's protection that holds every pump (SD-141): one the device
@@ -3161,10 +3180,8 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   const json args = it->second.is_object() ? it->second : json::object();
   const bool held = holds(rt_, id);
   rt_.latches.erase(it);
-  if (id == "hw.return") {
-    if (held) act_.allowReturnPump(true);  // it runs by the level again; on and on once more, it latches again
-    returnSince_ = -1;
-  }
+  applyReturnPump();  // released, the return pump runs by the level again (SD-109, SD-142)
+  if (id == "hw.return") returnSince_ = -1;  // on and on once more, it latches again
   if (!held) {
     // A report seen: it held nothing, so the check goes on undisturbed (SD-133)
     log_.add(clock_.epoch(), "unblock", "notice", say("ev.lock.cleared"),
@@ -3186,6 +3203,7 @@ Result Robot::stop(const Msg& who) {
   outputs_.allOff();
   const bool was = rt_.stopped;
   rt_.stopped = true;
+  applyReturnPump();
   Ctx c = ctx();
   if (job_ && job_->state == "running") {
     doser_.abort(c, act_, say("abort.stop"));
@@ -3229,6 +3247,7 @@ Result Robot::resume() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!rt_.stopped) return Result::ok();
   rt_.stopped = false;
+  applyReturnPump();
   log_.add(clock_.epoch(), "system", "info", say("ev.resume"));
   restartCycle();
   saveState(true);

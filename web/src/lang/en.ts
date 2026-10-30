@@ -113,7 +113,7 @@ const base: Record<keyof typeof deBase, string> = {
   "shell.stopFailed": "The Stop did not get through",
   "shell.stopHint": "In an emergency, unplug the robot – then everything is off.",
   "shell.liveTitle": "Live connection to the robot",
-  "shell.offlineTitle": "No connection to the robot – it keeps working",
+  "shell.offlineTitle": "No connection to the robot. If only the network is gone, it keeps working. If it stays unreachable, check that it has power and runs on its own power supply – with a wrong one it is completely off.",
   "shell.offlineBar": "No connection to the robot – the values are not current. It keeps working.",
   "shell.watchdogStale": "Monitoring without an assessment",
   "shell.connecting": "Connecting to the robot …",

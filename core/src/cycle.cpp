@@ -154,8 +154,8 @@ void MixCycle::noFlow(Ctx& c, Actuators& act, Msg why) {
     noFlowLogged_ = true;
   }
   const int tries = c.pumpInTank ? kDryTriesTank : kDryTries;
-  if (++noFlowTries_ >= tries) {
-    noFlowTries_ = 0;
+  if (++c.rt.noFlowTries >= tries) {
+    c.rt.noFlowTries = 0;
     const json latch = {{"at", c.epoch}, {"tries", tries}};
     const bool again = reportStands(c.rt, "flow.dry");
     if (setLatch(c.cfg, c.rt, "flow.dry", latch)) {
@@ -1005,7 +1005,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       feedPump(c, act, true);
       if (c.flowOk) {
         noFlowLogged_ = false;
-        noFlowTries_ = 0;
+        c.rt.noFlowTries = 0;
         if (flowSince_ == 0) flowSince_ = c.now;
         line_ = say("cycle.prove_flow", {{"flow", numOrNull(flow.value)}});
         if (c.now - flowSince_ >= kFlowProveMs) enter(c, Phase::Flush);

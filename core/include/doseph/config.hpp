@@ -490,6 +490,9 @@ struct RuntimeState {
   // long; a dry run draws far less (SD-127, RAT-049). Missing until learned (R5).
   double pumpNormalA = kNaN;
   double pumpLearnedS = 0;
+  // Starts of the feed pump in a row that found no flow: kept across a restart, so restarts do not
+  // reset the tries before the lock (SD-109, SD-127, SD-142)
+  int noFlowTries = 0;
   // The channels a run went through to its end, which filled the line (SD-129): a commissioning
   // step the robot sees
   std::set<int> filled;
