@@ -3565,6 +3565,75 @@
         }
       }
     },
+    "/channels/{channel}/pump-calibration": {
+      "post": {
+        "operationId": "startPumpCalibration",
+        "summary": "Starts a pump calibration by the user: water from a cylinder or a glass on a scale, on the intake side (SD-143)",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "The channel's number"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "cylinder",
+                      "scale"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The calibration as it stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pumpCalibration": {
+                      "$ref": "#/components/schemas/PumpCalibration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/channels/result": {
       "post": {
         "operationId": "calibrationResult",
@@ -4817,6 +4886,104 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/pump-calibration/next": {
+      "post": {
+        "operationId": "pumpCalibrationNext",
+        "summary": "The person's step of a pump calibration: the intake moved, or a reading in ml (cylinder) or g (scale)",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reading": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The calibration as it stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pumpCalibration": {
+                      "$ref": "#/components/schemas/PumpCalibration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/pump-calibration/cancel": {
+      "post": {
+        "operationId": "cancelPumpCalibration",
+        "summary": "Cancels a pump calibration; where its intake may be out of its canister, the channel is locked until released",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "responses": {
+          "200": {
+            "description": "The calibration as it stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pumpCalibration": {
+                      "$ref": "#/components/schemas/PumpCalibration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -6236,6 +6403,87 @@
         "required": [
           "reservePct"
         ]
+      },
+      "PumpCalibration": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "A pump calibration by the user (SD-143)",
+        "properties": {
+          "channel": {
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cylinder",
+              "scale"
+            ]
+          },
+          "step": {
+            "enum": [
+              "reverse",
+              "to_water",
+              "prime",
+              "reading",
+              "run",
+              "empty",
+              "to_canister",
+              "fill",
+              "done",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "waiting": {
+            "type": "boolean",
+            "description": "The person's turn: move the intake, or enter a reading"
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "s": {
+                  "type": "number"
+                },
+                "drops": {
+                  "type": "integer"
+                },
+                "flowMlPerMin": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "flowMlPerMin": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "nominalMlPerMin": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "message": {
+            "$ref": "#/components/schemas/Msg"
+          },
+          "at": {
+            "type": "integer"
+          }
+        }
       }
     }
   }

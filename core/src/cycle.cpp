@@ -902,7 +902,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     feedPump(c, act, false);
     return;
   }
-  if (!s.off.key.empty()) {
+  if (!s.off.key.empty() && !c.pumpCalibration) {
     if (phase_ != Phase::Off) {
       restart(c, act, doser);  // a round going on is cut: what went in is mixed first later
       if (s.off.key == "cycle.off.ended")
@@ -945,6 +945,12 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     if (phase_ == Phase::Wait && (line_.key == "cycle.follow.idle" || line_.key == "cycle.follow.no_link")) enter(c, Phase::PumpOn);
   }
   if (phase_ == Phase::Off || phase_ == Phase::Stopped) enter(c, Phase::PumpOn);
+  // A pump calibration (SD-143): the water circulates with flow proven, as for a check, and the check
+  // goes no further than its flush until the calibration ends
+  if (c.pumpCalibration && (phase_ == Phase::Measure || phase_ == Phase::Dose || phase_ == Phase::Mix || phase_ == Phase::Remeasure || phase_ == Phase::Hold)) {
+    restart(c, act, doser);
+    enter(c, Phase::PumpOn);
+  }
   // The flow is averaged while it is proven: volume ÷ flow is the turnover (SD-105)
   const Reading& flow = c.truth.get(Signal::Flow);
   auto noteFlow = [&] {
@@ -1028,6 +1034,10 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       noteFlow();
       // The measuring chamber is flushed with tank water before every measurement: no decision on an old reading (RAT-043)
       line_ = say("cycle.flush", {{"left", mmss(kFlushMs - flushedMs_)}});
+      if (c.pumpCalibration && flushedMs_ >= kFlushMs) {
+        line_ = say("cycle.wait.pump_calibration");
+        break;
+      }
       if (flushedMs_ >= kFlushMs) {
         if (flowN_ > 0) {
           c.rt.flowLpm = flowSum_ / flowN_;

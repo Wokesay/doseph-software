@@ -13,6 +13,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     p.variant = "Home (example)";
     p.channels.assign(4, {"brushed", "S", true, true, 40});
     p.channels[1].inverted = p.channels[3].inverted = true;  // two of four run the other way (which ones: an assumption)
+    for (auto& c : p.channels) c.lineMl = 6.0;
     p.flow = "outlet_level";
     p.pumpIn = "tank";
     p.returnBy = "gravity";
@@ -23,8 +24,10 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
     // well (assumptions)
     p.line = "pro";
     p.variant = "Pro (example)";
-    p.channels.assign(6, {"brushless", "M", true, false, 20});
+    // Every pump runs both ways: its slot's direction, and back after a dose (SD-142)
+    p.channels.assign(6, {"brushless", "M", true, true, 20});
     p.channels[1].inverted = p.channels[3].inverted = true;  // an assumption, as for Home
+    for (auto& c : p.channels) c.lineMl = 6.0;
     p.flow = "turbine";
     p.pumpIn = "tank";
     p.returnBy = "pump";
@@ -32,6 +35,8 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
   } else {
     return std::nullopt;
   }
+  // The nominal rate of each head size, ml/min (assumptions, SD-143)
+  p.headMlPerMin = {{"S", 50.0}, {"M", 125.0}, {"L", 300.0}};
   return p;
 }
 

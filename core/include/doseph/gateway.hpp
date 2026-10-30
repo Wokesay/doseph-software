@@ -60,6 +60,9 @@ struct Ctx {
   Epoch maintenanceUntil = 0;     // maintenance mode until then: someone works at tank or device (0: none)
   bool channelJob = false;        // a channel is being calibrated or primed: no dose starts meanwhile
   bool refilling = false;         // the refill valve fills the tank: no dose and no round meanwhile (SD-132)
+  // A pump calibration by the user (SD-143): the feed pump runs with flow proven, nothing is measured
+  // or dosed meanwhile
+  bool pumpCalibration = false;
   // What holds every pump below the robot (SD-110): "leak", "high_level" (both latched until a
   // person releases them), a fault of the device's protection by its lock reason ("self_test",
   // "power_trip", …, SD-141), "return", "stop_button", "release" (off without a known input); "": nothing
@@ -76,7 +79,8 @@ struct Ctx {
 };
 
 // A channel's own lock (SD-111): "channel.<n>.no_drops" (it ran and nothing dripped) or
-// "channel.<n>.siphon" (it dripped while its pump stood). A locked channel doses nothing into the
+// "channel.<n>.siphon" (it dripped while its pump stood), or "channel.<n>.cal_cut" (a pump
+// calibration ended with its intake perhaps out of its canister, SD-143). A locked channel doses nothing into the
 // tank until a person releases it; a calibration or a line fill into a cup still runs.
 std::string channelLatch(int channel, const std::string& what);
 bool channelLocked(const RuntimeState& rt, int channel);
@@ -100,6 +104,8 @@ class Actuators {
     return channel >= 1 && channel <= hw_.channelCount() && hw_.profile().channels[static_cast<size_t>(channel - 1)].reverse;
   }
   bool channelRunning() const { return runningChannel_ != 0; }
+  const Profile& profile() const { return hw_.profile(); }
+  void setChannelLight(int channel, bool on) { hw_.setChannelLight(channel, on); }
   void clearRun(int channel);
   void stopPumps() { hw_.stopAllPumps(); }
 
@@ -145,10 +151,15 @@ class Actuators {
 // A dose order = one canister, split into partial runs. Booked per run from
 // the actual run time (RAT-070), not only at the end; each run is written to
 // the journal before the pump starts (SD-106).
+// A pump calibration primes with water until this many drops have fallen: it drips steadily (SD-143)
+constexpr std::uint64_t kCalPrimeDrops = 5;
+
 struct DoseOrder {
   std::string id;
   // ec | ph | calibration | prime (a line into a cup, by time) | fill (a line into the tank, until it
-  // drips, SD-111); runs of the gateway also: refill | pullback
+  // drips, SD-111); a pump calibration by the user (SD-143): calprime (water along the normal path
+  // until it drips steadily) | calrun (a measuring run of water) | empty (backwards: the line's
+  // content back where the intake is); runs of the gateway also: refill | pullback
   std::string purpose;
   DoseStep step;
 };

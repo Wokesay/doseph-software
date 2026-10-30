@@ -57,6 +57,9 @@ class SimHardware : public doseph::IHardware {
   std::optional<bool> feedPump() const override { return w_.output; }
   std::optional<double> feedPumpA() const override { return w_.pumpA(); }
   void allowReturnPump(bool allowed) override { w_.returnLocked = !allowed; }
+  void setChannelLight(int channel, bool on) override {
+    if (channel >= 1 && channel <= static_cast<int>(w_.pumps.size())) w_.pumps[static_cast<size_t>(channel - 1)].light = on;
+  }
   // A reset asked for at the twin, as at the device (SD-139): the panel or the console
   void askReset(doseph::DeviceReset r) { reset_ = r; }
   doseph::DeviceReset takeReset() override {

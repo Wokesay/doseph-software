@@ -77,6 +77,7 @@ Ctx Robot::ctx() {
   c.maintenanceUntil = maintenanceUntil();
   c.channelJob = channelJobActive();
   c.refilling = refill_.filling();
+  c.pumpCalibration = pumpCal_.active();
   // The hardware release (SD-110): a leak and high level hold until a person releases their latch
   const Release r = hw_.release();
   c.pumpCut = r.noFlow;
@@ -497,6 +498,17 @@ void Robot::boot() {
       log_.add(bootEpoch_, "dose", "notice", say("ev.boot.cut_cup", {{"channel", r.channel}}), say("ev.boot.cut_cup.text"));
   }
   pairAfterRestart(rt_, journal_.runs());
+  // A pump calibration cut by the restart: its intake may be out of its canister, so the channel
+  // doses nothing until a person has put it back (SD-143, R6)
+  if (rt_.pumpCal.is_object()) {
+    const json n = rt_.pumpCal.value("channel", json());
+    if (n.is_number_integer() && n.get<int>() >= 1 && n.get<int>() <= hw_.channelCount()) {
+      const int ch = n.get<int>();
+      setLatch(cfg_, rt_, PumpCal::cutLatch(ch), {{"at", bootEpoch_}, {"channel", ch}, {"key", "channel.cal_cut"}});
+      log_.add(bootEpoch_, "calibration", "warn", say("ev.pumpcal.cut", {{"channel", ch}}), say("latch.channel.cal_cut", {{"channel", ch}}), {{"channel", ch}});
+    }
+    rt_.pumpCal = nullptr;
+  }
   if (journal_.anyIntoTank()) {
     // Doses not mixed in and measured yet: the first cycle mixes first and learns nothing (SD-106)
     Ctx c = ctx();
@@ -624,11 +636,16 @@ void Robot::tick() {
   // Drops without a running pump went into the tank: the check mixes first and learns nothing,
   // as after a cut dose (SD-111)
   if (act_.takeUnplannedDrops()) mixFirstNow();
+  pumpCal_.tick(c, act_, doser_);
   doser_.tick(c, act_);
   if (auto p = doser_.takeFinished()) {
-    // A run that went through its line has filled it: a step of commissioning the robot sees (SD-129)
-    if (p->state == DoseProgress::State::Done && p->msDone > 0 && p->channel > 0 && rt_.filled.insert(p->channel).second) saveState(true);
-    if (job_ && p->orderId == job_->id) channelJobDone(*p);
+    // A run that went through its line has filled it: a step of commissioning the robot sees (SD-129).
+    // A pump calibration's runs pump water; its last step fills the line itself (SD-143)
+    const bool calibration = p->orderId.rfind("pcal-", 0) == 0;
+    if (!calibration && p->state == DoseProgress::State::Done && p->msDone > 0 && p->channel > 0 && rt_.filled.insert(p->channel).second) saveState(true);
+    if (calibration) {
+      if (pumpCal_.owns(p->orderId)) pumpCalDone(c, *p);
+    } else if (job_ && p->orderId == job_->id) channelJobDone(*p);
     else if (p->orderId.rfind("peer-", 0) == 0) {
       // A run the leader asked for: its result goes back with the next call (SD-131)
       static const char* kStates[] = {"idle", "running", "done", "failed", "aborted"};
@@ -640,6 +657,7 @@ void Robot::tick() {
   }
   watchPeer(c);
   c.channelJob = channelJobActive();
+  c.pumpCalibration = pumpCal_.active();
   cycle_.tick(c, act_, doser_);
   if (auto st = cycle_.takeSettled()) learnSettling(*st, epoch);
 
@@ -1046,6 +1064,7 @@ json Robot::state() {
              return json{{"recipe", rt_.catchUp.value("recipe", "")}, {"parts", parts}};
            }()},
           {"channelJob", job},
+          {"pumpCalibration", pumpCal_.toJson()},  // SD-143
           {"probe", probe},
           {"maintenanceUntil", c.maintenanceUntil > 0 ? json(c.maintenanceUntil) : json(nullptr)},
           {"eventId", log_.lastId()}};
@@ -1917,6 +1936,7 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
   if (rt_.stopped) return Result::fail(409, say("act.stopped"));
   if (channel < 1 || channel > hw_.channelCount()) return Result::fail(404, say("act.no_channel", {{"channel", channel}}));
   if (channelJobActive()) return Result::fail(409, say("job.busy"));
+  if (pumpCal_.active()) return Result::fail(409, say("pumpcal.busy"));
   if (doser_.busy() || cycle_.dosing()) return Result::fail(409, say("job.cycle_dosing"));
   const Limits lim = cfg_.limits.bounded();
   // A line fill needs no time: it runs until it drips (SD-111)
@@ -2019,6 +2039,66 @@ Result Robot::cancelChannelJob() {
   }
   job_.reset();
   return Result::ok();
+}
+
+// A pump calibration by the user (SD-143): only while nothing else runs a pump, with the placement
+// confirmed and the device free to circulate
+Result Robot::startPumpCalibration(int channel, const json& body) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (peer_ && peer_->role == "follower" && peerLinkOk(clock_.nowMs()) && !leaderMaintenance_)
+    return Result::fail(409, say("coupling.channel_job", {{"name", peer_->name}}));
+  if (rt_.stopped) return Result::fail(409, say("act.stopped"));
+  if (pumpCal_.active()) return Result::fail(409, say("pumpcal.busy"));
+  if (channelJobActive() || probe_ || refill_.filling() || maintenanceUntilMs_ > 0) return Result::fail(409, say("job.busy"));
+  if (doser_.busy() || cycle_.dosing()) return Result::fail(409, say("job.cycle_dosing"));
+  if (!placementConfirmed(cfg_)) return Result::fail(409, say("act.placement"));
+  Ctx c = ctx();
+  if (!c.hold.empty()) return Result::fail(409, holdText("act.hold.", c.hold));
+  Msg err;
+  if (!pumpCal_.start(c, act_, channel, jstr(body, "method", "cylinder"), err)) return Result::fail(409, err);
+  saveState(true);
+  saveEvents();
+  return Result::ok({{"pumpCalibration", pumpCal_.toJson()}});
+}
+
+Result Robot::pumpCalibrationNext(const json& body) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Ctx c = ctx();
+  Msg err;
+  if (!pumpCal_.next(c, act_, body, err)) return Result::fail(err.key == "pumpcal.none" || err.key == "pumpcal.not_now" ? 409 : 422, err);
+  takePumpCalResult();
+  saveState(true);
+  saveEvents();
+  return Result::ok({{"pumpCalibration", pumpCal_.toJson()}});
+}
+
+Result Robot::cancelPumpCalibration() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!pumpCal_.active()) return Result::fail(404, say("pumpcal.none"));
+  Ctx c = ctx();
+  pumpCal_.cancel(c, act_, doser_, say("pumpcal.cancelled"));
+  doser_.takeFinished();  // its own run, cut: nothing to book
+  saveState(true);
+  saveEvents();
+  return Result::ok({{"pumpCalibration", pumpCal_.toJson()}});
+}
+
+void Robot::pumpCalDone(Ctx& c, const DoseProgress& p) {
+  pumpCal_.orderDone(c, act_, p);
+  // The line filled until its first drop: what fell after it is in the tank, mixed in first (SD-111)
+  if (pumpCal_.step() == "done" && p.msDone > 0) mixFirstNow();
+  saveState(true);
+}
+
+// The rate a pump calibration measured: saved with the head it measured (SD-108, SD-143)
+void Robot::takePumpCalResult() {
+  const auto flow = pumpCal_.takeResult();
+  if (!flow) return;
+  Config next = cfg_;
+  next.channels[pumpCal_.channel()] = ChannelCal{*flow, clock_.epoch(), pumpCal_.head()};
+  if (saveConfig(next, std::nullopt).status != 200) return;
+  log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.calibrated", {{"channel", pumpCal_.channel()}}),
+           say("pumpcal.result", {{"flow", *flow}}), {{"channel", pumpCal_.channel()}, {"flowMlPerMin", *flow}});
 }
 
 // ---------------------------------------------------------------- probes
@@ -3205,6 +3285,10 @@ Result Robot::stop(const Msg& who) {
   rt_.stopped = true;
   applyReturnPump();
   Ctx c = ctx();
+  if (pumpCal_.active()) {
+    pumpCal_.cancel(c, act_, doser_, say("abort.stop"));
+    doser_.takeFinished();
+  }
   if (job_ && job_->state == "running") {
     doser_.abort(c, act_, say("abort.stop"));
     if (auto p = doser_.takeFinished()) channelJobDone(*p);

@@ -282,9 +282,17 @@ TEST_CASE("Simulator: the robot's state shows each channel's drops; only a pump 
     const json chs = s.robot().state()["channels"];
     REQUIRE(chs.size() == sim::exampleProfile(name)->channels.size());
     for (const auto& ch : chs) CHECK(ch["drops"].is_object());  // every outlet has a sensor in both examples
-    CHECK(s.robot().info()["profile"]["channels"][0]["reverse"] == (name == "home"));
+    CHECK(s.robot().info()["profile"]["channels"][0]["reverse"] == true);  // every pump runs both ways (SD-142)
     std::string err;
-    CHECK(s.hardware().startRun(1, 500, "back-x", err, true) == (name == "home"));
-    if (name == "pro") CHECK(err == "this pump cannot run backwards");
+    CHECK(s.hardware().startRun(1, 500, "back-x", err, true));
   }
+  // A slot whose pump cannot run backwards refuses it
+  sim::World w;
+  w.reset(4);
+  doseph::Profile p = *sim::exampleProfile("home");
+  p.channels[0].reverse = false;
+  sim::SimHardware hw(w, p);
+  std::string err;
+  CHECK_FALSE(hw.startRun(1, 500, "back-y", err, true));
+  CHECK(err == "this pump cannot run backwards");
 }

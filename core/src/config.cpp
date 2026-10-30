@@ -1049,6 +1049,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["filled"] = s.filled;
   j["pumpLearnedS"] = s.pumpLearnedS;
   j["noFlowTries"] = s.noFlowTries;
+  j["pumpCal"] = s.pumpCal;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
 }
@@ -1166,6 +1167,7 @@ RuntimeState runtimeFromJson(const json& j) {
   const double learned = jnum(j, "pumpLearnedS");
   if (isNum(learned) && learned > 0 && isNum(s.pumpNormalA)) s.pumpLearnedS = learned;
   if (j.contains("noFlowTries") && j["noFlowTries"].is_number_integer()) s.noFlowTries = std::clamp(j["noFlowTries"].get<int>(), 0, 100);
+  if (j.contains("pumpCal") && j["pumpCal"].is_object()) s.pumpCal = j["pumpCal"];
   if (j.contains("filled") && j["filled"].is_array())
     for (const auto& n : j["filled"])
       if (n.is_number_integer()) s.filled.insert(n.get<int>());

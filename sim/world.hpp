@@ -54,6 +54,13 @@ struct Pump {
   int state = 0;  // 0 idle, 1 running, 2 done, 3 failed
   std::string error;
   double cupMl = 0;  // what a calibration run pumped into the cup
+  // A pump calibration by the user (SD-143): where the intake is ("canister", or "water" in the
+  // cylinder or glass), and what liquid fills the line's tip side after its air: concentrate ('c') or
+  // water ('w'), and how much of it; the rest towards the intake is what the intake drew since
+  std::string intake = "canister";
+  char tipKind = 'c';
+  double tipKindMl = 6.0;
+  bool light = false;  // the light at its outlet
 };
 
 struct Tank {
@@ -138,6 +145,7 @@ class World {
 
   // Pumps 1..n
   std::vector<Pump> pumps;
+  double calWaterMl = 100.0;  // the water in the cylinder or the glass a calibration draws from (SD-143)
   // What a pump moves with the head fitted now, ml/min: nothing without one
   static double flowOf(const Pump& p);
   // `motorReverse`: the motor turns the other way; whether that delivers or pulls back depends on
@@ -167,6 +175,9 @@ class World {
  private:
   void step(Ms dt);
   void outOfTip(Pump& p, double ml);  // what leaves a channel's tip: drops, and the tank
+  void countDrops(Pump& p, double ml);
+  void forward(Pump& p, double ml, bool intoCup);  // the line moves towards the tip (SD-143)
+  void backward(Pump& p, double ml);              // … and back towards the intake
   double noise(double sigma) const;
   Ms now_ = 0;
   Ms lastSample_ = -100000;

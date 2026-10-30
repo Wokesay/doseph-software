@@ -467,6 +467,10 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("POST", {"channels", "*", "calibrate"})) return fromResult(robot_.startCalibration(channelOf(p[1]), jnum(body, "seconds", 30)));
   if (is("POST", {"channels", "result"})) return fromResult(robot_.calibrationResult(jnum(body, "ml")));
   if (is("POST", {"channels", "cancel"})) return fromResult(robot_.cancelChannelJob());
+  // A pump calibration by the user (SD-143)
+  if (is("POST", {"channels", "*", "pump-calibration"})) return fromResult(robot_.startPumpCalibration(channelOf(p[1]), body));
+  if (is("POST", {"pump-calibration", "next"})) return fromResult(robot_.pumpCalibrationNext(body));
+  if (is("POST", {"pump-calibration", "cancel"})) return fromResult(robot_.cancelPumpCalibration());
   if (is("POST", {"probe"})) return fromResult(robot_.probe(body));
   if (is("POST", {"latches", "*", "ack"})) return fromResult(robot_.ackLatch(p[1], body));
   if (is("POST", {"alarms", "ack"})) return fromResult(robot_.ackAlarm(""));

@@ -19,9 +19,8 @@ constexpr double kPi = 3.14159265358979323846;
 // weir and 0.35 L up to the high-level sensor
 constexpr Ms kPrimeMs = 8000, kHoseMs = 2000, kHwNoFlowMs = 9000;
 constexpr double kWeirL = 0.15, kReturnOnL = 0.25, kReturnOffL = 0.18, kHighL = 0.35, kChamberMaxL = 0.40;
-// The outlets (assumptions, SD-111): a drop is 0.05 ml; a line pulls back at most 2 ml;
-// a canister above the device siphons 0.6 ml/min
-constexpr double kDropMl = 0.05, kLineMaxMl = 2.0, kSiphonMlPerMin = 0.6;
+// The outlets (assumptions, SD-111): a drop is 0.05 ml; a canister above the device siphons 0.6 ml/min
+constexpr double kDropMl = 0.05, kSiphonMlPerMin = 0.6;
 constexpr double kLineFullMl = 6.0;  // a line from the canister to the tip holds this much (assumption)
 }  // namespace
 
@@ -89,8 +88,7 @@ void World::addWater(double litres) {
   tank.volumeL = v + add;
 }
 
-void World::outOfTip(Pump& p, double ml) {
-  if (ml <= 0) return;
+void World::countDrops(Pump& p, double ml) {
   // The drop sensor counts each drop that falls through the air gap
   p.dropAcc += ml;
   while (p.dropAcc >= kDropMl) {
@@ -98,6 +96,61 @@ void World::outOfTip(Pump& p, double ml) {
     p.drops++;
     p.lastDropMs = now_;
   }
+}
+
+// The line from the intake to the tip (SD-143): the air at the tip goes out first, then the liquid
+// the line held, then what the intake draws now. Water from a calibration only adds to the tank.
+void World::forward(Pump& p, double ml, bool intoCup) {
+  const char src = p.intake == "water" ? 'w' : 'c';
+  if (src == 'w') {
+    ml = std::min(ml, calWaterMl);  // an empty glass draws air: nothing more moves (an assumption)
+    calWaterMl -= ml;
+  }
+  auto out = [&](char kind, double x) {
+    if (x <= 0) return;
+    if (intoCup) p.cupMl += x;
+    else if (kind == 'c') outOfTip(p, x);
+    else {
+      countDrops(p, x);
+      if (tank.volumeL > 0.1) tank.volumeL += x / 1000.0;
+    }
+  };
+  const double air = std::min(ml, p.lineMl);
+  p.lineMl -= air;
+  double rest = ml - air;
+  if (p.tipKind != src) {
+    const double old = std::min(rest, p.tipKindMl);
+    out(p.tipKind, old);
+    p.tipKindMl -= old;
+    rest -= old;
+    if (p.tipKindMl <= 1e-9) p.tipKind = src;
+  }
+  if (p.tipKind == src) p.tipKindMl = kLineFullMl - p.lineMl;
+  out(src, rest);
+}
+
+// Backwards, air comes in at the tip and the liquid goes back where the intake is: the part the
+// intake drew last first, then the tip's
+void World::backward(Pump& p, double ml) {
+  const double liquid = kLineFullMl - p.lineMl;
+  const double back = std::min(ml, liquid);
+  p.lineMl += back;
+  const double intakeSide = std::max(0.0, liquid - p.tipKindMl);
+  const double fromIntake = std::min(back, intakeSide);
+  const double fromTip = back - fromIntake;
+  p.tipKindMl = std::max(0.0, p.tipKindMl - fromTip);
+  const char intakeKind = p.tipKind == 'c' ? 'w' : 'c';
+  const double water = (intakeKind == 'w' ? fromIntake : 0) + (p.tipKind == 'w' ? fromTip : 0);
+  if (p.intake == "water") calWaterMl += water;  // back into the glass; into a canister it is not followed
+  if (p.tipKindMl <= 1e-9) {
+    p.tipKind = intakeKind;
+    p.tipKindMl = kLineFullMl - p.lineMl;
+  }
+}
+
+void World::outOfTip(Pump& p, double ml) {
+  if (ml <= 0) return;
+  countDrops(p, ml);
   // The drop goes into the mixing chamber and with the return into the tank, not mixed in yet
   if (tank.volumeL > 0.1 && liquids.count(p.liquid)) {
     const Liquid& l = liquids[p.liquid];
@@ -170,7 +223,11 @@ doseph::RunStatus World::runStatus(int pump) const {
 }
 
 void World::emptyLine(int pump) {
-  if (pump >= 1 && pump <= static_cast<int>(pumps.size())) pumps[static_cast<size_t>(pump - 1)].lineMl = kLineFullMl;
+  if (pump >= 1 && pump <= static_cast<int>(pumps.size())) {
+    Pump& p = pumps[static_cast<size_t>(pump - 1)];
+    p.lineMl = kLineFullMl;
+    p.tipKindMl = 0;
+  }
 }
 
 void World::stopAllPumps() {
@@ -244,17 +301,15 @@ void World::step(Ms dt) {
     const Ms eff = std::min(dt, p.requested - (p.elapsed - dt));
     const double ml = flowOf(p) * static_cast<double>(std::max<Ms>(0, eff)) / 60000.0;
     const bool intoCup = p.jobId.rfind("cal-", 0) == 0 || p.jobId.rfind("prime-", 0) == 0;
+    // An empty canister moves nothing, nor does a blocked outlet; water in a glass does (SD-143)
+    const bool dry = p.intake == "canister" && p.empty;
     if (p.backwards) {
-      p.lineMl = std::min(kLineMaxMl, p.lineMl + ml);  // pulled back towards the canister
+      backward(p, ml);  // pulled back towards the canister, or the glass
     } else if (intoCup) {
       // The outlet is off the device, over the cup: the sensor sees nothing; a line pulled back fills first
-      const double refill = p.empty ? 0 : std::min(ml, p.lineMl);
-      p.lineMl -= refill;
-      p.cupMl += p.empty ? 0 : ml - refill;
-    } else if (!p.empty && !p.outletBlocked) {
-      const double refill = std::min(ml, p.lineMl);  // a line pulled back fills first
-      p.lineMl -= refill;
-      outOfTip(p, ml - refill);
+      if (!dry) forward(p, ml, true);
+    } else if (!dry && !p.outletBlocked) {
+      forward(p, ml, false);  // a line pulled back fills first
     }
     if (p.elapsed >= p.requested) {
       p.elapsed = p.requested;
@@ -345,6 +400,8 @@ json World::toJson() const {
     ps.push_back({{"channel", i + 1}, {"liquid", p.liquid}, {"head", p.head}, {"trueFlow", flowOf(p)}, {"blocked", p.blocked}, {"empty", p.empty},
                   {"outletBlocked", p.outletBlocked}, {"siphon", p.siphon}, {"drops", p.drops},
                   {"lineMl", std::round(p.lineMl * 100.0) / 100.0},
+                  {"intake", p.intake}, {"light", p.light},
+                  {"lineHolds", p.lineMl >= kLineFullMl - 1e-9 ? "air" : p.tipKind == 'w' ? "water" : "concentrate"},
                   {"state", p.state}, {"cupMl", std::round(p.cupMl * 100.0) / 100.0}});
   }
   json liq = json::object();
@@ -353,6 +410,9 @@ json World::toJson() const {
                     {"pendingEc", tank.pendingEc}, {"pendingPh", tank.pendingPh}}},
           {"chamber", {{"ec", chamber.ec}, {"ph", chamber.ph}, {"temp", chamber.temp}}},
           {"channels", ps},
+          // The cylinder reads a little more than went, for the intake in it; the scale what went
+          // (an assumption, SD-143)
+          {"calWater", {{"ml", calWaterMl}, {"cylinderMl", std::round(calWaterMl * 1.02 * 100.0) / 100.0}, {"scaleG", std::round(calWaterMl * 100.0) / 100.0}}},
           {"output", output},
           {"pumpInTank", pumpInTank},
           {"noFlowCut", noFlowCut},
