@@ -800,25 +800,42 @@ std::string Robot::faultHold(const std::vector<std::string>& faults) const {
 // A calibration belongs to the pump head it was measured with (SD-108): another head, none fitted
 // or none recorded makes it void, and the channel doses nothing until it is calibrated again
 void Robot::checkHeads(Epoch epoch) {
-  const auto voided = [&](int n, const ChannelCal& cal) {
-    return n >= 1 && n <= hw_.channelCount() && (cal.head.empty() || cal.head != hw_.profile().channels[static_cast<size_t>(n - 1)].head);
-  };
   std::vector<int> gone;
-  for (const auto& [n, cal] : cfg_.channels)
-    if (voided(n, cal)) gone.push_back(n);
+  bool changed = false;
+  for (const auto& [n, cal] : cfg_.channels) {
+    if (n < 1 || n > hw_.channelCount()) continue;
+    const std::string& head = hw_.profile().channels[static_cast<size_t>(n - 1)].head;
+    if (head.empty() && !cal.head.empty()) {
+      // Taken off: the calibration waits for the head that comes back (SD-144); nothing runs meanwhile
+      if (rt_.headOff.emplace(n, cal.head).second) {
+        log_.add(epoch, "calibration", "warn", say("ev.channel.head_removed", {{"channel", n}}), say("ev.channel.head_removed.text"));
+        changed = true;
+      }
+    } else if (!head.empty() && head == cal.head && rt_.headOff.erase(n)) {
+      // The same size back: the device cannot tell a new head from the old one, so it asks (SD-144)
+      setLatch(cfg_, rt_, channelLatch(n, "head_check"), {{"at", epoch}, {"channel", n}, {"head", head}, {"key", "channel.head_check"}});
+      log_.add(epoch, "calibration", "warn", say("ev.channel.head_back", {{"channel", n}, {"head", head}}), say("latch.channel.head_check", {{"channel", n}, {"head", head}}));
+      changed = true;
+    } else if (cal.head.empty() || (!head.empty() && head != cal.head)) {
+      gone.push_back(n);  // another size, or none recorded: void (SD-108)
+    }
+  }
+  if (changed) saveState(true);
   if (gone.empty()) return;
   Config next = cfg_;
   for (int n : gone) next.channels.erase(n);
   // Kept while the store fails: the gateway refuses the void calibration meanwhile
   if (saveConfig(next, std::nullopt).status != 200) return;
   for (int n : gone) {
+    rt_.headOff.erase(n);
     const std::string& head = hw_.profile().channels[static_cast<size_t>(n - 1)].head;
     if (head.empty())
-      log_.add(epoch, "calibration", "warn", say("ev.channel.head_removed", {{"channel", n}}), say("ev.channel.head_removed.text"));
+      log_.add(epoch, "calibration", "warn", say("ev.channel.head_removed", {{"channel", n}}), say("ev.channel.head_void.text"));
     else
       log_.add(epoch, "calibration", "warn", say("ev.channel.head_changed", {{"channel", n}, {"head", head}}),
                say("ev.channel.head_changed.text"));
   }
+  saveState(true);
 }
 
 // A clean dose's settling time from the history: from the end of its dosing until the readings stay
@@ -3239,6 +3256,19 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   // … so does one of the device's protection (SD-141); a note goes once seen
   for (const auto& f : cleanFaults(rel.faults))
     if (const FaultInfo i = classifyFault(f); i.kind == FaultInfo::Kind::Latch && i.id() == id) return Result::fail(409, say("latch.cause_present"));
+  // A head of the same size fitted again: the person says whether it is new; a new one voids the
+  // calibration, the old one keeps it (SD-144)
+  if (jstr(it->second, "key") == "channel.head_check") {
+    if (!body.contains("newHead") || !body["newHead"].is_boolean()) return Result::fail(422, say("latch.head_answer"));
+    const double nn = jnum(it->second, "channel");
+    const int n = isNum(nn) ? static_cast<int>(nn) : 0;
+    if (body["newHead"].get<bool>() && cfg_.channels.count(n)) {
+      Config next = cfg_;
+      next.channels.erase(n);
+      if (saveConfig(next, std::nullopt).status != 200) return Result::fail(500, say("store.failed"));
+      log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.head_new", {{"channel", n}}), say("ev.channel.head_changed.text"));
+    }
+  }
   // Only a person who confirms the entered volume releases it; a new volume releases it too
   // (putTank). One that reported only was taken as confirmed when it was set (SD-133).
   if (id == "tank.volume" && holds(rt_, id)) {

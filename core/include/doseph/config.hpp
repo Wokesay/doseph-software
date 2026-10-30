@@ -496,6 +496,9 @@ struct RuntimeState {
   // A pump calibration under way, {channel, at}: a restart in its middle locks the channel, whose
   // intake may be out of its canister (SD-143, R6); null without one
   json pumpCal = nullptr;
+  // Channel → the head size its calibration was measured with, while no head is fitted: a head of
+  // that size fitted again asks whether it is a new one (SD-144)
+  std::map<int, std::string> headOff;
   // The channels a run went through to its end, which filled the line (SD-129): a commissioning
   // step the robot sees
   std::set<int> filled;

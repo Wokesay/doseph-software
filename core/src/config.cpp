@@ -1050,6 +1050,9 @@ void to_json(json& j, const RuntimeState& s) {
   j["pumpLearnedS"] = s.pumpLearnedS;
   j["noFlowTries"] = s.noFlowTries;
   j["pumpCal"] = s.pumpCal;
+  json off = json::object();
+  for (const auto& [n, h] : s.headOff) off[std::to_string(n)] = h;
+  j["headOff"] = off;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
 }
@@ -1168,6 +1171,9 @@ RuntimeState runtimeFromJson(const json& j) {
   if (isNum(learned) && learned > 0 && isNum(s.pumpNormalA)) s.pumpLearnedS = learned;
   if (j.contains("noFlowTries") && j["noFlowTries"].is_number_integer()) s.noFlowTries = std::clamp(j["noFlowTries"].get<int>(), 0, 100);
   if (j.contains("pumpCal") && j["pumpCal"].is_object()) s.pumpCal = j["pumpCal"];
+  if (j.contains("headOff") && j["headOff"].is_object())
+    for (const auto& [k, v] : j["headOff"].items())
+      if (v.is_string() && !k.empty() && k.size() <= 2 && k.find_first_not_of("0123456789") == std::string::npos) s.headOff[std::stoi(k)] = v.get<std::string>();
   if (j.contains("filled") && j["filled"].is_array())
     for (const auto& n : j["filled"])
       if (n.is_number_integer()) s.filled.insert(n.get<int>());

@@ -7,6 +7,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A pump head of the same size fitted again asks whether it is new; the
+  channel doses nothing until the answer under Status. A new head needs a
+  calibration, the same one keeps its rate. A pump's calibration is now
+  due together with the pH probe's in the maintenance plan (SD-144).
+
 - A pump calibration by the user (SD-143), guided under Channels ›
   Calibrate.
   - The line goes back into its canister first.

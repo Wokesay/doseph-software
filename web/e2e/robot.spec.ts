@@ -158,6 +158,20 @@ test("another pump head voids a channel's calibration; without a head the channe
   await expect(page.getByTestId("calibrate-2")).toBeDisabled();
 });
 
+test("a pump head of the same size fitted again asks whether it is new; the same head keeps its rate (SD-144)", async ({ page }) => {
+  await login(page);
+  await sim(page, "channelHead", { channel: 3, head: "" });
+  await page.goto("/#/channels");
+  await expect(page.getByTestId("head-3")).toContainText("no pump head");
+  await sim(page, "channelHead", { channel: 3, head: "S" });
+  await page.goto("/#/");
+  await expect(page.getByTestId("latch-channel.3.head_check")).toContainText("Is it a new head?", { timeout: 15_000 });
+  await page.getByTestId("same-head-channel.3.head_check").click();
+  await expect(page.getByTestId("latch-channel.3.head_check")).toHaveCount(0);
+  await page.goto("/#/channels");
+  await expect(page.getByTestId("head-3")).toContainText("ml/min");
+});
+
 test("a canister that siphons locks its channel until it is released (SD-111)", async ({ page }) => {
   await login(page);
   await sim(page, "channelFault", { channel: 4, siphon: true });

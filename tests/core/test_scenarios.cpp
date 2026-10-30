@@ -278,15 +278,58 @@ TEST_CASE("Scenario pump head: a changed head voids the channel's calibration un
   r.step(5 * kSecond);
   CHECK(channel2()["flowMlPerMin"].is_number());
   CHECK(r.s.control("channelHead", {{"channel", 2}, {"head", "XL"}}).contains("error"));  // no such head
-  // Taken off: the calibration is void, and nothing runs on the channel
+  // Taken off: nothing runs on the channel; its calibration waits for the head that comes back (SD-144)
+  const double flow = channel2()["flowMlPerMin"];
   r.act("channelHead", {{"channel", 2}, {"head", ""}});
   r.step(5 * kSecond);
   CHECK(channel2()["head"].is_null());
-  CHECK(channel2()["flowMlPerMin"].is_null());
+  CHECK(channel2()["flowMlPerMin"] == flow);
   CHECK(headEvents("ev.channel.head_removed") == 1);
   const auto prime = r.call("POST", "channels/2/prime", {{"seconds", 3}});
   CHECK(prime.status == 409);
   CHECK(prime.body.find("act.no_head") != std::string::npos);
+}
+
+TEST_CASE("Scenario pump head of the same size fitted again: the device asks whether it is new and doses nothing on the channel meanwhile; the same head keeps its rate, a new one voids it; another size voids it at once (SD-144)") {
+  Run r(device("home"));
+  const auto channel2 = [&] { return r.state()["channels"][1]; };
+  const double flow = channel2()["flowMlPerMin"];
+  r.act("channelHead", {{"channel", 2}, {"head", ""}});
+  r.step(5 * kSecond);
+  r.act("channelHead", {{"channel", 2}, {"head", "S"}});
+  r.step(5 * kSecond);
+  REQUIRE(r.state()["latches"].contains("channel.2.head_check"));
+  CHECK(doseph::channelLocked(r.s.robot().runtime(), 2));
+  CHECK(channel2()["flowMlPerMin"] == flow);
+  // An answer is needed: neither a plain release nor a guess
+  CHECK(r.call("POST", "latches/channel.2.head_check/ack").status == 422);
+  r.ok("POST", "latches/channel.2.head_check/ack", {{"newHead", false}});
+  CHECK_FALSE(doseph::channelLocked(r.s.robot().runtime(), 2));
+  CHECK(channel2()["flowMlPerMin"] == flow);
+  // Again, and this time a new head: the rate goes
+  r.act("channelHead", {{"channel", 2}, {"head", ""}});
+  r.step(5 * kSecond);
+  r.act("channelHead", {{"channel", 2}, {"head", "S"}});
+  r.step(5 * kSecond);
+  r.ok("POST", "latches/channel.2.head_check/ack", {{"newHead", true}});
+  CHECK(channel2()["flowMlPerMin"].is_null());
+  // A restart while the head is off keeps the question for when it comes back
+  REQUIRE(r.s.robot().setChannelFlow(2, 50.0).status == 200);
+  r.act("channelHead", {{"channel", 2}, {"head", ""}});
+  r.step(5 * kSecond);
+  r.s.reboot();
+  REQUIRE(r.login("demo-password"));
+  r.act("channelHead", {{"channel", 2}, {"head", "S"}});
+  r.step(5 * kSecond);
+  CHECK(r.state()["latches"].contains("channel.2.head_check"));
+  // Off and back with another size: void at once, no question
+  r.ok("POST", "latches/channel.2.head_check/ack", {{"newHead", false}});
+  r.act("channelHead", {{"channel", 2}, {"head", ""}});
+  r.step(5 * kSecond);
+  r.act("channelHead", {{"channel", 2}, {"head", "M"}});
+  r.step(5 * kSecond);
+  CHECK_FALSE(r.state()["latches"].contains("channel.2.head_check"));
+  CHECK(channel2()["flowMlPerMin"].is_null());
 }
 
 TEST_CASE("Scenario pull back: after a dose the line is pulled back about 0.2 ml where the pump can; the next run fills it first, and every dose still drips in full (SD-111)") {
