@@ -1053,6 +1053,9 @@ void to_json(json& j, const RuntimeState& s) {
   json off = json::object();
   for (const auto& [n, h] : s.headOff) off[std::to_string(n)] = h;
   j["headOff"] = off;
+  j["stockRead"] = s.stockRead;
+  j["rateProposal"] = s.rateProposal;
+  j["dropRate"] = s.dropRate;
   if (s.clock) j["clock"] = *s.clock;
   j["bootCount"] = s.bootCount;
 }
@@ -1174,6 +1177,15 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("headOff") && j["headOff"].is_object())
     for (const auto& [k, v] : j["headOff"].items())
       if (v.is_string() && !k.empty() && k.size() <= 2 && k.find_first_not_of("0123456789") == std::string::npos) s.headOff[std::stoi(k)] = v.get<std::string>();
+  // Their fields are read where used, as numbers or not at all: a damaged one is no entry (SD-145)
+  auto entries = [&](const char* key, json& to) {
+    if (j.contains(key) && j[key].is_object())
+      for (const auto& [k, v] : j[key].items())
+        if (v.is_object()) to[k] = v;
+  };
+  entries("stockRead", s.stockRead);
+  entries("rateProposal", s.rateProposal);
+  entries("dropRate", s.dropRate);
   if (j.contains("filled") && j["filled"].is_array())
     for (const auto& n : j["filled"])
       if (n.is_number_integer()) s.filled.insert(n.get<int>());

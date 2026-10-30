@@ -213,6 +213,7 @@ class Doser {
   void legEnded(const Ctx& c, Actuators& act, bool done, Ms ran, const std::string& error);
   void finish(const Ctx& c, DoseProgress::State state);
   void fail(const Ctx& c, Msg error);
+  void noteDrops(const Ctx& c, Actuators& act, Ms ms);
   std::string busJob() const;
   std::optional<DoseOrder> active_;
   bool dripped(Actuators& act) const;  // a line fill: the first drops fell
@@ -220,6 +221,10 @@ class Doser {
   std::string job_;  // the job ID of the run under way
   std::uint64_t fillFrom_ = 0;  // a line fill: the drops counted when it started
   bool filled_ = false;        // a line fill: it dripped, and its run was stopped
+  // A run of a dose that began with a full line, and the drops counted at its start: its drops tell
+  // the pump's rate (SD-145)
+  bool refilled_ = false;
+  std::optional<std::uint64_t> dropsFrom_;
   DoseProgress progress_;
   std::optional<DoseProgress> finished_;
   Ms pauseUntil_ = 0;

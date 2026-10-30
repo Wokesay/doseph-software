@@ -3185,7 +3185,7 @@
     "/canisters/{id}/stock": {
       "post": {
         "operationId": "setStock",
-        "summary": "Sets a canister's level, or full when refilled",
+        "summary": "Sets a canister's level, or full when refilled; a level read is compared with what the doses counted since the last one (SD-145)",
         "tags": [
           "canisters"
         ],
@@ -3223,11 +3223,45 @@
         },
         "responses": {
           "200": {
-            "description": "Done",
+            "description": "The level, and what the reading says of its channel's rate: null where there is no comparison",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "type": "object",
+                  "properties": {
+                    "stockMl": {
+                      "type": "number"
+                    },
+                    "check": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "countedMl": {
+                          "type": "number"
+                        },
+                        "usedMl": {
+                          "type": "number"
+                        },
+                        "share": {
+                          "type": "number",
+                          "description": "used / counted − 1"
+                        },
+                        "proposal": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "The rate proposed, beyond 5 %: {canister, countedMl, usedMl, from, to, at}"
+                        },
+                        "calibrate": {
+                          "type": "boolean",
+                          "description": "Too far off to correct, beyond 30 %: calibrate the pump"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3565,6 +3599,76 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rate-proposal": {
+      "post": {
+        "operationId": "answerRateProposal",
+        "summary": "Takes or dismisses the rate the consumption check proposed for the channel; taken, it is the channel's calibration from now on, with its head (SD-145)",
+        "tags": [
+          "channels"
+        ],
+        "x-roles": [
+          "owner",
+          "app"
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "The channel's number"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "take"
+                ],
+                "properties": {
+                  "take": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
             "$ref": "#/components/responses/Error"
           }
         }

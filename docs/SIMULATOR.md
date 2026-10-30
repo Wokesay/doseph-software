@@ -116,7 +116,9 @@ an **assumption**) and the scale (`calWater.scaleG`) read. `channelHead` with `{
 head, `"head": ""` takes it off (SD-108). `lineEmpty` with
 `{"channel": 4}` fills a channel's line with air, as after a canister
 change: it holds 6 ml (an **assumption**), which a run fills before the
-outlet drips (SD-111).
+outlet drips (SD-111). `pumpWear` with `{"channel": 2, "factor": 0.8}`
+wears a pump's tube: it delivers that share of what it did, while its
+calibration stays (SD-145).
 The network devices' twins (SD-132): `netOnline` with
 `{"address": "shelly-1.local", "online": false}` takes a device away, as a
 power loss would, and `true` brings it back; `netReachable` with
