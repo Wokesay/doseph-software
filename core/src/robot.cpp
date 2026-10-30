@@ -9,6 +9,7 @@
 #include <set>
 
 #include "doseph/embedded.hpp"
+#include "doseph/faults.hpp"
 #include "doseph/localtime.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
@@ -46,6 +47,7 @@ constexpr Epoch kStateSaveS = 60;        // the clock in the state, at most this
 constexpr Ms kProbeIdle = 30 * kMinute;  // a probe calibration explains jumps this long after its last step (RAT-042)
 constexpr Ms kFillMaxMs = 5 * kMinute;  // a line fill runs at most this long in all (SD-111)
 constexpr Ms kReturnMaxMs = 60 * kSecond;  // a return pump running this long without a pause is dry or blocked (SD-109)
+constexpr const char* kProtectionCheck = "protection_check";  // a check of the protection by hand after a start (SD-141)
 const std::set<std::string> kSeries = {"ph", "ec", "temp", "flow"};
 
 Msg changed(const char* what) { return say("ev.config.changed", {{"what", say(what)}}); }
@@ -78,12 +80,15 @@ Ctx Robot::ctx() {
   // The hardware release (SD-110): a leak and high level hold until a person releases their latch
   const Release r = hw_.release();
   c.pumpCut = r.noFlow;
+  const std::string fault = faultHold(cleanFaults(r.faults));
   c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
            : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
+           : !fault.empty()                                    ? fault
            : holds(rt_, "hw.return")                           ? "return"
            : r.stopButton                                      ? "stop_button"
            : !r.on                                             ? "release"
                                                                : "";
+  c.protectionCheck = holds(rt_, kProtectionCheck);
   c.follower = peer_ && peer_->role == "follower";
   c.linkOk = c.follower && peerLinkOk(c.now);
   c.leaderPump = c.linkOk && leaderPump_;
@@ -514,6 +519,14 @@ void Robot::boot() {
   }
   log_.add(bootEpoch_, "system", rt_.stopped ? "warn" : "info", say("ev.boot"),
            rt_.stopped ? say("ev.boot.stopped") : Msg{});
+  // A device that does not test its protection itself: after every start a person checks it by hand
+  // and confirms it before anything doses into the tank (SD-141)
+  if (hw_.profile().selfTest != "auto") {  // "manual", or anything the robot does not know
+    setLatch(cfg_, rt_, kProtectionCheck, {{"at", bootEpoch_}});
+    log_.add(bootEpoch_, "system", "warn", say("ev.protection_check"), say("latch.protection_check"));
+  } else {
+    rt_.latches.erase(kProtectionCheck);
+  }
   if (authKept_) log_.add(bootEpoch_, "auth", "alarm", say("ev.auth.kept"), say("auth.kept"));
   saveState(true);
   saveEvents();
@@ -644,6 +657,7 @@ void Robot::tick() {
     in.maintenance = maintenanceUntilMs_ > 0;
     in.channelCount = hw_.channelCount();
     in.hold = c.hold;
+    in.faults = cleanFaults(hw_.release().faults);
     if (peer_) in.peer = {true, peer_->role == "leader", peerLinkOk(c.now), deviation_, peer_->name};
     in.roles = roleStates(now);
     for (const auto& a : climate_.alerts(cfg_)) in.rooms.push_back({a.id, a.name, a.co2High, a.heat, a.limitC});
@@ -701,6 +715,47 @@ void Robot::watchRelease(Epoch epoch) {
   }
   if (r.stopButton && !stopButtonSeen_) stop(say("stop.button"));
   stopButtonSeen_ = r.stopButton;
+
+  // The device's own protection (SD-141): each fault is logged when it appears, and all but a
+  // warning stop what runs. One that latches holds until a person releases it once it is no longer
+  // reported; a restart by the safety supervisor stays as a note until a person has seen it.
+  // A fault that comes and goes is logged again only after a minute, so it does not wear the flash
+  std::set<std::string> seen;
+  for (const auto& f : cleanFaults(r.faults)) {
+    seen.insert(f);
+    if (faultsSeen_.count(f)) continue;
+    const FaultInfo i = classifyFault(f);
+    if (faultLogged_.size() > 64) faultLogged_.clear();
+    const auto last = faultLogged_.find(f);
+    const bool quiet = last != faultLogged_.end() && now - last->second < kMinute;
+    faultLogged_[f] = now;
+    const json args = faultArgs(i, f);
+    const bool warning = i.kind == FaultInfo::Kind::Warning;
+    if ((i.kind == FaultInfo::Kind::Latch || i.reason == "safety_restart") && !rt_.latches.count(i.id())) {
+      json entry = args;
+      entry["at"] = epoch;
+      entry["key"] = "hw." + i.reason;
+      entry["fault"] = i.reason;
+      if (i.reason == "safety_restart") entry["note"] = true;  // holds nothing
+      setLatch(cfg_, rt_, i.id(), std::move(entry));
+      saveState(true);
+    }
+    if (!warning) act_.stopAll();
+    if (!quiet) log_.add(epoch, "alarm", warning ? "warn" : "alarm", say("ev.hw.fault", {{"name", say("lock.hw." + i.reason)}}), say("latch.hw." + i.reason, args));
+  }
+  faultsSeen_ = std::move(seen);
+}
+
+// The first fault of the device's protection that holds every pump (SD-141): one the device
+// reports now, or a latched one a person has not released yet
+std::string Robot::faultHold(const std::vector<std::string>& faults) const {
+  for (const auto& f : faults) {
+    const FaultInfo i = classifyFault(f);
+    if (i.kind != FaultInfo::Kind::Warning) return i.reason;
+  }
+  for (const auto& [id, l] : rt_.latches)
+    if (l.is_object() && !jstr(l, "fault").empty() && holds(rt_, id)) return jstr(l, "fault");
+  return "";
 }
 
 // A calibration belongs to the pump head it was measured with (SD-108): another head, none fitted
@@ -934,6 +989,9 @@ json Robot::state() {
              const WaterPath w = hw_.waterPath();
              auto opt = [](const std::optional<bool>& v) { return v ? json(*v) : json(nullptr); };
              return json{{"release", {{"on", r.on}, {"leak", r.leak}, {"highLevel", r.highLevel}, {"stopButton", r.stopButton}, {"noFlow", r.noFlow}}},
+                         {"faults", cleanFaults(r.faults)},  // as the device names them, checked (SD-141)
+                         {"hold", c.hold.empty() ? json(nullptr) : json(c.hold)},
+                         {"protectionCheck", c.protectionCheck},
                          {"outletWet", opt(w.outletWet)},
                          {"returnPump", opt(w.returnPump)}};
            }()},
@@ -3091,6 +3149,9 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   const Release rel = hw_.release();
   if ((id == "hw.leak" && rel.leak) || (id == "hw.high_level" && rel.highLevel))
     return Result::fail(409, say("latch.cause_present"));
+  // … so does one of the device's protection (SD-141); a note goes once seen
+  for (const auto& f : cleanFaults(rel.faults))
+    if (const FaultInfo i = classifyFault(f); i.kind == FaultInfo::Kind::Latch && i.id() == id) return Result::fail(409, say("latch.cause_present"));
   // Only a person who confirms the entered volume releases it; a new volume releases it too
   // (putTank). One that reported only was taken as confirmed when it was set (SD-133).
   if (id == "tank.volume" && holds(rt_, id)) {
@@ -3106,7 +3167,8 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   }
   if (!held) {
     // A report seen: it held nothing, so the check goes on undisturbed (SD-133)
-    log_.add(clock_.epoch(), "unblock", "notice", say("ev.lock.cleared"), reportedEvent(jstr(args, "key", id), args));
+    log_.add(clock_.epoch(), "unblock", "notice", say("ev.lock.cleared"),
+             id == kSafetyRestartNote ? say("latch." + id, args) : reportedEvent(jstr(args, "key", id), args));
     saveState(true);
     return Result::ok();
   }

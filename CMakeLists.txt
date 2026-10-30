@@ -54,6 +54,7 @@ endif()
 add_library(doseph_core
   core/src/common.cpp
   core/src/hardware.cpp
+  core/src/faults.cpp
   core/src/clock.cpp
   core/src/localtime.cpp
   core/src/config.cpp
@@ -122,6 +123,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/main.cpp
     tests/core/test_auth.cpp
     tests/core/test_reset.cpp
+    tests/core/test_faults.cpp
     tests/core/test_history.cpp
     tests/core/test_localtime.cpp
     tests/core/test_messages.cpp

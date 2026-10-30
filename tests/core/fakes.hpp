@@ -26,7 +26,7 @@ class Hardware : public doseph::IHardware {
  public:
   bool isOnline = true;
   std::map<Signal, doseph::Sample> samples;
-  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true, true}), "turbine", "tank", "gravity", {"wifi"}, doseph::kNaN, false};
+  doseph::Profile prof{"home", "Test", std::vector<doseph::ChannelCaps>(4, {"brushed", "S", true, true}), "turbine", "tank", "gravity", {"wifi"}, doseph::kNaN, false, "signed", "auto", "fixed", ""};
   std::map<int, doseph::RunStatus> runs;
   int started = 0;
   bool out = false;

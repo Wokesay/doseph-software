@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "doseph/faults.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
 
@@ -863,10 +864,10 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   // The hardware release holds every pump (SD-110): a dose going on is cut, what went in is mixed
   // first later; the cycle waits with the reason until the release is back
   if (!c.hold.empty()) {
-    const std::string key = "cycle.wait.hold." + c.hold;
-    if (!(phase_ == Phase::Wait && line_.key == key)) {
+    Msg why = holdText("cycle.wait.hold.", c.hold);
+    if (!(phase_ == Phase::Wait && line_.key == why.key && line_.args == why.args)) {
       restart(c, act, doser);
-      wait(c, act, say(key), 0);
+      wait(c, act, std::move(why), 0);
     }
     feedPump(c, act, false);
     return;
@@ -880,6 +881,16 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       restart(c, act, doser);
       wait(c, act, say(key), 0);
     }
+    return;
+  }
+  // A device that does not test its protection itself: after a start the check waits until a person
+  // confirmed it by hand (SD-141)
+  if (c.protectionCheck) {
+    if (!(phase_ == Phase::Wait && line_.key == "cycle.wait.protection_check")) {
+      restart(c, act, doser);
+      wait(c, act, say("cycle.wait.protection_check"), 0);
+    }
+    feedPump(c, act, false);
     return;
   }
   // Maintenance: someone works at tank or device. The cycle holds and the feed pump is off until it ends.
@@ -1155,6 +1166,9 @@ json MixCycle::checks(const Ctx& c) const {
 
   json all = json::array();
   all.push_back(item(!c.stopped, say(c.stopped ? "check.stopped" : "check.not_stopped")));
+  // The hardware's release and the device's protection (SD-110, SD-141), and a check by hand
+  all.push_back(item(c.hold.empty(), c.hold.empty() ? say("check.release") : holdText("cycle.wait.hold.", c.hold)));
+  if (c.protectionCheck) all.push_back(item(false, say("cycle.wait.protection_check")));
   const bool placed = placementConfirmed(c.cfg);
   all.push_back(item(placed, say(placed ? "check.placement" : "cycle.off.placement")));
   if (s.off.key == "cycle.off.ended") all.push_back(item(false, s.off));  // its time is over

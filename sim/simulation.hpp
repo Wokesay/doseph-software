@@ -45,6 +45,7 @@ struct Options {
   std::string scenario = "demo";  // demo | new
   std::string profile = "home";   // an example profile: home | pro
   std::string pumpIn;             // "tank" | "device" for the profile's feed pump; empty: the profile's
+  std::string selfTest;           // "auto" | "manual" for the profile's self-test; empty: the profile's (SD-141)
   std::string dataDir;            // empty: in memory only
   std::string password;           // the demo's password
   bool showSetupCodes = false;    // the console shows setup codes (SD-129, SD-139)

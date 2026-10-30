@@ -95,6 +95,8 @@ class World {
   // flow its sensor sees is switched off with every dosing pump, and held off
   // until the robot switches its output off
   bool noFlowCut = false;
+  // What the device's protection reports, by ID (SD-141): set from the panel or a test
+  std::vector<std::string> faults;
   // The feed pump's current, A (assumptions): 0.80 moving water, 0.32 running
   // dry or against a blocked inlet, 0.86 with the hose off; 0 when it stands
   double pumpA() const;

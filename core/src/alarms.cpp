@@ -28,9 +28,11 @@ const char* levelName(Level l) {
 }
 
 // Critical: water where it must not be, a pump that runs dry or moves nothing, a canister that runs
-// into the tank on its own, pH out of its range (SD-123), and CO2 above 2,000 ppm (SD-136). Info: what can wait for a date.
-// Everything else is a warning.
+// into the tank on its own, pH out of its range (SD-123), CO2 above 2,000 ppm (SD-136), and a fault
+// of the device's protection (SD-141). Info: what can wait for a date. Everything else is a warning.
 Level levelOf(const std::string& id) {
+  if (id == "hw.board_hot" || id == std::string("latch.") + kSafetyRestartNote) return Level::Warning;
+  if (startsWith(id, "hw.") || startsWith(id, "latch.hw.")) return Level::Critical;
   if (id == "latch.hw.leak" || id == "latch.hw.high_level" || id == "latch.hw.return" || id == "latch.flow.dry" || id == "latch.pump.cable" ||
       id == "target.ph")
     return Level::Critical;
@@ -107,7 +109,8 @@ bool Alarms::update(const WatchResult& w, const AlarmInput& in, RuntimeState& rt
       s["since"] = now;
       continue;
     }
-    if (!startsWith(id, "latch.") && now - epochAt(s, "since") < kAlarmStandS) continue;
+    // A latch, and the device's protection, alarm at once (SD-141)
+    if (!startsWith(id, "latch.") && !startsWith(id, "hw.") && now - epochAt(s, "since") < kAlarmStandS) continue;
     const Level lv = levelOf(id);
     const bool pushNow = lv == Level::Critical || (lv == Level::Warning && !night);
     s = {{"since", epochAt(s, "since")}, {"raised", true},     {"level", levelName(lv)},

@@ -42,6 +42,7 @@ void World::reset(int n) {
   leak = stopButton = false;
   primedMs_ = noFlowMs_ = 0;
   noFlowCut = cableFault = false;
+  faults.clear();
   probeFault.clear();
   phBuffer.reset();
   ecBuffer.reset();
@@ -368,6 +369,7 @@ json World::toJson() const {
           {"returnFault", returnFault},
           {"leak", leak},
           {"stopButton", stopButton},
+          {"faults", faults},
           {"released", released()},
           {"probeFault", probeFault},
           {"phBuffer", phBuffer ? json(*phBuffer) : json(nullptr)},

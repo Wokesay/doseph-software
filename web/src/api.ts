@@ -132,8 +132,9 @@ export type RobotState = {
   cycle: Cycle;
   watchdog: Watchdog;
   alarms: Alarm[];
-  // reportOnly: set while its lock reported only; it holds nothing (SD-133)
-  latches: Record<string, Record<string, unknown> & { reportOnly?: boolean }>;
+  // reportOnly: set while its lock reported only; it holds nothing (SD-133); note: a note that holds
+  // nothing, such as a restart by the safety supervisor (SD-141)
+  latches: Record<string, Record<string, unknown> & { reportOnly?: boolean; note?: boolean }>;
   jumpLocks: Record<string, { until: number; from: number; to: number; at: number }>;
   newTank: boolean; topUp: boolean;
   // The refill valve (SD-132): a fill under way and since when, why it was started, whether the float
@@ -381,7 +382,7 @@ export type CirculationMode = "mixing" | "always";
 // The locks a person releases that may be set to report only, by their kind (SD-133); as the core's
 export const REPORTABLE_LOCKS = ["flow.dry", "tank.volume", "ec.no_effect", "ph.no_effect", "channel.no_drops", "channel.siphon", "hw.return", "refill"] as const;
 // Whether a latch holds: one set while its lock reported only holds nothing (SD-133)
-export const holds = (latch: { reportOnly?: boolean } | undefined) => !!latch && !latch.reportOnly;
+export const holds = (latch: { reportOnly?: boolean; note?: boolean } | undefined) => !!latch && !latch.reportOnly && !latch.note;
 
 // Network devices and the roles bound to them (SD-132)
 export type NetDevice = {

@@ -6,6 +6,7 @@
 #include <limits>
 #include <tuple>
 
+#include "doseph/faults.hpp"
 #include "doseph/messages.hpp"
 
 namespace doseph {
@@ -48,7 +49,7 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
     return false;
   };
   if (c.stopped) return fail(say("act.stopped"));
-  if (!c.hold.empty()) return fail(say("act.hold." + c.hold));  // the hardware release holds every pump (SD-110)
+  if (!c.hold.empty()) return fail(holdText("act.hold.", c.hold));  // the hardware release holds every pump (SD-110)
   if (runningChannel_ != 0) return fail(say("act.busy"));  // one run at a time (RAT-018)
   if (channel < 1 || channel > hw_.channelCount()) return fail(say("act.no_channel", {{"channel", channel}}));
   // A channel without a pump head moves nothing (SD-108)
@@ -60,6 +61,9 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
   // (SD-118); into a cup it may
   if ((intoTank(purpose) || purpose == "fill" || purpose == "refill") && !placementConfirmed(c.cfg)) return fail(say("act.placement"));
   if (intoTank(purpose)) {
+    // Not before a person checked the protection by hand after the start, where the device does not
+    // test it itself (SD-141)
+    if (c.protectionCheck) return fail(say("act.protection_check"));
     // No dose without a measured calibration (RAT-015), no run under the minimum (RAT-050)
     const double flow = c.cfg.channelFlow(channel);
     if (!(isNum(flow) && flow > 0)) return fail(say("act.uncalibrated"));
@@ -143,7 +147,7 @@ bool Actuators::setFeedPump(const Ctx& c, bool on, Msg& err) {
     return false;
   }
   if (on && !c.hold.empty()) {
-    err = say("act.hold." + c.hold);
+    err = holdText("act.hold.", c.hold);
     return false;
   }
   std::string e;
@@ -370,7 +374,8 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   if (!order.step.device.empty()) {
     Msg e;
     if (c.stopped) e = say("act.stopped");
-    else if (!c.hold.empty()) e = say("act.hold." + c.hold);
+    else if (!c.hold.empty()) e = holdText("act.hold.", c.hold);
+    else if (c.protectionCheck) e = say("act.protection_check");
     else if (!placementConfirmed(c.cfg)) e = say("act.placement");
     else if (!intoTank(order.purpose)) e = say("act.purpose");
     else if (!c.remote || !c.remote->linked()) e = say("coupling.no_link");

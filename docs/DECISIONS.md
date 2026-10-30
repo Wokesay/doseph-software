@@ -1575,3 +1575,70 @@ owner. These are details decided here by the minimal principle.
 - **No drain of its own.** The device has no drain. Draining stays the
   user's.
 
+
+## SD-141: What the device's own protection reports
+
+2026-10-30. The first part of the firmware platform from the product input
+of 29 and 30 Oct in #10, chosen by the owner. These are details decided
+here by the minimal principle; the check by hand after a start was chosen
+by the owner.
+
+- **The interface.** The hardware release (SD-110) carries a list of
+  faults, each by an ID the firmware gives. The robot never overrides one.
+  At its first report every pump is stopped, an event names it, and the
+  check waits with it as its lock reason.
+- **Faults the device ends with a restart.** These hold every pump while
+  the device reports them, with a critical alarm. The restart that clears
+  them is the person's act, so there is no latch to release:
+  - `self_test.<part>`: the test at the start failed. The alarm names what
+    failed (the switch-off paths, the pump protection or the supply
+    protection) and clears only with a start that passes.
+  - `board_description`: missing, invalid or not matching the hardware
+    found.
+  - `power_trip.<rail>`: a supply rail switched off (dosing, feed pump,
+    return pump). The alarm names the part and what to do; it stays off
+    until a restart.
+  - `safety_cycle`: the safety supervisor restarts the device again and
+    again.
+  - An ID the robot does not know holds the same way.
+- **Faults a person releases.** `supply`, `current_limit.<rail>`,
+  `pump_protection.<pump|return>`, `stop_mismatch`, `not_off`,
+  `leak_sensor_open` and `moisture` latch as a leak does. They hold every
+  pump until a person releases them, and only once the device no longer
+  reports them. They can vanish on their own (a loose contact, moisture
+  that dries) while their cause stands, so a person looks first. They
+  never report only (SD-133). A pump's protection names the pump; for the
+  feed pump the text says it may be defective.
+- **Warnings.** `board_hot` holds nothing and is a warning while reported.
+  `safety_restart` (this start came from the safety supervisor) is a note
+  with the latches that holds nothing, a warning until a person has seen
+  it. Repeated restarts are the device's `safety_cycle`.
+- **Alarms.** Every fault but the warnings is critical and alarms at once,
+  without the usual wait of a problem.
+- **The board description's fields.** The profile says whether the
+  description is signed by the maker or one of the owner's own, shown as
+  such like own firmware. It also says whether the device tests its
+  protection itself (`selfTest`: auto or manual), the feed pump's speed
+  (fixed or adjustable), and how a return pump is seen to run. Each slot
+  says whether its pump delivers with the motor turning the other way.
+  Only the driver reads that; it is never shown.
+- **The check by hand (chosen by the owner).** Where the device does not
+  test its protection itself (a prototype), every start sets a lock
+  "protection check". Until a person releases it under Status, nothing
+  doses into the tank: the check waits with the feed pump off, and the
+  gateway refuses a dose whoever asks, the coupled device included. Runs
+  into a cup, a calibration and a line fill still go. The lock is a
+  warning, and the next start sets it again.
+- **What the robot takes from the device.** At most 16 IDs, each a short
+  name of lower-case letters, digits, `_` and `.`; anything else counts as
+  an unknown fault and holds. A part is read only where the ID documents
+  one (self-test, power trip, current limit, pump protection), so a note
+  or a warning with a part stays what it is. A fault that comes and goes
+  is logged again only after a minute. A self-test value other than
+  `auto` asks for the check by hand. The owner's app token may release
+  the check like any lock; a remote account may not.
+- **Not here.** The safety supervisor and its liveness, the self-test
+  itself and the pump direction in the driver are the firmware's. The
+  rest of the product input (the pump direction in the twin, the no-flow
+  count across a restart, the return pump on high level, flash writes,
+  Stop across a factory reset) follows in its own change.
