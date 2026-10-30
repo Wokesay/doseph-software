@@ -302,6 +302,10 @@ class Robot : public RemoteRuns {
   // changed; plants whose phase ended move on first
   Result savePlants(Config next, const Msg& what);
   void movePlants(Epoch epoch);
+  // The water plan's EC target fell by more than 0.2 mS/cm: the advice to drain, until the tank fits
+  // the new target (RAT-065, SD-140)
+  void watchDrain(Epoch epoch);
+  Msg drainAdvice() const;
 
   mutable std::recursive_mutex mtx_;
   IHardware& hw_;

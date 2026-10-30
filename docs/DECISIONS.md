@@ -1544,3 +1544,32 @@ proves to stand at the device is hardware, and a product question (#99).
   - Signed updates.
   - With the account (`docs/ACCOUNT.md`): HTTPS per device and the
     device's key pair.
+
+## SD-140: The advice to drain when the EC target falls
+
+2026-10-30. The last open point of step 6 of #10 (RAT-065), chosen by the
+owner. These are details decided here by the minimal principle.
+
+- **When.** The water plan's EC target falls by more than 0.2 mS/cm. Any
+  cause counts: a plant's next phase, a change of its current phase, another
+  leading plant, a recipe chosen by hand. The robot can only raise EC
+  (RAT-012), so a full tank cannot follow such a fall.
+- **What it says.** An info note (SD-123) and an event, with one of these:
+  - **Another nutrient:** the new recipe doses another set of nutrient
+    canisters (fixed additions aside). Then: drain and mix anew,
+    whatever is left.
+  - **Top up:** watering counted the litres the tank gave since it was
+    full (SD-134), so the robot knows what is left. If that rest, topped
+    up with fresh water, ends below the new target, it says so and that
+    there is no need to drain; it then doses up. Fresh water is counted
+    as without nutrients.
+  - **Drain:** the rest topped up stays above the target, so drain and mix
+    anew.
+  - **Unknown:** what is left is not known. The note says both ways:
+    drain, or top up if little is left.
+- **Until when.** Until a check after the fall measures the tank within the
+  new target's band (drained, topped up or mixed anew), or the target rises
+  again. It is kept across a restart.
+- **No drain of its own.** The device has no drain. Draining stays the
+  user's.
+
