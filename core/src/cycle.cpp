@@ -977,7 +977,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
   // try without flow; at its start the window without flow protects it
   if (act.feedPump().value_or(false) && c.pumpA && isNum(*c.pumpA)) {
     const double a = *c.pumpA, normal = c.rt.pumpNormalA;
-    const bool low = isNum(normal) && c.rt.pumpLearnedS >= kPumpLearnS && a < kDryShare * normal;
+    const bool low = belowDryShare(c.rt, a);
     if (c.flowOk && !low && a > 0) {
       const double dts = static_cast<double>(dt) / 1000.0;
       c.rt.pumpNormalA = isNum(normal) ? normal + (a - normal) * std::min(1.0, dts / 60.0) : a;

@@ -88,7 +88,8 @@ class World {
   // pushes water up its hose, which fills in 2 s; in the device it primes
   // first (SD-109). `flowFault` "blocked" (its inlet), "dry" (out of the
   // water) or "hose" (the hose off) means it runs without flow, "sensor" that
-  // water flows but the flow or outlet sensor sees none.
+  // water flows but the flow or outlet sensor sees none, "air" that it draws air
+  // which turns the flow sensor's rotor: pulses without water (SD-146).
   bool output = false;
   bool pumpInTank = true;  // the profile's position of the feed pump
   double pumpLpm = 12.0;  // flow when it runs (assumption)

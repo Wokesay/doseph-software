@@ -165,14 +165,15 @@ void World::outOfTip(Pump& p, double ml) {
 bool World::primed() const { return primedMs_ >= (pumpInTank ? kHoseMs : kPrimeMs); }
 
 bool World::flowing() const {
-  return pumpRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && flowFault != "hose" && tank.volumeL > 1.0;
+  return pumpRuns() && primed() && flowFault != "blocked" && flowFault != "dry" && flowFault != "hose" && flowFault != "air" &&
+         tank.volumeL > 1.0;
 }
 
 bool World::highLevel() const { return chamberL >= kHighL; }
 
 double World::pumpA() const {
   if (!pumpRuns()) return 0.0;
-  const bool dry = flowFault == "dry" || flowFault == "blocked" || tank.volumeL <= 1.0 || (!pumpInTank && !primed());
+  const bool dry = flowFault == "dry" || flowFault == "blocked" || flowFault == "air" || tank.volumeL <= 1.0 || (!pumpInTank && !primed());
   return dry ? 0.32 : flowFault == "hose" ? 0.86 : 0.80;
 }
 
@@ -382,6 +383,8 @@ double World::rawEc() const {
 double World::rawTemp() const { return std::round((chamber.temp + noise(0.02)) * 100.0) / 100.0; }
 
 double World::rawFlow() const {
+  // Air turns the rotor as well: pulses as for most of the pump's flow, without water (SD-146, an assumption)
+  if (flowFault == "air" && pumpRuns()) return std::round(pumpLpm * 0.7 * (1.0 + noise(0.05)) * 10.0) / 10.0;
   if (flowFault == "sensor" || !flowing()) return 0.0;
   return std::round(pumpLpm * (1.0 + noise(0.01)) * 10.0) / 10.0;
 }

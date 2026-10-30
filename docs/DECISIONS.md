@@ -1845,3 +1845,62 @@ minimal principle.
   comes from the calibrated rate as before (SD-108, SD-143).
 - The 250 ml, the 5 %, the 10 ml and the 20 % are assumptions until
   measured with users.
+
+## SD-146: The flow signal (product requirement, from the input of 30 Oct)
+
+2026-10-30. From the product input of 30 Oct in #10: the flow signal, and
+the leak and moisture sensors. The owner chose this package. The control
+details are decided here by the minimal principle.
+
+- **Pulses are not flow.** Air can turn the flow meter's rotor, so its
+  pulses alone no longer count. Where the device measures the feed pump's
+  current, flow also needs the pump to draw:
+  - at least the least current with water that the board description
+    gives (`pumpMinA`);
+  - once its current with water is learned (SD-127), at least the share
+    below which it runs dry (60 %).
+
+  A current that is not usable is no sign of water (R5). A board that
+  gives a least current measures it, so a current not read there is no
+  sign either. A device that measures no current keeps the pulses alone.
+  Without a least current in the board description, the learned current
+  is the only check, and air from the very first start would be learned as
+  normal; so the board description should give one. The outlet level
+  sensor (SD-109) is not fooled by air and stays as it is.
+- **Short dips.** Once the pump moved water in a run, a current below
+  water's for less than 2 s (the dry run's time, SD-127) is bubbles or
+  ripple and no break. For 2 s it is no flow: a running dose stops and the
+  check proves flow again. Before flow was proven, and for a current not
+  read, there is no such grace.
+- **The start window.** After the feed pump switches on, nothing counts as
+  flow until its start window (`pumpStartMs`, 3 s in the example
+  profiles) has passed, while its current and the flow sensor settle. A
+  dose needs proven flow (SD-105), so dosing starts only after the window
+  too. The 10 s flow proof counts from its end. A feed pump whose state is
+  not known counts as off. A window longer than half the window without
+  flow (6 s in the tank, SD-127) counts as that half, 3 s: a longer one
+  would end every check in "no flow".
+- **The firmware's plausibility check.** The firmware compares flow pulses,
+  pump speed and pump current within a window of its own. When they
+  disagree it reports `flow_implausible`. That latches like a pump's
+  protection (SD-141): every pump stops, a critical alarm says to check
+  the pump, its hose and the flow sensor, and a person releases it once it
+  is no longer reported.
+- **Faults from the input:**
+  - `supply_overvoltage_latched`: the supply holds it until the device is
+    unplugged, so the robot holds while it is reported. It adds no latch
+    of its own, because unplugging is already the person's step. Its alarm
+    says to unplug.
+  - `sensor_supply`: leak sensors and probes cannot be trusted meanwhile.
+    It latches like the supply.
+  - `leak_sensor_open.<input>`: every leak and moisture input reports its
+    own open sensor, with the input named. The lock reason reads "leak or
+    moisture sensor fault".
+- **The firmware's own part:**
+  - the plausibility window;
+  - the current threshold in hardware;
+  - the self-test that simulates "wet" on every leak and moisture input;
+  - the secure storage of the input.
+- **Simulator.** `flowFault: "air"` draws air: the rotor gives about 70 %
+  of the pulses at the current of a dry run. The example profiles' 0.5 A
+  and 3 s are assumptions.

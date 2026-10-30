@@ -14,8 +14,11 @@ FaultInfo classifyFault(const std::string& fault) {
   if (name == "self_test" || name == "board_description" || name == "power_trip" || name == "safety_cycle") {
     f.kind = K::Hold;
     f.reason = name;
+  } else if (name == "supply_overvoltage_latched") {
+    f.kind = K::Hold;  // the hardware holds it until unplugged: that is the person's step
+    f.reason = "supply_overvoltage";
   } else if (name == "supply" || name == "current_limit" || name == "pump_protection" || name == "stop_mismatch" || name == "not_off" ||
-             name == "moisture") {
+             name == "moisture" || name == "sensor_supply" || name == "flow_implausible") {
     f.kind = K::Latch;
     f.reason = name;
   } else if (name == "leak_sensor_open") {
@@ -30,7 +33,8 @@ FaultInfo classifyFault(const std::string& fault) {
     f.part.clear();
   }
   // A part only where the ID documents one, and only a short name
-  const bool parts = f.reason == "self_test" || f.reason == "power_trip" || f.reason == "current_limit" || f.reason == "pump_protection";
+  const bool parts = f.reason == "self_test" || f.reason == "power_trip" || f.reason == "current_limit" || f.reason == "pump_protection" ||
+                     f.reason == "leak_sensor";
   if (!parts || f.part.size() > 24 || f.part.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos) f.part.clear();
   return f;
 }
@@ -53,8 +57,9 @@ Msg holdText(const std::string& prefix, const std::string& hold) {
 json faultArgs(const FaultInfo& f, const std::string& fault) {
   static const char* const kParts[] = {"dosing", "pump", "return", "switch_off", "pump_protection", "supply"};
   json part = say("hw.part.unknown");
+  // A leak or moisture input is named by the board's own name for it (SD-146)
   for (const char* k : kParts)
-    if (f.part == k) part = say(std::string("hw.part.") + k);
+    if (f.part == k && f.reason != "leak_sensor") part = say(std::string("hw.part.") + k);
   if (!f.part.empty() && part["key"] == "hw.part.unknown") part = f.part;
   // The ID only as far as it is a short name: it comes from the device
   const bool plain = !fault.empty() && fault.size() <= 48 && fault.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos;

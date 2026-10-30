@@ -7,6 +7,15 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The flow signal (SD-146). A flow meter's pulses alone are no longer flow:
+  where the device measures the feed pump's current, the pump must also
+  draw the current of moving water. Nothing counts as flow, and nothing
+  doses, within the pump's start window. New faults of the device's
+  protection: flow signals that disagree and a failed sensor supply latch
+  until released; an overvoltage held by the supply says to unplug it; an
+  open leak or moisture input names the input. The simulator can let air
+  turn the flow sensor.
+
 - Checks of a pump's rate in use (SD-145). A canister level you read and
   enter is compared with what the doses counted since the last reading.
   Where the two differ by more than 5 %, a rate that fits is proposed
