@@ -86,7 +86,8 @@ of its own.
 | The return pump runs by the level, also on high level; a Stop holds it off until Resume, and so does a latched fault that names it until released | SD-142 | ✓ | `robot.cpp`, `world.cpp` · test_platform.cpp |
 | The history and the event log are written whole only while no dosing pump runs | SD-142 | ✓ | `robot.cpp` · test_platform.cpp |
 | A Stop pressed before a factory reset holds after it until Resume | SD-142 | ✓ | `robot.cpp` · test_platform.cpp |
-| A calibration belongs to the pump head it was measured with: another head, none fitted or none recorded voids it, and the channel doses nothing until it is calibrated again | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A calibration belongs to the pump head it was measured with: another size or none recorded voids it, and the channel doses nothing until it is calibrated again; with no head fitted nothing runs on the channel | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A head of the same size fitted again locks the channel until a person says whether it is new: a new one voids the calibration, the same one keeps it; the question survives a restart while the head is off | SD-144 | ✓ | `config.hpp`, `config.cpp`, `gateway.cpp`, `robot.cpp` · test_scenarios.cpp, robot.spec.ts |
 | A channel without a pump head runs nothing, not even into a cup | SD-108 | ✓ | `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | One pH− canister at most; the rest are nutrients | SD-108 | ✓ | `config.cpp` · test_config.cpp |
 | A channel's run time into the tank (doses and line fills) per rolling 24 h stays within its head's value and never passes 60 min; a run that would pass it is refused with the reason, the check waits for it, the user may set ml per day below it, and the count survives a restart | SD-113 | ✓ | `hardware.hpp`, `config.hpp`, `config.cpp`, `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_config.cpp, test_scenarios.cpp |
@@ -149,6 +150,7 @@ of its own.
 | One delivery per enabled channel and notification, in the device's language; the core sends nothing, the platform reports back; a channel that fails is logged once | SD-124 | ✓ | `push.cpp`, `robot.cpp`, `messages.cpp` · test_push.cpp, test_messages.cpp |
 | The simulator sends through the system's curl with the secret in a private config file that is deleted after the run | SD-124 | ✓ | `sim/push.cpp` · test_push.cpp |
 | Maintenance items by what the device has, each due its interval after it was done, calibrated or first had; items due within a week of the earliest join its date | SD-125 | ✓ | `service.hpp`, `service.cpp`, `config.cpp` · test_service.cpp |
+| A pump's calibration is due with the last calibration of the pH probe that falls due before it | SD-144 | ✓ | `service.cpp` · test_service.cpp |
 | A maintenance item on its date is a note in the morning report and the app until it is done; the watchdog stays as it is | SD-125 | ✓ | `robot.cpp` · test_service.cpp |
 
 ## Plants and phases (SD-128)

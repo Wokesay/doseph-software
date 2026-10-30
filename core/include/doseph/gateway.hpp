@@ -80,7 +80,8 @@ struct Ctx {
 
 // A channel's own lock (SD-111): "channel.<n>.no_drops" (it ran and nothing dripped) or
 // "channel.<n>.siphon" (it dripped while its pump stood), or "channel.<n>.cal_cut" (a pump
-// calibration ended with its intake perhaps out of its canister, SD-143). A locked channel doses nothing into the
+// calibration ended with its intake perhaps out of its canister, SD-143), or "channel.<n>.head_check" (a head of
+// the same size fitted again, until a person says whether it is new, SD-144). A locked channel doses nothing into the
 // tank until a person releases it; a calibration or a line fill into a cup still runs.
 std::string channelLatch(int channel, const std::string& what);
 bool channelLocked(const RuntimeState& rt, int channel);

@@ -37,7 +37,8 @@ constexpr Ms kAfterRunMs = 10 * kSecond;    // drops this long after a run are s
 std::string channelLatch(int channel, const std::string& what) { return "channel." + std::to_string(channel) + "." + what; }
 
 bool channelLocked(const RuntimeState& rt, int channel) {
-  return holds(rt, channelLatch(channel, "no_drops")) || holds(rt, channelLatch(channel, "siphon")) || holds(rt, channelLatch(channel, "cal_cut"));
+  return holds(rt, channelLatch(channel, "no_drops")) || holds(rt, channelLatch(channel, "siphon")) || holds(rt, channelLatch(channel, "cal_cut")) ||
+         holds(rt, channelLatch(channel, "head_check"));
 }
 
 // ---------------------------------------------------------------- Actuators

@@ -3706,6 +3706,10 @@
                 "properties": {
                   "confirm": {
                     "type": "boolean"
+                  },
+                  "newHead": {
+                    "type": "boolean",
+                    "description": "For channel.<n>.head_check: whether the head fitted again is a new one; a new one voids the channel's calibration (SD-144)"
                   }
                 }
               }

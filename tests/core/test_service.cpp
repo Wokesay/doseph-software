@@ -53,29 +53,33 @@ TEST_CASE("Maintenance: each item is due its interval after it was last done or 
   Config c = withChannels();
   RuntimeState rt;
   noteService(c, rt, kT0);
-  // Channel 1 was calibrated 5 days before: due at 85 days, and the EC probe at 90 joins its date
-  c.channels[1] = {50.0, kT0 - 5 * kDay};
-  // The pH probe calibrated 20 days in: due at 50 days
+  // The EC probe calibrated 7 days before: due at 83 days; the chamber cleaned 55 days in: due at 85
+  c.ecCal = {{"at", kT0 - 7 * kDay}};
+  rt.serviceDone["chamber.clean"] = kT0 + 55 * kDay;
+  // The pH probe calibrated 20 days in: due at 50 days, then every 30 days
   c.phCal = {{"at", kT0 + 20 * kDay}};
+  // Channel 1 was calibrated 5 days before: its 85 days come with the pH probe's at 80 (SD-144)
+  c.channels[1] = {50.0, kT0 - 5 * kDay};
   ServicePlan p = planService(c, rt, kT0, "Europe/Berlin");
-  CHECK(item(p, "chamber.clean").due == kT0 + 30 * kDay);
   CHECK(item(p, "probe.ph.cal").due == kT0 + 50 * kDay);
-  CHECK(item(p, "channel.1.cal").due == kT0 + 85 * kDay);
-  CHECK(item(p, "channel.4.cal").due == kT0 + 90 * kDay);
-  CHECK(item(p, "probe.ec.cal").due == kT0 + 90 * kDay);
+  CHECK(item(p, "channel.1.cal").due == kT0 + 80 * kDay);
+  CHECK(item(p, "channel.4.cal").due == kT0 + 80 * kDay);
+  CHECK(item(p, "probe.ec.cal").due == kT0 + 83 * kDay);
+  CHECK(item(p, "chamber.clean").due == kT0 + 85 * kDay);
   CHECK(item(p, "heads.check").due == kT0 + 180 * kDay);
   CHECK(item(p, "probe.ph.replace").due == kT0 + 365 * kDay);
-  // Dates: 30 days, 50, 85 (with both at 90), 180, 365; each the local midnight
-  REQUIRE(p.dates.size() == 5);
-  const Epoch d85 = p.dates[2];
-  CHECK(item(p, "probe.ec.cal").date == d85);
-  CHECK(item(p, "channel.4.cal").date == d85);
-  const LocalTime lt = localTime(d85, "Europe/Berlin");
+  // Dates: 50 days, 80 (with the EC probe at 83 and the chamber at 85), 180, 365; each the local midnight
+  REQUIRE(p.dates.size() == 4);
+  const Epoch d80 = p.dates[1];
+  CHECK(item(p, "probe.ec.cal").date == d80);
+  CHECK(item(p, "chamber.clean").date == d80);
+  CHECK(item(p, "channel.4.cal").date == d80);
+  const LocalTime lt = localTime(d80, "Europe/Berlin");
   CHECK(lt.minuteOfDay == 0);
   CHECK(localTime(item(p, "channel.1.cal").due, "Europe/Berlin").day == lt.day);
   CHECK_FALSE(item(p, "probe.ec.cal").dueNow);
-  // On that date all three are due, the EC probe 5 days early
-  p = planService(c, rt, d85, "Europe/Berlin");
+  // On that date all are due, the EC probe 3 days early
+  p = planService(c, rt, d80, "Europe/Berlin");
   CHECK(item(p, "channel.1.cal").dueNow);
   CHECK(item(p, "probe.ec.cal").dueNow);
   CHECK_FALSE(item(p, "heads.check").dueNow);
@@ -135,4 +139,22 @@ TEST_CASE("Maintenance over the API: the plan, an item done, the intervals; an i
   s.step(10 * kSecond);
   const json after = s.robot().state()["alarms"];
   for (const auto& a : after) CHECK(a["id"] != "maint.chamber.clean");
+}
+
+TEST_CASE("Maintenance: a pump's calibration comes with the pH probe's: it is due with the last one of those before it; with none before it, at its own interval (SD-144)") {
+  Config c = withChannels();
+  RuntimeState rt;
+  noteService(c, rt, kT0);
+  c.phCal = {{"at", kT0 + 10 * kDay}};   // pH due at 40, 70, 100 …
+  c.channels[1] = {50.0, kT0};           // due at 90 → 70
+  c.channels[4] = {50.0, kT0 - 60 * kDay};  // due at 30, before the pH probe's: stays
+  ServicePlan p = planService(c, rt, kT0, "UTC");
+  CHECK(item(p, "channel.1.cal").due == kT0 + 70 * kDay);
+  CHECK(item(p, "channel.4.cal").due == kT0 + 30 * kDay);
+  // Calibrated together with the probe on its day, both are due together again
+  c.phCal = {{"at", kT0 + 70 * kDay}};
+  c.channels[1] = {50.0, kT0 + 70 * kDay};
+  p = planService(c, rt, kT0 + 70 * kDay, "UTC");
+  CHECK(item(p, "channel.1.cal").due == kT0 + 160 * kDay);
+  CHECK(item(p, "channel.1.cal").date == item(p, "probe.ph.cal").date + 60 * kDay);
 }

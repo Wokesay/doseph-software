@@ -241,8 +241,18 @@ function Locks() {
               // Its lock only reports (SD-133): nothing is held, and clearing it says it was seen
               <div class="row-actions">
                 <Pill tone="warn">{t("status.reportedOnly")}</Pill>
-                <Button size="sm" onClick={() => release(id, false, "status.cleared")}>
+                <Button size="sm" onClick={() => release(id, {}, "status.cleared")}>
                   {t("status.clear")}
+                </Button>
+              </div>
+            ) : /^channel\.\d+\.head_check$/.test(id) ? (
+              // A head of the same size fitted again: the person says whether it is new (SD-144)
+              <div class="row-actions">
+                <Button size="sm" onClick={() => release(id, { newHead: true })} data-testid={`new-head-${id}`}>
+                  {t("status.newHead")}
+                </Button>
+                <Button size="sm" onClick={() => release(id, { newHead: false })} data-testid={`same-head-${id}`}>
+                  {t("status.sameHead")}
                 </Button>
               </div>
             ) : id === "tank.volume" ? (
@@ -250,12 +260,12 @@ function Locks() {
                 <a class="btn sm" href="#/tank">
                   {t("status.correctVolume")}
                 </a>
-                <Button size="sm" onClick={() => release(id, true)}>
+                <Button size="sm" onClick={() => release(id, { confirm: true })}>
                   {t("status.volumeRight")}
                 </Button>
               </div>
             ) : (
-              <Button size="sm" onClick={() => release(id, false)}>
+              <Button size="sm" onClick={() => release(id, {})}>
                 {t("status.release")}
               </Button>
             )}
@@ -266,9 +276,9 @@ function Locks() {
   );
 }
 
-async function release(id: string, confirm: boolean, done: "status.released" | "status.cleared" = "status.released") {
+async function release(id: string, body: object, done: "status.released" | "status.cleared" = "status.released") {
   try {
-    await post(`/latches/${encodeURIComponent(id)}/ack`, confirm ? { confirm: true } : {});
+    await post(`/latches/${encodeURIComponent(id)}/ack`, body);
     await refreshState();
     toast(t(done));
   } catch (e) {

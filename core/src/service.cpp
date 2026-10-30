@@ -91,6 +91,15 @@ ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, co
     i.due = last + static_cast<Epoch>(i.days) * 86400;
     plan.items.push_back(std::move(i));
   }
+  // A pump calibration comes with the pH probe's calibration (SD-144): it is due with the last one of
+  // those that falls due before it, so both are done together
+  const auto ph = std::find_if(plan.items.begin(), plan.items.end(), [](const ServiceItem& i) { return i.kind == "probe.ph.cal"; });
+  if (ph != plan.items.end() && ph->days > 0)
+    for (auto& i : plan.items) {
+      if (i.kind != "channel.cal" || ph->due > i.due) continue;
+      const Epoch step = static_cast<Epoch>(ph->days) * 86400;
+      i.due = ph->due + (i.due - ph->due) / step * step;
+    }
   std::sort(plan.items.begin(), plan.items.end(), [](const ServiceItem& a, const ServiceItem& b) { return a.due < b.due; });
   // Bundled: the earliest open item opens a date; whatever is due within a week of it joins
   Epoch open = 0;

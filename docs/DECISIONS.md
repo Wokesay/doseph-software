@@ -1782,3 +1782,30 @@ principle; numbers marked as assumptions hold until the bench test.
     above about 5 %.
   - **Drift.** Drops per ml are learned during operation, and a re-measure
     is suggested at about 20 %.
+
+## SD-144: When a pump is calibrated again: a head fitted again, and the reminder
+
+2026-10-30. Part of the triggers in item 1 of the product input of 30 Oct
+in #10, chosen by the owner. These are details decided here by the minimal
+principle.
+
+- **A head taken off.** Nothing runs on the channel without a head, as
+  before (SD-108). Its calibration no longer goes at once: it waits for
+  the head that comes back. The robot keeps the size it was measured
+  with, also across a restart.
+- **A head fitted again:**
+  - **Another size** voids the calibration at once (SD-108).
+  - **The same size** cannot be told from the old head, so the robot
+    asks. It locks the channel (`channel.<n>.head_check`) until a person
+    says whether the head is new. A new head voids the calibration, and
+    the channel needs a pump calibration (SD-143). The same head keeps
+    its rate. A plain release without the answer is refused.
+- **The reminder.** A pump's calibration in the maintenance plan
+  (SD-125) is due together with the pH probe's calibration: on the last
+  of those due dates that falls before its own interval ends. Both are
+  then done on one date. Where no probe calibration falls before it, its
+  own interval holds.
+- **A new intake line.** The help says to calibrate after one; the
+  device cannot see it.
+- **Not here.** The consumption check and the drift of drops per ml
+  follow in their own change.
