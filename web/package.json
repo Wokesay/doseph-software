@@ -1,7 +1,7 @@
 {
   "name": "doseph-web",
   "private": true,
-  "version": "0.1.0-proto.5",
+  "version": "0.1.0-dev",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "description": "Web app of the Doseph mixing robot (served by the device or the simulator)",
