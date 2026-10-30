@@ -75,9 +75,13 @@ class Robot : public RemoteRuns {
   // The device's own identity (SD-129): random, made at the first start, kept apart from the
   // configuration so a restored backup does not copy it
   const std::string& deviceId() const { return deviceId_; }
-  // No password and no setup code armed: the platform arms one and shows it, after the first start
-  // and after an access reset (SD-139)
-  bool needsSetupCode() const;
+  // The platform shows setup codes to whoever stands at the device (a label, a display, the
+  // simulator's console); set before boot. The robot then arms one whenever a first password is due
+  // (the first start, an access reset), under the same lock, so the first password always needs it
+  // (SD-129, SD-139).
+  void showSetupCodes(bool on) { showCodes_ = on; }
+  // The code armed since the last call, for the platform to show; "" for none
+  std::string takeCodeToShow();
 
   // ---- Resets (SD-139)
   // An access reset, asked for at the device: no password, no session, no access token, no
@@ -89,6 +93,8 @@ class Robot : public RemoteRuns {
   Result factoryResetByOwner(const json& j, const std::string& client);
   // A factory reset is done: the platform restarts the device; until then nothing is saved
   bool restartWanted() const { return restartWanted_; }
+  // A factory reset is under way or done: the API takes nothing more
+  bool halted() const;
 
   // ---- Coupling (PD-457, SD-131): the peer, pairing with a code, leaving
   json coupling() const;
@@ -299,7 +305,7 @@ class Robot : public RemoteRuns {
 
   mutable std::recursive_mutex mtx_;
   IHardware& hw_;
-  IStorage& store_;
+  SealableStorage store_;  // sealed by a factory reset once cleared (SD-139)
   HubClock clock_;
   RandomFn rng_;
   json platform_ = json::object();
@@ -383,6 +389,17 @@ class Robot : public RemoteRuns {
   std::optional<ProbeSession> probe_;
   bool authKept_ = false;
   bool restartWanted_ = false;  // a factory reset is done (SD-139)
+  // A factory reset under way (SD-139): outputs go off, confirmed or for a minute, then the files go
+  struct Resetting {
+    std::string by;
+    Ms until = 0;
+  };
+  std::optional<Resetting> resetting_;
+  bool showCodes_ = false;  // the platform shows setup codes
+  std::string codeToShow_;
+  void armShownCode();
+  void tickReset(Ms now);
+  void finishFactoryReset();
   std::string deviceId_;
 
   Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none

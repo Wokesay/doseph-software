@@ -121,12 +121,12 @@ bool FileStorage::remove(const std::string& name) {
   return !ec;
 }
 
-bool FileStorage::clear() {
+bool FileStorage::clear(const std::string& keep) {
   std::lock_guard<std::mutex> l(m_);
   std::error_code ec;
   bool ok = true;
   for (const auto& e : fs::directory_iterator(dir_, ec)) {
-    if (e.path().filename() == "simulator.lock" || !e.is_regular_file()) continue;
+    if (e.path().filename() == "simulator.lock" || e.path().filename() == keep || !e.is_regular_file()) continue;
     std::error_code rm;
     fs::remove(e.path(), rm);
     ok = ok && !rm;
@@ -170,6 +170,7 @@ Simulation::~Simulation() {
 void Simulation::createRobot() {
   robot_ = std::make_unique<doseph::Robot>(*hw_, *store_, *clock_, randomBytes);
   robot_->setPlatform({{"kind", "simulator"}, {"simulated", true}, {"scenario", opts_.scenario}});
+  robot_->showSetupCodes(opts_.showSetupCodes);
   api_ = std::make_unique<doseph::Api>(*robot_, *clock_);
 }
 
@@ -202,7 +203,8 @@ void Simulation::configureDemo() {
   auto& r = *robot_;
   if (opts_.password.empty()) opts_.password = "doseph-demo";
   if (!r.auth().hasPassword()) {
-    r.auth().setInitialPassword(opts_.password);
+    // The demo sets its password as the owner would, with the code the start armed for it
+    r.auth().setInitialPassword(opts_.password, r.takeCodeToShow(), clock_->nowMs());
     r.saveAuth();
     r.markPasswordSet();
   }

@@ -1492,38 +1492,55 @@ summary (RAT-064) and the proposals a new plant recipe starts from
 2026-10-30. The first of the device security items of #10, chosen by the
 owner as the next step after the release of 0.1.0-proto.5. They are
 control details, decided here by the minimal principle. How a person
-proves to stand at the device is hardware, and a product question.
+proves to stand at the device is hardware, and a product question (#99).
 
 - **Access reset ("forgot the password").**
   - It is asked for at the device only, never over the network: the
     device's platform reports it.
   - It removes the password, every session, every access token and the
     coupling. The coupled device learns it as when the coupling ends
-    (SD-131).
+    (SD-131). A pairing code armed before and a pairing under way go too.
   - MQTT takes no more commands; the values still go out (SD-130).
-  - The next password is a first one again, with the setup code where
-    the device shows one (SD-129).
+  - The next password is a first one again. Where the device shows setup
+    codes, the reset arms one at once, so no first password is set without
+    it (SD-129).
   - Dosing goes on, and every setting, recipe, plant and the history
     stay. The event log keeps it as an alarm.
+  - The disk is changed first: "no password set" is written, then the
+    password file goes. If a step fails, the reset is said and not done,
+    and the person asks for it again.
 - **Factory reset.**
   - It is asked for at the device, or by the owner in the web app,
     confirmed with the password. An app token cannot, and a wrong
     password counts as a failed sign-in with its lockout.
-  - Everything is switched off first (R6). Then every file the device
-    keeps is removed: configuration, run-time state, password, device
-    ID, coupling, MQTT, push, network devices, events, history and the
-    dosing journal.
+  - Everything is switched off first (R6):
+    - the pumps at once;
+    - every network device's output, light and a room's fans too. Each
+      gets an off until its device confirms it, a minute at most.
+  - Then every file the device keeps is removed: configuration, run-time
+    state, password, device ID, coupling, MQTT, push, network devices,
+    events, history and the dosing journal.
+  - From the start of the reset until the device has restarted, nothing
+    more is taken (the API and MQTT commands answer that it restarts), and
+    once cleared, nothing more is written.
   - The platform restarts the device, which starts as new: a new device
-    ID, no password, commissioning from the start. Until the restart,
-    nothing more is taken or saved.
+    ID, no password, commissioning from the start.
+  - A reset cut short by a power loss goes on at the next start.
   - The new event log begins with the factory reset, saying whether it
     was asked for at the device or by the owner. Nothing of the old log
     is kept.
 - **At the device.** The device's platform reports a reset asked for at
-  it. In the simulator, the console stands for the device ("reset
-  access", "reset factory"), and the simulator's panel has the same two
-  buttons. The setup code for the next first password is shown there.
-- **Later:** encrypted storage and signed updates, with the firmware;
-  HTTPS per device and the device's key pair, with the account
-  (`docs/ACCOUNT.md`).
-
+  it.
+  - In the simulator, the console stands for the device ("reset access",
+    "reset factory"), and the setup code for the next first password is
+    shown there.
+  - The simulator's panel has the same two buttons, for the owner only.
+- **Later:**
+  - With the firmware: erasing the storage itself, or encrypted storage
+    whose key is destroyed, so that deleted data cannot be read from the
+    flash. Wi-Fi credentials go with it.
+  - Clearing the retained MQTT messages on the broker before a factory
+    reset.
+  - Signed updates.
+  - With the account (`docs/ACCOUNT.md`): HTTPS per device and the
+    device's key pair.

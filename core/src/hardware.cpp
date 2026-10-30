@@ -45,8 +45,8 @@ bool MemoryStorage::remove(const std::string& name) {
   return true;
 }
 
-bool MemoryStorage::clear() {
-  files_.clear();
+bool MemoryStorage::clear(const std::string& keep) {
+  files_.erase(std::remove_if(files_.begin(), files_.end(), [&](const auto& f) { return f.first != keep; }), files_.end());
   return true;
 }
 

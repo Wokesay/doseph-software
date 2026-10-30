@@ -826,6 +826,7 @@ constexpr Entry kMessages[] = {
     {"ev.auth.signed_in", "Signed in"},
     {"ev.auth.password_changed", "Password changed"},
     {"ev.auth.access_reset", "Access reset at the device"},
+    {"ev.auth.access_reset_failed", "The access reset failed: ask for it at the device again"},
     {"ev.auth.access_reset.text", "The password, every session, every access token and the coupling are gone, and MQTT takes no commands. Set a new password. Dosing and the settings stay."},
     {"ev.system.factory_reset", "Factory reset"},
     {"ev.system.factory_reset.device", "Asked for at the device. The device starts as new: set it up again."},

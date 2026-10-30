@@ -154,6 +154,8 @@ int main(int argc, char** argv) {
   }
 
   std::cout << "Starting simulator (scenario " << opts.scenario << ") …" << std::flush;
+  // The console shows setup codes; automated tests (--allow-reset) set the first password without one
+  opts.showSetupCodes = !allowReset;
   sim::Simulation simulation(opts);
   simulation.speed = std::clamp(speed, 0.0, sim::Simulation::kMaxSpeed);
   std::cout << " ready.\n";
@@ -226,7 +228,9 @@ int main(int argc, char** argv) {
       res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
       return;
     }
-    if (!open && !doseph::permitted(*role, "POST", {"sim", action})) {  // as any other change (SD-129)
+    // A reset at the device stands for someone at it: the owner's alone here, never a token's (SD-139)
+    const bool refused = !open && (action == "atDevice" ? *role != doseph::Role::Owner : !doseph::permitted(*role, "POST", {"sim", action}));
+    if (refused) {  // as any other change (SD-129)
       res.status = 403;
       res.set_content(doseph::json{{"error", doseph::say("auth.role", {{"role", doseph::say(std::string("auth.role.") + doseph::roleName(*role))}})}}.dump(),
                       "application/json");
@@ -351,12 +355,10 @@ int main(int argc, char** argv) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       std::lock_guard<std::recursive_mutex> l(simulation.mutex());
       simulation.step(static_cast<doseph::Ms>(100 * simulation.speed));
-      // After an access or a factory reset the first password needs a setup code again, shown here
-      // to whoever sits at the simulator, as the device shows its own (SD-139)
-      if (!allowReset && simulation.robot().needsSetupCode()) {
-        const std::string code = simulation.robot().armSetupCode();
-        if (!code.empty()) std::cout << "Setup code for the first password: " << code << "\n" << std::flush;
-      }
+      // A setup code armed for a first password (an access or a factory reset), shown here to whoever
+      // sits at the simulator, as the device shows its own (SD-129, SD-139)
+      if (const std::string code = simulation.robot().takeCodeToShow(); !code.empty())
+        std::cout << "Setup code for the first password: " << code << "\n" << std::flush;
       for (auto& d : simulation.robot().takeDeliveries()) pushes.send(std::move(d));
       for (const auto& r : pushes.poll()) simulation.robot().deliveryResult(r.channel, r.ok, r.error);
     }
@@ -369,10 +371,9 @@ int main(int argc, char** argv) {
     std::lock_guard<std::recursive_mutex> l(simulation.mutex());
     if (simulation.scenario() == "demo" && !simulation.demoPassword().empty())
       std::cout << "Demo password: " << simulation.demoPassword() << " (simulator only)\n";
-    // The first password needs a setup code shown to the owner alone: here the console. Automated
-    // tests (--allow-reset) set it without one.
-    const std::string code = allowReset ? std::string() : simulation.robot().armSetupCode();
-    if (!code.empty()) std::cout << "Setup code for the first password: " << code << "\n";
+    // The first password needs a setup code shown to the owner alone: here the console
+    if (const std::string code = simulation.robot().takeCodeToShow(); !code.empty())
+      std::cout << "Setup code for the first password: " << code << "\n";
   }
   if (!haveWeb) std::cout << "Note: no web app found at " << web << "\n";
   std::cout << "To stop: press Ctrl+C or close this window.\n"

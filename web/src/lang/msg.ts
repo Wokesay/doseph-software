@@ -639,6 +639,7 @@ export const msgDe: Record<string, string> = {
   "ev.auth.signed_in": "Angemeldet",
   "ev.auth.password_changed": "Passwort geändert",
   "ev.auth.access_reset": "Zugang am Gerät zurückgesetzt",
+  "ev.auth.access_reset_failed": "Zurücksetzen des Zugangs fehlgeschlagen: am Gerät noch einmal verlangen",
   "ev.auth.access_reset.text": "Passwort, alle Sitzungen, alle Zugangstokens und die Kopplung sind weg, und MQTT nimmt keine Befehle an. Leg ein neues Passwort fest. Das Dosieren und die Einstellungen bleiben.",
   "ev.system.factory_reset": "Werkseinstellungen",
   "ev.system.factory_reset.device": "Am Gerät verlangt. Das Gerät startet wie neu: Richte es neu ein.",

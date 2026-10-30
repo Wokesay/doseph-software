@@ -380,6 +380,7 @@ static const struct {
     {"ev.active.set", "Rezept {name} in Kraft"},
     {"ev.auth.access_reset", "Zugang am Gerät zurückgesetzt"},
     {"ev.auth.access_reset.text", "Passwort, alle Sitzungen, alle Zugangstokens und die Kopplung sind weg, und MQTT nimmt keine Befehle an. Leg ein neues Passwort fest. Das Dosieren und die Einstellungen bleiben."},
+    {"ev.auth.access_reset_failed", "Zurücksetzen des Zugangs fehlgeschlagen: am Gerät noch einmal verlangen"},
     {"ev.auth.code_wrong", "Einrichtungscode abgelehnt"},
     {"ev.auth.code_wrong.text", "Falsche Einrichtungscodes seit dem Start: {count}. Warst du es nicht, hat ein anderes Gerät in deinem Netz es versucht – vergeblich."},
     {"ev.auth.failed", "Anmeldung fehlgeschlagen"},

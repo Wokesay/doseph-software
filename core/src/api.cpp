@@ -165,8 +165,6 @@ bool writeAllowed(const std::string& method, const std::string& secFetchSite, co
 
 ApiResponse Api::handle(const ApiRequest& req) {
   try {
-    // After a factory reset nothing more is taken until the device has restarted (SD-139)
-    if (robot_.restartWanted()) return fail(503, say("system.restarting"));
     return route(req);
   } catch (const json::exception&) {
     return fail(400, say("api.bad_input"));
@@ -244,6 +242,9 @@ ApiResponse Api::mqttCommand(const std::string& topic, const std::string& payloa
 }
 
 ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
+  // While a factory reset is under way and until the device has restarted nothing more is taken,
+  // over MQTT neither (SD-139)
+  if (robot_.halted()) return fail(503, say("system.restarting"));
   auto p = split(req.path);
   if (p.size() < 2 || p[0] != "api" || p[1] != "v1") return fail(404, say("api.not_found"));
   p.erase(p.begin(), p.begin() + 2);

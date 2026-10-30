@@ -59,7 +59,7 @@ Result Result::fail(int st, const Msg& m, json extra) {
 }
 
 Robot::Robot(IHardware& hw, IStorage& storage, const IClock& clock, RandomFn rng)
-    : hw_(hw), store_(storage), clock_(clock), rng_(std::move(rng)), auth_(rng_), act_(hw), journal_(storage) {}
+    : hw_(hw), store_(storage), clock_(clock), rng_(std::move(rng)), auth_(rng_), act_(hw), journal_(store_) {}
 
 json Robot::templates() { return json::parse(embedded::kTemplatesJson); }
 
@@ -112,22 +112,45 @@ std::string Robot::armSetupCode(Ms validFor) {
   return auth_.armSetupCode(clock_.nowMs(), validFor);
 }
 
-bool Robot::needsSetupCode() const {
+std::string Robot::takeCodeToShow() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return !restartWanted_ && !auth_.hasPassword() && !credentialsLost() && !authKept_ && !auth_.setupCodeRequired();
+  if (auth_.hasPassword()) codeToShow_.clear();  // a password was set meanwhile: nothing to show
+  std::string c;
+  c.swap(codeToShow_);
+  return c;
+}
+
+void Robot::armShownCode() {
+  if (!showCodes_ || auth_.hasPassword() || credentialsLost() || authKept_ || auth_.setupCodeRequired()) return;
+  codeToShow_ = auth_.armSetupCode(clock_.nowMs(), 0);
+}
+
+bool Robot::halted() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return restartWanted_ || resetting_.has_value();
 }
 
 void Robot::resetAccess() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (restartWanted_) return;
-  // The coupled device loses its way in, and learns it as when the coupling ends (SD-131)
-  if (peer_) unpair();
-  auth_.resetAccess();
+  if (halted()) return;
+  // The coupled device loses its way in and learns it as when the coupling ends (SD-131); a code
+  // armed for pairing and a pairing under way go too, so nobody pairs in after the reset
   authKept_ = false;
-  store_.remove(kAuthFile);
+  if (peer_) unpair();
+  pairing_.reset();
+  peerPending_.clear();
+  pairStatus_ = nullptr;
+  // The disk first: no password set, then no password file. A power loss between the two leaves the
+  // old password, never a device nobody can sign in to; a step that fails is said, and nothing more
+  // happens, so it is asked for again
   Config next = cfg_;
   next.system.passwordSet = false;
-  saveConfig(next, std::nullopt);
+  if (saveConfig(next, std::nullopt).status != 200 || !store_.remove(kAuthFile)) {
+    log_.add(clock_.epoch(), "auth", "alarm", say("ev.auth.access_reset_failed"), say("store.failed"));
+    saveEvents();
+    return;
+  }
+  auth_.resetAccess();
   // Commands over MQTT are a way in too; the values still go out (SD-130)
   if (mqtt_.commands) {
     mqtt_.commands = false;
@@ -136,18 +159,42 @@ void Robot::resetAccess() {
   }
   log_.add(clock_.epoch(), "auth", "alarm", say("ev.auth.access_reset"), say("ev.auth.access_reset.text"));
   saveEvents();
+  armShownCode();
 }
 
 void Robot::factoryReset(const std::string& by) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (restartWanted_) return;
-  // Everything off first, as at a start (R6); the coupled device learns it as when the coupling
-  // ends, or loses the link and stops dosing (SD-131)
+  if (halted()) return;
+  const Ms now = clock_.nowMs();
+  // A start that finds this mark finishes the reset before anything else
+  store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "pending"}}.dump());
+  // Everything off first (R6): the pumps at once, every network device's output, light and a room's
+  // fans too, until its device confirms it or a minute has passed; the coupled device learns it as
+  // when the coupling ends, or loses the link and stops dosing (SD-131)
   act_.stopAll();
   outputs_.allOff();
+  outputs_.releaseAll(cfg_, devices_, now);
+  authKept_ = false;
   if (peer_) unpair();
-  store_.clear();
-  store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}}.dump());
+  pairing_.reset();
+  peerPending_.clear();
+  resetting_ = Resetting{by, now + kMinute};
+}
+
+void Robot::tickReset(Ms now) {
+  // Only the pumps held off and the network devices' offs, nothing else, until they are done
+  act_.stopAll();
+  outputs_.tickReleases(devices_, now);
+  if (!outputs_.releasing() || now >= resetting_->until) finishFactoryReset();
+}
+
+void Robot::finishFactoryReset() {
+  const std::string by = resetting_ ? resetting_->by : "device";
+  // Every file but the mark goes; the mark then says it is done. A clearing that fails leaves the
+  // mark pending, and the next start does it again
+  if (store_.clear(kResetFile)) store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "done"}}.dump());
+  store_.seal(kResetFile);
+  resetting_.reset();
   restartWanted_ = true;
 }
 
@@ -453,18 +500,25 @@ void Robot::boot() {
   } else {
     journal_.clear();
   }
-  // After a factory reset, its event comes first (SD-139)
+  // After a factory reset, its event comes first; one cut short by a power loss goes on (SD-139)
+  std::optional<std::string> resetPending;
   if (auto s = store_.read(kResetFile)) {
     const json j = json::parse(*s, nullptr, false);
     const std::string by = j.is_object() ? jstr(j, "by") : "";
-    log_.add(bootEpoch_, "system", "notice", say("ev.system.factory_reset"), say(by == "owner" ? "ev.system.factory_reset.owner" : "ev.system.factory_reset.device"));
-    store_.remove(kResetFile);
+    if (j.is_object() && jstr(j, "state") == "done") {
+      log_.add(bootEpoch_, "system", "notice", say("ev.system.factory_reset"), say(by == "owner" ? "ev.system.factory_reset.owner" : "ev.system.factory_reset.device"));
+      store_.remove(kResetFile);
+    } else {
+      resetPending = by.empty() ? "device" : by;
+    }
   }
   log_.add(bootEpoch_, "system", rt_.stopped ? "warn" : "info", say("ev.boot"),
            rt_.stopped ? say("ev.boot.stopped") : Msg{});
   if (authKept_) log_.add(bootEpoch_, "auth", "alarm", say("ev.auth.kept"), say("auth.kept"));
   saveState(true);
   saveEvents();
+  if (resetPending) factoryReset(*resetPending);
+  else armShownCode();
 }
 
 // ---------------------------------------------------------------- tick
@@ -476,6 +530,10 @@ void Robot::tick() {
   const Ms now = clock_.nowMs();
   const Epoch epoch = clock_.epoch();
   hw_.poll(now);
+  if (resetting_) {
+    tickReset(now);
+    return;
+  }
   // A reset asked for at the device (SD-139)
   switch (hw_.takeReset()) {
     case DeviceReset::Access:
