@@ -852,8 +852,11 @@ TEST_CASE("Flow by the device's method: an outlet level sensor proves it while i
   MemoryStorage store;
   Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
   r.boot();
-  // The feed pump as the hardware reports it after the tick (without a recipe the check switches it off)
+  hw.prof.pumpStartMs = 0;  // its start window is tested on its own (SD-146)
+  // The feed pump as the hardware reports it, before the tick and after it (without a recipe the
+  // check switches it off)
   auto flowOk = [&](bool suction) {
+    hw.out = suction;
     clock.ms += 1000;
     r.tick();
     hw.out = suction;
@@ -871,5 +874,45 @@ TEST_CASE("Flow by the device's method: an outlet level sensor proves it while i
   hw.set(Signal::Flow, 0.4, clock.ms + 1000);
   CHECK_FALSE(flowOk(true));
   hw.set(Signal::Flow, 6.0, clock.ms + 1000);
+  CHECK(flowOk(true));
+}
+
+TEST_CASE("Flow signal: nothing is flow within the feed pump's start window, and a flow meter's pulses are none while the pump's current says it moves no water (SD-146)") {
+  fake::Hardware hw;
+  fake::Clock clock;
+  MemoryStorage store;
+  Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
+  r.boot();
+  hw.prof.flow = "turbine";
+  hw.prof.pumpStartMs = 3 * kSecond;
+  hw.prof.pumpMinA = 0.5;
+  auto flowOk = [&](bool pump) {
+    hw.out = pump;
+    clock.ms += 1000;
+    r.tick();
+    hw.out = pump;
+    hw.set(Signal::Flow, 6.0, clock.ms);
+    return r.state()["flowOk"].get<bool>();
+  };
+  // The start window: 3 s from when the pump was seen running
+  hw.amps = 0.8;
+  CHECK_FALSE(flowOk(false));
+  CHECK_FALSE(flowOk(true));  // seen running now
+  CHECK_FALSE(flowOk(true));  // 1 s
+  CHECK_FALSE(flowOk(true));  // 2 s
+  CHECK(flowOk(true));        // 3 s
+  // Pulses while the pump draws less than the least current with water: air turns the rotor
+  hw.amps = 0.3;
+  CHECK_FALSE(flowOk(true));
+  hw.amps = std::numeric_limits<double>::quiet_NaN();  // a current not read is no sign of water (R5)
+  CHECK_FALSE(flowOk(true));
+  hw.amps = 0.8;
+  CHECK(flowOk(true));
+  // Switched off and on: the window starts again
+  CHECK_FALSE(flowOk(false));
+  CHECK_FALSE(flowOk(true));
+  // A device that measures no current has only the pulses
+  hw.amps.reset();
+  for (int i = 0; i < 3; ++i) flowOk(true);
   CHECK(flowOk(true));
 }

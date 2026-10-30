@@ -58,6 +58,8 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Network | Wi-Fi | Wi-Fi, LAN |
 | Feed pump | in the tank | in the tank |
 | Feed pump, low end | 10 L/min | – |
+| Feed pump, start window (SD-146) | 3 s | 3 s |
+| Feed pump, least current with water (SD-146) | 0.5 A | 0.5 A |
 | Pull back | the pumps run backwards | they cannot |
 | Run time per 24 h (SD-113) | 40 min per head | 20 min per head |
 
@@ -99,7 +101,10 @@ Scenario tests (`tests/core/test_scenarios.cpp`) drive the core through
 the API with the harness in `tests/core/harness.hpp` and read what the
 core cannot see from the twin.
 The water path's faults are in the panel and in the API: `flowFault` with
-`{"fault": "dry"}`, `returnFault` with `{"fault": "blocked"}` or
+`{"fault": "dry"}` (or `"blocked"`, `"hose"`, `"sensor"`, and `"air"`: the
+pump draws air, which turns the flow sensor's rotor to about 70 % of its
+pulses while its current is that of a dry run, an **assumption**, SD-146),
+`returnFault` with `{"fault": "blocked"}` or
 `{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
 `{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and
 `siphon`. `faults` with `{"ids": ["power_trip.dosing"]}` sets what the

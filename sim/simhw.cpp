@@ -37,6 +37,9 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
   }
   // The nominal rate of each head size, ml/min (assumptions, SD-143)
   p.headMlPerMin = {{"S", 50.0}, {"M", 125.0}, {"L", 300.0}};
+  // The feed pump moves water above 0.5 A (an assumption, SD-146; the twin draws 0.8 A with water,
+  // 0.32 A in air)
+  p.pumpMinA = 0.5;
   return p;
 }
 

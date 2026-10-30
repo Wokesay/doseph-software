@@ -100,10 +100,27 @@ Ctx Robot::ctx() {
 
 // Flow by the device's method (SD-109): with an outlet level sensor, it reports water while the
 // feed pump runs; with a flow meter, at least 0.5 L/min. The check proves it for 10 s.
+// Nothing is flow within the feed pump's start window; and a flow meter's pulses alone are none,
+// as air turns its rotor too: where the device measures the pump's current, the pump must move
+// water as well (SD-146)
 bool Robot::flowOk() const {
-  if (hw_.profile().flow == "outlet_level") return hw_.waterPath().outletWet == true && hw_.feedPump() == true;
+  if (hw_.feedPump() != true || !feedOnSince_ || clock_.nowMs() - *feedOnSince_ < hw_.profile().pumpStartMs) return false;
+  if (hw_.profile().flow == "outlet_level") return hw_.waterPath().outletWet == true;
   const Reading& f = truth_.get(Signal::Flow);
-  return f.usable() && *f.value >= kFlowMinLpm;
+  return f.usable() && *f.value >= kFlowMinLpm && pumpMovesWater();
+}
+
+// The feed pump's current says it moves water (SD-146): at least the least current the board
+// description gives, and once its current with water is learned, at least the share below which it
+// runs dry (SD-127). A device that measures no current has only the pulses.
+bool Robot::pumpMovesWater() const {
+  const auto a = hw_.feedPumpA();
+  if (!a) return true;
+  if (!isNum(*a)) return false;
+  const double least = hw_.profile().pumpMinA;
+  if (isNum(least) && *a < least) return false;
+  const bool learned = isNum(rt_.pumpNormalA) && rt_.pumpLearnedS >= kPumpLearnS;
+  return !learned || *a >= kDryShare * rt_.pumpNormalA;
 }
 
 void Robot::markPasswordSet() {
@@ -592,6 +609,9 @@ void Robot::tick() {
   if (maintenanceUntilMs_ > 0)
     for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp})
       truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
+  // Since when the feed pump runs: its start window (SD-146). Unknown counts as off.
+  if (hw_.feedPump() != true) feedOnSince_.reset();
+  else if (!feedOnSince_) feedOnSince_ = now;
   watchRelease(epoch);
   checkHeads(epoch);
   if (pruneRateChecks(cfg_, rt_)) saveState(true);

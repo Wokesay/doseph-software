@@ -294,6 +294,7 @@ class Robot : public RemoteRuns {
  private:
   Ctx ctx();
   bool flowOk() const;
+  bool pumpMovesWater() const;
   Result saveConfig(Config next, const std::optional<Msg>& what);
   void saveState(bool force = false);
   void saveEvents();
@@ -429,6 +430,7 @@ class Robot : public RemoteRuns {
 
   std::string lastHold_;         // the hold of the last tick: when it ends, the cycle starts anew
   bool lastChannelJob_ = false;
+  std::optional<Ms> feedOnSince_;  // the feed pump runs since then (SD-146)
   Ms returnSince_ = -1;          // the return pump runs since then without a pause; -1: it stands (SD-109)  // a channel job ran in the last tick: when it ends, the check starts anew
   Epoch maintenanceUntil() const;
 

@@ -23,11 +23,11 @@ type World = {
 };
 
 type Channel = World["channels"][number];
-// What the device's protection can report (SD-141), by the IDs the firmware uses
+// What the device's protection can report (SD-141, SD-146), by the IDs the firmware uses
 const HW_FAULTS = [
   "self_test.switch_off", "board_description", "power_trip.dosing", "power_trip.pump", "power_trip.return", "safety_cycle",
-  "supply", "current_limit.dosing", "pump_protection.pump", "pump_protection.return", "stop_mismatch", "not_off",
-  "leak_sensor_open", "moisture", "board_hot", "safety_restart",
+  "supply_overvoltage_latched", "supply", "current_limit.dosing", "pump_protection.pump", "pump_protection.return", "stop_mismatch",
+  "not_off", "leak_sensor_open", "moisture", "sensor_supply", "flow_implausible", "board_hot", "safety_restart",
 ];
 // A channel's faults as they are, so a button changes only its own
 const faults = (p: Channel) => ({ channel: p.channel, blocked: p.blocked, empty: p.empty, outletBlocked: p.outletBlocked, siphon: p.siphon });
@@ -169,6 +169,7 @@ export function SimPanel() {
             ["dry", t("sim.fault.dry")],
             ["hose", t("sim.fault.hose")],
             ["sensor", t("sim.fault.sensor")],
+            ["air", t("sim.fault.air")],
           ]}
         />
       </div>

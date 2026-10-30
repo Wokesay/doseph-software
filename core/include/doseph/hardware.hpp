@@ -84,6 +84,12 @@ struct Profile {
   // The nominal rate of a pump with each head size, ml/min (SD-143): a pump calibration derives its
   // run length from it and judges its result by it. Missing: no calibration by the user.
   std::map<std::string, double> headMlPerMin{};
+  // The flow signal (SD-146). The feed pump's start window, ms: after it switches on nothing counts
+  // as flow until this has passed, while its current and the flow sensor settle.
+  Ms pumpStartMs = 3 * kSecond;
+  // The least current of the feed pump moving water, A: below it the flow sensor's pulses are no
+  // flow, as air turns its rotor too. NaN: the board description gives none.
+  double pumpMinA = kNaN;
 };
 
 // The hardware release (SD-110): below the firmware, a leak, high level in
@@ -103,9 +109,12 @@ struct Release {
   //   "board_description"           the board description is missing, invalid or does not match
   //   "power_trip.<rail>"           a supply rail switched off: dosing, pump, return
   //   "safety_cycle"                the safety supervisor restarts the device again and again
+  //   "supply_overvoltage_latched"  the supply's overvoltage protection holds until it is unplugged
   // Latched until a person releases it, once no longer reported:
   //   "supply", "current_limit.<rail>", "pump_protection.<pump|return>", "stop_mismatch",
-  //   "not_off", "leak_sensor_open", "moisture"
+  //   "not_off", "leak_sensor_open.<input>" (a leak or moisture input open: a broken wire),
+  //   "moisture", "sensor_supply" (the sensors' supply failed), "flow_implausible" (flow pulses,
+  //   pump speed and pump current disagree, SD-146)
   // Warnings, which hold nothing: "board_hot"; "safety_restart" (this start came from the safety
   // supervisor; the device reports it from the start on). Any other ID holds while reported.
   std::vector<std::string> faults{};
