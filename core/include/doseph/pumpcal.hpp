@@ -4,7 +4,7 @@
 // how much went. Steps, one at a time:
 //   reverse      the line's concentrate back into its canister (backwards, the line and a margin)
 //   to_water     the person moves the intake into the water
-//   prime        water until it drips steadily, then pulled back as after a dose
+//   prime        water until it drips steadily (a drop sensor is needed), then pulled back as after a dose
 //   reading      the person enters the start reading, then one after each measuring run
 //   run          a measuring run, as a dose: refill, run, pull back
 //   empty        the water back out of the line
@@ -73,7 +73,7 @@ class PumpCal {
   int channel_ = 0;
   std::string method_, step_, head_, canister_, name_;
   double nominal_ = kNaN, lineMl_ = kNaN;
-  bool drops_ = false, pending_ = false;
+  bool pending_ = false;
   std::string order_;
   int seq_ = 0;
   Ms lastStep_ = 0;
@@ -87,7 +87,7 @@ class PumpCal {
   std::uint64_t dropsFrom_ = 0;
   double flow_ = kNaN;
   std::optional<double> result_;
-  Msg message_;
+  Msg message_, waitWhy_;
   Epoch at_ = 0;
 };
 

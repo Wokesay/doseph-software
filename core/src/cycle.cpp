@@ -1025,7 +1025,8 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       break;
     case Phase::Flush:
-      announceChamber();
+      // Held at its end by a pump calibration, the readings are the tank's again: jumps count (RAT-042)
+      if (!(c.pumpCalibration && flushedMs_ >= kFlushMs)) announceChamber();
       if (!c.flowOk) {
         enter(c, Phase::ProveFlow);
         break;

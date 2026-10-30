@@ -490,6 +490,8 @@ constexpr Entry kMessages[] = {
     {"pumpcal.no_nominal", "The device knows no rate for this pump head, so the calibration could not judge its result"},
     {"pumpcal.no_reverse", "The pump of channel {channel} cannot run backwards: its line cannot be emptied into its canister first"},
     {"pumpcal.busy", "A pump calibration is under way"},
+    {"pumpcal.no_drop_sensor", "Channel {channel} has no drop sensor: the calibration primes and fills its line by the drops it sees"},
+    {"pumpcal.pump_locked", "The feed pump is locked (no flow, or its cable): a calibration needs the water to circulate"},
     {"pumpcal.none", "No pump calibration is under way"},
     {"pumpcal.not_now", "Not now: the pump is running a step of the calibration"},
     {"pumpcal.reading", "Enter a reading between 0 and 10,000"},
