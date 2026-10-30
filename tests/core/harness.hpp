@@ -91,6 +91,33 @@ class Run {
     }
     FAIL("not within " << maxS << " s: " << what);
   }
+
+  // A pump calibration by the user from start to end, as a person with a scale does it (SD-143);
+  // the rate it saved
+  double calibrateByHand(int channel) {
+    auto step = [&] {
+      const json st = state();
+      return st["pumpCalibration"].is_object() ? st["pumpCalibration"]["step"].get<std::string>() : std::string();
+    };
+    auto reach = [&](const std::string& want) { waitUntil("step " + want, [&] { return step() == want; }, 400, 250); };
+    auto scale = [&] { return twin()["calWater"]["scaleG"].get<double>(); };
+    ok("POST", "channels/" + std::to_string(channel) + "/pump-calibration", {{"method", "scale"}});
+    reach("to_water");
+    act("intake", {{"channel", channel}, {"where", "water"}});
+    act("calWater", {{"ml", 100}});
+    ok("POST", "pump-calibration/next");
+    reach("reading");
+    ok("POST", "pump-calibration/next", {{"reading", scale()}});
+    while (true) {
+      waitUntil("a reading or the end", [&] { const std::string s = step(); return s == "reading" || s == "to_canister"; }, 400, 250);
+      if (step() == "to_canister") break;
+      ok("POST", "pump-calibration/next", {{"reading", scale()}});
+    }
+    act("intake", {{"channel", channel}, {"where", "canister"}});
+    ok("POST", "pump-calibration/next");
+    reach("done");
+    return state()["pumpCalibration"]["flowMlPerMin"].get<double>();
+  }
 };
 
 }  // namespace harness

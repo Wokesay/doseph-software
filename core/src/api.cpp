@@ -464,8 +464,6 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
   if (is("PUT", {"active"})) return fromResult(robot_.setActive(body));
 
   if (is("POST", {"channels", "*", "prime"})) return fromResult(robot_.prime(channelOf(p[1]), jnum(body, "seconds", 5)));
-  if (is("POST", {"channels", "*", "calibrate"})) return fromResult(robot_.startCalibration(channelOf(p[1]), jnum(body, "seconds", 30)));
-  if (is("POST", {"channels", "result"})) return fromResult(robot_.calibrationResult(jnum(body, "ml")));
   if (is("POST", {"channels", "cancel"})) return fromResult(robot_.cancelChannelJob());
   // A pump calibration by the user (SD-143)
   if (is("POST", {"channels", "*", "pump-calibration"})) return fromResult(robot_.startPumpCalibration(channelOf(p[1]), body));

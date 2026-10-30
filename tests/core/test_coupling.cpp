@@ -320,10 +320,10 @@ TEST_CASE("Coupling: the leader doses a canister on the follower's channel there
     booked |= e["title"]["key"] == "ev.dose" && e["data"]["canister"] == "part_b" && e["data"]["ml"].get<double>() > 0;
   CHECK(booked);
   // The follower's own channel runs only while the leader is in maintenance
-  CHECK(json::parse(call(b, bt, "POST", "channels/1/calibrate", {{"seconds", 5}}).body)["error"]["key"] == "coupling.channel_job");
+  CHECK(json::parse(call(b, bt, "POST", "channels/1/prime", {{"seconds", 5}}).body)["error"]["key"] == "coupling.channel_job");
   REQUIRE(call(a, at, "POST", "maintenance", {{"minutes", 30}}).status == 200);
   together(a, b, 5 * kSecond);
-  CHECK(call(b, bt, "POST", "channels/1/calibrate", {{"seconds", 5}}).status == 200);
+  CHECK(call(b, bt, "POST", "channels/1/prime", {{"seconds", 5}}).status == 200);
 }
 
 TEST_CASE("Coupling: without the follower its canisters are not planned and a run there ends; the watchdog says so on both devices (SD-131)") {

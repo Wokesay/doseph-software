@@ -3501,70 +3501,6 @@
         }
       }
     },
-    "/channels/{channel}/calibrate": {
-      "post": {
-        "operationId": "calibrateChannel",
-        "summary": "Runs a channel into a cup to calibrate it",
-        "tags": [
-          "channels"
-        ],
-        "x-roles": [
-          "owner",
-          "app"
-        ],
-        "parameters": [
-          {
-            "name": "channel",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "description": "The channel's number"
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "seconds": {
-                    "type": "number"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Done",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
     "/channels/{channel}/pump-calibration": {
       "post": {
         "operationId": "startPumpCalibration",
@@ -3629,64 +3565,6 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/channels/result": {
-      "post": {
-        "operationId": "calibrationResult",
-        "summary": "The ml measured in the cup",
-        "tags": [
-          "channels"
-        ],
-        "x-roles": [
-          "owner",
-          "app"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "ml": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "ml"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Done",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error"
-          },
-          "500": {
             "$ref": "#/components/responses/Error"
           }
         }

@@ -221,13 +221,8 @@ void Simulation::configureDemo() {
   const char* ids[] = {"ph_down", "part_a", "part_b", "calmag"};
   for (int i = 0; i < 4; ++i)
     r.putCanister({{"id", ids[i]}, {"name", names[i]}, {"role", roles[i]}, {"channel", i + 1}, {"pair", pairs[i]}, {"color", colors[i]}});
-  for (int i = 0; i < 4; ++i) {
-    const double seconds = 30;
-    r.startCalibration(i + 1, seconds);
-    step(32 * doseph::kSecond, 500);
-    r.calibrationResult(world_.pumps[static_cast<size_t>(i)].cupMl);
-    r.cancelChannelJob();  // closed, as the app does
-  }
+  // Calibrated as a pump calibration by the user would find it (SD-143), without its runs
+  for (int i = 0; i < 4; ++i) r.setChannelFlow(i + 1, world_.flowOf(world_.pumps[static_cast<size_t>(i)]), true);
   // Their sizes, freshly filled: 1 L of each nutrient, 0.5 L of pH− (an assumption)
   for (int i = 0; i < 4; ++i) {
     r.putCanister({{"id", ids[i]}, {"capacityMl", i == 0 ? 500 : 1000}});

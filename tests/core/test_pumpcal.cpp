@@ -39,7 +39,7 @@ void idle(harness::Run& r) {
 
 }  // namespace
 
-TEST_CASE("Pump calibration: the line goes back into its canister, water from the cylinder primes it, two measuring runs give the rate corrected for the cylinder, and the line is refilled from the canister; the water takes nothing from the canister and nothing else doses meanwhile (SD-143)") {
+TEST_CASE("Pump calibration: the line goes back into its canister, water from the cylinder primes it, two measuring runs give the rate corrected for the cylinder from the run time the driver reported, and the line is refilled from the canister; the water takes nothing from the canister and nothing else doses meanwhile (SD-143, RAT-070)") {
   for (const std::string method : {"cylinder", "scale"}) {
     CAPTURE(method);
     harness::Run r(harness::device());
@@ -93,7 +93,7 @@ TEST_CASE("Pump calibration: the line goes back into its canister, water from th
   }
 }
 
-TEST_CASE("Pump calibration: a reading far from the head's rate is refused with its likely cause, as is one that rises; two runs that disagree ask for a third, and the two that agree give the rate (SD-143)") {
+TEST_CASE("Pump calibration: a reading far from the head's rate is refused with its likely cause, as is one that rises; two runs that disagree ask for a third, and the two that agree give the rate (SD-143, RAT-003)") {
   harness::Run r(harness::device());
   idle(r);
   r.ok("POST", "channels/1/pump-calibration", {{"method", "scale"}});
@@ -154,7 +154,7 @@ TEST_CASE("Pump calibration: cancelled or cut by a restart with the intake perha
   CHECK(std::any_of(ev.begin(), ev.end(), [](const json& e) { return e["title"]["key"] == "ev.pumpcal.cut"; }));
 }
 
-TEST_CASE("Pump calibration: refused while stopped, while another job runs, and for an account; while it runs, no other job starts; a Stop ends it, and so do 30 min without a step (SD-143)") {
+TEST_CASE("Pump calibration: refused while stopped, while another job runs, and for an account; while it runs, no other job starts; a Stop ends it, and so do 30 min without a step (SD-143, RAT-003)") {
   harness::Run r(harness::device());
   idle(r);
   CHECK(r.call("POST", "channels/9/pump-calibration", {{"method", "cylinder"}}).status != 200);

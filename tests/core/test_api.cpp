@@ -474,7 +474,7 @@ TEST_CASE("API: access tokens by role: the app may do all but the password and t
   CHECK(account.status("POST", "latches/flow.dry/ack") == 403);
   CHECK(account.status("POST", "resume") == 403);
   CHECK(account.status("POST", "channels/1/prime", {{"seconds", 1}}) == 403);
-  CHECK(account.status("POST", "channels/1/calibrate", {{"seconds", 1}}) == 403);
+  CHECK(account.status("POST", "channels/1/pump-calibration", {{"method", "scale"}}) == 403);
   CHECK(account.status("POST", "probe", {{"action", "start"}}) == 403);
   CHECK(account.status("PUT", "system", {{"name", "x"}}) == 403);
   CHECK(account.status("PUT", "push", json::object()) == 403);
@@ -578,12 +578,13 @@ TEST_CASE("API: commissioning has the steps of #10 in order and resumes after a 
   REQUIRE(c.status("PUT", "commissioning/push", {{"state", "skipped"}}) == 200);
   CHECK(c.get("commissioning")["next"] == "flow");
 
-  // A pH− channel calibrated into a cup: the channel is calibrated, and the run filled its line
+  // A pH− channel calibrated, and its line filled into the tank: the robot sees both steps
   CHECK(stateOf(c.get("commissioning"), "channels") == "open");
   REQUIRE(s.robot().putCanister({{"id", "ph_down"}, {"name", "pH down"}, {"role", "ph_down"}, {"channel", 1}}).status == 200);
-  REQUIRE(c.status("POST", "channels/1/calibrate", {{"seconds", 10}}) == 200);
+  REQUIRE(s.robot().setChannelFlow(1, 50).status == 200);
+  CHECK(stateOf(c.get("commissioning"), "channels") == "done");
+  REQUIRE(c.status("POST", "channels/1/prime", json::object()) == 200);
   s.step(12 * kSecond, 500);
-  REQUIRE(c.status("POST", "channels/result", {{"ml", 5}}) == 200);
 
   // A restart resumes where it stood
   s.reboot();

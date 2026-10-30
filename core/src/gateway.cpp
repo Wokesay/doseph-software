@@ -16,7 +16,6 @@ namespace {
 Msg purposeLabel(const std::string& p) {
   if (p == "ec") return say("purpose.ec");
   if (p == "ph") return say("purpose.ph");
-  if (p == "calibration") return say("purpose.calibration");
   if (p == "prime") return say("purpose.prime");
   if (p == "fill") return say("purpose.fill");
   return say("purpose.other");
@@ -81,7 +80,7 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
     if (!c.flowOk) return fail(say("act.no_flow"));
   } else if (purpose == "pullback" || purpose == "empty") {
     if (!canPullBack(channel)) return fail(say("act.no_reverse", {{"channel", channel}}));
-  } else if (purpose != "calibration" && purpose != "prime" && purpose != "fill" && purpose != "refill") {
+  } else if (purpose != "prime" && purpose != "fill" && purpose != "refill") {
     return fail(say("act.purpose"));
   }
   if (counted(purpose))
@@ -427,7 +426,7 @@ void Doser::book(const Ctx& c, Ms ms, bool known) {
   // The canister's level, run by run: a dose and a line fill take from it alike; a calibration is
   // booked from the cup when its amount is entered (SD-119). Kept below zero, never hidden as 0 (RAT-015).
   // A pump calibration pumps water and takes nothing (SD-143)
-  const bool water = o.purpose == "calibration" || o.purpose == "calrun" || o.purpose == "calprime" || o.purpose == "empty";
+  const bool water = o.purpose == "calrun" || o.purpose == "calprime" || o.purpose == "empty";
   if (!water) takeStock(c, o.step.canister, o.step.name, ml);
   // What went into the tank, for the plants' records (RAT-064): an amount not known is counted as
   // such, never as nothing (R5)

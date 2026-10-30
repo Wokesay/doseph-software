@@ -1771,9 +1771,11 @@ principle; numbers marked as assumptions hold until the bench test.
   canister) or the field for the reading, a refused reading's cause, and
   each run's rate. The simulator panel moves the intake and shows what the
   cylinder and the scale read.
+- **The old calibration into a cup is gone** from the API and the core;
+  the simulator's demo starts with its channels calibrated as a device
+  in use. A journal record of a cup calibration from before is still
+  read as no dose.
 - **Not yet built.** These follow as their own changes:
-  - **The old calibration into a cup leaves the API.** The web app no
-    longer offers it.
   - **The triggers.** A new head of the same size asks "new head?"; a
     new intake line recommends a calibration; a reminder comes with the
     probe calibration; a consumption check proposes a corrected rate

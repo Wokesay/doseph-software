@@ -75,6 +75,17 @@ All notable changes to this software. The format follows
   (`docs/RELEASE.md`, step 4). The owner pushes a release's tag, since a
   Claude session may push only its own branches (step 3).
 
+### Removed
+
+- The calibration into a cup (`POST channels/{n}/calibrate`,
+  `POST channels/result`). The pump calibration by the user replaces it
+  (SD-143).
+
+### Fixed
+
+- A pump calibration's water run cut by a restart was read back from the
+  dosing journal as a nutrient dose (SD-143).
+
 ## [0.1.0-proto.5] – 2026-10-30
 
 ### Changed

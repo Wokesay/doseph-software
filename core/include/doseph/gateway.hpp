@@ -156,7 +156,7 @@ constexpr std::uint64_t kCalPrimeDrops = 5;
 
 struct DoseOrder {
   std::string id;
-  // ec | ph | calibration | prime (a line into a cup, by time) | fill (a line into the tank, until it
+  // ec | ph | prime (a line into a cup, by time) | fill (a line into the tank, until it
   // drips, SD-111); a pump calibration by the user (SD-143): calprime (water along the normal path
   // until it drips steadily) | calrun (a measuring run of water) | empty (backwards: the line's
   // content back where the intake is); runs of the gateway also: refill | pullback

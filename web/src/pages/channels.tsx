@@ -367,18 +367,17 @@ function PumpCalDialog(p: { channel: number; onClose: () => void }) {
 }
 
 /** Priming one channel: a line into a cup by time, or into the tank until it drips. */
-function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; onClose: () => void }) {
+function ChannelJobDialog(p: { channel: number; onClose: () => void }) {
   const st = state.value!;
   // Only the job this dialog started: a finished one from before is not this one's
   const [started, setStarted] = useState<string | null>(null);
   const job = st.channelJob && st.channelJob.id === started ? st.channelJob : null;
-  const [seconds, setSeconds] = useState<number | null>(p.type === "calibration" ? 30 : 5);
-  const [ml, setMl] = useState<number | null>(null);
+  const [seconds, setSeconds] = useState<number | null>(5);
   const max = config.value!.limits.maxRunS;
   // With a drop sensor at the outlet the line is filled into the tank until it drips (SD-111)
-  const fill = p.type === "prime" && st.channels.some((c) => c.channel === p.channel && c.drops !== null);
+  const fill = st.channels.some((c) => c.channel === p.channel && c.drops !== null);
   const start = async () => {
-    const r = await post<{ id: string }>(`/channels/${p.channel}/${p.type === "calibration" ? "calibrate" : "prime"}`, fill ? {} : { seconds });
+    const r = await post<{ id: string }>(`/channels/${p.channel}/prime`, fill ? {} : { seconds });
     setStarted(r.id);
     await refreshState();
   };
@@ -387,14 +386,10 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
     await refreshState();
     p.onClose();
   };
-  const result = async () => {
-    await post("/channels/result", { ml });
-    await Promise.all([refreshState(), refreshConfig()]);
-  };
   const bad = !fill && (seconds === null || seconds < 1 || seconds > max);
   return (
     <Modal
-      title={t(p.type === "calibration" ? "channels.calibrateN" : fill ? "channels.fillN" : "channels.primeN", { channel: p.channel })}
+      title={t(fill ? "channels.fillN" : "channels.primeN", { channel: p.channel })}
       onClose={cancel}
       footer={
         job?.state === "done" ? (
@@ -410,7 +405,7 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
     >
       {!job && (
         <div class="stack">
-          <p>{t(p.type === "calibration" ? "channels.calibrateIntro" : fill ? "channels.fillIntro" : "channels.primeIntro")}</p>
+          <p>{t(fill ? "channels.fillIntro" : "channels.primeIntro")}</p>
           {!fill && (
             <Field label={t("channels.seconds")} error={bad ? t("channels.secondsRange", { max }) : null}>
               <NumberInput value={seconds} onValue={setSeconds} unit="s" name="seconds" />
@@ -428,19 +423,6 @@ function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; o
           <p>{job.type === "fill" ? t("channels.filling") : t("channels.running", { s: num(job.seconds, 0) })}</p>
           <div class="progress">
             <span style="width:100%;opacity:0.5" />
-          </div>
-        </div>
-      )}
-      {job?.state === "waiting_result" && (
-        <div class="stack">
-          <p>{msg(job.message)}</p>
-          <Field label={t("channels.mlInCup")}>
-            <NumberInput value={ml} onValue={setMl} unit="ml" name="ml" />
-          </Field>
-          <div>
-            <Button variant="primary" onClick={result} disabled={ml === null || ml <= 0} data-testid="job-result">
-              {t("common.save")}
-            </Button>
           </div>
         </div>
       )}
@@ -519,7 +501,7 @@ function ChannelsCard() {
         <Term topic="calibratePump" />
       </p>
       <p class="muted small">{t("channels.headNote")}</p>
-      {dialog?.type === "prime" && <ChannelJobDialog {...dialog} onClose={() => setDialog(null)} />}
+      {dialog?.type === "prime" && <ChannelJobDialog channel={dialog.channel} onClose={() => setDialog(null)} />}
       {dialog?.type === "calibration" && <PumpCalDialog channel={dialog.channel} onClose={() => setDialog(null)} />}
     </Card>
   );
