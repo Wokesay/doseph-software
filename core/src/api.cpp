@@ -93,7 +93,9 @@ std::optional<Role> Api::access(const ApiRequest& req) {
 bool permitted(Role role, const std::string& method, const std::vector<std::string>& p) {
   if (role == Role::Owner) return true;
   const std::string first = p.empty() ? "" : p[0];
-  if (role == Role::App) return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password");
+  // A factory reset is the owner's alone, with the password (SD-139)
+  if (role == Role::App)
+    return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password") && !(first == "system" && p.size() > 1 && p[1] == "factory-reset");
   if (method == "GET") return first != "tokens";
   // The coupled device's calls (SD-131); the robot checks that the token is the one made for it
   if (role == Role::Peer) return method == "POST" && p.size() == 2 && ((first == "coupling" && p[1] == "leave") || first == "peer");
@@ -163,6 +165,8 @@ bool writeAllowed(const std::string& method, const std::string& secFetchSite, co
 
 ApiResponse Api::handle(const ApiRequest& req) {
   try {
+    // After a factory reset nothing more is taken until the device has restarted (SD-139)
+    if (robot_.restartWanted()) return fail(503, say("system.restarting"));
     return route(req);
   } catch (const json::exception&) {
     return fail(400, say("api.bad_input"));
@@ -341,6 +345,7 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
     robot_.logEvent("auth", "notice", say("ev.auth.password_changed"), say("ev.auth.password_changed.text"));
     return jsonResp(200, {{"ok", true}});
   }
+  if (is("POST", {"system", "factory-reset"})) return fromResult(robot_.factoryResetByOwner(body, req.client));
   if (is("GET", {"tokens"})) return jsonResp(200, robot_.tokens());
   if (is("POST", {"tokens"})) return fromResult(robot_.createToken(body));
   if (is("DELETE", {"tokens", "*"})) return fromResult(robot_.revokeToken(p[1]));

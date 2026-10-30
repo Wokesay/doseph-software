@@ -175,6 +175,33 @@ std::optional<std::string> Auth::login(const std::string& pw, Ms now, Msg& err, 
   return t;
 }
 
+bool Auth::confirm(const std::string& pw, Ms now, Msg& err, const std::string& client) {
+  if (!hasPassword()) {
+    err = say("auth.no_password");
+    return false;
+  }
+  Attempts& a = attemptsOf(client);
+  if (locked(a, now, err)) return false;
+  if (!sameHash(hashOf(pw, salt_, iterations_), hash_)) {
+    failed(a, now);
+    err = say("auth.wrong");
+    return false;
+  }
+  return true;
+}
+
+void Auth::resetAccess() {
+  salt_.clear();
+  hash_.clear();
+  iterations_ = kIterations;
+  sessions_.clear();
+  tokens_.clear();
+  known_.clear();
+  shared_ = Attempts{};
+  setupCode_.clear();
+  setupCodeUntil_ = 0;
+}
+
 void Auth::seen(const std::string& client, Ms now) {
   auto it = client.empty() ? known_.end() : known_.find(client);
   if (it != known_.end()) it->second.lastSeen = now;

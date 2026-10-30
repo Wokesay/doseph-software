@@ -32,6 +32,9 @@ class FileStorage : public doseph::IStorage {
   std::optional<std::string> read(const std::string& name) override;
   bool write(const std::string& name, const std::string& data) override;
   bool append(const std::string& name, const std::string& data) override;
+  bool remove(const std::string& name) override;
+  // Every file in the folder but the simulator's lock
+  bool clear() override;
 
  private:
   std::string dir_;

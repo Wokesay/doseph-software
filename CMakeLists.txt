@@ -121,6 +121,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
   add_executable(doseph_tests
     tests/core/main.cpp
     tests/core/test_auth.cpp
+    tests/core/test_reset.cpp
     tests/core/test_history.cpp
     tests/core/test_localtime.cpp
     tests/core/test_messages.cpp

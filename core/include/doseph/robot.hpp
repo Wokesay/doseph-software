@@ -75,6 +75,20 @@ class Robot : public RemoteRuns {
   // The device's own identity (SD-129): random, made at the first start, kept apart from the
   // configuration so a restored backup does not copy it
   const std::string& deviceId() const { return deviceId_; }
+  // No password and no setup code armed: the platform arms one and shows it, after the first start
+  // and after an access reset (SD-139)
+  bool needsSetupCode() const;
+
+  // ---- Resets (SD-139)
+  // An access reset, asked for at the device: no password, no session, no access token, no
+  // coupling, and MQTT takes no commands. Dosing and every other setting stay.
+  void resetAccess();
+  // A factory reset, asked for at the device or by the owner with the password: everything off,
+  // every file removed; then the platform restarts the device, which starts as new
+  void factoryReset(const std::string& by);
+  Result factoryResetByOwner(const json& j, const std::string& client);
+  // A factory reset is done: the platform restarts the device; until then nothing is saved
+  bool restartWanted() const { return restartWanted_; }
 
   // ---- Coupling (PD-457, SD-131): the peer, pairing with a code, leaving
   json coupling() const;
@@ -368,6 +382,7 @@ class Robot : public RemoteRuns {
   };
   std::optional<ProbeSession> probe_;
   bool authKept_ = false;
+  bool restartWanted_ = false;  // a factory reset is done (SD-139)
   std::string deviceId_;
 
   Ms maintenanceUntilMs_ = 0;  // monotonic, so no clock step stretches it; 0: none

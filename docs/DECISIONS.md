@@ -1486,3 +1486,44 @@ summary (RAT-064) and the proposals a new plant recipe starts from
   never be dosed (RAT-046).
 - **Later:** the advice to drain at a phase change that lowers the EC
   target (RAT-065), and cost per canister.
+
+## SD-139: An access reset at the device, and a factory reset
+
+2026-10-30. The first of the device security items of #10, chosen by the
+owner as the next step after the release of 0.1.0-proto.5. They are
+control details, decided here by the minimal principle. How a person
+proves to stand at the device is hardware, and a product question.
+
+- **Access reset ("forgot the password").**
+  - It is asked for at the device only, never over the network: the
+    device's platform reports it.
+  - It removes the password, every session, every access token and the
+    coupling. The coupled device learns it as when the coupling ends
+    (SD-131).
+  - MQTT takes no more commands; the values still go out (SD-130).
+  - The next password is a first one again, with the setup code where
+    the device shows one (SD-129).
+  - Dosing goes on, and every setting, recipe, plant and the history
+    stay. The event log keeps it as an alarm.
+- **Factory reset.**
+  - It is asked for at the device, or by the owner in the web app,
+    confirmed with the password. An app token cannot, and a wrong
+    password counts as a failed sign-in with its lockout.
+  - Everything is switched off first (R6). Then every file the device
+    keeps is removed: configuration, run-time state, password, device
+    ID, coupling, MQTT, push, network devices, events, history and the
+    dosing journal.
+  - The platform restarts the device, which starts as new: a new device
+    ID, no password, commissioning from the start. Until the restart,
+    nothing more is taken or saved.
+  - The new event log begins with the factory reset, saying whether it
+    was asked for at the device or by the owner. Nothing of the old log
+    is kept.
+- **At the device.** The device's platform reports a reset asked for at
+  it. In the simulator, the console stands for the device ("reset
+  access", "reset factory"), and the simulator's panel has the same two
+  buttons. The setup code for the next first password is shown there.
+- **Later:** encrypted storage and signed updates, with the firmware;
+  HTTPS per device and the device's key pair, with the account
+  (`docs/ACCOUNT.md`).
+

@@ -245,6 +245,27 @@ export function SimPanel() {
         </div>
       </div>
       <div class="stack-sm">
+        <div class="section-title">{t("sim.atDevice")}</div>
+        <p class="faint small">{t("sim.atDeviceNote")}</p>
+        <div class="row">
+          {(["access", "factory"] as const).map((r) => (
+            <Button
+              size="sm"
+              variant="danger-soft"
+              data-testid={`sim-reset-${r}`}
+              onClick={async () => {
+                if (!confirm(t(r === "access" ? "sim.accessResetAsk" : "sim.factoryResetAsk"))) return;
+                await act("atDevice", { reset: r });
+                logoutLocal();
+                location.reload();
+              }}
+            >
+              {t(r === "access" ? "sim.accessReset" : "sim.factoryReset")}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div class="stack-sm">
         <div class="section-title">{t("sim.scenario")}</div>
         <p class="faint small">{t("sim.scenarioNote")}</p>
         <div class="row">

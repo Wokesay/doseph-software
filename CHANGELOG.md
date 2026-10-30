@@ -5,6 +5,19 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An access reset and a factory reset (SD-139).
+  - **Access reset:** asked for at the device only. It removes the
+    password, the sessions, the access tokens and the coupling, and MQTT
+    takes no more commands. Dosing and the settings stay, and the next
+    password is a first one again.
+  - **Factory reset:** at the device, or by the owner in Settings ›
+    Reset with the password. It switches everything off, removes every
+    file and starts the device as new, with a new device ID.
+  - In the simulator, the console ("reset access", "reset factory") and
+    the panel stand for the device.
+
 ### Changed
 
 - The version on `main` is `0.1.0-dev` again after the release

@@ -160,6 +160,8 @@ of its own.
 | An access token is shown once and kept as a hash; it has one of three roles, never the owner's; a revoked token is refused at once; a password change ends the sessions, not the tokens | SD-129 | ✓ | `auth.cpp`, `robot.cpp` · test_auth.cpp, test_api.cpp |
 | A call outside a token's role is refused: an app token never reaches the password or the tokens, an account token never limits, releases, calibration, single pumps or settings, a peer token only reads; a token never goes into a cookie | SD-129 | ✓ | `api.cpp`, `sim/main.cpp` · test_api.cpp, robot.spec.ts |
 | The device ID is random, made once, kept across a restart and never in a backup | SD-129 | ✓ | `robot.cpp` · test_api.cpp, robot.spec.ts |
+| An access reset is asked for at the device only: no password, session, access token or coupling, no MQTT commands, and the next password is a first one; dosing and the settings stay | SD-139 | ✓ | `auth.cpp`, `robot.cpp`, `sim/main.cpp` · test_reset.cpp, robot.spec.ts |
+| A factory reset, at the device or by the owner with the password, switches everything off, removes every file and restarts as new with a new device ID; until then nothing is taken or saved | SD-139 | ✓ | `robot.cpp`, `api.cpp`, `hardware.hpp` · test_reset.cpp, robot.spec.ts |
 
 ## Commissioning (SD-129)
 

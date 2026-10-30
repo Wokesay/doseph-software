@@ -95,6 +95,10 @@ struct RunStatus {
   std::string error;
 };
 
+// A reset asked for at the device itself, which shows that a person stands at it (SD-139). How it
+// is asked for (a button, how long it is held) is the device's.
+enum class DeviceReset { None, Access, Factory };
+
 class IHardware {
  public:
   virtual ~IHardware() = default;
@@ -123,6 +127,8 @@ class IHardware {
   virtual std::optional<bool> feedPump() const = 0;  // nullopt: state unknown
   // The feed pump's current in A while it runs; nullopt where the device does not measure it
   virtual std::optional<double> feedPumpA() const = 0;
+  // A reset asked for at the device since the last call; each is taken once (SD-139)
+  virtual DeviceReset takeReset() { return DeviceReset::None; }
 };
 
 // Storage for configuration and state (device: flash, host: files). write()
@@ -136,6 +142,10 @@ class IStorage {
   virtual bool write(const std::string& name, const std::string& data) = 0;
   // Without a real append the whole file is rewritten; storages that can append override this.
   virtual bool append(const std::string& name, const std::string& data) { return write(name, read(name).value_or("") + data); }
+  // Removes one file; true when it is gone, also when there was none
+  virtual bool remove(const std::string& name) = 0;
+  // Removes every file the robot keeps: a factory reset (SD-139)
+  virtual bool clear() = 0;
 };
 
 class MemoryStorage : public IStorage {
@@ -143,6 +153,8 @@ class MemoryStorage : public IStorage {
   std::optional<std::string> read(const std::string& name) override;
   bool write(const std::string& name, const std::string& data) override;
   bool append(const std::string& name, const std::string& data) override;
+  bool remove(const std::string& name) override;
+  bool clear() override;
 
  private:
   std::vector<std::pair<std::string, std::string>> files_;
