@@ -79,6 +79,7 @@ add_library(doseph_core
   core/src/climate.cpp
   core/src/service.cpp
   core/src/plants.cpp
+  core/src/pumpcal.cpp
   core/src/robot.cpp
   core/src/api.cpp
   core/src/messages.cpp
@@ -125,6 +126,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_reset.cpp
     tests/core/test_faults.cpp
     tests/core/test_platform.cpp
+    tests/core/test_pumpcal.cpp
     tests/core/test_history.cpp
     tests/core/test_localtime.cpp
     tests/core/test_messages.cpp

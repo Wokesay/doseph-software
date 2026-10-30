@@ -354,7 +354,14 @@ json Simulation::control(const std::string& action, const json& b) {
   else if (action == "returnFault") world_.returnFault = doseph::jstr(b, "fault");
   else if (action == "leak") world_.leak = doseph::jbool(b, "on", false);
   else if (action == "stopButton") world_.stopButton = doseph::jbool(b, "pressed", false);
-  else if (action == "faults") {  // what the device's protection reports (SD-141)
+  else if (action == "intake") {  // a pump calibration: the intake into the water or back (SD-143)
+    const int n = static_cast<int>(num("channel", 0));
+    const std::string where = doseph::jstr(b, "where");
+    if (n < 1 || n > static_cast<int>(world_.pumps.size()) || (where != "water" && where != "canister")) return {{"error", "channel and where: water | canister"}};
+    world_.pumps[static_cast<size_t>(n - 1)].intake = where;
+  } else if (action == "calWater") {
+    world_.calWaterMl = std::clamp(num("ml", 100), 0.0, 2000.0);
+  } else if (action == "faults") {  // what the device's protection reports (SD-141)
     world_.faults.clear();
     if (b.contains("ids") && b["ids"].is_array())
       for (const auto& f : b["ids"])

@@ -493,6 +493,9 @@ struct RuntimeState {
   // Starts of the feed pump in a row that found no flow: kept across a restart, so restarts do not
   // reset the tries before the lock (SD-109, SD-127, SD-142)
   int noFlowTries = 0;
+  // A pump calibration under way, {channel, at}: a restart in its middle locks the channel, whose
+  // intake may be out of its canister (SD-143, R6); null without one
+  json pumpCal = nullptr;
   // The channels a run went through to its end, which filled the line (SD-129): a commissioning
   // step the robot sees
   std::set<int> filled;

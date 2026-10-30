@@ -38,7 +38,7 @@ constexpr Ms kAfterRunMs = 10 * kSecond;    // drops this long after a run are s
 std::string channelLatch(int channel, const std::string& what) { return "channel." + std::to_string(channel) + "." + what; }
 
 bool channelLocked(const RuntimeState& rt, int channel) {
-  return holds(rt, channelLatch(channel, "no_drops")) || holds(rt, channelLatch(channel, "siphon"));
+  return holds(rt, channelLatch(channel, "no_drops")) || holds(rt, channelLatch(channel, "siphon")) || holds(rt, channelLatch(channel, "cal_cut"));
 }
 
 // ---------------------------------------------------------------- Actuators
@@ -64,6 +64,8 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
     // Not before a person checked the protection by hand after the start, where the device does not
     // test it itself (SD-141)
     if (c.protectionCheck) return fail(say("act.protection_check"));
+    // No dose while a pump calibration runs, whoever asks: its intake may be in the water (SD-143)
+    if (c.pumpCalibration) return fail(say("pumpcal.busy"));
     // No dose without a measured calibration (RAT-015), no run under the minimum (RAT-050)
     const double flow = c.cfg.channelFlow(channel);
     if (!(isNum(flow) && flow > 0)) return fail(say("act.uncalibrated"));
@@ -73,7 +75,11 @@ bool Actuators::allowed(const Ctx& c, int channel, Ms ms, const std::string& pur
     // No dose without flow through the device: it would not reach the tank (SD-105)
     if (!c.flowOk) return fail(say("act.no_flow"));
     if (channelLocked(c.rt, channel)) return fail(say("act.channel_locked", {{"channel", channel}}));
-  } else if (purpose == "pullback") {
+  } else if (purpose == "calrun" || purpose == "calprime") {
+    // Water from a cylinder or a glass along the normal path into the tank: with flow, as a dose (SD-143)
+    if (!placementConfirmed(c.cfg)) return fail(say("act.placement"));
+    if (!c.flowOk) return fail(say("act.no_flow"));
+  } else if (purpose == "pullback" || purpose == "empty") {
     if (!canPullBack(channel)) return fail(say("act.no_reverse", {{"channel", channel}}));
   } else if (purpose != "calibration" && purpose != "prime" && purpose != "fill" && purpose != "refill") {
     return fail(say("act.purpose"));
@@ -106,7 +112,7 @@ std::optional<Msg> Actuators::dailyCap(const Ctx& c, int channel, Ms ms) const {
 bool Actuators::startRun(const Ctx& c, int channel, Ms ms, const std::string& purpose, const std::string& jobId, Msg& err) {
   if (!allowed(c, channel, ms, purpose, err)) return false;
   std::string e;
-  if (!hw_.startRun(channel, ms, jobId, e, purpose == "pullback")) {
+  if (!hw_.startRun(channel, ms, jobId, e, purpose == "pullback" || purpose == "empty")) {
     err = say("act.hw", {{"error", e}});
     return false;
   }
@@ -222,7 +228,8 @@ void Actuators::enforce(const Ctx& c) {
   if (runningChannel_ == 0) return;
   // A Stop or the hardware release ends every run (SD-110); a dose without flow stops: what it
   // pumps would stay in the device (SD-105)
-  if (c.stopped || !c.hold.empty() || (intoTank(runningPurpose_) && !c.flowOk)) {
+  const bool needsFlow = intoTank(runningPurpose_) || runningPurpose_ == "calrun" || runningPurpose_ == "calprime";  // SD-143
+  if (c.stopped || !c.hold.empty() || (needsFlow && !c.flowOk)) {
     hw_.stopAllPumps();
     if (!cutLogged_ && !c.stopped && c.hold.empty()) {
       c.log.add(c.epoch, "block", "warn", say("ev.flow_cut"), say("ev.flow_cut.text"));
@@ -256,7 +263,8 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
   }
   // A line pulled back after the last dose is filled first: the same time forwards, not booked,
   // so the dose stays the planned amount (SD-111)
-  if (auto back = c.rt.pulledBackMs.find(o.step.channel); back != c.rt.pulledBackMs.end()) {
+  // Not before a run backwards: it would push the line's content forwards first (SD-143)
+  if (auto back = c.rt.pulledBackMs.find(o.step.channel); back != c.rt.pulledBackMs.end() && o.purpose != "empty") {
     Msg e;
     // Only for a run that may start: a refused one is refused as without a refill
     if (!act.allowed(c, o.step.channel, o.step.runs[progress_.run], o.purpose, e)) {
@@ -309,7 +317,9 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
 bool Doser::pullBack(const Ctx& c, Actuators& act) {
   const auto& o = *active_;
   const double flow = o.step.flowMlPerMin;
-  if (!intoTank(o.purpose) || !act.canPullBack(o.step.channel) || !(isNum(flow) && flow > 0)) return false;
+  // … and after a run of a pump calibration, which behaves as a dose (SD-143)
+  const bool dose = intoTank(o.purpose) || o.purpose == "calrun" || o.purpose == "calprime";
+  if (!dose || !act.canPullBack(o.step.channel) || !(isNum(flow) && flow > 0)) return false;
   const Ms ms = std::clamp<Ms>(std::llround(kPullBackMl / flow * 60000.0), 1, kPullBackMaxMs);
   Msg e;
   job_ = busJob() + "b";
@@ -323,7 +333,9 @@ bool Doser::pullBack(const Ctx& c, Actuators& act) {
 
 bool Doser::dripped(Actuators& act) const {
   const auto d = act.drops(active_->step.channel);
-  return d && d->count > fillFrom_;
+  // A line fill ends at its first drop; a pump calibration's priming once it drips steadily (SD-143)
+  const std::uint64_t want = active_->purpose == "calprime" ? kCalPrimeDrops : 1;
+  return d && d->count >= fillFrom_ + want;
 }
 
 void Doser::finish(const Ctx& c, DoseProgress::State state) {
@@ -376,6 +388,7 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
     if (c.stopped) e = say("act.stopped");
     else if (!c.hold.empty()) e = holdText("act.hold.", c.hold);
     else if (c.protectionCheck) e = say("act.protection_check");
+    else if (c.pumpCalibration) e = say("pumpcal.busy");
     else if (!placementConfirmed(c.cfg)) e = say("act.placement");
     else if (!intoTank(order.purpose)) e = say("act.purpose");
     else if (!c.remote || !c.remote->linked()) e = say("coupling.no_link");
@@ -413,7 +426,9 @@ void Doser::book(const Ctx& c, Ms ms, bool known) {
   if (!remote_) c.journal.end(o.id, static_cast<int>(progress_.run) + 1, ms, ml);
   // The canister's level, run by run: a dose and a line fill take from it alike; a calibration is
   // booked from the cup when its amount is entered (SD-119). Kept below zero, never hidden as 0 (RAT-015).
-  if (o.purpose != "calibration") takeStock(c, o.step.canister, o.step.name, ml);
+  // A pump calibration pumps water and takes nothing (SD-143)
+  const bool water = o.purpose == "calibration" || o.purpose == "calrun" || o.purpose == "calprime" || o.purpose == "empty";
+  if (!water) takeStock(c, o.step.canister, o.step.name, ml);
   // What went into the tank, for the plants' records (RAT-064): an amount not known is counted as
   // such, never as nothing (R5)
   if (counted(o.purpose) && ms > 0) {
@@ -506,8 +521,9 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     return;
   }
   const auto& o = *active_;
-  // A line fill stops at its first drops (SD-111)
-  if (running_ && leg_ == Leg::Dose && o.purpose == "fill" && !filled_ && dripped(act)) {
+  // A line fill stops at its first drops (SD-111), a pump calibration's priming once it drips steadily
+  const bool untilDrops = o.purpose == "fill" || o.purpose == "calprime";
+  if (running_ && leg_ == Leg::Dose && untilDrops && !filled_ && dripped(act)) {
     act.stopPumps();
     filled_ = true;
   }
@@ -539,6 +555,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     if (filled_ && mine) {
       book(c, std::max<Ms>(0, st.actualMs));
       progress_.run++;
+      if (o.purpose == "calprime" && pullBack(c, act)) return;  // as after a dose, so each measuring run starts alike
       finish(c, DoseProgress::State::Done);
       return;
     }
@@ -553,13 +570,13 @@ void Doser::tick(const Ctx& c, Actuators& act) {
       book(c, st.actualMs);
       progress_.run++;
       if (progress_.run >= o.step.runs.size()) {
-        if (pullBack(c, act)) return;  // the order ends after it
-        if (o.purpose == "fill" && !dripped(act)) {
-          // Every run ran and nothing dripped: the line is not full (SD-111)
+        if (untilDrops && !dripped(act)) {
+          // Every run ran and nothing dripped: the line is not full (SD-111), nor primed (SD-143)
           progress_.error = say("dose.fill_no_drops", {{"name", o.step.name}, {"s", progress_.msDone / 1000.0}});
           finish(c, DoseProgress::State::Failed);
           return;
         }
+        if (pullBack(c, act)) return;  // the order ends after it
         finish(c, DoseProgress::State::Done);
         return;
       }
@@ -575,7 +592,8 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     active_.reset();
     return;
   }
-  if (o.purpose == "fill" && dripped(act)) {
+  if (untilDrops && dripped(act)) {
+    if (o.purpose == "calprime" && pullBack(c, act)) return;
     finish(c, DoseProgress::State::Done);  // it dripped between two runs
     return;
   }

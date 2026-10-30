@@ -1683,3 +1683,95 @@ principle.
 - **Not here.** The pump calibration by the user and the channel lights,
   progress for large tanks and the calibration texts each follow as a
   package of their own.
+
+## SD-143: Pump calibration by the user
+
+2026-10-30. Item 1 of the product input of 30 Oct in #10, chosen by the
+owner as the next package. These are details decided here by the minimal
+principle; numbers marked as assumptions hold until the bench test.
+
+- **Where.** On the intake side. The channel's intake goes into a
+  graduated cylinder, or into a glass of water on a kitchen scale. Water
+  only, for every channel, pH− too.
+- **The pump's path.** The pump draws that water along its normal path
+  into the tank, so each run behaves as a dose: the line is refilled
+  first, and pulled back after it (SD-111). The feed pump runs with flow
+  proven, and the gateway releases the runs as it does a dose. The check
+  pauses: it goes no further than its flush until the calibration ends.
+  One run at a time, as always.
+- **Steps.**
+  1. **Back into the canister.** With the intake still in its canister,
+     the pump runs backwards by what its line holds plus half of it, so
+     no uncounted concentrate reaches the tank. The board description
+     gives the line's volume; where it is not known, 30 s. A pump that
+     cannot run backwards is not calibrated this way, nor a channel
+     without a drop sensor: priming and the fill at the end stop at the
+     drops they see. The concentrate that went back counts again in its
+     canister's level, as the fill at the end takes it out again.
+  2. **Into the water.** The person moves the intake and confirms.
+  3. **Priming.** Water runs until 5 drops have fallen (steady drops),
+     at most 2 min, then is pulled back as after a dose. If it never drips
+     steadily, the calibration fails.
+  4. **Start reading.** In ml on the cylinder, or g on the scale.
+  5. **Measuring runs.** Each run lasts what 20 ml takes at the head's
+     nominal rate (an assumption: three runs and the priming fit the
+     100 ml cylinder), within the run limits. After each run the person
+     enters the reading. The rate comes from the reading's fall and the
+     run time the driver reported.
+  6. **Back out.** The water goes back out of the line, the same way as
+     step 1.
+  7. **Into the canister.** The person puts the intake into the canister
+     with the same colour and number, and confirms.
+  8. **Line fill.** The line fills until its first drop; what falls
+     after it is the first dose, booked as one (SD-111).
+- **The result.**
+  - Two runs that agree within 3 % give the rate, their mean. Two that
+    do not ask for a third. Of three, the two that agree best give it;
+    if no two agree, the calibration fails.
+  - A cylinder reads about 2 % more than went, because the intake stands
+    in it (an assumption). That share is taken off; a scale's reading is
+    taken as it is (1 g is 1 ml).
+  - The rate is saved with the head it measured (SD-108).
+- **Refused readings.** The person may correct a refused reading:
+  - a reading that rises;
+  - a run that dripped nothing (drops are a coarse check, never the
+    rate);
+  - a rate more than 30 % from the head's nominal rate (an assumption).
+    The message names the likely cause: below it, air, a kink or the
+    intake out of the water; above it, a typo or another head.
+- **Not consumption.** The water takes nothing from a canister's level
+  and counts towards no daily amount.
+- **Nothing else meanwhile.**
+  - The gateway doses nothing into the tank while a calibration runs,
+    whoever asks, the coupled device included.
+  - A probe calibration, maintenance and a fill by the refill valve do
+    not start.
+  - A calibration does not start where the feed pump cannot circulate:
+    on a coupled follower, under the check by hand after a start
+    (SD-141), or with the feed pump locked for no flow or its cable.
+  - A run that loses its flow stops, as a dose does.
+- **A tared scale** may read below zero; only a reading that rises is
+  refused. A rate that cannot be saved ends the calibration as a cancel
+  does.
+- **Ending early.** A Stop, a cancel or 30 min without a step ends it.
+  - If the intake may be out of its canister (from step 2 to step 7),
+    the channel is locked until a person releases it: put the intake
+    back, fill the line.
+  - A restart in the middle does the same (R6). The run-time state keeps
+    the calibration under way for that.
+- **The channel light.** The light at the outlet is on for the whole
+  calibration, so the person finds the channel.
+- **The board description's part.** The nominal rate of each head size,
+  and each slot's line volume. The twin's example values are
+  assumptions. Every pump of the twin's examples now runs both ways, as
+  the device's do (SD-142).
+- **Who.** The owner and the owner's app; not an account.
+- **Not yet built.** These follow as their own changes:
+  - **The web app's guide.** It also removes the old calibration into a
+    cup, which this replaces.
+  - **The triggers.** A new head of the same size asks "new head?"; a
+    new intake line recommends a calibration; a reminder comes with the
+    probe calibration; a consumption check proposes a corrected rate
+    above about 5 %.
+  - **Drift.** Drops per ml are learned during operation, and a re-measure
+    is suggested at about 20 %.

@@ -299,8 +299,7 @@ TEST_CASE("Scenario pull back: after a dose the line is pulled back about 0.2 ml
     r.step(5 * kSecond);
     const int ch = r.events("dose")[0]["data"]["channel"];
     const double line = r.twin()["channels"][ch - 1]["lineMl"];
-    if (std::string(profile) == "home") CHECK(line == doctest::Approx(0.2).epsilon(0.1));
-    else CHECK(line == 0);  // its pumps cannot run backwards
+    CHECK(line == doctest::Approx(0.2).epsilon(0.1));  // every pump runs both ways (SD-142)
   }
 }
 

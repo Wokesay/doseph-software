@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -47,6 +48,8 @@ struct ChannelCaps {
   // "forwards" and "backwards" into the motor's direction; the core never reads it, and it is
   // never shown.
   bool inverted = false;
+  // What the slot's line from the canister to the outlet holds, ml (SD-143); NaN: not known
+  double lineMl = kNaN;
 };
 
 // What a channel's drop sensor has seen (SD-111): the drops counted since the
@@ -78,6 +81,9 @@ struct Profile {
   std::string selfTest = "auto";
   std::string pumpSpeed = "fixed";    // the feed pump's speed: "fixed", "adjustable"
   std::string returnFeedback;         // how a return pump is seen to run: "current", "" (none)
+  // The nominal rate of a pump with each head size, ml/min (SD-143): a pump calibration derives its
+  // run length from it and judges its result by it. Missing: no calibration by the user.
+  std::map<std::string, double> headMlPerMin{};
 };
 
 // The hardware release (SD-110): below the firmware, a leak, high level in
@@ -155,6 +161,8 @@ class IHardware {
   virtual std::optional<double> feedPumpA() const = 0;
   // A reset asked for at the device since the last call; each is taken once (SD-139)
   virtual DeviceReset takeReset() { return DeviceReset::None; }
+  // The light at a channel's outlet, in its colour: on, it points a person to the channel (SD-143)
+  virtual void setChannelLight(int /*channel*/, bool /*on*/) {}
 };
 
 // Storage for configuration and state (device: flash, host: files). write()

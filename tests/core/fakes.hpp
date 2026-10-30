@@ -45,6 +45,8 @@ class Hardware : public doseph::IHardware {
   doseph::WaterPath water;
   doseph::WaterPath waterPath() const override { return water; }
   std::map<int, doseph::Drops> dropsSeen;  // the channels with a drop sensor and what it counted
+  std::map<int, bool> lights;
+  void setChannelLight(int channel, bool on) override { lights[channel] = on; }
   std::optional<doseph::Drops> drops(int channel) const override {
     auto it = dropsSeen.find(channel);
     if (it == dropsSeen.end()) return std::nullopt;

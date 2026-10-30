@@ -25,6 +25,7 @@
 #include "doseph/clock.hpp"
 #include "doseph/cycle.hpp"
 #include "doseph/history.hpp"
+#include "doseph/pumpcal.hpp"
 #include "doseph/watchdog.hpp"
 
 namespace doseph {
@@ -240,6 +241,11 @@ class Robot : public RemoteRuns {
   Result startCalibration(int channel, double seconds);
   Result calibrationResult(double ml);
   Result cancelChannelJob();
+  // A pump calibration by the user (SD-143): {"method": "cylinder" | "scale"}; the person's next step
+  // ({"reading": ml or g} where a reading is wanted); cancelled by the person
+  Result startPumpCalibration(int channel, const json& body);
+  Result pumpCalibrationNext(const json& body);
+  Result cancelPumpCalibration();
   Result probe(const json& j);
   Result ackLatch(const std::string& id, const json& body);
   // Pauses the repetition of a raised alarm, or of all ("") (RAT-022, SD-123)
@@ -297,6 +303,8 @@ class Robot : public RemoteRuns {
   void learnSettling(const MixCycle::Settled& st, Epoch epoch);
   void snapshot(Epoch epoch);
   void channelJobDone(const DoseProgress& p);
+  void pumpCalDone(Ctx& c, const DoseProgress& p);
+  void takePumpCalResult();
   Result startChannelJob(const std::string& type, int channel, double seconds);
   bool channelJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
   void restartCycle();
@@ -384,6 +392,7 @@ class Robot : public RemoteRuns {
   static constexpr size_t kMaxDeliveries = 100;
   void queueDeliveries(std::vector<Delivery> ds);
   std::optional<ChannelJob> job_;
+  PumpCal pumpCal_;
   // A probe calibration: the kind, its points and when the last step was
   // taken. It holds the cycle until it is saved or cancelled; it explains
   // jumps for 30 min after its last step (RAT-042).

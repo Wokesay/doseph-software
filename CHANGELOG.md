@@ -7,6 +7,20 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- A pump calibration by the user (SD-143), in the core and the API. The
+  web app's guide follows.
+  - The line goes back into its canister first.
+  - Water from a measuring cylinder or a glass on a scale primes the
+    line, and two measuring runs give the rate, a third where they
+    disagree. A cylinder's reading is corrected for the intake in it.
+  - Readings far from the head's rate are refused with their likely
+    cause.
+  - At the end the line fills from the canister again: what falls after
+    its first drop is the first dose.
+  - Cut short with the intake perhaps in the water, the channel stays
+    locked until released.
+  - The channel's light points to it meanwhile.
+
 - The firmware platform's rules in the core and the twin (SD-142).
   - Each slot's pump turns as the board description says; the twin mounts
     two slots the other way.
