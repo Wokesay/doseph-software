@@ -1569,7 +1569,9 @@ owner. These are details decided here by the minimal principle.
     drain, or top up if little is left.
 - **Until when.** Until a check after the fall measures the tank within the
   new target's band (drained, topped up or mixed anew), or the target rises
-  again. It is kept across a restart.
+  again to within 0.2 mS/cm of the level the tank was mixed for. A second
+  fall while the note stands keeps that first level. It is kept across a
+  restart.
 - **No drain of its own.** The device has no drain. Draining stays the
   user's.
 

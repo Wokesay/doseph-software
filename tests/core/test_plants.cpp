@@ -642,3 +642,42 @@ TEST_CASE("Plants: when the water plan's EC target falls by more than 0.2 mS/cm 
   s.step(kMinute, 1000);
   CHECK(s.robot().runtime().drain.is_null());
 }
+
+TEST_CASE("Plants: a second fall while the drain advice stands keeps where the tank came from, so a small rise after it does not end the advice; a damaged stored advice is read as far as it goes (RAT-065, SD-140)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Basil"},
+             {"phases", json::array({{{"name", "Grow"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}},
+                                     {{"name", "Mid"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.5}},
+                                     {{"name", "Late"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.2}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  const std::string id = r.startPlant({{"name", "Pot"}, {"plantRecipe", prId}}).body["id"];
+  REQUIRE(heldWithin(s, 8));
+  REQUIRE(r.plantNext(id).status == 200);  // 1.8 to 1.5
+  s.step(kMinute, 1000);
+  REQUIRE(r.runtime().drain.is_object());
+  REQUIRE(r.plantNext(id).status == 200);  // 1.5 to 1.2
+  s.step(kMinute, 1000);
+  REQUIRE(r.runtime().drain.is_object());
+  CHECK(jnum(r.runtime().drain, "from") == doctest::Approx(1.8));
+  // Up to 1.4: still more than 0.2 below the 1.8 the tank was mixed for
+  json phases = r.plants()["plants"][0]["phases"];
+  phases[2]["ecTarget"] = 1.4;
+  REQUIRE(r.putPlant(id, {{"phases", phases}}).status == 200);
+  s.step(6 * kMinute, 1000);  // a note stands a while before it is listed
+  REQUIRE(r.runtime().drain.is_object());
+  CHECK(jnum(r.runtime().drain, "to") == doctest::Approx(1.4));
+  CHECK(drainNote(r).is_object());
+  // A stored advice with fields of the wrong kind: no crash, and the advice stands
+  r.flush();
+  json state = json::parse(*s.storage().read("state.json"));
+  state["drain"]["at"] = "yesterday";
+  state["drain"]["product"] = "maybe";
+  REQUIRE(s.storage().write("state.json", state.dump()));
+  s.reboot();
+  s.step(6 * kMinute, 1000);
+  const json note = drainNote(s.robot());
+  REQUIRE(note.is_object());
+  CHECK(note["text"]["key"] != "drain.product");
+}

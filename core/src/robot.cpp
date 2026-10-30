@@ -1163,8 +1163,11 @@ void Robot::watchDrain(Epoch epoch) {
     const double before = rt_.planEc.is_object() ? jnum(rt_.planEc, "target") : kNaN;
     const RecipeCfg* was = rt_.planEc.is_object() ? cfg_.recipe(jstr(rt_.planEc, "recipe")) : nullptr;
     if (isNum(before) && target < before - kDrainStepMs - 1e-9) {
-      const bool product = was && plan.recipe && nutrients(was) != nutrients(plan.recipe);
-      rt_.drain = {{"from", before}, {"to", target}, {"product", product}, {"at", epoch}};
+      // A fall while the advice stands keeps where the tank came from, and another set of nutrients
+      const bool open = rt_.drain.is_object();
+      const double from = open && isNum(jnum(rt_.drain, "from")) ? std::max(jnum(rt_.drain, "from"), before) : before;
+      const bool product = (open && jbool(rt_.drain, "product", false)) || (was && plan.recipe && nutrients(was) != nutrients(plan.recipe));
+      rt_.drain = {{"from", from}, {"to", target}, {"product", product}, {"at", epoch}};
       log_.add(epoch, "control", "notice", say("ev.plan.drain", {{"from", before}, {"to", target}}), drainAdvice());
     } else if (rt_.drain.is_object() && std::abs(target - jnum(rt_.drain, "to")) > 1e-9 && target >= jnum(rt_.drain, "from") - kDrainStepMs - 1e-9) {
       rt_.drain = nullptr;  // the target rose again: the tank's water fits it
@@ -1176,13 +1179,14 @@ void Robot::watchDrain(Epoch epoch) {
   // Drained, topped up or mixed anew: a check since then measured the tank within the new target's band
   if (rt_.drain.is_object()) {
     const Measured& m = cycle_.last();
-    if (m.at > rt_.drain.value("at", Epoch{0}) && isNum(m.ec) && m.ec <= jnum(rt_.drain, "to") + cfg_.control.ecTolerance) rt_.drain = nullptr;
+    const json& at = rt_.drain.contains("at") ? rt_.drain["at"] : json();
+    if (m.at > (at.is_number_integer() ? at.get<Epoch>() : Epoch{0}) && isNum(m.ec) && m.ec <= jnum(rt_.drain, "to") + cfg_.control.ecTolerance) rt_.drain = nullptr;
   }
 }
 
 Msg Robot::drainAdvice() const {
   const double to = jnum(rt_.drain, "to");
-  if (rt_.drain.value("product", false)) return say("drain.product");
+  if (jbool(rt_.drain, "product", false)) return say("drain.product");
   // What fresh water makes of what is left, where the robot knows both: the tank's EC and the litres
   // watering took since it was full (SD-134); fresh water counted as without nutrients
   const double ec = cycle_.last().ec;
