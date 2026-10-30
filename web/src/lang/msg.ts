@@ -472,6 +472,8 @@ export const msgDe: Record<string, string> = {
   "pumpcal.no_nominal": "Das Gerät kennt keine Förderrate für diesen Pumpenkopf, also könnte die Kalibrierung ihr Ergebnis nicht beurteilen",
   "pumpcal.no_reverse": "Die Pumpe von Kanal {channel} kann nicht rückwärts laufen: Ihre Leitung lässt sich nicht erst in den Kanister leeren",
   "pumpcal.busy": "Eine Pumpenkalibrierung läuft",
+  "pumpcal.no_drop_sensor": "Kanal {channel} hat keinen Tropfensensor: Die Kalibrierung füllt seine Leitung nach den Tropfen, die sie sieht",
+  "pumpcal.pump_locked": "Die Förderpumpe ist gesperrt (kein Durchfluss oder ihr Kabel): Eine Kalibrierung braucht zirkulierendes Wasser",
   "pumpcal.none": "Keine Pumpenkalibrierung läuft",
   "pumpcal.not_now": "Gerade nicht: Die Pumpe läuft einen Schritt der Kalibrierung",
   "pumpcal.reading": "Gib einen Wert zwischen 0 und 10.000 ein",

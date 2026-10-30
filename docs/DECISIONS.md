@@ -1704,11 +1704,14 @@ principle; numbers marked as assumptions hold until the bench test.
      the pump runs backwards by what its line holds plus half of it, so
      no uncounted concentrate reaches the tank. The board description
      gives the line's volume; where it is not known, 30 s. A pump that
-     cannot run backwards is not calibrated this way.
+     cannot run backwards is not calibrated this way, nor a channel
+     without a drop sensor: priming and the fill at the end stop at the
+     drops they see. The concentrate that went back counts again in its
+     canister's level, as the fill at the end takes it out again.
   2. **Into the water.** The person moves the intake and confirms.
   3. **Priming.** Water runs until 5 drops have fallen (steady drops),
-     at most 2 min, then is pulled back as after a dose. Without a drop
-     sensor, twice the line's time.
+     at most 2 min, then is pulled back as after a dose. If it never drips
+     steadily, the calibration fails.
   4. **Start reading.** In ml on the cylinder, or g on the scale.
   5. **Measuring runs.** Each run lasts what 20 ml takes at the head's
      nominal rate (an assumption: three runs and the priming fit the
@@ -1738,6 +1741,18 @@ principle; numbers marked as assumptions hold until the bench test.
     intake out of the water; above it, a typo or another head.
 - **Not consumption.** The water takes nothing from a canister's level
   and counts towards no daily amount.
+- **Nothing else meanwhile.**
+  - The gateway doses nothing into the tank while a calibration runs,
+    whoever asks, the coupled device included.
+  - A probe calibration, maintenance and a fill by the refill valve do
+    not start.
+  - A calibration does not start where the feed pump cannot circulate:
+    on a coupled follower, under the check by hand after a start
+    (SD-141), or with the feed pump locked for no flow or its cable.
+  - A run that loses its flow stops, as a dose does.
+- **A tared scale** may read below zero; only a reading that rises is
+  refused. A rate that cannot be saved ends the calibration as a cancel
+  does.
 - **Ending early.** A Stop, a cancel or 30 min without a step ends it.
   - If the intake may be out of its canister (from step 2 to step 7),
     the channel is locked until a person releases it: put the intake

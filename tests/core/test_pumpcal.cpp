@@ -7,6 +7,9 @@
 #include <cmath>
 #include <string>
 
+#include "doseph/journal.hpp"
+#include "doseph/pumpcal.hpp"
+#include "fakes.hpp"
 #include "harness.hpp"
 
 using namespace doseph;
@@ -71,13 +74,18 @@ TEST_CASE("Pump calibration: the line goes back into its canister, water from th
     reach(r, "to_canister");
     CHECK(r.twin()["channels"][1]["lineHolds"] == "air");  // the water went back into the glass
     CHECK(std::fabs(tankSalt(r) - salt) < 0.005);  // only water reached the tank
-    CHECK(r.state()["stock"] == stockBefore);  // the water took nothing from a canister
+    // The water took nothing from a canister; the line's concentrate went back into its own
+    const json stock = r.state()["stock"];
+    for (const auto& [id, s] : stockBefore.items())
+      CHECK(stock[id]["ml"].get<double>() == doctest::Approx(s["ml"].get<double>() + (id == "part_a" ? 6.0 : 0.0)));
     r.act("intake", {{"channel", 2}, {"where", "canister"}});
     r.ok("POST", "pump-calibration/next");
     reach(r, "done", 400);
     CHECK(r.twin()["channels"][1]["lineHolds"] == "concentrate");
     CHECK(r.twin()["channels"][1]["light"] == false);
     CHECK(r.events("dose")[0]["title"]["key"] == "ev.fill");  // the first drop on is the first dose
+    // … and the fill took the line back out of the canister: its level is where it was, give or take a drop
+    CHECK(r.state()["stock"]["part_a"]["ml"].get<double>() == doctest::Approx(stockBefore["part_a"]["ml"].get<double>()).epsilon(0.002));
     const json ev = r.events("calibration");
     CHECK(std::any_of(ev.begin(), ev.end(), [](const json& e) { return e["title"]["key"] == "ev.channel.calibrated"; }));
     // The check goes on afterwards
@@ -94,7 +102,7 @@ TEST_CASE("Pump calibration: a reading far from the head's rate is refused with 
   r.ok("POST", "pump-calibration/next");
   reach(r, "reading");
   const double start = reading(r, "scale");
-  CHECK(r.call("POST", "pump-calibration/next", {{"reading", -1}}).status == 422);
+  CHECK(r.call("POST", "pump-calibration/next", {{"reading", -20000}}).status == 422);
   r.ok("POST", "pump-calibration/next", {{"reading", start}});
   reach(r, "reading");
   const double after1 = reading(r, "scale");
@@ -146,7 +154,7 @@ TEST_CASE("Pump calibration: cancelled or cut by a restart with the intake perha
   CHECK(std::any_of(ev.begin(), ev.end(), [](const json& e) { return e["title"]["key"] == "ev.pumpcal.cut"; }));
 }
 
-TEST_CASE("Pump calibration: refused while stopped, while another job runs, without the placement confirmed, for a pump without a head's rate, and for an account; left idle it ends after 30 min (SD-143)") {
+TEST_CASE("Pump calibration: refused while stopped, while another job runs, and for an account; while it runs, no other job starts; a Stop ends it, and so do 30 min without a step (SD-143)") {
   harness::Run r(harness::device());
   idle(r);
   CHECK(r.call("POST", "channels/9/pump-calibration", {{"method", "cylinder"}}).status != 200);
@@ -159,6 +167,9 @@ TEST_CASE("Pump calibration: refused while stopped, while another job runs, with
   CHECK(r.call("POST", "channels/2/pump-calibration", {{"method", "cylinder"}}).status == 409);
   CHECK(r.call("POST", "channels/2/prime", json::object()).status == 409);
   CHECK(r.call("POST", "pump-calibration/next", {{"reading", 5}}).status == 409);  // not the person's turn
+  // Nothing else that would stop its circulation, or its pump, starts meanwhile
+  CHECK(r.call("POST", "probe", {{"action", "start"}, {"kind", "ph"}}).status == 409);
+  CHECK(r.call("POST", "maintenance", {{"minutes", 10}}).status == 409);
   // A Stop ends it
   r.ok("POST", "stop");
   CHECK(step(r) == "cancelled");
@@ -178,4 +189,70 @@ TEST_CASE("Pump calibration: refused while stopped, while another job runs, with
   r.token = made["token"];
   CHECK(r.call("POST", "channels/1/pump-calibration", {{"method", "cylinder"}}).status == 403);
   r.token = owner;
+}
+
+TEST_CASE("Pump calibration: a prime that never drips steadily, or three runs that all disagree, fail and lock the channel; a locked channel doses nothing into the tank (SD-143)") {
+  harness::Run r(harness::device());
+  idle(r);
+  r.ok("POST", "channels/2/pump-calibration", {{"method", "scale"}});
+  reach(r, "to_water");
+  r.act("intake", {{"channel", 2}, {"where", "water"}});
+  r.act("channelFault", {{"channel", 2}, {"outletBlocked", true}});
+  r.ok("POST", "pump-calibration/next");
+  reach(r, "failed", 400);
+  CHECK(cal(r)["message"]["key"] == "pumpcal.run_failed");
+  CHECK(channelLocked(r.s.robot().runtime(), 2));
+  r.act("channelFault", {{"channel", 2}, {"outletBlocked", false}});
+  r.ok("POST", "latches/channel.2.cal_cut/ack");
+  // Three runs, no two within 3 %
+  r.ok("POST", "channels/2/pump-calibration", {{"method", "scale"}});
+  reach(r, "to_water");
+  r.ok("POST", "pump-calibration/next");
+  reach(r, "reading");
+  double truth = reading(r, "scale"), entered = truth;
+  r.ok("POST", "pump-calibration/next", {{"reading", entered}});
+  for (const double share : {1.0, 1.08, 1.16}) {  // what went, as read: no two within 3 %
+    reach(r, "reading");
+    const double now = reading(r, "scale");
+    entered -= (truth - now) * share;
+    truth = now;
+    r.ok("POST", "pump-calibration/next", {{"reading", entered}});
+  }
+  CHECK(step(r) == "failed");
+  CHECK(cal(r)["message"]["key"] == "pumpcal.disagree");
+  CHECK(channelLocked(r.s.robot().runtime(), 2));
+}
+
+TEST_CASE("Pump calibration: refused for a pump without its head's nominal rate, one that cannot run backwards, or one without a drop sensor; the gateway doses nothing into the tank while one runs, whoever asks (SD-143)") {
+  MemoryStorage store;
+  fake::Hardware hw;
+  Config cfg;
+  cfg.setup["placement"] = {"done", 1};
+  cfg.channels[2] = {50, 1, "S"};
+  RuntimeState rt;
+  SensorTruth truth;
+  EventLog log;
+  DoseJournal journal(store);
+  Ctx c{cfg, rt, truth, log, journal};
+  c.flowOk = true;
+  Actuators act(hw);
+  PumpCal pc;
+  Msg err;
+  CHECK_FALSE(pc.start(c, act, 2, "cylinder", err));
+  CHECK(err.key == "pumpcal.no_nominal");
+  hw.prof.headMlPerMin = {{"S", 50.0}};
+  hw.prof.channels[1].reverse = false;
+  CHECK_FALSE(pc.start(c, act, 2, "cylinder", err));
+  CHECK(err.key == "pumpcal.no_reverse");
+  hw.prof.channels[1].reverse = true;
+  CHECK_FALSE(pc.start(c, act, 2, "cylinder", err));
+  CHECK(err.key == "pumpcal.no_drop_sensor");
+  hw.dropsSeen[2] = {0, -1};
+  CHECK(pc.start(c, act, 2, "cylinder", err));
+  CHECK(pc.active());
+  CHECK(hw.lights[2]);
+  // While it runs, no dose into the tank
+  c.pumpCalibration = true;
+  CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j1", err));
+  CHECK(err.key == "pumpcal.busy");
 }

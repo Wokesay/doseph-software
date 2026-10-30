@@ -489,6 +489,8 @@ void Robot::boot() {
   }
   journal_.load();
   for (const auto& r : journal_.closeOpen()) {
+    // A pump calibration's water run: its own report follows (SD-143)
+    if (r.purpose == "calrun" || r.purpose == "calprime" || r.purpose == "empty") continue;
     // How much went in is not known: the plants' records say so (RAT-064, R5)
     if (r.intoTank()) rt_.count.unknown[r.canister]++;
     if (r.intoTank())
@@ -2045,8 +2047,8 @@ Result Robot::cancelChannelJob() {
 // confirmed and the device free to circulate
 Result Robot::startPumpCalibration(int channel, const json& body) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (peer_ && peer_->role == "follower" && peerLinkOk(clock_.nowMs()) && !leaderMaintenance_)
-    return Result::fail(409, say("coupling.channel_job", {{"name", peer_->name}}));
+  // A follower runs its feed pump only with the leader's: it cannot circulate for a calibration (SD-131)
+  if (peer_ && peer_->role == "follower") return Result::fail(409, say("coupling.channel_job", {{"name", peer_->name}}));
   if (rt_.stopped) return Result::fail(409, say("act.stopped"));
   if (pumpCal_.active()) return Result::fail(409, say("pumpcal.busy"));
   if (channelJobActive() || probe_ || refill_.filling() || maintenanceUntilMs_ > 0) return Result::fail(409, say("job.busy"));
@@ -2054,6 +2056,10 @@ Result Robot::startPumpCalibration(int channel, const json& body) {
   if (!placementConfirmed(cfg_)) return Result::fail(409, say("act.placement"));
   Ctx c = ctx();
   if (!c.hold.empty()) return Result::fail(409, holdText("act.hold.", c.hold));
+  // Nothing that keeps the feed pump off: a check by hand after the start, a lock for no flow or the
+  // pump's cable (SD-141, SD-109, SD-127)
+  if (c.protectionCheck) return Result::fail(409, say("act.protection_check"));
+  if (holds(rt_, "flow.dry") || holds(rt_, "pump.cable")) return Result::fail(409, say("pumpcal.pump_locked"));
   Msg err;
   if (!pumpCal_.start(c, act_, channel, jstr(body, "method", "cylinder"), err)) return Result::fail(409, err);
   saveState(true);
@@ -2096,7 +2102,12 @@ void Robot::takePumpCalResult() {
   if (!flow) return;
   Config next = cfg_;
   next.channels[pumpCal_.channel()] = ChannelCal{*flow, clock_.epoch(), pumpCal_.head()};
-  if (saveConfig(next, std::nullopt).status != 200) return;
+  if (saveConfig(next, std::nullopt).status != 200) {
+    Ctx c = ctx();  // not saved: the calibration ends, and the channel stays locked as its intake is in the water
+    pumpCal_.cancel(c, act_, doser_, say("store.failed"));
+    doser_.takeFinished();
+    return;
+  }
   log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.calibrated", {{"channel", pumpCal_.channel()}}),
            say("pumpcal.result", {{"flow", *flow}}), {{"channel", pumpCal_.channel()}, {"flowMlPerMin", *flow}});
 }
@@ -2110,6 +2121,7 @@ Result Robot::probe(const json& j) {
   if (action == "start") {
     const std::string kind = jstr(j, "kind");
     if (kind != "ph" && kind != "ec") return Result::fail(422, say("probe.kind"));
+    if (pumpCal_.active()) return Result::fail(409, say("pumpcal.busy"));  // its water runs past the probes (SD-143)
     probe_ = ProbeSession{kind, json::array(), kNaN, now};
     log_.add(clock_.epoch(), "calibration", "info", say(kind == "ph" ? "ev.probe.start_ph" : "ev.probe.start_ec"));
     return Result::ok();
@@ -2866,7 +2878,7 @@ RefillIn Robot::refillIn(Ms now) const {
   const json valve = outputs_.status(cfg_, devices_, now)["refill_valve"];
   in.valve = jstr(valve, "state");
   in.switchedOn = jbool(valve, "switchedOn", false);
-  in.busy = doser_.busy() || cycle_.dosing() || channelJobActive() || probe_.has_value();
+  in.busy = doser_.busy() || cycle_.dosing() || channelJobActive() || probe_.has_value() || pumpCal_.active();
   return in;
 }
 
@@ -3311,6 +3323,8 @@ Result Robot::maintenance(double minutes) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (!isNum(minutes) || minutes < 0 || minutes > kMaxMaintenanceMin)
     return Result::fail(422, say("maint.minutes", {{"max", kMaxMaintenanceMin}}));
+  // It would switch the feed pump off under a pump calibration's runs (SD-143)
+  if (minutes > 0 && pumpCal_.active()) return Result::fail(409, say("pumpcal.busy"));
   const bool was = maintenanceUntilMs_ > 0;
   maintenanceUntilMs_ = minutes > 0 ? clock_.nowMs() + static_cast<Ms>(std::llround(minutes * 60.0)) * kSecond : 0;
   if (minutes > 0) outputs_.want("circulation_pump", false);  // at once, not only at the next tick (SD-132)

@@ -41,6 +41,11 @@ bool PumpCal::start(Ctx& c, Actuators& act, int channel, const std::string& meth
     err = say("pumpcal.no_reverse", {{"channel", channel}});
     return false;
   }
+  // Priming and the line fill at the end stop at the drops they see: none without a drop sensor
+  if (!act.drops(channel)) {
+    err = say("pumpcal.no_drop_sensor", {{"channel", channel}});
+    return false;
+  }
   const int seq = seq_;  // order IDs stay unique across calibrations
   *this = PumpCal{};
   seq_ = seq;
@@ -49,7 +54,6 @@ bool PumpCal::start(Ctx& c, Actuators& act, int channel, const std::string& meth
   head_ = caps.head;
   nominal_ = nominal->second;
   lineMl_ = caps.lineMl;
-  drops_ = act.drops(channel).has_value();
   if (const CanisterCfg* b = c.cfg.canisterOnChannel(channel)) {
     canister_ = b->id;
     name_ = b->name;
@@ -66,6 +70,7 @@ bool PumpCal::start(Ctx& c, Actuators& act, int channel, const std::string& meth
 void PumpCal::go(Ctx& c, const std::string& step, Msg message) {
   step_ = step;
   message_ = std::move(message);
+  waitWhy_ = Msg{};
   lastStep_ = c.now;
   pending_ = step == "reverse" || step == "prime" || step == "run" || step == "empty" || step == "fill";
 }
@@ -87,9 +92,10 @@ bool PumpCal::next(Ctx& c, Actuators& act, const json& body, Msg& err) {
     go(c, "fill", say("pumpcal.fill", {{"channel", channel_}}));
     return true;
   }
-  // A reading: ml on the cylinder, or grams on the scale (water: 1 g is 1 ml)
+  // A reading: ml on the cylinder, or grams on the scale (water: 1 g is 1 ml); a scale tared with the
+  // glass on it reads below zero
   const double reading = jnum(body, "reading");
-  if (!isNum(reading) || reading < 0 || reading > 10000) {
+  if (!isNum(reading) || reading < -10000 || reading > 10000) {
     err = say("pumpcal.reading");
     return false;
   }
@@ -107,7 +113,7 @@ bool PumpCal::next(Ctx& c, Actuators& act, const json& body, Msg& err) {
   const double pumped = (last - reading) / (method_ == "cylinder" ? kCylinderShift : 1.0);
   const double flow = pumped / static_cast<double>(std::max<Ms>(run.ms, 1)) * 60000.0;
   // Drops are a coarse check, never the rate: none at all means nothing reached the outlet
-  if (drops_ && run.drops == 0) {
+  if (run.drops == 0) {
     err = say("pumpcal.no_drops");
     return false;
   }
@@ -179,12 +185,11 @@ bool PumpCal::launch(Ctx& c, Actuators& act, Doser& doser) {
     o.purpose = "empty";
     o.step.runs = split(lineMs);
   } else if (step_ == "prime") {
-    // Until it drips steadily; without a drop sensor twice what the line holds
-    o.purpose = drops_ ? "calprime" : "calrun";
-    o.step.runs = drops_ ? std::vector<Ms>(kCalPrimeRuns, std::min(kCalPrimeRunMs, maxRun)) : split(2 * lineMs);
+    o.purpose = "calprime";  // until it drips steadily
+    o.step.runs = std::vector<Ms>(kCalPrimeRuns, std::min(kCalPrimeRunMs, maxRun));
   } else if (step_ == "run") {
     o.purpose = "calrun";
-    o.step.runs = {std::clamp<Ms>(static_cast<Ms>(kCalRunMl / nominal_ * 60000.0), 3 * kSecond, maxRun)};
+    o.step.runs = {std::min(std::max<Ms>(static_cast<Ms>(kCalRunMl / nominal_ * 60000.0), 3 * kSecond), maxRun)};
     const auto d = act.drops(channel_);
     dropsFrom_ = d ? d->count : 0;
   } else if (step_ == "fill") {
@@ -198,9 +203,10 @@ bool PumpCal::launch(Ctx& c, Actuators& act, Doser& doser) {
   }
   Msg err;
   if (!doser.start(c, act, o, err)) {
-    message_ = err;  // tried again at the next tick, until the step is left idle too long
+    waitWhy_ = err;  // tried again at the next tick, until the step is left idle too long
     return false;
   }
+  waitWhy_ = Msg{};
   order_ = o.id;
   pending_ = false;
   return true;
@@ -210,6 +216,10 @@ void PumpCal::orderDone(Ctx& c, Actuators& act, const DoseProgress& p) {
   order_.clear();
   if (p.state != DoseProgress::State::Done) return fail(c, act, say("pumpcal.run_failed", {{"reason", p.error}}));
   if (step_ == "reverse") {
+    // The line's concentrate is back in its canister: its level gets it back where the line was full,
+    // as the fill at the end books it again (SD-119); the line is no longer filled
+    if (c.rt.filled.erase(channel_) && isNum(lineMl_)) takeStock(c, canister_, name_, -lineMl_);
+    c.rt.pulledBackMs.erase(channel_);
     go(c, "to_water", say(method_ == "cylinder" ? "pumpcal.to_water.cylinder" : "pumpcal.to_water.scale", {{"channel", channel_}}));
   } else if (step_ == "prime") {
     go(c, "reading", say(method_ == "cylinder" ? "pumpcal.start.cylinder" : "pumpcal.start.scale"));
@@ -221,6 +231,7 @@ void PumpCal::orderDone(Ctx& c, Actuators& act, const DoseProgress& p) {
     runs_.push_back(run);
     go(c, "reading", say(method_ == "cylinder" ? "pumpcal.after.cylinder" : "pumpcal.after.scale", {{"run", runs_.size()}}));
   } else if (step_ == "empty") {
+    c.rt.pulledBackMs.erase(channel_);
     go(c, "to_canister", say("pumpcal.to_canister", {{"channel", channel_}}));
   } else if (step_ == "fill") {
     c.rt.filled.insert(channel_);
@@ -266,6 +277,8 @@ json PumpCal::toJson() const {
           {"flowMlPerMin", numOrNull(flow_)},
           {"nominalMlPerMin", numOrNull(nominal_)},
           {"message", message_},
+          // Why the step's run has not started yet: no flow, a hold; null where nothing stops it
+          {"waitingFor", waitWhy_.key.empty() ? json(nullptr) : json(waitWhy_)},
           {"at", at_}};
 }
 
