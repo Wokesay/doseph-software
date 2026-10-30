@@ -103,7 +103,9 @@ core cannot see from the twin.
 The water path's faults are in the panel and in the API: `flowFault` with
 `{"fault": "dry"}` (or `"blocked"`, `"hose"`, `"sensor"`, and `"air"`: the
 pump draws air, which turns the flow sensor's rotor to about 70 % of its
-pulses while its current is that of a dry run, an **assumption**, SD-146),
+pulses while its current is that of a dry run, an **assumption**, SD-146;
+the twin's own cut for no flow looks at the outlet with either flow method,
+where a real cut by the flow meter's pulses would be fooled by air),
 `returnFault` with `{"fault": "blocked"}` or
 `{"fault": "failed"}`, `leak` with `{"on": true}`, `stopButton` with
 `{"pressed": true}`, and on `channelFault` the keys `outletBlocked` and

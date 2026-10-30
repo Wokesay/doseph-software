@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "doseph/faults.hpp"
 #include "harness.hpp"
 
 using namespace doseph;
@@ -67,4 +68,6 @@ TEST_CASE("Flow signal: flow pulses, pump speed and current that disagree, and a
   r.step(6 * kSecond);
   REQUIRE(r.state()["latches"].contains("hw.leak_sensor.tray"));
   CHECK(alarm(r, "latch.hw.leak_sensor.tray")["text"]["args"]["part"] == "tray");
+  // … by the board's own name, also one that matches a part of the device
+  CHECK(faultArgs(classifyFault("leak_sensor_open.pump"), "leak_sensor_open.pump")["part"] == "pump");
 }

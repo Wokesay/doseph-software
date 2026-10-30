@@ -42,6 +42,10 @@ constexpr int kDryTriesTank = 2;               // pump in the tank: each try may
 constexpr double kDryShare = 0.6;
 constexpr Ms kDryShareMs = 2 * kSecond;
 constexpr double kPumpLearnS = 60;
+// The feed pump's current below the share of its learned current where it runs dry
+inline bool belowDryShare(const RuntimeState& rt, double amps) {
+  return isNum(rt.pumpNormalA) && rt.pumpLearnedS >= kPumpLearnS && amps < kDryShare * rt.pumpNormalA;
+}
 // pH and EC with the feed pump running and standing (SD-127): a damaged cable in the water shifts
 // them while it runs. At the end of each check the last 10 s running are compared with 10–20 s
 // after the stop; a difference beyond these repeats it once, at once (assumptions)

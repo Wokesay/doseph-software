@@ -1860,17 +1860,26 @@ details are decided here by the minimal principle.
   - once its current with water is learned (SD-127), at least the share
     below which it runs dry (60 %).
 
-  A current that is not read is no sign of water (R5). A device that
-  measures no current keeps the pulses alone. Without a least current in
-  the board description, the learned current is the only check, so the
-  board description should give one. The outlet level sensor (SD-109) is
-  not fooled by air and stays as it is.
+  A current that is not usable is no sign of water (R5). A board that
+  gives a least current measures it, so a current not read there is no
+  sign either. A device that measures no current keeps the pulses alone.
+  Without a least current in the board description, the learned current
+  is the only check, and air from the very first start would be learned as
+  normal; so the board description should give one. The outlet level
+  sensor (SD-109) is not fooled by air and stays as it is.
+- **Short dips.** Once the pump moved water in a run, a current below
+  water's for less than 2 s (the dry run's time, SD-127) is bubbles or
+  ripple and no break. For 2 s it is no flow: a running dose stops and the
+  check proves flow again. Before flow was proven, and for a current not
+  read, there is no such grace.
 - **The start window.** After the feed pump switches on, nothing counts as
   flow until its start window (`pumpStartMs`, 3 s in the example
   profiles) has passed, while its current and the flow sensor settle. A
   dose needs proven flow (SD-105), so dosing starts only after the window
   too. The 10 s flow proof counts from its end. A feed pump whose state is
-  not known counts as off.
+  not known counts as off. A window longer than half the window without
+  flow (6 s in the tank, SD-127) counts as that half, 3 s: a longer one
+  would end every check in "no flow".
 - **The firmware's plausibility check.** The firmware compares flow pulses,
   pump speed and pump current within a window of its own. When they
   disagree it reports `flow_implausible`. That latches like a pump's

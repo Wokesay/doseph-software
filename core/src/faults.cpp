@@ -57,8 +57,9 @@ Msg holdText(const std::string& prefix, const std::string& hold) {
 json faultArgs(const FaultInfo& f, const std::string& fault) {
   static const char* const kParts[] = {"dosing", "pump", "return", "switch_off", "pump_protection", "supply"};
   json part = say("hw.part.unknown");
+  // A leak or moisture input is named by the board's own name for it (SD-146)
   for (const char* k : kParts)
-    if (f.part == k) part = say(std::string("hw.part.") + k);
+    if (f.part == k && f.reason != "leak_sensor") part = say(std::string("hw.part.") + k);
   if (!f.part.empty() && part["key"] == "hw.part.unknown") part = f.part;
   // The ID only as far as it is a short name: it comes from the device
   const bool plain = !fault.empty() && fault.size() <= 48 && fault.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos;

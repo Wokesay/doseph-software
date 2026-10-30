@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -877,15 +878,16 @@ TEST_CASE("Flow by the device's method: an outlet level sensor proves it while i
   CHECK(flowOk(true));
 }
 
-TEST_CASE("Flow signal: nothing is flow within the feed pump's start window, and a flow meter's pulses are none while the pump's current says it moves no water (SD-146)") {
+TEST_CASE("Flow signal: nothing is flow within the feed pump's start window, and a flow meter's pulses are none while the pump's current says it moves no water; a dip shorter than 2 s after it moved water is no break (SD-146)") {
   fake::Hardware hw;
   fake::Clock clock;
   MemoryStorage store;
   Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
   r.boot();
   hw.prof.flow = "turbine";
-  hw.prof.pumpStartMs = 3 * kSecond;
+  hw.prof.pumpStartMs = 10 * kSecond;  // longer than half the window without flow: 3 s
   hw.prof.pumpMinA = 0.5;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
   auto flowOk = [&](bool pump) {
     hw.out = pump;
     clock.ms += 1000;
@@ -901,18 +903,54 @@ TEST_CASE("Flow signal: nothing is flow within the feed pump's start window, and
   CHECK_FALSE(flowOk(true));  // 1 s
   CHECK_FALSE(flowOk(true));  // 2 s
   CHECK(flowOk(true));        // 3 s
-  // Pulses while the pump draws less than the least current with water: air turns the rotor
+  // Once it moved water, a current below water's for less than 2 s is bubbles or ripple; for 2 s it
+  // is no flow: air turns the rotor
   hw.amps = 0.3;
+  CHECK(flowOk(true));
+  CHECK(flowOk(true));
   CHECK_FALSE(flowOk(true));
-  hw.amps = std::numeric_limits<double>::quiet_NaN();  // a current not read is no sign of water (R5)
+  hw.amps = nan;  // a current not read is no sign of water, at once (R5)
   CHECK_FALSE(flowOk(true));
   hw.amps = 0.8;
   CHECK(flowOk(true));
-  // Switched off and on: the window starts again
+  // Switched off and on: the window starts again, and air from the start is never flow
   CHECK_FALSE(flowOk(false));
+  hw.amps = 0.3;
+  for (int i = 0; i < 6; ++i) CHECK_FALSE(flowOk(true));
+  hw.amps = 0.8;
+  CHECK(flowOk(true));
+  // A board that gives a least current measures it: none read is no sign
+  hw.amps.reset();
   CHECK_FALSE(flowOk(true));
   // A device that measures no current has only the pulses
-  hw.amps.reset();
-  for (int i = 0; i < 3; ++i) flowOk(true);
+  hw.prof.pumpMinA = nan;
+  CHECK(flowOk(true));
+}
+
+TEST_CASE("Flow signal: without a least current from the board description, a current below 60 % of the one learned with water is no flow (SD-146, SD-127)") {
+  fake::Hardware hw;
+  fake::Clock clock;
+  MemoryStorage store;
+  // Its current with water learned before: 0.8 A
+  REQUIRE(store.write("state.json", json{{"pumpNormalA", 0.8}, {"pumpLearnedS", 120}}.dump()));
+  Robot r(hw, store, clock, [](std::uint8_t* p, size_t n) { std::fill(p, p + n, std::uint8_t{7}); });
+  r.boot();
+  REQUIRE(r.runtime().pumpLearnedS >= kPumpLearnS);
+  hw.prof.flow = "turbine";
+  hw.prof.pumpStartMs = 0;
+  hw.prof.pumpMinA = std::numeric_limits<double>::quiet_NaN();
+  auto flowOk = [&](bool pump) {
+    hw.out = pump;
+    clock.ms += 1000;
+    r.tick();
+    hw.out = pump;
+    hw.set(Signal::Flow, 6.0, clock.ms);
+    return r.state()["flowOk"].get<bool>();
+  };
+  hw.amps = 0.45;  // below 0.48 A
+  CHECK_FALSE(flowOk(false));
+  CHECK_FALSE(flowOk(true));
+  CHECK_FALSE(flowOk(true));
+  hw.amps = 0.55;
   CHECK(flowOk(true));
 }
