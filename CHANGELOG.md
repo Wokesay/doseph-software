@@ -5,6 +5,8 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-proto.5] – 2026-10-30
+
 ### Changed
 
 - Prototypes say that they do not comply with the Cyber Resilience Act
