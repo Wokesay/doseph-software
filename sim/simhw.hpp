@@ -46,7 +46,9 @@ class SimHardware : public doseph::IHardware {
       err = "this pump cannot run backwards";
       return false;
     }
-    return w_.startRun(channel, ms, jobId, err, backwards);
+    // The driver turns "forwards" and "backwards" into the motor's direction by the slot (SD-141)
+    const bool inverted = channel >= 1 && channel <= channelCount() && profile_.channels[static_cast<size_t>(channel - 1)].inverted;
+    return w_.startRun(channel, ms, jobId, err, backwards != inverted);
   }
   std::optional<doseph::Drops> drops(int channel) const override;
   doseph::RunStatus runStatus(int channel) const override { return w_.runStatus(channel); }

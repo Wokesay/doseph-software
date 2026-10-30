@@ -81,6 +81,11 @@ of its own.
 | A hot board and a restart by the safety supervisor hold nothing; the restart stays as a note until seen | SD-141 | ✓ | `config.cpp`, `watchdog.cpp`, `robot.cpp` · test_faults.cpp |
 | Where the device does not test its protection itself, every start locks doses into the tank until a person releases the check by hand; runs into a cup still go | SD-141 | ✓ | `robot.cpp`, `gateway.cpp`, `cycle.cpp` · test_faults.cpp |
 | A slot's pump direction stays in the driver: never read by the core, never shown | SD-141 | ✓ | `hardware.hpp`, `hardware.cpp` · test_faults.cpp |
+| The driver turns forwards and backwards into the motor's direction by the slot: a run delivers and a pull-back pulls back on every slot | SD-142 | ✓ | `simhw.hpp`, `world.cpp` · test_platform.cpp |
+| The tries without flow survive a restart; only flow proven resets them | SD-142 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp` · test_platform.cpp |
+| The return pump runs by the level, also on high level; a Stop holds it off until Resume, and so does a latched fault that names it until released | SD-142 | ✓ | `robot.cpp`, `world.cpp` · test_platform.cpp |
+| The history and the event log are written whole only while no dosing pump runs | SD-142 | ✓ | `robot.cpp` · test_platform.cpp |
+| A Stop pressed before a factory reset holds after it until Resume | SD-142 | ✓ | `robot.cpp` · test_platform.cpp |
 | A calibration belongs to the pump head it was measured with: another head, none fitted or none recorded voids it, and the channel doses nothing until it is calibrated again | SD-108 | ✓ | `config.hpp`, `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
 | A channel without a pump head runs nothing, not even into a cup | SD-108 | ✓ | `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | One pH− canister at most; the rest are nutrients | SD-108 | ✓ | `config.cpp` · test_config.cpp |

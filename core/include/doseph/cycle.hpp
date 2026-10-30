@@ -176,7 +176,6 @@ class MixCycle {
   bool noFlowLogged_ = false;
   Epoch doseEndAt_ = 0;  // the round's last dose ended then: its settling is counted from there (SD-112)
   std::optional<Settled> settled_;
-  int noFlowTries_ = 0;  // tries in a row that found no flow (SD-109, SD-127)
 
   // The comparison with the feed pump running and standing (SD-127): stage 1 standing, 2 running
   // again, 3 standing again; 0 none

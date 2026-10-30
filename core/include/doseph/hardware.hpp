@@ -159,6 +159,9 @@ class IHardware {
 
 // Storage for configuration and state (device: flash, host: files). write()
 // must be atomic (copy first, then rename) and is on disk when it returns.
+// The robot leaves its large writes (the history and the event log whole)
+// for a time without a dosing run; the device writes in small pieces and
+// keeps its safety supervisor running meanwhile (SD-142).
 // append() adds to the end of a journal; a torn end after a power loss is
 // allowed, the reader skips it.
 class IStorage {
