@@ -1629,6 +1629,14 @@ by the owner.
   gateway refuses a dose whoever asks, the coupled device included. Runs
   into a cup, a calibration and a line fill still go. The lock is a
   warning, and the next start sets it again.
+- **What the robot takes from the device.** At most 16 IDs, each a short
+  name of lower-case letters, digits, `_` and `.`; anything else counts as
+  an unknown fault and holds. A part is read only where the ID documents
+  one (self-test, power trip, current limit, pump protection), so a note
+  or a warning with a part stays what it is. A fault that comes and goes
+  is logged again only after a minute. A self-test value other than
+  `auto` asks for the check by hand. The owner's app token may release
+  the check like any lock; a remote account may not.
 - **Not here.** The safety supervisor and its liveness, the self-test
   itself and the pump direction in the driver are the firmware's. The
   rest of the product input (the pump direction in the twin, the no-flow

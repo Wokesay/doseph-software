@@ -355,7 +355,10 @@ json Simulation::control(const std::string& action, const json& b) {
     world_.faults.clear();
     if (b.contains("ids") && b["ids"].is_array())
       for (const auto& f : b["ids"])
-        if (f.is_string() && world_.faults.size() < 8) world_.faults.push_back(f.get<std::string>().substr(0, 48));
+        if (f.is_string() && world_.faults.size() < 8) {
+          const std::string id = f.get<std::string>();
+          if (!id.empty() && id.size() <= 48 && id.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos) world_.faults.push_back(id);
+        }
   }
   else if (action == "probeFault") world_.probeFault = doseph::jstr(b, "fault");
   else if (action == "channelFault") {

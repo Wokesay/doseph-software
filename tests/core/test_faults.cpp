@@ -220,3 +220,50 @@ TEST_CASE("Device protection: each fault ID is taken by its kind; a part that is
   CHECK(faultArgs(f, "current_limit.rail_5v")["part"] == "rail_5v");
   CHECK(faultArgs(classifyFault("x"), "X<y>")["id"] == "?");
 }
+
+TEST_CASE("Device protection: a start into a fault already reported never runs the feed pump; a latched fault still reported after a restart cannot be released (SD-141, R6)") {
+  harness::Run r(harness::device());
+  feedPumpRuns(r);
+  r.act("faults", {{"ids", {"self_test.switch_off", "moisture"}}});
+  r.step(6 * kSecond);
+  CHECK(r.state()["hardware"]["hold"] == "self_test");  // the first reported holds
+  r.s.reboot();
+  REQUIRE(r.login("demo-password"));
+  for (int i = 0; i < 120; ++i) {
+    r.step(kSecond);
+    REQUIRE(r.twin()["output"] == false);
+  }
+  CHECK(r.call("POST", "latches/hw.moisture/ack").status == 409);
+  r.act("faults", {{"ids", json::array()}});
+  r.step(6 * kSecond);
+  CHECK(r.state()["hardware"]["hold"] == "moisture");
+  r.ok("POST", "latches/hw.moisture/ack");
+  feedPumpRuns(r);
+}
+
+TEST_CASE("Device protection: what the device reports is checked; a part only where its ID has one, an odd ID holds as unknown, and a self-test the robot does not know asks for the check by hand (SD-141)") {
+  harness::Run r(harness::device());
+  feedPumpRuns(r);
+  // A note or warning given a part stays a note or warning
+  r.act("faults", {{"ids", {"safety_restart.x", "board_hot.y"}}});
+  r.step(6 * kSecond);
+  json st = r.state();
+  CHECK(st["hardware"]["hold"].is_null());
+  CHECK(st["latches"].contains(kSafetyRestartNote));
+  CHECK(st["latches"][kSafetyRestartNote]["note"] == true);
+  CHECK(alarm(r, "hw.board_hot")["level"] == "warning");
+  CHECK(r.twin()["output"] == true);
+  // An ID that is no short name reaches the state as "?" and holds
+  Release rel;
+  rel.faults = {"bad\xff", std::string(60, 'a')};
+  for (int i = 0; i < 20; ++i) rel.faults.push_back("x");
+  const auto clean = cleanFaults(rel.faults);
+  CHECK(clean.size() == 16);
+  CHECK(clean[0] == "?");
+  CHECK(clean[1] == "?");
+  CHECK(classifyFault(clean[0]).reason == "fault");
+  sim::Options o = harness::device();
+  o.selfTest = "Manual";
+  harness::Run odd(o);
+  CHECK(odd.state()["latches"].contains("protection_check"));
+}

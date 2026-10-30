@@ -29,9 +29,20 @@ FaultInfo classifyFault(const std::string& fault) {
     f.reason = "fault";
     f.part.clear();
   }
-  // A part is a short name; anything else is not shown
-  if (f.part.size() > 24 || f.part.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos) f.part.clear();
+  // A part only where the ID documents one, and only a short name
+  const bool parts = f.reason == "self_test" || f.reason == "power_trip" || f.reason == "current_limit" || f.reason == "pump_protection";
+  if (!parts || f.part.size() > 24 || f.part.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos) f.part.clear();
   return f;
+}
+
+std::vector<std::string> cleanFaults(const std::vector<std::string>& faults) {
+  std::vector<std::string> out;
+  for (const auto& f : faults) {
+    if (out.size() >= 16) break;
+    const bool plain = !f.empty() && f.size() <= 48 && f.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos;
+    out.push_back(plain ? f : "?");
+  }
+  return out;
 }
 
 Msg holdText(const std::string& prefix, const std::string& hold) {
@@ -46,7 +57,7 @@ json faultArgs(const FaultInfo& f, const std::string& fault) {
     if (f.part == k) part = say(std::string("hw.part.") + k);
   if (!f.part.empty() && part["key"] == "hw.part.unknown") part = f.part;
   // The ID only as far as it is a short name: it comes from the device
-  const bool plain = fault.size() <= 48 && fault.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos;
+  const bool plain = !fault.empty() && fault.size() <= 48 && fault.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_.") == std::string::npos;
   return {{"part", part}, {"id", plain ? fault : std::string("?")}};
 }
 

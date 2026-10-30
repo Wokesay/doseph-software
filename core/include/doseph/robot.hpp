@@ -290,7 +290,7 @@ class Robot : public RemoteRuns {
   void saveEvents();
   void sampleHistory(Epoch epoch);
   void watchRelease(Epoch epoch);
-  std::string faultHold(const Release& r) const;
+  std::string faultHold(const std::vector<std::string>& faults) const;
   void checkHeads(Epoch epoch);
   void mixFirstNow();
   void learnSettling(const MixCycle::Settled& st, Epoch epoch);
@@ -412,6 +412,7 @@ class Robot : public RemoteRuns {
 
   bool stopButtonSeen_ = false;  // the stop button was pressed; a new press stops again (SD-110)
   std::set<std::string> faultsSeen_;  // the faults the device reported in the last tick (SD-141)
+  std::map<std::string, Ms> faultLogged_;  // when each fault was last reported anew
 
   std::string lastHold_;         // the hold of the last tick: when it ends, the cycle starts anew
   bool lastChannelJob_ = false;

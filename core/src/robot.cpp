@@ -80,7 +80,7 @@ Ctx Robot::ctx() {
   // The hardware release (SD-110): a leak and high level hold until a person releases their latch
   const Release r = hw_.release();
   c.pumpCut = r.noFlow;
-  const std::string fault = faultHold(r);
+  const std::string fault = faultHold(cleanFaults(r.faults));
   c.hold = rt_.latches.count("hw.leak") || r.leak             ? "leak"
            : rt_.latches.count("hw.high_level") || r.highLevel ? "high_level"
            : !fault.empty()                                    ? fault
@@ -521,7 +521,7 @@ void Robot::boot() {
            rt_.stopped ? say("ev.boot.stopped") : Msg{});
   // A device that does not test its protection itself: after every start a person checks it by hand
   // and confirms it before anything doses into the tank (SD-141)
-  if (hw_.profile().selfTest == "manual") {
+  if (hw_.profile().selfTest != "auto") {  // "manual", or anything the robot does not know
     setLatch(cfg_, rt_, kProtectionCheck, {{"at", bootEpoch_}});
     log_.add(bootEpoch_, "system", "warn", say("ev.protection_check"), say("latch.protection_check"));
   } else {
@@ -657,7 +657,7 @@ void Robot::tick() {
     in.maintenance = maintenanceUntilMs_ > 0;
     in.channelCount = hw_.channelCount();
     in.hold = c.hold;
-    in.faults = hw_.release().faults;
+    in.faults = cleanFaults(hw_.release().faults);
     if (peer_) in.peer = {true, peer_->role == "leader", peerLinkOk(c.now), deviation_, peer_->name};
     in.roles = roleStates(now);
     for (const auto& a : climate_.alerts(cfg_)) in.rooms.push_back({a.id, a.name, a.co2High, a.heat, a.limitC});
@@ -719,31 +719,37 @@ void Robot::watchRelease(Epoch epoch) {
   // The device's own protection (SD-141): each fault is logged when it appears, and all but a
   // warning stop what runs. One that latches holds until a person releases it once it is no longer
   // reported; a restart by the safety supervisor stays as a note until a person has seen it.
+  // A fault that comes and goes is logged again only after a minute, so it does not wear the flash
   std::set<std::string> seen;
-  for (const auto& f : r.faults) {
+  for (const auto& f : cleanFaults(r.faults)) {
     seen.insert(f);
     if (faultsSeen_.count(f)) continue;
     const FaultInfo i = classifyFault(f);
+    if (faultLogged_.size() > 64) faultLogged_.clear();
+    const auto last = faultLogged_.find(f);
+    const bool quiet = last != faultLogged_.end() && now - last->second < kMinute;
+    faultLogged_[f] = now;
     const json args = faultArgs(i, f);
     const bool warning = i.kind == FaultInfo::Kind::Warning;
-    if (i.kind == FaultInfo::Kind::Latch || i.reason == "safety_restart") {
+    if ((i.kind == FaultInfo::Kind::Latch || i.reason == "safety_restart") && !rt_.latches.count(i.id())) {
       json entry = args;
       entry["at"] = epoch;
       entry["key"] = "hw." + i.reason;
       entry["fault"] = i.reason;
+      if (i.reason == "safety_restart") entry["note"] = true;  // holds nothing
       setLatch(cfg_, rt_, i.id(), std::move(entry));
+      saveState(true);
     }
     if (!warning) act_.stopAll();
-    log_.add(epoch, "alarm", warning ? "warn" : "alarm", say("ev.hw.fault", {{"name", say("lock.hw." + i.reason)}}), say("latch.hw." + i.reason, args));
-    saveState(true);
+    if (!quiet) log_.add(epoch, "alarm", warning ? "warn" : "alarm", say("ev.hw.fault", {{"name", say("lock.hw." + i.reason)}}), say("latch.hw." + i.reason, args));
   }
   faultsSeen_ = std::move(seen);
 }
 
 // The first fault of the device's protection that holds every pump (SD-141): one the device
 // reports now, or a latched one a person has not released yet
-std::string Robot::faultHold(const Release& r) const {
-  for (const auto& f : r.faults) {
+std::string Robot::faultHold(const std::vector<std::string>& faults) const {
+  for (const auto& f : faults) {
     const FaultInfo i = classifyFault(f);
     if (i.kind != FaultInfo::Kind::Warning) return i.reason;
   }
@@ -983,7 +989,7 @@ json Robot::state() {
              const WaterPath w = hw_.waterPath();
              auto opt = [](const std::optional<bool>& v) { return v ? json(*v) : json(nullptr); };
              return json{{"release", {{"on", r.on}, {"leak", r.leak}, {"highLevel", r.highLevel}, {"stopButton", r.stopButton}, {"noFlow", r.noFlow}}},
-                         {"faults", r.faults},  // as the device names them (SD-141)
+                         {"faults", cleanFaults(r.faults)},  // as the device names them, checked (SD-141)
                          {"hold", c.hold.empty() ? json(nullptr) : json(c.hold)},
                          {"protectionCheck", c.protectionCheck},
                          {"outletWet", opt(w.outletWet)},
@@ -3144,7 +3150,7 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
   if ((id == "hw.leak" && rel.leak) || (id == "hw.high_level" && rel.highLevel))
     return Result::fail(409, say("latch.cause_present"));
   // … so does one of the device's protection (SD-141); a note goes once seen
-  for (const auto& f : rel.faults)
+  for (const auto& f : cleanFaults(rel.faults))
     if (const FaultInfo i = classifyFault(f); i.kind == FaultInfo::Kind::Latch && i.id() == id) return Result::fail(409, say("latch.cause_present"));
   // Only a person who confirms the entered volume releases it; a new volume releases it too
   // (putTank). One that reported only was taken as confirmed when it was set (SD-133).

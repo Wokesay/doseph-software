@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "doseph/common.hpp"
 
@@ -20,6 +21,9 @@ struct FaultInfo {
 };
 
 FaultInfo classifyFault(const std::string& fault);
+// What the device reports, as the robot takes it: at most 16, each a short name of [a-z0-9_.] or
+// "?" in its place, which holds as an unknown fault
+std::vector<std::string> cleanFaults(const std::vector<std::string>& faults);
 // The arguments of its texts: the part by name ("the dosing pumps"), and the ID as the device gave it
 json faultArgs(const FaultInfo& f, const std::string& fault);
 // The text for a hold (Ctx::hold) under a prefix ("act.hold.", "cycle.wait.hold."): its own for

@@ -375,6 +375,7 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
     Msg e;
     if (c.stopped) e = say("act.stopped");
     else if (!c.hold.empty()) e = holdText("act.hold.", c.hold);
+    else if (c.protectionCheck) e = say("act.protection_check");
     else if (!placementConfirmed(c.cfg)) e = say("act.placement");
     else if (!intoTank(order.purpose)) e = say("act.purpose");
     else if (!c.remote || !c.remote->linked()) e = say("coupling.no_link");
