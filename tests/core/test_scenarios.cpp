@@ -272,10 +272,8 @@ TEST_CASE("Scenario pump head: a changed head voids the channel's calibration un
   CHECK(channel2()["flowMlPerMin"].is_null());
   CHECK(headEvents("ev.channel.head_changed") == 1);  // once, not every tick
   // Calibrated again, the channel doses with the new head's flow
-  r.ok("POST", "channels/2/calibrate", {{"seconds", 10}});
-  r.waitUntil("the run into the cup", [&] { return r.state()["channelJob"]["state"] == "waiting_result"; }, 30);
-  r.ok("POST", "channels/result", {{"ml", r.twin()["channels"][1]["cupMl"]}});
-  r.ok("POST", "channels/cancel", json::object());
+  r.waitUntil("the check doses nothing", [&] { return r.phase() != "dose"; }, 3600, 1000);
+  CHECK(r.calibrateByHand(2) == doctest::Approx(2.5 * small).epsilon(0.02));
   CHECK(channel2()["flowMlPerMin"].get<double>() == doctest::Approx(2.5 * small).epsilon(0.02));
   r.step(5 * kSecond);
   CHECK(channel2()["flowMlPerMin"].is_number());
@@ -345,18 +343,16 @@ TEST_CASE("Scenario line fill cut by a restart: reported as a cut dose, and the 
   CHECK(r.state()["channelJob"].is_null());  // nothing resumes
 }
 
-TEST_CASE("Scenario calibration: a channel calibration stops the check and the feed pump first; the check starts anew once it ends (SD-109)") {
+TEST_CASE("Scenario line fill by hand: a channel's job stops the check and the feed pump first; the check starts anew once it ends (SD-109)") {
   Run r(device("home"));
   r.waitUntil("the chamber is flushed", [&] { return r.phase() == "flush"; }, 3 * 60);
   REQUIRE(r.twin()["output"] == true);
-  r.ok("POST", "channels/2/calibrate", {{"seconds", 10}});
+  r.act("lineEmpty", {{"channel", 2}});
+  r.ok("POST", "channels/2/prime", json::object());
   r.step(2 * kSecond);
   CHECK(r.line() == "cycle.wait.channel_job");
   CHECK(r.twin()["output"] == false);
-  r.waitUntil("the run into the cup", [&] { return r.state()["channelJob"]["state"] == "waiting_result"; }, 30);
-  r.step(30 * kSecond);
-  CHECK(r.line() == "cycle.wait.channel_job");  // the outlet is still over the cup
-  r.ok("POST", "channels/result", {{"ml", r.twin()["channels"][1]["cupMl"]}});
+  r.waitUntil("the line is full", [&] { return r.state()["channelJob"]["state"] == "done"; }, 60, 250);
   r.waitUntil("the check starts anew", [&] { return r.phase() == "flush"; }, 3 * 60);
 }
 

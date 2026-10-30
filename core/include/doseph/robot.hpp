@@ -39,13 +39,13 @@ struct Result {
 };
 
 // A channel's calibration or priming run, into a cup or the line (RAT-070).
+// A run of one channel by hand; a calibration is a pump calibration of its own (SD-143)
 struct ChannelJob {
-  std::string id, type;  // calibration | prime (into a cup) | fill (into the tank, SD-111)
+  std::string id, type;  // prime (into a cup) | fill (into the tank, SD-111)
   int channel = 0;
-  std::string head;               // calibration: the pump head it measures (SD-108)
-  std::string state = "running";  // running | waiting_result | done | failed
+  std::string head;
+  std::string state = "running";  // running | done | failed
   Ms ms = 0, actualMs = 0;
-  double ml = kNaN;  // calibration: what the user measured in the cup
   Msg message;
   Epoch at = 0;
 };
@@ -238,8 +238,9 @@ class Robot : public RemoteRuns {
 
   // ---- Operation
   Result prime(int channel, double seconds);
-  Result startCalibration(int channel, double seconds);
-  Result calibrationResult(double ml);
+  // A rate measured elsewhere, and whether the line is filled: the simulator's demo starts as a device
+  // in use; not in the API
+  Result setChannelFlow(int channel, double flowMlPerMin, bool lineFilled = false);
   Result cancelChannelJob();
   // A pump calibration by the user (SD-143): {"method": "cylinder" | "scale"}; the person's next step
   // ({"reading": ml or g} where a reading is wanted); cancelled by the person
@@ -306,7 +307,7 @@ class Robot : public RemoteRuns {
   void pumpCalDone(Ctx& c, const DoseProgress& p);
   void takePumpCalResult();
   Result startChannelJob(const std::string& type, int channel, double seconds);
-  bool channelJobActive() const { return job_ && (job_->state == "running" || job_->state == "waiting_result"); }
+  bool channelJobActive() const { return job_ && job_->state == "running"; }
   void restartCycle();
   void logLockChanges(const Config& was);
   // Plants (SD-128): saves `next`, says what changed and starts the check anew when the water plan

@@ -984,7 +984,7 @@ json Robot::state() {
   json job = nullptr;
   if (job_)
     job = {{"id", job_->id}, {"type", job_->type}, {"channel", job_->channel}, {"state", job_->state},
-           {"seconds", job_->ms / 1000.0}, {"actualS", job_->actualMs / 1000.0}, {"ml", numOrNull(job_->ml)},
+           {"seconds", job_->ms / 1000.0}, {"actualS", job_->actualMs / 1000.0},
            {"message", job_->message}, {"at", job_->at}};
   json probe = nullptr;
   if (probe_) {
@@ -1946,7 +1946,7 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
     return Result::fail(422, say("job.seconds", {{"max", lim.maxRunS}}));
   const CanisterCfg* b = cfg_.canisterOnChannel(channel);
   ChannelJob job;
-  job.id = (type == "calibration" ? "cal-" : type == "fill" ? "fill-" : "prime-") + std::to_string(++idSeq_);
+  job.id = (type == "fill" ? "fill-" : "prime-") + std::to_string(++idSeq_);
   job.type = type;
   job.channel = channel;
   job.head = hw_.profile().channels[static_cast<size_t>(channel - 1)].head;
@@ -1965,8 +1965,8 @@ Result Robot::startChannelJob(const std::string& type, int channel, double secon
     o.step.runs.assign(static_cast<size_t>((kFillMaxMs + run - 1) / run), run);
     job.ms = kFillMaxMs;
   }
-  // A line fill is booked like a dose, from the pump's flow; a calibration from the cup (SD-119)
-  if (type != "calibration") o.step.flowMlPerMin = cfg_.channelFlow(channel);
+  // A line fill is booked like a dose, from the pump's flow (SD-119)
+  o.step.flowMlPerMin = cfg_.channelFlow(channel);
   Ctx c = ctx();
   Msg err;
   if (!doser_.start(c, act_, o, err)) return Result::fail(409, err);
@@ -1981,11 +1981,6 @@ Result Robot::prime(int channel, double seconds) {
   return startChannelJob(hw_.drops(channel) ? "fill" : "prime", channel, seconds);
 }
 
-Result Robot::startCalibration(int channel, double seconds) {
-  std::lock_guard<std::recursive_mutex> l(mtx_);
-  return startChannelJob("calibration", channel, seconds);
-}
-
 void Robot::channelJobDone(const DoseProgress& p) {
   job_->actualMs = p.msDone;
   // What a line fill dripped is in the tank: the check mixes it in first and learns nothing (SD-111)
@@ -1995,40 +1990,21 @@ void Robot::channelJobDone(const DoseProgress& p) {
     job_->message = p.error;
     return;
   }
-  if (job_->type == "calibration") {
-    job_->state = "waiting_result";
-    job_->message = say("job.measure_cup", {{"s", job_->actualMs / 1000.0}});
-  } else {
-    job_->state = "done";
-    job_->message = job_->type == "fill" ? say("job.filled", {{"channel", job_->channel}, {"s", job_->actualMs / 1000.0}}) : say("job.primed");
-  }
+  job_->state = "done";
+  job_->message = job_->type == "fill" ? say("job.filled", {{"channel", job_->channel}, {"s", job_->actualMs / 1000.0}}) : say("job.primed");
 }
 
-Result Robot::calibrationResult(double ml) {
+// A rate measured elsewhere, saved with the head fitted now: the simulator's demo starts calibrated.
+// The API offers only the pump calibration by the user (SD-143).
+Result Robot::setChannelFlow(int channel, double flowMlPerMin, bool lineFilled) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  if (!job_ || job_->type != "calibration" || job_->state != "waiting_result") return Result::fail(409, say("job.no_result_wanted"));
-  // A result that is missing, zero, negative or above 1000 ml is refused; the previous value stays (RAT-003)
-  if (!isNum(ml) || ml <= 0 || ml > 1000) return Result::fail(422, say("job.ml", {{"max", 1000}}));
-  if (job_->actualMs <= 0) return Result::fail(409, say("job.no_run"));
-  // From the actual run time the driver reported, not the requested one (RAT-070)
-  const double flow = ml / static_cast<double>(job_->actualMs) * 60000.0;
+  if (channel < 1 || channel > hw_.channelCount()) return Result::fail(404, say("act.no_channel", {{"channel", channel}}));
+  if (!isNum(flowMlPerMin) || flowMlPerMin <= 0) return Result::fail(422, say("api.bad_input"));
   Config next = cfg_;
-  // With the head it measured: if the head changed meanwhile, the next tick voids it (SD-108)
-  next.channels[job_->channel] = ChannelCal{std::round(flow * 100) / 100, clock_.epoch(), job_->head};
+  next.channels[channel] = ChannelCal{std::round(flowMlPerMin * 100) / 100, clock_.epoch(), hw_.profile().channels[static_cast<size_t>(channel - 1)].head};
   Result r = saveConfig(next, std::nullopt);
-  if (r.status != 200) return r;
-  job_->ml = ml;
-  job_->state = "done";
-  // What went into the cup came out of the canister (SD-119)
-  if (const CanisterCfg* b = cfg_.canisterOnChannel(job_->channel)) {
-    Ctx c = ctx();
-    takeStock(c, b->id, b->name, ml);
-    saveState(true);
-  }
-  job_->message = say("job.calibrated", {{"channel", job_->channel}, {"flow", flow}});
-  log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.calibrated", {{"channel", job_->channel}}),
-           say("ev.channel.calibrated.text", {{"flow", flow}, {"ml", ml}, {"s", job_->actualMs / 1000.0}}));
-  return Result::ok({{"flowMlPerMin", flow}});
+  if (r.status == 200 && lineFilled && rt_.filled.insert(channel).second) saveState(true);
+  return r;
 }
 
 Result Robot::cancelChannelJob() {

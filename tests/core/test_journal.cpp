@@ -62,12 +62,16 @@ TEST_CASE("Dosing journal: a run begun is on record before it ends; after a rest
   CHECK_FALSE(empty.anyIntoTank());
 }
 
-TEST_CASE("Dosing journal: a calibration or priming run goes into a cup, not into the tank (RAT-070)") {
+TEST_CASE("Dosing journal: a run into a cup, or a pump calibration's water run, is no dose into the tank, also read back after a restart; a cup calibration from before is read as one (RAT-070, SD-143)") {
   MemoryStorage store;
   DoseJournal j(store);
-  j.begin(run("cal-1", 1, "calibration"));
   j.begin(run("prime-2", 1, "prime"));
+  for (const char* purpose : {"calrun", "calprime", "empty", "calibration"}) j.begin(run(std::string("pcal-") + purpose, 1, purpose));
   CHECK_FALSE(j.anyIntoTank());
+  DoseJournal back(store);
+  back.load();
+  CHECK_FALSE(back.anyIntoTank());
+  CHECK(back.runs().size() == 5);
 }
 
 TEST_CASE("Dosing journal: a damaged file counts as a dose that may be in, never as nothing (R5)") {
@@ -132,7 +136,7 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j1", err));
   CHECK(err.key == "act.no_flow");
   // A calibration into a cup needs no flow, an uncalibrated pump doses nothing (RAT-015)
-  CHECK(act.startRun(c, 3, 6000, "calibration", "j2", err));
+  CHECK(act.startRun(c, 3, 6000, "prime", "j2", err));
   act.clearRun(3);
   c.flowOk = true;
   CHECK_FALSE(act.startRun(c, 3, 6000, "ec", "j3", err));
@@ -151,7 +155,7 @@ TEST_CASE("Gateway: no dose without flow; one that loses its flow stops at once;
   // A Stop refuses every run, also into a cup (RAT-036)
   act.clearRun(2);
   c.stopped = true;
-  CHECK_FALSE(act.startRun(c, 3, 6000, "calibration", "j8", err));
+  CHECK_FALSE(act.startRun(c, 3, 6000, "prime", "j8", err));
   CHECK(err.key == "act.stopped");
 }
 
@@ -170,11 +174,11 @@ TEST_CASE("Gateway: a channel without a pump head runs nothing; a calibration of
   Msg err;
   CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j1", err));
   CHECK(err.key == "act.head_changed");
-  // Calibrating it again is the way back
-  CHECK(act.startRun(c, 2, 6000, "calibration", "j2", err));
+  // Into a cup it still runs, and a pump calibration's water runs too (SD-143)
+  CHECK(act.startRun(c, 2, 6000, "prime", "j2", err));
   act.clearRun(2);
   hw.prof.channels[1].head = "";
-  for (const char* purpose : {"calibration", "prime"}) {
+  for (const char* purpose : {"calrun", "prime"}) {
     CHECK_FALSE(act.startRun(c, 2, 6000, purpose, std::string("j3") + purpose, err));
     CHECK(err.key == "act.no_head");
   }
@@ -212,7 +216,7 @@ TEST_CASE("Gateway: a run into the tank needs drops; none within the wait cuts i
   // Locked: no dose, but a calibration into a cup still runs
   CHECK_FALSE(act.startRun(c, 2, 6000, "ec", "j2", err));
   CHECK(err.key == "act.channel_locked");
-  CHECK(act.startRun(c, 2, 6000, "calibration", "j3", err));
+  CHECK(act.startRun(c, 2, 6000, "prime", "j3", err));
   act.clearRun(2);
   rt.latches.clear();
   // A run shorter than the wait is judged at its end plus the wait
@@ -416,7 +420,7 @@ TEST_CASE("Gateway: a channel's run time into the tank per rolling 24 h stays wi
   CHECK(run(60000, "ph", "j2"));
   CHECK_FALSE(run(1000, "ec", "j3"));
   CHECK(err.key == "act.daily_cap");
-  CHECK(run(30000, "calibration", "j4"));  // into a cup: not counted
+  CHECK(run(30000, "prime", "j4"));  // into a cup: not counted
   // A line fill drips into the tank: counted (SD-111)
   CHECK_FALSE(run(1000, "fill", "j5"));
   // A day later the runs have rolled out
@@ -465,7 +469,7 @@ TEST_CASE("Gateway: nothing runs towards the tank before the owner confirmed the
     CHECK_FALSE(act.startRun(c, 2, 6000, purpose, "j1", err));
     CHECK(err.key == "act.placement");
   }
-  CHECK(act.startRun(c, 2, 6000, "calibration", "j2", err));
+  CHECK(act.startRun(c, 2, 6000, "prime", "j2", err));
   act.clearRun(2);
   CHECK(act.startRun(c, 2, 6000, "prime", "j3", err));
   act.clearRun(2);

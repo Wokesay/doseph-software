@@ -459,29 +459,6 @@ TEST_CASE("Cycle: a probe calibration holds the cycle; a dose running is cut and
   CHECK(st(s)["cycle"]["progress"]["first"] == true);
 }
 
-TEST_CASE("Pumps: a calibration runs into the cup and is worked out from the actual run time; a senseless result is refused (RAT-003, RAT-070)") {
-  sim::Simulation s(demo());
-  s.robot().setActive({{"recipe", ""}});  // nothing in force: the cycle is off
-  CHECK(s.robot().startCalibration(9, 30).status == 404);
-  CHECK(s.robot().startCalibration(2, 0.5).status == 422);
-  REQUIRE(s.robot().startCalibration(2, 30).status == 200);
-  CHECK(s.robot().startCalibration(3, 30).status == 409);  // one at a time
-  s.step(32 * kSecond, 500);
-  json job = st(s)["channelJob"];
-  CHECK(job["state"] == "waiting_result");
-  const double cup = s.world().pumps[1].cupMl;
-  CHECK(s.robot().calibrationResult(0).status == 422);
-  CHECK(s.robot().calibrationResult(1200).status == 422);
-  const double before = s.robot().config().channelFlow(2);
-  REQUIRE(s.robot().calibrationResult(cup).status == 200);
-  CHECK(s.robot().config().channelFlow(2) == doctest::Approx(s.world().pumps[1].trueFlow).epsilon(0.02));
-  CHECK(before == doctest::Approx(s.robot().config().channelFlow(2)).epsilon(0.02));
-  // The cup is no dose: nothing went into the tank, nothing waits to be mixed
-  CHECK(s.storage().read("journal.json").value_or("[]").find("\"purpose\":\"calibration\"") != std::string::npos);
-  s.reboot();
-  CHECK_FALSE(hasEvent(s, "ev.boot.mix_first"));
-}
-
 TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the state (RAT-037)") {
   sim::Simulation s(demo());
   auto group = [&](const char* g) { return st(s)["cycle"]["checks"][g]; };
@@ -510,10 +487,11 @@ TEST_CASE("Cycle: the checklist says why the robot doses or not, and follows the
   b["channel"] = 0;
   REQUIRE(s.robot().putCanister(b).status == 200);
   CHECK(item("ec", "check.part_not_ready")["args"]["name"] == b["name"]);
-  // A pump calibration and the Stop
+  // A channel's line filled by hand, and the Stop
   b["channel"] = 3;
   REQUIRE(s.robot().putCanister(b).status == 200);
-  REQUIRE(s.robot().startCalibration(4, 10).status == 200);
+  s.world().emptyLine(4);
+  REQUIRE(s.robot().prime(4, 5).status == 200);
   CHECK(item("all", "check.channel_job")["ok"] == false);
   REQUIRE(s.robot().stop(say("stop.app")).status == 200);
   CHECK(item("all", "check.stopped")["ok"] == false);

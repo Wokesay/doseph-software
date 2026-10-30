@@ -25,18 +25,21 @@ TEST_CASE("Platform: each slot's pump turns as the board description says; the d
   sim::World& w = r.s.world();
   REQUIRE(w.pumps[1].inverted);
   REQUIRE_FALSE(w.pumps[0].inverted);
-  // Into a cup on a slot mounted the other way: the motor turns backwards, and the cup fills
-  r.ok("POST", "channels/2/prime", {{"seconds", 3}});
+  // A line filled on a slot mounted the other way: the motor turns backwards, and it drips
+  r.act("lineEmpty", {{"channel", 2}});
+  const auto drops2 = w.pumps[1].drops;
+  r.ok("POST", "channels/2/prime", json::object());
   r.step(kSecond);
   CHECK(w.pumps[1].motorReverse);
   CHECK_FALSE(w.pumps[1].backwards);
-  r.step(4 * kSecond);
-  CHECK(w.pumps[1].cupMl > 1.0);
-  r.ok("POST", "channels/1/prime", {{"seconds", 3}});
+  r.waitUntil("channel 2 drips", [&] { return w.pumps[1].drops > drops2; }, 30);
+  r.waitUntil("its job ends", [&] { return r.state()["channelJob"]["state"] != "running"; }, 30);
+  r.act("lineEmpty", {{"channel", 1}});
+  const auto drops1 = w.pumps[0].drops;
+  r.ok("POST", "channels/1/prime", json::object());
   r.step(kSecond);
   CHECK_FALSE(w.pumps[0].motorReverse);
-  r.step(4 * kSecond);
-  CHECK(w.pumps[0].cupMl > 1.0);
+  r.waitUntil("channel 1 drips", [&] { return w.pumps[0].drops > drops1; }, 30);
   // The driver of an inverted slot: a pull-back turns its motor forwards
   std::string err;
   REQUIRE(r.s.hardware().startRun(2, 500, "pb-test", err, true));
@@ -92,14 +95,17 @@ TEST_CASE("Platform: the return pump keeps running on high level so the chamber 
 
 TEST_CASE("Platform: the history and the event log are written whole only between dosing runs (SD-142)") {
   harness::Run r(harness::device());
-  // The first snapshot is due 6 h after the start
+  // The first snapshot is due 6 h after the start; a pump calibration's run back into the canister
+  // (11 s) begins just before it
   const long long up = r.state()["uptimeS"].get<long long>();
-  r.step((6 * 3600 - 15 - up) * kSecond);
+  r.step((6 * 3600 - 4 - up) * kSecond);
   const auto before = r.s.storage().read("history.bin");
-  r.ok("POST", "channels/1/calibrate", {{"seconds", 40}});
-  r.step(30 * kSecond);  // the snapshot is due meanwhile
+  r.ok("POST", "channels/1/pump-calibration", {{"method", "scale"}});
+  r.step(7 * kSecond);  // the snapshot is due meanwhile
+  REQUIRE(r.s.world().pumps[0].state == 1);
   CHECK(r.s.storage().read("history.bin") == before);
   r.waitUntil("the snapshot after the run", [&] { return r.s.storage().read("history.bin") != before; }, 60);
+  CHECK(r.s.world().pumps[0].state != 1);
 }
 
 TEST_CASE("Platform: a Stop pressed before a factory reset holds after it until Resume in the app (SD-142, SD-139)") {

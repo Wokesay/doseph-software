@@ -72,7 +72,6 @@ export const de = {
   "channels.calReading": "Abgelesener Wert",
   "channels.calEnter": "Eintragen",
   "channels.calRun": "Lauf {n}: {flow} ml/min",
-  "channels.calibrateIntro": "Füll den Schlauch zuerst, dann halte sein Ende in einen leeren Messbecher (nicht in den Tank). Die Pumpe läuft die eingestellte Zeit; danach trägst du die ml im Becher ein.",
   "channels.primeIntro": "Halte das Schlauchende in einen Becher, nicht in den Tank. Die Pumpe läuft die eingestellte Zeit.",
   "channels.fillN": "Kanal {channel}: Schlauch füllen",
   "channels.fillIntro":
@@ -82,7 +81,6 @@ export const de = {
   "channels.secondsRange": "Zwischen 1 und {max} s",
   "channels.start": "Starten",
   "channels.running": "Die Pumpe läuft ({s} s) …",
-  "channels.mlInCup": "ml im Becher",
   "channels.phProbe": "pH-Sonde",
   "channels.ecProbe": "EC-Sonde",
   "channels.calibrate": "Kalibrieren",
@@ -175,7 +173,6 @@ export const en: Record<keyof typeof de, string> = {
   "channels.calReading": "Reading",
   "channels.calEnter": "Enter",
   "channels.calRun": "Run {n}: {flow} ml/min",
-  "channels.calibrateIntro": "Prime the tube first, then hold its end in an empty measuring cup (not in the tank). The pump runs for the time set; then you enter the ml in the cup.",
   "channels.primeIntro": "Hold the tube's end in a cup, not in the tank. The pump runs for the time set.",
   "channels.fillN": "Channel {channel}: fill the line",
   "channels.fillIntro":
@@ -185,7 +182,6 @@ export const en: Record<keyof typeof de, string> = {
   "channels.secondsRange": "Between 1 and {max} s",
   "channels.start": "Start",
   "channels.running": "The pump is running ({s} s) …",
-  "channels.mlInCup": "ml in the cup",
   "channels.phProbe": "pH probe",
   "channels.ecProbe": "EC probe",
   "channels.calibrate": "Calibrate",

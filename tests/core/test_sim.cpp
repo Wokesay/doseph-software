@@ -236,7 +236,7 @@ TEST_CASE("Twin: the drop sensor counts each drop of a dose; a blocked outlet, a
     sim::World v = twinWithWater();
     v.pumps[1].outletBlocked = std::string(fault) == "outlet";
     v.pumps[1].empty = std::string(fault) == "empty";
-    REQUIRE(v.startRun(2, 6000, std::string(fault) == "cup" ? "cal-1" : "dose-1", err));
+    REQUIRE(v.startRun(2, 6000, std::string(fault) == "cup" ? "prime-1" : "dose-1", err));
     v.advance(v.now() + 7000);
     CHECK(v.runStatus(2).state == doseph::RunStatus::State::Done);  // the pump ran
     CHECK(v.pumps[1].drops == 0);

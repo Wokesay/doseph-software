@@ -17,7 +17,7 @@ namespace doseph {
 struct JournalRun {
   std::string order;
   int run = 0;            // partial run, from 1
-  std::string purpose;    // ec | ph | calibration | prime | fill
+  std::string purpose;    // ec | ph | prime | fill | a pump calibration's calrun | calprime | empty
   std::string canister, name;
   int channel = 0;
   double ml = kNaN;       // planned for this run

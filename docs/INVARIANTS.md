@@ -46,7 +46,7 @@ of its own.
 | The hardware's cut for no flow stops the check and counts as a try; switching the pump off re-arms it | SD-127 | ✓ | `cycle.cpp`, `robot.cpp`, `hardware.hpp` · test_cycle.cpp |
 | At the end of each check pH and EC with the feed pump running are compared with them standing; a shift beyond 0.1 pH or 0.05 mS/cm is compared once more at once, and confirmed it locks the pump and dosing as a critical alarm until a person releases it | SD-127 | ✓ | `cycle.hpp`, `cycle.cpp`, `alarms.cpp` · test_cycle.cpp |
 | The feed pump's current is learned while it moves water; once it has, below 60 % of it for 2 s it goes off at once as a try without flow | RAT-049 | ✓ | `cycle.hpp`, `cycle.cpp` · test_cycle.cpp |
-| A probe or channel calibration, or a line fill, stops the check and the feed pump first; the check starts anew once it ends | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
+| A probe calibration, or a channel's line primed or filled by hand, stops the check and the feed pump first; the check starts anew once it ends. A pump calibration keeps the water circulating instead (SD-143) | SD-109 | ✓ | `cycle.cpp`, `robot.cpp` · test_scenarios.cpp |
 | A return pump that runs a minute without a pause is dry or blocked: it is held off and latched, everything holds, and a restart holds it off again until a person releases it (or reports only, SD-133) | SD-109 | ✓ | `hardware.hpp`, `gateway.hpp`, `robot.cpp` · test_scenarios.cpp |
 
 ## Dose planning and learning
@@ -68,11 +68,11 @@ of its own.
 
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|
-| One pump job at a time and none while the cycle doses; a senseless calibration result is refused | RAT-003 | ✓ | `config.cpp`, `robot.cpp` · test_cycle.cpp |
+| One pump job at a time and none while the cycle doses; a senseless calibration reading is refused | RAT-003 | ✓ | `config.cpp`, `robot.cpp`, `pumpcal.cpp` · test_pumpcal.cpp |
 | After a restart every pump is off and nothing resumes; a run is at most 60 s | RAT-007 | ✓ | `journal.hpp`, `robot.cpp`, `world.cpp` · test_cycle.cpp |
 | One dosing run at a time; a run that does not report back in time is switched off and booked as failed | RAT-018 | ✓ | `gateway.cpp` · test_journal.cpp |
 | Stop switches everything off at once, books what ran and holds across a restart until Resume | RAT-036 | ✓ | `config.hpp`, `cycle.hpp`, `gateway.hpp`, `robot.cpp` · test_cycle.cpp |
-| A calibration or line fill is no dose into the tank; flows and amounts come from the actual run time | RAT-070 | ✓ | `config.hpp`, `gateway.hpp`, `hardware.hpp`, `journal.hpp`, `robot.hpp`, `gateway.cpp`, `robot.cpp` · test_cycle.cpp, test_journal.cpp |
+| A calibration's water runs or a line primed into a cup are no dose into the tank, also when read back after a restart; flows and amounts come from the actual run time | RAT-070 | ✓ | `config.hpp`, `gateway.hpp`, `hardware.hpp`, `journal.hpp`, `robot.hpp`, `gateway.cpp`, `journal.cpp`, `robot.cpp`, `pumpcal.cpp` · test_pumpcal.cpp, test_journal.cpp |
 | The hardware release holds every pump: a run or the feed pump is refused with the input that holds it, and the cycle waits with it | SD-110 | ✓ | `gateway.hpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp`, `watchdog.cpp` · test_scenarios.cpp |
 | A leak or high level latches; a person releases the latch only once the device no longer reports the cause, and a restart never releases it | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
 | The stop button on the device is the Stop of the app: it holds across a restart until Resume in the app | SD-110 | ✓ | `robot.cpp` · test_scenarios.cpp |
@@ -92,7 +92,7 @@ of its own.
 | A channel's run time into the tank (doses and line fills) per rolling 24 h stays within its head's value and never passes 60 min; a run that would pass it is refused with the reason, the check waits for it, the user may set ml per day below it, and the count survives a restart | SD-113 | ✓ | `hardware.hpp`, `config.hpp`, `config.cpp`, `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_config.cpp, test_scenarios.cpp |
 | A run into the tank needs drops: none within four times a drop's time at the calibrated flow, at least 5 s, from its start or the last drop cuts it and locks the channel; a shorter run is judged at its end plus that time; a Stop is not judged | SD-111 | ✓ | `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | Drops while the pump stands, past 10 s after its run, lock the channel with an alarm, and the check mixes first and learns nothing | SD-111 | ✓ | `gateway.cpp`, `robot.cpp` · test_journal.cpp, test_scenarios.cpp |
-| A locked channel doses nothing into the tank until a person releases it (or the lock reports only, SD-133); a calibration or line fill into a cup still runs | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
+| A locked channel doses nothing into the tank until a person releases it (or the lock reports only, SD-133); a line primed into a cup or a pump calibration's water run still goes | SD-111 | ✓ | `gateway.cpp`, `cycle.cpp` · test_journal.cpp, test_scenarios.cpp |
 | After the last run of a dose the pump runs backwards about 0.2 ml, at most 1 s, where it can; the channel's next run first fills the line the same time forwards, unbooked, so the dose stays the planned amount; a run that would be refused is refused before the refill | SD-111 | ✓ | `config.hpp`, `gateway.hpp`, `gateway.cpp` · test_journal.cpp, test_scenarios.cpp |
 | Filling a line, where the outlet has a drop sensor, drips into the tank: runs of at most 60 s until the first drops fall, at most 5 min in all; it is journaled and booked like a dose, the check mixes it in first, and a restart reports it cut; without a sensor the line goes into a cup for the time given | SD-111 | ✓ | `journal.hpp`, `gateway.cpp`, `robot.cpp` · test_scenarios.cpp, test_cycle.cpp |
 | A pump calibration first runs the line back into its canister, then pumps only water from the intake side along the normal path, as a dose with refill and pull-back and with flow proven; the check doses nothing meanwhile, and the water takes nothing from a canister | SD-143 | ✓ | `pumpcal.cpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp` · test_pumpcal.cpp |

@@ -202,7 +202,7 @@ bool World::startRun(int pump, Ms ms, const std::string& jobId, std::string& err
   p.elapsed = 0;
   p.state = 1;
   p.error.clear();
-  if (jobId.rfind("cal-", 0) == 0) p.cupMl = 0;
+  if (jobId.rfind("prime-", 0) == 0) p.cupMl = 0;  // a fresh cup for a line primed into one
   running_ = pump;
   return true;
 }
@@ -300,7 +300,7 @@ void World::step(Ms dt) {
     }
     const Ms eff = std::min(dt, p.requested - (p.elapsed - dt));
     const double ml = flowOf(p) * static_cast<double>(std::max<Ms>(0, eff)) / 60000.0;
-    const bool intoCup = p.jobId.rfind("cal-", 0) == 0 || p.jobId.rfind("prime-", 0) == 0;
+    const bool intoCup = p.jobId.rfind("prime-", 0) == 0;
     // An empty canister moves nothing, nor does a blocked outlet; water in a glass does (SD-143)
     const bool dry = p.intake == "canister" && p.empty;
     if (p.backwards) {

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "doseph/journal.hpp"
 
+#include <algorithm>
+#include <iterator>
+
 namespace doseph {
 
 namespace {
@@ -42,8 +45,10 @@ void DoseJournal::load() {
     r.msDone = static_cast<Ms>(jnum(e, "msDone", 0));
     r.mlDone = jnum(e, "mlDone");
     r.cut = jbool(e, "cut", false);
-    // A record whose purpose cannot be read is taken as a dose into the tank (the safe side)
-    if (r.purpose != "ec" && r.purpose != "ph" && r.purpose != "calibration" && r.purpose != "prime" && r.purpose != "fill") {
+    // A record whose purpose cannot be read is taken as a dose into the tank (the safe side). A pump
+    // calibration's runs pump water (SD-143); "calibration" is a cup calibration from before it
+    static const char* const kKnown[] = {"ec", "ph", "prime", "fill", "calrun", "calprime", "empty", "calibration"};
+    if (std::none_of(std::begin(kKnown), std::end(kKnown), [&](const char* k) { return r.purpose == k; })) {
       r.purpose = "ec";
       damaged_ = true;
     }

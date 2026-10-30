@@ -44,9 +44,9 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** Only one pump job, a calibration or priming, runs at a time, and none while the cycle doses; a second start is refused with the reason. A calibration result that is missing, zero, negative or above 1000 ml is rejected and the previous value stays.
 - **Why:** A dosing sequence that can start twice overdoses. One that runs on a missing or zero rate either has no exit or underdoses, and either way it looks like success.
 - **Evidence:** Observed on the reference installation (2026): a mixing sequence that started without valid inputs could neither finish nor stop, and a flow rate of zero would have passed as valid. Limits on attempts and run time, a refusal of zero rates and a lock against a second start fixed it.
-- **Changed:** The grow controller's mix jobs and their confirmation are gone; the cycle (SD-105) is the only thing that doses into the tank.
-- **Implemented in:** `core/src/config.cpp`, `core/src/robot.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Pumps: a calibration runs into the cup and is worked out from the actual run time; a senseless result is refused (RAT-003, RAT-070)"
+- **Changed:** The grow controller's mix jobs and their confirmation are gone; the cycle (SD-105) is the only thing that doses into the tank. The calibration into a cup is replaced by the pump calibration by the user (SD-143): it is one job of its own, and a reading that rises, a run without drops or a rate far from the head's nominal one is refused, so a senseless rate never stands.
+- **Implemented in:** `core/src/config.cpp`, `core/src/robot.cpp`, `core/src/pumpcal.cpp`
+- **Tests:** `tests/core/test_pumpcal.cpp` "Pump calibration: a reading far from the head's rate is refused with its likely cause, as is one that rises; two runs that disagree ask for a third, and the two that agree give the rate (SD-143, RAT-003)"; `tests/core/test_pumpcal.cpp` "Pump calibration: refused while stopped, while another job runs, and for an account; while it runs, no other job starts; a Stop ends it, and so do 30 min without a step (SD-143, RAT-003)"
 
 ### RAT-004 – pH correction always comes last and is never part of a recipe
 
@@ -601,8 +601,9 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Rule:** A calibration or priming run goes into a cup and never counts as a dose into the tank; the flow rate is worked out from the run time the driver reported, not the requested one.
 - **Why:** A calibration run handled like a hand dose is cut short by the hand-dose limit and counted as consumption. Dividing the cup volume by the requested time instead of the actual one then gives too high a flow rate, and all later doses come out too small. Booking only when a job ends loses whatever was pumped before an abort.
 - **Evidence:** Observed on the reference installation (2026): a nominal 10-s calibration run was cut by the 5-ml manual limit after 5.7–7.8 s depending on the pump and booked as consumption; dividing the cup volume by 10 s would have overstated the rate by 1.3–1.8×. Consumption was booked only at the end of a mixing sequence, so amounts pumped before an external stop would have stayed unbooked (a gap found in review, not observed).
-- **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/gateway.hpp`, `core/include/doseph/hardware.hpp`, `core/include/doseph/journal.hpp`, `core/include/doseph/robot.hpp`, `core/src/gateway.cpp`, `core/src/robot.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Pumps: a calibration runs into the cup and is worked out from the actual run time; a senseless result is refused (RAT-003, RAT-070)"; `tests/core/test_journal.cpp` "Dosing journal: a calibration or priming run goes into a cup, not into the tank (RAT-070)"
+- **Changed:** The calibration into a cup is replaced by the pump calibration by the user (SD-143). Its water runs are no dose and take nothing from a canister either, and its rate comes from the run time the driver reported.
+- **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/gateway.hpp`, `core/include/doseph/hardware.hpp`, `core/include/doseph/journal.hpp`, `core/include/doseph/robot.hpp`, `core/src/gateway.cpp`, `core/src/robot.cpp`, `core/src/pumpcal.cpp`
+- **Tests:** `tests/core/test_pumpcal.cpp` "Pump calibration: the line goes back into its canister, water from the cylinder primes it, two measuring runs give the rate corrected for the cylinder from the run time the driver reported, and the line is refilled from the canister; the water takes nothing from the canister and nothing else doses meanwhile (SD-143, RAT-070)"; `tests/core/test_journal.cpp` "Dosing journal: a run into a cup, or a pump calibration's water run, is no dose into the tank, also read back after a restart; a cup calibration from before is read as one (RAT-070, SD-143)"
 
 ### RAT-071 – Minimum stock per canister: 150 ml, pH− 20 ml
 
