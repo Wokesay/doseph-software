@@ -4,10 +4,10 @@
 // path page, in the measuring chamber.
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
-import { del, get, holds, post, type Canister, type Coupling, type Stock } from "../api";
+import { ApiError, del, get, holds, post, type Canister, type Coupling, type PumpCalibration, type Stock } from "../api";
 import { ago, dateTime, num } from "../format";
 import { msg, t } from "../i18n";
-import { canisters, config, info, refreshConfig, refreshState, state, toast } from "../store";
+import { canisters, config, errorText, info, refreshConfig, refreshState, state, toast } from "../store";
 import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term } from "../ui";
 
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
@@ -244,7 +244,124 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
   );
 }
 
-/** Calibrating or priming one channel: start, the run, the amount in the cup, the result. */
+// The steps of a pump calibration as the person sees them (SD-143)
+const CAL_STEPS: PumpCalibration["step"][] = ["reverse", "to_water", "prime", "reading", "empty", "to_canister", "fill", "done"];
+const calStepIndex = (s: PumpCalibration["step"]) => (s === "run" ? CAL_STEPS.indexOf("reading") : CAL_STEPS.indexOf(s));
+
+/** A pump calibration by the user (SD-143): the intake in a cylinder or a glass on a scale, readings
+ *  after each run, the intake back into its canister. The device leads; this shows its step. */
+function PumpCalDialog(p: { channel: number; onClose: () => void }) {
+  const st = state.value!;
+  const [method, setMethod] = useState<"cylinder" | "scale">("cylinder");
+  const [started, setStarted] = useState(false);
+  const [reading, setReading] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pc = started && st.pumpCalibration?.channel === p.channel ? st.pumpCalibration : null;
+  const active = pc && !["done", "failed", "cancelled"].includes(pc.step);
+  const call = async (path: string, body: object = {}) => {
+    setError(null);
+    try {
+      await post(path, body);
+    } catch (e) {
+      if (e instanceof ApiError) setError(errorText(e));  // in the user's language, with its cause
+      else throw e;
+    }
+    await Promise.all([refreshState(), refreshConfig()]);
+  };
+  const start = async () => {
+    await call(`/channels/${p.channel}/pump-calibration`, { method });
+    setStarted(true);
+  };
+  const close = async () => {
+    if (active) await post("/pump-calibration/cancel").catch(() => {});
+    await refreshState();
+    p.onClose();
+  };
+  const enter = async () => {
+    await call("/pump-calibration/next", { reading });
+    setReading(null);
+  };
+  const unit = (pc?.method ?? method) === "cylinder" ? "ml" : "g";
+  return (
+    <Modal
+      title={t("channels.calibrateN", { channel: p.channel })}
+      onClose={close}
+      footer={
+        <button class={`btn${pc && !active ? " primary" : ""}`} onClick={close} data-testid="cal-close">
+          {pc && !active ? t("common.close") : t("common.cancel")}
+        </button>
+      }
+    >
+      {!pc && (
+        <div class="stack">
+          <p>{t("channels.calIntro")}</p>
+          <Seg
+            value={method}
+            onChange={(v) => setMethod(v as "cylinder" | "scale")}
+            label={t("channels.calMethod")}
+            options={[
+              ["cylinder", t("channels.calCylinder")],
+              ["scale", t("channels.calScale")],
+            ]}
+          />
+          <p class="muted small">{t(method === "cylinder" ? "channels.calCylinderNote" : "channels.calScaleNote")}</p>
+          {error && <Banner tone="bad">{error}</Banner>}
+          <div>
+            <Button variant="primary" onClick={start} data-testid="cal-start">
+              {t("channels.start")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {pc && (
+        <div class="stack" data-testid="cal-step" data-step={pc.step}>
+          {active && (
+            <div class="muted small">
+              {t("channels.calStep", { n: calStepIndex(pc.step) + 1, of: CAL_STEPS.length })}
+            </div>
+          )}
+          <Banner tone={pc.step === "done" ? "ok" : pc.step === "failed" || pc.step === "cancelled" ? "bad" : pc.waiting ? "warn" : "info"}>
+            <span data-testid="cal-message">{msg(pc.message)}</span>
+          </Banner>
+          {active && !pc.waiting && (
+            <div class="progress">
+              <span style="width:100%;opacity:0.5" />
+            </div>
+          )}
+          {(pc.step === "to_water" || pc.step === "to_canister") && (
+            <div>
+              <Button variant="primary" onClick={() => call("/pump-calibration/next")} data-testid="cal-next">
+                {t(pc.step === "to_water" ? "channels.calInWater" : "channels.calInCanister")}
+              </Button>
+            </div>
+          )}
+          {pc.step === "reading" && (
+            <div class="stack-sm">
+              <Field label={t(pc.readings.length === 0 ? "channels.calStartReading" : "channels.calReading")}>
+                <NumberInput value={reading} onValue={setReading} unit={unit} name="reading" />
+              </Field>
+              <div>
+                <Button variant="primary" onClick={enter} disabled={reading === null || reading < 0} data-testid="cal-reading">
+                  {t("channels.calEnter")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {error && <Banner tone="bad"><span data-testid="cal-error">{error}</span></Banner>}
+          {pc.runs.some((r) => r.flowMlPerMin !== null) && (
+            <ul class="small muted" data-testid="cal-runs">
+              {pc.runs.map((r, i) =>
+                r.flowMlPerMin !== null ? <li>{t("channels.calRun", { n: i + 1, flow: num(r.flowMlPerMin, 1) })}</li> : null,
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** Priming one channel: a line into a cup by time, or into the tank until it drips. */
 function ChannelJobDialog(p: { channel: number; type: "calibration" | "prime"; onClose: () => void }) {
   const st = state.value!;
   // Only the job this dialog started: a finished one from before is not this one's
@@ -397,7 +514,8 @@ function ChannelsCard() {
         <Term topic="calibratePump" />
       </p>
       <p class="muted small">{t("channels.headNote")}</p>
-      {dialog && <ChannelJobDialog {...dialog} onClose={() => setDialog(null)} />}
+      {dialog?.type === "prime" && <ChannelJobDialog {...dialog} onClose={() => setDialog(null)} />}
+      {dialog?.type === "calibration" && <PumpCalDialog channel={dialog.channel} onClose={() => setDialog(null)} />}
     </Card>
   );
 }

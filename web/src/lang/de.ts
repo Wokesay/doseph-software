@@ -92,7 +92,7 @@ export const deBase = {
   "term.fixed": "Feste Menge",
   "help.fixed": "Diese Menge gehört je Liter frisches Wasser hinein und wird beim Anheben der EC nicht mitdosiert, z. B. CalMag für weiches Wasser.",
   "term.calibratePump": "Einmessen",
-  "help.calibratePump": "Die Pumpe läuft eine feste Zeit in einen Messbecher, du trägst die ml ein. Ohne diesen Wert dosiert sie nicht.",
+  "help.calibratePump": "Der Ansaugschlauch kommt in Wasser (Messzylinder oder Glas auf der Waage), die Pumpe läuft zwei- oder dreimal, du liest jeweils ab. Ohne diesen Wert dosiert der Kanal nicht.",
   "term.prime": "Schlauch füllen",
   "help.prime": "Pumpt, bis die Flüssigkeit vorne ankommt. Nötig vor dem Einmessen und nach jedem Kanisterwechsel. Halte das Schlauchende in einen Becher, nicht in den Tank.",
   "term.calibrateProbe": "Sonde kalibrieren",

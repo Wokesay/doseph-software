@@ -88,7 +88,7 @@ const base: Record<keyof typeof deBase, string> = {
   "term.fixed": "Fixed amount",
   "help.fixed": "This amount goes in per litre of fresh water and is not dosed when EC is raised, e.g. CalMag for soft water.",
   "term.calibratePump": "Calibrate",
-  "help.calibratePump": "The pump runs for a set time into a measuring cup, you enter the ml. Without this value it doses nothing.",
+  "help.calibratePump": "The intake goes into water (a measuring cylinder, or a glass on a scale), the pump runs two or three times, and you read after each run. Without this value the channel doses nothing.",
   "term.prime": "Prime tube",
   "help.prime": "Pumps until the liquid reaches the end of the tube. Needed before calibrating and after every canister change. Hold the tube's end in a cup, not in the tank.",
   "term.calibrateProbe": "Calibrate probe",
