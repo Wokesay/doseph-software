@@ -659,6 +659,8 @@ void Robot::tick() {
     for (const auto& i : planService(cfg_, rt_, epoch, cfg_.system.timezone).items)
       if (i.dueNow) alarmWatch_.items.push_back({"maint." + i.id, i.label, "problem", say("service.due")});
     for (const auto& n : plantNotes(cfg_, epoch, cfg_.system.timezone)) alarmWatch_.items.push_back({n.id, n.label, "problem", n.text});
+    watchDrain(epoch);
+    if (rt_.drain.is_object()) alarmWatch_.items.push_back({"plant.drain", say("watch.drain"), "problem", drainAdvice()});
     alarms_.update(alarmWatch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
@@ -1136,6 +1138,67 @@ Result Robot::savePlants(Config next, const Msg& what) {
   }
   r.body = plantsJson(cfg_, now, cfg_.system.timezone);
   return r;
+}
+
+namespace {
+
+// A fall of the EC target that a full tank cannot follow (RAT-065)
+constexpr double kDrainStepMs = 0.2;
+
+// The nutrients a recipe doses by EC, not its fixed additions: another set is another product
+std::set<std::string> nutrients(const RecipeCfg* r) {
+  std::set<std::string> out;
+  if (r)
+    for (const auto& s : r->steps)
+      if (!s.fixed) out.insert(s.canister);
+  return out;
+}
+
+}  // namespace
+
+void Robot::watchDrain(Epoch epoch) {
+  const WaterPlan plan = waterPlan(cfg_, epoch);
+  const double target = plan.ecTarget;
+  if (isNum(target)) {
+    const double before = rt_.planEc.is_object() ? jnum(rt_.planEc, "target") : kNaN;
+    const RecipeCfg* was = rt_.planEc.is_object() ? cfg_.recipe(jstr(rt_.planEc, "recipe")) : nullptr;
+    if (isNum(before) && target < before - kDrainStepMs - 1e-9) {
+      // A fall while the advice stands keeps where the tank came from, and another set of nutrients
+      const bool open = rt_.drain.is_object();
+      const double from = open && isNum(jnum(rt_.drain, "from")) ? std::max(jnum(rt_.drain, "from"), before) : before;
+      const bool product = (open && jbool(rt_.drain, "product", false)) || (was && plan.recipe && nutrients(was) != nutrients(plan.recipe));
+      rt_.drain = {{"from", from}, {"to", target}, {"product", product}, {"at", epoch}};
+      log_.add(epoch, "control", "notice", say("ev.plan.drain", {{"from", before}, {"to", target}}), drainAdvice());
+    } else if (rt_.drain.is_object() && std::abs(target - jnum(rt_.drain, "to")) > 1e-9 && target >= jnum(rt_.drain, "from") - kDrainStepMs - 1e-9) {
+      rt_.drain = nullptr;  // the target rose again: the tank's water fits it
+    } else if (rt_.drain.is_object()) {
+      rt_.drain["to"] = target;
+    }
+    rt_.planEc = {{"target", target}, {"recipe", plan.recipe ? plan.recipe->id : ""}};
+  }
+  // Drained, topped up or mixed anew: a check since then measured the tank within the new target's band
+  if (rt_.drain.is_object()) {
+    const Measured& m = cycle_.last();
+    const json& at = rt_.drain.contains("at") ? rt_.drain["at"] : json();
+    if (m.at > (at.is_number_integer() ? at.get<Epoch>() : Epoch{0}) && isNum(m.ec) && m.ec <= jnum(rt_.drain, "to") + cfg_.control.ecTolerance) rt_.drain = nullptr;
+  }
+}
+
+Msg Robot::drainAdvice() const {
+  const double to = jnum(rt_.drain, "to");
+  if (jbool(rt_.drain, "product", false)) return say("drain.product");
+  // What fresh water makes of what is left, where the robot knows both: the tank's EC and the litres
+  // watering took since it was full (SD-134); fresh water counted as without nutrients
+  const double ec = cycle_.last().ec;
+  const double volume = cfg_.tank.volumeL;
+  const json& given = rt_.watering.is_object() && rt_.watering.contains("givenL") ? rt_.watering["givenL"] : json();
+  if (isNum(ec) && isNum(volume) && volume > 0 && given.is_number()) {
+    const double left = std::clamp(volume - given.get<double>(), 0.0, volume);
+    const double est = ec * left / volume;
+    if (est < to) return say("drain.top_up", {{"left", left}, {"est", est}, {"target", to}});
+    return say("drain.needed_est", {{"est", est}, {"target", to}});
+  }
+  return say("drain.needed", {{"target", to}});
 }
 
 void Robot::movePlants(Epoch epoch) {

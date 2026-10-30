@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The advice to drain when the water plan's EC target falls by more than
+  0.2 mS/cm (RAT-065, SD-140).
+  - Another nutrient means draining.
+  - Where watering counted what the tank gave, the note works out whether
+    the rest topped up with fresh water ends below the target, so no drain
+    is needed.
+  - It goes once a check measures the tank within the new target.
+
 - An access reset and a factory reset (SD-139).
   - **Access reset:** asked for at the device only. It removes the
     password, the sessions, the access tokens and the coupling, and MQTT

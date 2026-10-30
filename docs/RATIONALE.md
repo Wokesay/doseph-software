@@ -554,11 +554,12 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-065 – Drain on EC step-down only when needed; always on product change
 
-- **Dropped:** the grow controller only (drain); not part of the mixing robot (SD-105).
 - **Rule:** When a phase change lowers the EC target by more than 0.2 mS/cm, the app suggests draining the tank completely – unless the solution left plus fresh water ends below the new target and can be dosed up. On a change of nutrient product the drain stays. No partial draining: the robot cannot dilute (RAT-012).
 - **Why:** Draining every time throws away usable solution and nutrients; mixing a new base product onto the old one is not wanted.
 - **Evidence:** Calculated from the reference installation's figures (2026): stepping from EC 3.0 to 2.0, 13.4 L of residue plus 13.7 L of fresh water give about 1.55, below the new target, so no drain is needed; the drain into late flowering stays, since the diluted residue (0.84) is above the 0.8 target. One needless drain would have thrown away 34.8 L of mixed solution.
-- **Later:** step 9 (drain); the advice at a phase change can come with step 6.
+- **Changed:** The robot has no drain; it advises. Any fall of the water plan's EC target counts, whatever caused it (a phase, another leading plant, a hand choice). The advice is an info note, kept until a check measures the tank within the new target. Where watering counted the litres the tank gave since it was full, the robot works out what is left plus fresh water (counted as without nutrients); otherwise it says both ways. Another set of nutrients in the recipe always means draining (SD-140).
+- **Implemented in:** `core/src/robot.cpp`, `core/src/config.cpp`
+- **Tests:** `tests/core/test_plants.cpp` "Plants: when the water plan's EC target falls by more than 0.2 mS/cm the robot advises to drain, or to top up where what is left plus fresh water ends below it; a new nutrient means draining; the advice goes once the tank fits the target (RAT-065, SD-140)"
 
 ### RAT-066 – Phase defaults and recipe templates follow the manufacturer chart
 

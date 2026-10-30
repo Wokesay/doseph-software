@@ -466,6 +466,11 @@ struct RuntimeState {
   // s, override} while one runs, day: {date, runS: {circuit: s}}, last: {circuit: {at, s, l, end}}}.
   // `waterLow`: a shot would go below the reserve, so water is to be topped up.
   json watering = json::object();
+  // The water plan's EC target and recipe as last seen, and the advice to drain after it fell by
+  // more than 0.2 mS/cm: {from, to, product, at}, until the tank fits the new target (RAT-065,
+  // SD-140); null without one
+  json planEc = nullptr;
+  json drain = nullptr;
   bool waterLow = false;
   // Light switched by hand (SD-135): {circuit: {on, until}}, until the plan's next change (epoch)
   json lighting = json::object();

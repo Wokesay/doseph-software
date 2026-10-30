@@ -561,3 +561,123 @@ TEST_CASE("Plants over the API: a dose cut by a restart counts in the plant's re
     if (b["id"] == canister) cut = b["unknown"].get<int>() >= 1;
   CHECK(cut);
 }
+
+namespace {
+
+json drainNote(Robot& r) {
+  const json st = r.state();
+  for (const auto& a : st["alarms"])
+    if (a["id"] == "plant.drain") return a;
+  return nullptr;
+}
+
+bool heldWithin(sim::Simulation& s, int hours) {
+  for (int i = 0; i < hours * 360; ++i) {
+    s.step(10 * kSecond, 1000);
+    if (s.robot().state()["cycle"]["phase"] == "hold") return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+TEST_CASE("Plants: when the water plan's EC target falls by more than 0.2 mS/cm the robot advises to drain, or to top up where what is left plus fresh water ends below it; a new nutrient means draining; the advice goes once the tank fits the target (RAT-065, SD-140)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Lettuce"},
+             {"phases", json::array({{{"name", "Grow"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}},
+                                     {{"name", "Late"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.2}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  const std::string id = r.startPlant({{"name", "Tray"}, {"plantRecipe", prId}}).body["id"];
+  REQUIRE(heldWithin(s, 8));
+  CHECK(drainNote(r).is_null());
+  // A fall of 0.6 mS/cm: the full tank cannot follow
+  REQUIRE(r.plantNext(id).status == 200);
+  s.step(6 * kMinute, 1000);
+  json note = drainNote(r);
+  REQUIRE(note.is_object());
+  CHECK(note["level"] == "info");
+  CHECK(note["text"]["key"] == "drain.needed");  // what is left is not known here
+  const json ev = r.events(0, std::numeric_limits<Epoch>::max(), "control", 200);
+  CHECK(std::any_of(ev.begin(), ev.end(), [](const json& e) { return e["title"]["key"] == "ev.plan.drain"; }));
+  // Where watering counted what the tank gave since it was full, a fifth left topped up stays below
+  // the target: no need to drain. It holds across a restart.
+  s.robot().flush();
+  json state = json::parse(*s.storage().read("state.json"));
+  const double volume = r.config().tank.volumeL;
+  state["watering"]["givenL"] = volume * 0.8;
+  REQUIRE(s.storage().write("state.json", state.dump()));
+  s.reboot();
+  s.step(6 * kMinute, 1000);
+  note = drainNote(s.robot());
+  REQUIRE(note.is_object());
+  CHECK(note["text"]["key"] == "drain.top_up");
+  CHECK(note["text"]["args"]["left"].get<double>() == doctest::Approx(volume * 0.2));
+  CHECK(note["text"]["args"]["est"].get<double>() < 1.2);
+  // Drained and filled anew: the next check finds the tank within the target, and the advice goes
+  REQUIRE(s.control("fill", {{"volumeL", volume}, {"ec", 0.4}, {"ph", 6.5}}).is_object());
+  bool gone = false;
+  for (int i = 0; i < 3 * 360 && !gone; ++i) {  // the hold between two checks included
+    s.step(10 * kSecond, 1000);
+    gone = s.robot().runtime().drain.is_null();
+  }
+  CHECK(gone);
+  // A new nutrient with a lower target: draining, whatever is left
+  REQUIRE(s.robot().putRecipe({{"id", "calmag_only"}, {"name", "CalMag only"}, {"ecTarget", 0.6},
+                               {"steps", json::array({{{"canister", "calmag"}, {"mlPerL", 1.0}}})}}).status == 200);
+  REQUIRE(heldWithin(s, 8));
+  json phases = s.robot().plants()["plants"][0]["phases"];
+  phases[1]["recipe"] = "calmag_only";
+  phases[1]["ecTarget"] = nullptr;
+  REQUIRE(s.robot().putPlant(id, {{"phases", phases}}).status == 200);
+  s.step(6 * kMinute, 1000);
+  note = drainNote(s.robot());
+  REQUIRE(note.is_object());
+  CHECK(note["text"]["key"] == "drain.product");
+  // The target up again: the tank's water fits it, and the advice goes
+  phases[1]["recipe"] = "two_part";
+  phases[1]["ecTarget"] = 1.2;
+  REQUIRE(s.robot().putPlant(id, {{"phases", phases}}).status == 200);
+  s.step(kMinute, 1000);
+  CHECK(s.robot().runtime().drain.is_null());
+}
+
+TEST_CASE("Plants: a second fall while the drain advice stands keeps where the tank came from, so a small rise after it does not end the advice; a damaged stored advice is read as far as it goes (RAT-065, SD-140)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  json pr = {{"name", "Basil"},
+             {"phases", json::array({{{"name", "Grow"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}},
+                                     {{"name", "Mid"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.5}},
+                                     {{"name", "Late"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.2}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  const std::string id = r.startPlant({{"name", "Pot"}, {"plantRecipe", prId}}).body["id"];
+  REQUIRE(heldWithin(s, 8));
+  REQUIRE(r.plantNext(id).status == 200);  // 1.8 to 1.5
+  s.step(kMinute, 1000);
+  REQUIRE(r.runtime().drain.is_object());
+  REQUIRE(r.plantNext(id).status == 200);  // 1.5 to 1.2
+  s.step(kMinute, 1000);
+  REQUIRE(r.runtime().drain.is_object());
+  CHECK(jnum(r.runtime().drain, "from") == doctest::Approx(1.8));
+  // Up to 1.4: still more than 0.2 below the 1.8 the tank was mixed for
+  json phases = r.plants()["plants"][0]["phases"];
+  phases[2]["ecTarget"] = 1.4;
+  REQUIRE(r.putPlant(id, {{"phases", phases}}).status == 200);
+  s.step(6 * kMinute, 1000);  // a note stands a while before it is listed
+  REQUIRE(r.runtime().drain.is_object());
+  CHECK(jnum(r.runtime().drain, "to") == doctest::Approx(1.4));
+  CHECK(drainNote(r).is_object());
+  // A stored advice with fields of the wrong kind: no crash, and the advice stands
+  r.flush();
+  json state = json::parse(*s.storage().read("state.json"));
+  state["drain"]["at"] = "yesterday";
+  state["drain"]["product"] = "maybe";
+  REQUIRE(s.storage().write("state.json", state.dump()));
+  s.reboot();
+  s.step(6 * kMinute, 1000);
+  const json note = drainNote(s.robot());
+  REQUIRE(note.is_object());
+  CHECK(note["text"]["key"] != "drain.product");
+}
