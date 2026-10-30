@@ -328,6 +328,11 @@ function PumpCalDialog(p: { channel: number; onClose: () => void }) {
               <span style="width:100%;opacity:0.5" />
             </div>
           )}
+          {active && pc.waitingFor && (
+            <p class="small warn-text" data-testid="cal-waiting">
+              {msg(pc.waitingFor)}
+            </p>
+          )}
           {(pc.step === "to_water" || pc.step === "to_canister") && (
             <div>
               <Button variant="primary" onClick={() => call("/pump-calibration/next")} data-testid="cal-next">
