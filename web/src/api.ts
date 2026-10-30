@@ -125,15 +125,6 @@ export type PumpCalibration = {
   waitingFor: Msg | null;  // why the step's run has not started yet: no flow, a hold
 };
 
-// A pump calibration by the user (SD-143): its step, and whether it is the person's turn
-export type PumpCalibration = {
-  channel: number; method: "cylinder" | "scale";
-  step: "reverse" | "to_water" | "prime" | "reading" | "run" | "empty" | "to_canister" | "fill" | "done" | "failed" | "cancelled";
-  waiting: boolean; readings: number[]; runs: { s: number; drops: number; flowMlPerMin: number | null }[];
-  flowMlPerMin: number | null; nominalMlPerMin: number | null; message: Msg; at: number;
-  waitingFor: Msg | null;  // why the step's run has not started yet: no flow, a hold
-};
-
 export type ProbeSession = { kind: "ph" | "ec"; points: [number, number][]; rawPh: number | null; rawEc: number | null; temp: number | null };
 
 export type RobotState = {
