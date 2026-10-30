@@ -100,6 +100,13 @@ ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, co
       const Epoch step = static_cast<Epoch>(ph->days) * 86400;
       i.due = ph->due + (i.due - ph->due) / step * step;
     }
+  // Its doses' drops per ml changed since its calibration: due from when that was seen (SD-145)
+  for (auto& i : plan.items) {
+    const auto d = rt.dropRate.find(std::to_string(i.channel));
+    if (i.kind != "channel.cal" || d == rt.dropRate.end() || !d->is_object() || !d->contains("drift")) continue;
+    const double at = jnum((*d)["drift"], "at");
+    if (isNum(at)) i.due = std::min(i.due, static_cast<Epoch>(at));
+  }
   std::sort(plan.items.begin(), plan.items.end(), [](const ServiceItem& a, const ServiceItem& b) { return a.due < b.due; });
   // Bundled: the earliest open item opens a date; whatever is due within a week of it joins
   Epoch open = 0;

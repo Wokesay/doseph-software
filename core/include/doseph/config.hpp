@@ -499,6 +499,17 @@ struct RuntimeState {
   // Channel → the head size its calibration was measured with, while no head is fitted: a head of
   // that size fitted again asks whether it is a new one (SD-144)
   std::map<int, std::string> headOff;
+  // Checks of a pump's rate in use (SD-145), keyed by canister ID or channel number:
+  // stockRead   canister → the level last read and entered, {ml, at, channel, calAt}: the next
+  //             reading compares what went with what the doses counted meanwhile
+  // rateProposal channel → a rate that check proposes, {canister, countedMl, usedMl, from, to, at,
+  //             calAt}, until the person takes or dismisses it
+  // dropRate    channel → its doses' drops per ml since its calibration at `calAt`: {calAt, ml,
+  //             drops} until learned, then {perMl, ml, drops} of the window under way; `drift`,
+  //             {share, at}, once they changed beyond the share
+  json stockRead = json::object();
+  json rateProposal = json::object();
+  json dropRate = json::object();
   // The channels a run went through to its end, which filled the line (SD-129): a commissioning
   // step the robot sees
   std::set<int> filled;

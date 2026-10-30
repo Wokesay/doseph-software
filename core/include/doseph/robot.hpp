@@ -245,6 +245,8 @@ class Robot : public RemoteRuns {
   // A pump calibration by the user (SD-143): {"method": "cylinder" | "scale"}; the person's next step
   // ({"reading": ml or g} where a reading is wanted); cancelled by the person
   Result startPumpCalibration(int channel, const json& body);
+  // Takes ({"take": true}) or dismisses the rate the consumption check proposed (SD-145)
+  Result answerRateProposal(int channel, const json& body);
   Result pumpCalibrationNext(const json& body);
   Result cancelPumpCalibration();
   Result probe(const json& j);

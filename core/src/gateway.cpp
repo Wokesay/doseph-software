@@ -8,6 +8,7 @@
 
 #include "doseph/faults.hpp"
 #include "doseph/messages.hpp"
+#include "doseph/ratecheck.hpp"
 
 namespace doseph {
 
@@ -307,6 +308,9 @@ bool Doser::launch(const Ctx& c, Actuators& act) {
     progress_.error = e;
     return false;
   }
+  // The line is full after its refill, and for each later run of the order (SD-145)
+  const auto d = act.drops(o.step.channel);
+  dropsFrom_ = d && (refilled_ || progress_.run > 0) ? std::optional<std::uint64_t>(d->count) : std::nullopt;
   running_ = true;
   runStartedAt_ = c.now;
   runRequestedMs_ = ms;
@@ -338,6 +342,21 @@ bool Doser::dripped(Actuators& act) const {
   return d && d->count >= fillFrom_ + want;
 }
 
+// A run of a dose into the tank went to its end from a full line: what its drops say of the pump's
+// rate. A change beyond the share makes its calibration due (SD-145).
+void Doser::noteDrops(const Ctx& c, Actuators& act, Ms ms) {
+  const auto& o = *active_;
+  const int n = o.step.channel;
+  const auto d = act.drops(n);
+  const auto cal = c.cfg.channels.find(n);
+  if (!intoTank(o.purpose) || !dropsFrom_ || !d || d->count < *dropsFrom_ || cal == c.cfg.channels.end() || !isNum(o.step.flowMlPerMin)) return;
+  const double ml = o.step.flowMlPerMin * static_cast<double>(ms) / 60000.0;
+  const auto share = watchDrops(c.rt, n, cal->second.at, ml, d->count - *dropsFrom_, c.epoch);
+  if (!share) return;
+  c.log.add(c.epoch, "calibration", "info", say("ev.channel.drift", {{"channel", n}}),
+            say(*share < 0 ? "ev.channel.drift.fewer" : "ev.channel.drift.more", {{"pct", std::abs(*share) * 100}}), {{"channel", n}, {"share", *share}});
+}
+
 void Doser::finish(const Ctx& c, DoseProgress::State state) {
   progress_.state = state;
   logOrder(c);
@@ -357,6 +376,7 @@ void Doser::legEnded(const Ctx& c, Actuators& act, bool done, Ms ran, const std:
   // next run starts without a refill (the safe direction: less into the tank)
   c.rt.pulledBackMs.erase(o.step.channel);
   if (done) {
+    refilled_ = true;
     if (!launch(c, act)) finish(c, DoseProgress::State::Failed);
     return;
   }
@@ -407,6 +427,8 @@ bool Doser::start(const Ctx& c, Actuators& act, DoseOrder order, Msg& err) {
   running_ = false;
   pauseUntil_ = 0;
   filled_ = false;
+  refilled_ = false;
+  dropsFrom_.reset();
   const auto d = remote_ ? std::nullopt : act.drops(order.step.channel);
   fillFrom_ = d ? d->count : 0;
   if (!launch(c, act)) {
@@ -568,6 +590,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
     }
     if (st.state == RunStatus::State::Done) {
       book(c, st.actualMs);
+      noteDrops(c, act, st.actualMs);
       progress_.run++;
       if (progress_.run >= o.step.runs.size()) {
         if (untilDrops && !dripped(act)) {

@@ -375,6 +375,13 @@ json Simulation::control(const std::string& action, const json& b) {
       p.outletBlocked = doseph::jbool(b, "outletBlocked", false);
       p.siphon = doseph::jbool(b, "siphon", false);
     }
+  } else if (action == "pumpWear") {
+    // The tube wears (SD-145): the pump delivers this share of what it did, its calibration unchanged
+    const int n = static_cast<int>(num("channel", 0));
+    const double factor = num("factor", doseph::kNaN);
+    if (n < 1 || n > static_cast<int>(world_.pumps.size()) || !doseph::isNum(factor) || factor < 0.1 || factor > 2)
+      return {{"error", doseph::say("api.bad_input")}};
+    world_.pumps[static_cast<size_t>(n - 1)].trueFlow *= factor;
   } else if (action == "lineEmpty") {
     world_.emptyLine(static_cast<int>(num("channel", 0)));
   } else if (action == "channelHead") {

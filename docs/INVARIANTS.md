@@ -99,6 +99,8 @@ of its own.
 | A pump calibration first runs the line back into its canister, then pumps only water from the intake side along the normal path, as a dose with refill and pull-back and with flow proven; the check doses nothing meanwhile, and the water takes nothing from a canister | SD-143 | ✓ | `pumpcal.cpp`, `gateway.cpp`, `cycle.cpp`, `robot.cpp` · test_pumpcal.cpp |
 | Two measuring runs within 3 % give the rate, else a third, and of three the two that agree best; a cylinder's reading is corrected; a reading that rises, a run without drops or a rate more than 30 % from the head's nominal one is refused with its cause | SD-143 | ✓ | `pumpcal.cpp` · test_pumpcal.cpp |
 | A pump calibration ended early, or cut by a restart, with the intake perhaps out of its canister locks the channel until a person releases it | SD-143 | ✓ | `pumpcal.cpp`, `robot.cpp`, `gateway.cpp` · test_pumpcal.cpp |
+| A canister level read is compared with what the doses counted since the last reading, along one calibration of the same channel and from 250 ml counted; off by more than 5 % a rate is proposed, which only a person takes; beyond 30 % there is none, and the pump is to be calibrated; a refill to its size starts no comparison | SD-145 | ✓ | `ratecheck.cpp`, `robot.cpp` · test_ratecheck.cpp, robot.spec.ts |
+| A channel's drops per ml are learned from its first 10 ml of doses after a calibration, counted only for runs that began with a full line; a change beyond 20 % over the next 10 ml is said once and makes its calibration due | SD-145 | ✓ | `ratecheck.cpp`, `gateway.cpp`, `service.cpp` · test_ratecheck.cpp, robot.spec.ts |
 | A canister below 150 ml (pH− 20 ml) by the count is a problem; a dose the count cannot cover waits (SD-119) | RAT-071 | ✓ | `config.hpp`, `config.cpp`, `cycle.cpp`, `gateway.cpp`, `robot.cpp`, `watchdog.cpp` · test_cycle.cpp |
 
 ## Sensor truth
@@ -150,7 +152,7 @@ of its own.
 | One delivery per enabled channel and notification, in the device's language; the core sends nothing, the platform reports back; a channel that fails is logged once | SD-124 | ✓ | `push.cpp`, `robot.cpp`, `messages.cpp` · test_push.cpp, test_messages.cpp |
 | The simulator sends through the system's curl with the secret in a private config file that is deleted after the run | SD-124 | ✓ | `sim/push.cpp` · test_push.cpp |
 | Maintenance items by what the device has, each due its interval after it was done, calibrated or first had; items due within a week of the earliest join its date | SD-125 | ✓ | `service.hpp`, `service.cpp`, `config.cpp` · test_service.cpp |
-| A pump's calibration is due with the last calibration of the pH probe that falls due before it | SD-144 | ✓ | `service.cpp` · test_service.cpp |
+| A pump's calibration is due with the last calibration of the pH probe that falls due before it; at once when its drops per ml changed (SD-145) | SD-144 | ✓ | `service.cpp` · test_service.cpp, test_ratecheck.cpp |
 | A maintenance item on its date is a note in the morning report and the app until it is done; the watchdog stays as it is | SD-125 | ✓ | `robot.cpp` · test_service.cpp |
 
 ## Plants and phases (SD-128)

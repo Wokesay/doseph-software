@@ -170,7 +170,14 @@ export type RobotState = {
   dosing: { order: string; purpose: string; canister: string; name: string; ml: number | null; mlDone: number; run: number; runs: number } | null;
   // `head`: the pump head fitted, null without one (SD-108)
   // `day`: its run time into the tank in the last 24 h and its cap (SD-113)
-  channels: { channel: number; canister: string | null; head: string | null; flowMlPerMin: number | null; at: number | null; drops: { count: number; lastAgoS: number | null } | null; day: { usedS: number; capS: number } }[];
+  channels: {
+    channel: number; canister: string | null; head: string | null; flowMlPerMin: number | null; at: number | null;
+    drops: { count: number; lastAgoS: number | null } | null; day: { usedS: number; capS: number };
+    // A rate the consumption check proposes, and a change of its drops per ml since its
+    // calibration (SD-145)
+    rateProposal: RateProposal | null;
+    drift: { share: number; at: number } | null;
+  }[];
   stock: Record<string, Stock>;
   // What a pair still misses after a round cut short; the next nutrient round doses it first (SD-114)
   catchUp: { recipe: string; parts: { canister: string; name: string; ml: number }[] } | null;
@@ -239,6 +246,10 @@ export type Config = {
   channels: Record<string, { flowMlPerMin: number | null; at: number; head: string }>;
   probes: { ph: { points?: [number, number][]; at?: number } | null; ec: { factor?: number; reference?: number; tempC?: number; at?: number } | null };
 };
+
+// What a level read and entered says of its channel's rate (SD-145)
+export type RateProposal = { canister: string; countedMl: number; usedMl: number; from: number; to: number; at: number };
+export type UseCheck = { countedMl: number; usedMl: number; share: number; proposal: RateProposal | null; calibrate: boolean } | null;
 
 export type Info = {
   product: string; version: string; api: number; schemaVersion: number;

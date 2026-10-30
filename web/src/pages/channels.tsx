@@ -4,7 +4,7 @@
 // path page, in the measuring chamber.
 import { useEffect, useState } from "preact/hooks";
 import { Beaker, Pencil, Plus, RefreshCw, Ruler, Syringe, Trash2 } from "lucide-preact";
-import { ApiError, del, get, holds, post, type Canister, type Coupling, type PumpCalibration, type Stock } from "../api";
+import { ApiError, del, get, holds, post, type Canister, type Coupling, type PumpCalibration, type RateProposal, type Stock, type UseCheck } from "../api";
 import { ago, dateTime, num } from "../format";
 import { msg, t } from "../i18n";
 import { canisters, config, errorText, info, refreshConfig, refreshState, state, toast } from "../store";
@@ -138,9 +138,15 @@ function LevelDialog(p: { canister: Canister; onClose: () => void }) {
             variant="primary"
             disabled={ml === null || ml < 0}
             onClick={async () => {
-              await post(`/canisters/${encodeURIComponent(p.canister.id)}/stock`, { ml });
+              const r = await post<{ check: UseCheck }>(`/canisters/${encodeURIComponent(p.canister.id)}/stock`, { ml });
               await refreshState();
-              toast(t("channels.levelSaved"));
+              // What the reading says of its channel's rate (SD-145)
+              const c = r.check;
+              const amounts = c && { used: num(c.usedMl, 0), counted: num(c.countedMl, 0), channel: p.canister.channel };
+              if (!c) toast(t("channels.levelSaved"));
+              else if (c.calibrate) toast(t("channels.rateFarOff", amounts!), "error");
+              else if (c.proposal) toast(t("channels.rateProposed", amounts!), "info");
+              else toast(t("channels.levelChecked", amounts!));
               p.onClose();
             }}
           >
@@ -436,6 +442,31 @@ function ChannelJobDialog(p: { channel: number; onClose: () => void }) {
   );
 }
 
+/** The rate the consumption check proposes for a channel (SD-145): the person takes or keeps it. */
+function RateProposalRow(p: { channel: number; proposal: RateProposal }) {
+  const answer = async (take: boolean) => {
+    await post(`/channels/${p.channel}/rate-proposal`, { take });
+    await Promise.all([refreshState(), refreshConfig()]);
+    if (take) toast(t("channels.rateTaken"));
+  };
+  const r = p.proposal;
+  return (
+    <div class="stack-sm" style="margin-top:6px" data-testid={`proposal-${p.channel}`}>
+      <Banner tone="info">
+        {t("channels.proposal", { used: num(r.usedMl, 0), counted: num(r.countedMl, 0), to: num(r.to, 2), from: num(r.from, 2) })}
+      </Banner>
+      <div class="row" style="gap:8px">
+        <Button size="sm" variant="primary" onClick={() => answer(true)} data-testid={`take-rate-${p.channel}`}>
+          {t("channels.takeRate", { to: num(r.to, 2) })}
+        </Button>
+        <Button size="sm" onClick={() => answer(false)} data-testid={`keep-rate-${p.channel}`}>
+          {t("channels.keepRate")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ChannelsCard() {
   const st = state.value!;
   const [dialog, setDialog] = useState<{ channel: number; type: "calibration" | "prime" } | null>(null);
@@ -480,6 +511,12 @@ function ChannelsCard() {
                   </>
                 )}
               </div>
+              {p.drift && (
+                <div class="small warn-text" data-testid={`drift-${p.channel}`}>
+                  {t(p.drift.share < 0 ? "channels.drift.fewer" : "channels.drift.more", { pct: num(Math.abs(p.drift.share) * 100, 0) })}
+                </div>
+              )}
+              {p.rateProposal && <RateProposalRow channel={p.channel} proposal={p.rateProposal} />}
             </div>
             <div class="row-actions">
               <button class="btn sm" onClick={() => setDialog({ channel: p.channel, type: "prime" })} disabled={st.stopped || !p.head} data-testid={`prime-${p.channel}`}>

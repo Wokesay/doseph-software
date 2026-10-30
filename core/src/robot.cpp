@@ -13,6 +13,7 @@
 #include "doseph/localtime.hpp"
 #include "doseph/messages.hpp"
 #include "doseph/plants.hpp"
+#include "doseph/ratecheck.hpp"
 #include "doseph/sha256.hpp"
 
 namespace doseph {
@@ -593,6 +594,7 @@ void Robot::tick() {
       truth_.expectChange(ch, std::min(now + 10 * kSecond, maintenanceUntilMs_));
   watchRelease(epoch);
   checkHeads(epoch);
+  if (pruneRateChecks(cfg_, rt_)) saveState(true);
   Ctx c = ctx();
   // The release is back: the check starts anew, nothing resumes on its own (R6)
   if (c.hold.empty() && !lastHold_.empty()) restartCycle();
@@ -991,6 +993,13 @@ json Robot::state() {
                      {"day", {{"usedS", rt_.dayRunMs(n, c.epoch - 24 * 3600) / 1000.0}, {"capS", act_.dailyCapMin(n) * 60}}},
                      {"flowMlPerMin", it == cfg_.channels.end() ? json(nullptr) : numOrNull(it->second.flowMlPerMin)},
                      {"at", it == cfg_.channels.end() ? json(nullptr) : json(it->second.at)},
+                     // A rate the consumption check proposes, and a change of its drops per ml since
+                     // its calibration (SD-145): null without
+                     {"rateProposal", rt_.rateProposal.value(std::to_string(n), json(nullptr))},
+                     {"drift", [&] {
+                        const auto d = rt_.dropRate.find(std::to_string(n));
+                        return d != rt_.dropRate.end() && d->is_object() && d->contains("drift") ? (*d)["drift"] : json(nullptr);
+                      }()},
                      // What its drop sensor saw (SD-111): null without one
                      {"drops", [&] {
                         const auto d = hw_.drops(n);
@@ -1710,6 +1719,8 @@ Result Robot::putCanister(const json& j) {
   // an earlier canister of the same ID. An existing one keeps its count (RAT-015).
   if (stockGiven) rt_.stockMl[id] = j["stockMl"].get<double>();
   else if (created) rt_.stockMl.erase(id);
+  // A level entered with the canister starts the consumption check (SD-145)
+  if (stockGiven) startUse(cfg_, rt_, *cfg_.canister(id), j["stockMl"].get<double>(), clock_.epoch());
   saveState(true);
   return r;
 }
@@ -1728,20 +1739,33 @@ Result Robot::setStock(const std::string& id, const json& j) {
   const CanisterCfg* b = cfg_.canister(id);
   if (!b) return Result::fail(404, say("api.not_found"));
   double ml = kNaN;
-  if (jbool(j, "full", false)) {
+  const bool full = jbool(j, "full", false);
+  if (full) {
     if (!isNum(b->capacityMl)) return Result::fail(422, say("canister.no_capacity", {{"name", b->name}}));
     ml = b->capacityMl;
   } else if (j.contains("ml") && j["ml"].is_number()) {
     ml = j["ml"].get<double>();
   }
   if (!isNum(ml) || ml < 0) return Result::fail(422, say("canister.stock"));
+  // A level read is compared with what the doses counted since the last one; a refill to its size
+  // was not read, so the next reading only starts a comparison (SD-145)
+  json check = nullptr;
+  if (full) rt_.stockRead.erase(id);
+  else check = checkUse(cfg_, rt_, *b, ml, clock_.epoch());
   rt_.stockMl[id] = ml;
   log_.add(clock_.epoch(), "config", "info", say("ev.stock.set", {{"name", b->name}}), say("ev.stock.set.text", {{"name", b->name}, {"ml", ml}}),
            {{"canister", id}, {"stockMl", ml}});
+  if (check.is_object() && (check["calibrate"] == true || check["proposal"].is_object())) {
+    const json& p = check["proposal"];
+    const json fill = {{"channel", b->channel}, {"used", check["usedMl"]}, {"counted", check["countedMl"]}};
+    log_.add(clock_.epoch(), "calibration", check["calibrate"] == true ? "warn" : "info", say("ev.rate.checked", fill),
+             check["calibrate"] == true ? say("ev.rate.far_off.text") : say("ev.rate.proposed.text", {{"from", p["from"]}, {"to", p["to"]}}),
+             {{"canister", id}, {"channel", b->channel}, {"share", check["share"]}});
+  }
   saveState(true);
   // A check waiting for a refill tries again now, not at its next retry
   if (cycle_.phase() == Phase::Wait) restartCycle();
-  return Result::ok({{"stockMl", ml}});
+  return Result::ok({{"stockMl", ml}, {"check", check}});
 }
 
 Result Robot::deleteCanister(const std::string& id) {
@@ -2087,6 +2111,34 @@ void Robot::pumpCalDone(Ctx& c, const DoseProgress& p) {
   // The line filled until its first drop: what fell after it is in the tank, mixed in first (SD-111)
   if (pumpCal_.step() == "done" && p.msDone > 0) mixFirstNow();
   saveState(true);
+}
+
+// The rate the consumption check proposed, taken or dismissed by the person (SD-145): taken, it is the
+// channel's calibration from now on, with the head it had
+Result Robot::answerRateProposal(int channel, const json& body) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (!body.contains("take") || !body["take"].is_boolean()) return Result::fail(422, say("rate.answer"));
+  pruneRateChecks(cfg_, rt_);
+  const std::string ch = std::to_string(channel);
+  if (!rt_.rateProposal.contains(ch)) return Result::fail(404, say("rate.none"));
+  const json p = rt_.rateProposal[ch];
+  if (body["take"].get<bool>()) {
+    const double to = jnum(p, "to");
+    Config next = cfg_;
+    ChannelCal& cal = next.channels[channel];  // there while its proposal stands
+    cal.flowMlPerMin = to;
+    cal.at = clock_.epoch();
+    if (saveConfig(next, std::nullopt).status != 200) return Result::fail(500, say("store.failed"));
+    log_.add(clock_.epoch(), "calibration", "info", say("ev.channel.calibrated", {{"channel", channel}}), say("rate.taken", {{"from", p["from"]}, {"to", to}}),
+             {{"channel", channel}, {"flowMlPerMin", to}});
+    // The next comparison starts from the level counted now, at the new rate
+    const CanisterCfg* b = cfg_.canister(jstr(p, "canister"));
+    const auto stock = rt_.stockMl.find(jstr(p, "canister"));
+    if (b) startUse(cfg_, rt_, *b, stock == rt_.stockMl.end() ? kNaN : stock->second, clock_.epoch());
+  }
+  rt_.rateProposal.erase(ch);
+  saveState(true);
+  return Result::ok();
 }
 
 // The rate a pump calibration measured: saved with the head it measured (SD-108, SD-143)

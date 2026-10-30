@@ -1809,3 +1809,39 @@ principle.
   device cannot see it.
 - **Not here.** The consumption check and the drift of drops per ml
   follow in their own change.
+
+## SD-145: Checks of a pump's rate in use: consumption and drops per ml
+
+2026-10-30. The rest of the triggers in item 1 of the product input of 30
+Oct in #10, chosen by the owner. A pump's tube wears, and it delivers less
+than its calibration says. Two checks say when the rate no longer fits.
+Neither changes it on its own. These are details decided here by the
+minimal principle.
+
+- **The consumption check.** A canister level the person reads and enters
+  starts it. The next reading compares what went with what the doses
+  counted in between:
+  - It compares only along one calibration of the same channel, and only
+    from 250 ml counted. A reading's error then stays well below the
+    share.
+  - Off by more than 5 %, the robot proposes the rate that fits what
+    went. The person takes or dismisses it under Channels. A rate taken
+    is the channel's calibration from then on, with its head.
+  - Off by more than 30 % (the calibration's window, SD-143), there is no
+    proposal. A leak, a misread level or a worn pump is more likely, so
+    the pump is to be calibrated.
+  - A refill to the canister's size starts no comparison, as its level
+    was not read.
+- **The drops per ml.** Each channel learns them from its first 10 ml of
+  doses after a calibration. It counts only runs that began with a full
+  line: after the line's refill, or as a later run of the order
+  (SD-111). Over each further 10 ml they are compared with what was
+  learned. A change beyond 20 % is said once, as an event naming the
+  direction. The pump's calibration then falls due at once in the
+  maintenance plan (SD-125). A new calibration learns afresh.
+  - Where a device does not pull its line back, the drops per ml are not
+    watched.
+- **Not changed.** No dose is held for either check. The dose's amount
+  comes from the calibrated rate as before (SD-108, SD-143).
+- The 250 ml, the 5 %, the 10 ml and the 20 % are assumptions until
+  measured with users.

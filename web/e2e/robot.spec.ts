@@ -1012,3 +1012,37 @@ test("reset: the access is reset at the device and a new password set, the setti
   const info = await request.get("/api/v1/info");
   expect((await info.json()).hasPassword).toBe(false);
 });
+
+test("a level read after the doses proposes the rate that fits, and a worn pump's drops per ml say to calibrate it (SD-145)", async ({ page, request }) => {
+  test.setTimeout(180_000);
+  await scenario(request, "demo");
+  await login(page);
+  // A level read: the start of the comparison
+  await page.goto("/#/channels");
+  const readLevel = async (ml: number) => {
+    await page.getByRole("button", { name: "Enter level: Part A" }).click();
+    await page.locator("input[name=level]").fill(String(ml));
+    await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  };
+  await readLevel(1000);
+  await expect(page.getByText("Level saved")).toBeVisible();
+  // The first round learns each channel's drops per ml; then channel 3's tube wears
+  await sim(page, "fastForward", { hours: 2 });
+  await sim(page, "pumpWear", { channel: 3, factor: 0.65 });
+  for (let i = 0; i < 3; i++) {
+    await sim(page, "topup", { litres: 60 });
+    await sim(page, "fastForward", { hours: 6 });
+  }
+  // 10 % more went than the doses counted
+  const counted = await page.evaluate(async () => 1000 - (await (await fetch("/api/v1/state")).json()).stock.part_a.ml);
+  expect(counted).toBeGreaterThan(250);
+  await readLevel(Math.round(1000 - counted * 1.1));
+  await expect(page.getByText("a proposal waits under Dosing channels")).toBeVisible();
+  const proposal = page.getByTestId("proposal-2");
+  await expect(proposal).toContainText(`the count said ${Math.round(counted)} ml`);
+  await proposal.getByTestId("take-rate-2").click();
+  await expect(page.getByText("Rate taken")).toBeVisible();
+  await expect(page.getByTestId("proposal-2")).toHaveCount(0);
+  // Channel 3 gives fewer drops per ml since its tube wore
+  await expect(page.getByTestId("drift-3")).toContainText("fewer drops per ml than after its calibration");
+});

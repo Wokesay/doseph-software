@@ -7,6 +7,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Checks of a pump's rate in use (SD-145). A canister level you read and
+  enter is compared with what the doses counted since the last reading.
+  Where the two differ by more than 5 %, a rate that fits is proposed
+  under Channels to take or keep. Each channel also learns its drops per
+  ml after a calibration. A change beyond 20 % says to calibrate the pump
+  and makes its calibration due. The simulator can wear a pump's tube.
+
 - A pump head of the same size fitted again asks whether it is new; the
   channel doses nothing until the answer under Status. A new head needs a
   calibration, the same one keeps its rate. A pump's calibration is now

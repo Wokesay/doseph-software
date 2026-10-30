@@ -280,6 +280,9 @@ export function SimPanel() {
                 <Button size="sm" variant="ghost" onClick={() => act("channelFault", { ...faults(p), siphon: !p.siphon })}>
                   {p.siphon ? t("sim.siphonOff") : t("sim.siphonOn")}
                 </Button>
+                <Button size="sm" variant="ghost" onClick={() => act("pumpWear", { channel: p.channel, factor: 0.8 })} title={t("sim.wearHint")}>
+                  {t("sim.wear")}
+                </Button>
               </div>
             ))}
           </div>
