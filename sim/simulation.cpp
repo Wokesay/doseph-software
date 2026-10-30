@@ -114,6 +114,26 @@ bool FileStorage::write(const std::string& name, const std::string& data) {
   return true;
 }
 
+bool FileStorage::remove(const std::string& name) {
+  std::lock_guard<std::mutex> l(m_);
+  std::error_code ec;
+  fs::remove(fs::path(dir_) / name, ec);
+  return !ec;
+}
+
+bool FileStorage::clear(const std::string& keep) {
+  std::lock_guard<std::mutex> l(m_);
+  std::error_code ec;
+  bool ok = true;
+  for (const auto& e : fs::directory_iterator(dir_, ec)) {
+    if (e.path().filename() == "simulator.lock" || e.path().filename() == keep || !e.is_regular_file()) continue;
+    std::error_code rm;
+    fs::remove(e.path(), rm);
+    ok = ok && !rm;
+  }
+  return ok && !ec;
+}
+
 bool FileStorage::append(const std::string& name, const std::string& data) {
   std::lock_guard<std::mutex> l(m_);
   std::error_code ec;
@@ -150,6 +170,7 @@ Simulation::~Simulation() {
 void Simulation::createRobot() {
   robot_ = std::make_unique<doseph::Robot>(*hw_, *store_, *clock_, randomBytes);
   robot_->setPlatform({{"kind", "simulator"}, {"simulated", true}, {"scenario", opts_.scenario}});
+  robot_->showSetupCodes(opts_.showSetupCodes);
   api_ = std::make_unique<doseph::Api>(*robot_, *clock_);
 }
 
@@ -182,7 +203,8 @@ void Simulation::configureDemo() {
   auto& r = *robot_;
   if (opts_.password.empty()) opts_.password = "doseph-demo";
   if (!r.auth().hasPassword()) {
-    r.auth().setInitialPassword(opts_.password);
+    // The demo sets its password as the owner would, with the code the start armed for it
+    r.auth().setInitialPassword(opts_.password, r.takeCodeToShow(), clock_->nowMs());
     r.saveAuth();
     r.markPasswordSet();
   }
@@ -244,6 +266,12 @@ void Simulation::step(Ms dt, Ms tick) {
     const Ms d = std::min(dt, tick);
     clock_->advance(d);
     robot_->tick();
+    // A factory reset: the device restarts as new (SD-139)
+    if (robot_->restartWanted()) {
+      reboot();
+      dt -= d;
+      continue;
+    }
     // The network devices' twins answer at once, as a device in the home network would (SD-132)
     const Ms now = clock_->nowMs();
     for (const auto& r : robot_->takeDeviceRequests()) {
@@ -347,6 +375,12 @@ json Simulation::control(const std::string& action, const json& b) {
   } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable" ||
              action == "netFloat" || action == "climateAir") {
     if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
+  } else if (action == "atDevice") {
+    // A reset asked for at the device (SD-139): taken at the next tick
+    const std::string r = doseph::jstr(b, "reset");
+    if (r != "access" && r != "factory") return {{"error", doseph::say("api.bad_input")}};
+    hw_->askReset(r == "access" ? doseph::DeviceReset::Access : doseph::DeviceReset::Factory);
+    step(100);
   } else if (action == "reboot") reboot(static_cast<Ms>(num("outageS", 0) * 1000));
   else if (action == "fastForward") fastForward(std::clamp(num("hours", 1), 0.0, 48.0));
   else if (action == "scenario") loadScenario(doseph::jstr(b, "name", "demo"));

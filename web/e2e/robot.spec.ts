@@ -947,3 +947,31 @@ test("plants: a new plant recipe starts from a proposal and says an EC target be
   const after = await call("GET", "plants");
   expect(after.body.plants.find((x: { id: string }) => x.id === plant.body.id).yieldG).toBe(250);
 });
+
+test("reset: the access is reset at the device and a new password set, the settings stay; a factory reset needs the password and starts the device as new (SD-139)", async ({ page, request }) => {
+  await login(page);
+  await page.goto("/#/settings");
+  await expect(page.getByTestId("reset-card")).toContainText("The access is reset at the device itself, never over the network.");
+  // At the device: the access only, without a password
+  const r = await request.post("/api/v1/sim/atDevice", { data: { reset: "access" } });
+  expect(r.ok()).toBeTruthy();
+  await page.goto("/");
+  await page.locator("input[name=password]").fill("another-long-password");
+  await page.locator("input[name=password2]").fill("another-long-password");
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByTestId("cycle-line")).toBeVisible();
+  await page.goto("/#/plants");
+  await expect(page.getByTestId("plants-plan")).toContainText("Two-part nutrient");  // the settings stayed
+  // The factory reset: the password first, then everything goes
+  page.on("dialog", (d) => d.accept());
+  await page.goto("/#/settings");
+  await page.locator("input[name=factory-password]").fill("wrong-password");
+  await page.locator("input[name=factory-sure]").check();
+  await page.getByTestId("factory-reset").click();
+  await expect(page.getByText("Wrong password").first()).toBeVisible();
+  await page.locator("input[name=factory-password]").fill("another-long-password");
+  await page.getByTestId("factory-reset").click();
+  await expect(page.getByRole("button", { name: "Set password" })).toBeVisible({ timeout: 15000 });
+  const info = await request.get("/api/v1/info");
+  expect((await info.json()).hasPassword).toBe(false);
+});

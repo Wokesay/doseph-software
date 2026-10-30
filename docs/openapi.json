@@ -4762,6 +4762,65 @@
           }
         }
       }
+    },
+    "/system/factory-reset": {
+      "post": {
+        "operationId": "factoryReset",
+        "summary": "Factory reset by the owner, confirmed with the password: everything off, every file removed, the device restarts as new (SD-139). The access reset has no route: it is asked for at the device.",
+        "tags": [
+          "auth"
+        ],
+        "x-roles": [
+          "owner"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done; the device restarts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "restarting": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

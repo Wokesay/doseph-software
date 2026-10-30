@@ -3,7 +3,7 @@
 // and what was notified, the password, access tokens, backup and restore,
 // reporting a problem, signing out, the version.
 import { useEffect, useState } from "preact/hooks";
-import { Bell, Bug, Cable, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, Send, Ticket, Upload } from "lucide-preact";
+import { Bell, Bug, Cable, Copy, DatabaseBackup, House, Link2, Download, ExternalLink, Info as InfoIcon, KeyRound, Lock, LogOut, Monitor, RotateCcw, Send, Ticket, Upload } from "lucide-preact";
 import { ApiError, type CirculationMode, DEVICE_ROLES, del, get, post, put, REPORTABLE_LOCKS, TOKEN_ROLES, type Devices, type RoleBinding, type RoleSource, type AccessTokens, type Coupling, type MqttSettings, type Msg, type NewToken, type Notice, type PushSettings, type TokenRole } from "../api";
 import { dateTime, timeZone } from "../format";
 import { lang, msg, setLang, t, type Lang, type TextKey } from "../i18n";
@@ -339,6 +339,49 @@ function PasswordCard() {
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+// The factory reset (SD-139): the owner's, with the password; everything goes and the device starts
+// as new. The access reset is asked for at the device only, so this card only says how.
+function ResetCard() {
+  const [pw, setPw] = useState("");
+  const [sure, setSure] = useState(false);
+  const reset = async () => {
+    if (!confirm(t("settings.factoryAsk"))) return;
+    try {
+      await post("/system/factory-reset", { password: pw });
+      toast(t("settings.factoryDone"), "info");
+      logoutLocal();
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <Card title={t("settings.reset")} icon={<RotateCcw size={18} />}>
+      <div class="stack" data-testid="reset-card">
+        <div class="stack-sm">
+          <div class="section-title">{t("settings.accessReset")}</div>
+          <p class="small">{t("settings.accessResetText")}</p>
+        </div>
+        <div class="stack-sm">
+          <div class="section-title">{t("settings.factoryReset")}</div>
+          <p class="small">{t("settings.factoryResetText")}</p>
+          <Field label={t("settings.factoryPassword")}>
+            <input class="input" type="password" autoComplete="current-password" value={pw} onInput={(e) => setPw((e.target as HTMLInputElement).value)} name="factory-password" />
+          </Field>
+          <label class="check">
+            <input type="checkbox" checked={sure} onChange={(e) => setSure((e.target as HTMLInputElement).checked)} name="factory-sure" /> {t("settings.factorySure")}
+          </label>
+          <div>
+            <Button variant="danger" onClick={reset} disabled={!pw || !sure} data-testid="factory-reset">
+              {t("settings.factoryButton")}
+            </Button>
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1195,6 +1238,7 @@ export function SettingsPage() {
       <TokensCard />
       <LocksCard key={`l${rev}`} />
       <BackupCard />
+      <ResetCard />
       <ReportCard />
       <Card title={t("settings.about")}>
         <div class="stack">

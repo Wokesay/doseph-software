@@ -246,6 +246,14 @@ class NetOutputs {
   void tick(const Config& cfg, NetDevices& dev, bool hold, Ms now) { tick(cfg, dev, hold, hold, now); }
   void answer(const Config& cfg, NetDevices& dev, const NetAnswer& a, Ms now);
   void release(const Config& cfg, NetDevices& dev, const std::string& role, Ms now);
+  // Every bound output, light and a room's fans too: an off until each device confirms it, a minute at
+  // most (a factory reset, SD-139, R6)
+  void releaseAll(const Config& cfg, NetDevices& dev, Ms now);
+  // An off of a released output still waits for its device
+  bool releasing() const { return !releasing_.empty(); }
+  // Only the released outputs' offs, again until answered: while a factory reset waits for them,
+  // nothing is bound anew (SD-139)
+  void tickReleases(NetDevices& dev, Ms now);
   // Releases whose off no device confirmed within a minute, by the name of the device
   std::vector<std::string> takeFailedReleases();
   // Why an output does not switch, where it does not

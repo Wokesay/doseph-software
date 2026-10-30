@@ -714,19 +714,7 @@ void NetOutputs::tick(const Config& cfg, NetDevices& dev, bool stopped, bool hol
   hold_ = hold;
   const bool force = forceOff_;
   forceOff_ = false;
-  // Outputs let go: off again until a device answers, for a minute at most
-  for (auto it = releasing_.begin(); it != releasing_.end();) {
-    if (now > it->until) {
-      failedReleases_.push_back(it->device.name);
-      it = releasing_.erase(it);
-      continue;
-    }
-    if (it->pending == 0 && now - it->lastSent >= kNetPollMs) {
-      it->pending = dev.releaseRpc(it->device, it->user, it->password, it->ownId, it->comp + ".Set", {{"id", it->channel}, {"on", false}}, now);
-      it->lastSent = now;
-    }
-    ++it;
-  }
+  tickReleases(dev, now);
   // Outputs of circuits no longer in the configuration are dropped with their wants
   for (auto it = outs_.begin(); it != outs_.end();) it = roleDef(cfg, it->first) ? std::next(it) : outs_.erase(it);
   for (const auto& def : roleDefs(cfg)) {
@@ -937,6 +925,26 @@ void NetOutputs::release(const Config& cfg, NetDevices& dev, const std::string& 
   r.until = now + kMinute;
   r.pending = dev.releaseRpc(r.device, r.user, r.password, r.ownId, r.comp + ".Set", {{"id", r.channel}, {"on", false}}, now);
   releasing_.push_back(std::move(r));
+}
+
+void NetOutputs::tickReleases(NetDevices& dev, Ms now) {
+  // Outputs let go: off again until a device answers, for a minute at most
+  for (auto it = releasing_.begin(); it != releasing_.end();) {
+    if (now > it->until) {
+      failedReleases_.push_back(it->device.name);
+      it = releasing_.erase(it);
+      continue;
+    }
+    if (it->pending == 0 && now - it->lastSent >= kNetPollMs) {
+      it->pending = dev.releaseRpc(it->device, it->user, it->password, it->ownId, it->comp + ".Set", {{"id", it->channel}, {"on", false}}, now);
+      it->lastSent = now;
+    }
+    ++it;
+  }
+}
+
+void NetOutputs::releaseAll(const Config& cfg, NetDevices& dev, Ms now) {
+  for (const auto& [role, b] : cfg.roles) release(cfg, dev, role, now);
 }
 
 std::vector<std::string> NetOutputs::takeFailedReleases() {

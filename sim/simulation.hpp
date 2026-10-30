@@ -32,6 +32,9 @@ class FileStorage : public doseph::IStorage {
   std::optional<std::string> read(const std::string& name) override;
   bool write(const std::string& name, const std::string& data) override;
   bool append(const std::string& name, const std::string& data) override;
+  bool remove(const std::string& name) override;
+  // Every file in the folder but the simulator's lock and `keep`
+  bool clear(const std::string& keep) override;
 
  private:
   std::string dir_;
@@ -44,6 +47,7 @@ struct Options {
   std::string pumpIn;             // "tank" | "device" for the profile's feed pump; empty: the profile's
   std::string dataDir;            // empty: in memory only
   std::string password;           // the demo's password
+  bool showSetupCodes = false;    // the console shows setup codes (SD-129, SD-139)
   double prefillHours = 24;       // history the demo computes ahead
   doseph::Epoch startEpoch = 0;   // 0: now minus the prefill
 };

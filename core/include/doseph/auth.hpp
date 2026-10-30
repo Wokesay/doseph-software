@@ -75,6 +75,12 @@ class Auth {
   void seen(const std::string& client, Ms now);
   void logout(const std::string& token) { sessions_.erase(token); }
   void logoutAll() { sessions_.clear(); }
+  // The password again, for a step that needs it (a factory reset, SD-139): counts as a sign-in
+  // attempt of `client`, with its lockout, and opens no session
+  bool confirm(const std::string& pw, Ms now, Msg& err, const std::string& client);
+  // An access reset (SD-139): no password, no session, no access token, no count; the next
+  // password is a first one again
+  void resetAccess();
 
   json toJson() const;  // hash and salt, and the tokens' hashes; never sessions
   void load(const json& j);

@@ -93,7 +93,9 @@ std::optional<Role> Api::access(const ApiRequest& req) {
 bool permitted(Role role, const std::string& method, const std::vector<std::string>& p) {
   if (role == Role::Owner) return true;
   const std::string first = p.empty() ? "" : p[0];
-  if (role == Role::App) return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password");
+  // A factory reset is the owner's alone, with the password (SD-139)
+  if (role == Role::App)
+    return first != "tokens" && !(first == "auth" && p.size() > 1 && p[1] == "password") && !(first == "system" && p.size() > 1 && p[1] == "factory-reset");
   if (method == "GET") return first != "tokens";
   // The coupled device's calls (SD-131); the robot checks that the token is the one made for it
   if (role == Role::Peer) return method == "POST" && p.size() == 2 && ((first == "coupling" && p[1] == "leave") || first == "peer");
@@ -240,6 +242,9 @@ ApiResponse Api::mqttCommand(const std::string& topic, const std::string& payloa
 }
 
 ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
+  // While a factory reset is under way and until the device has restarted nothing more is taken,
+  // over MQTT neither (SD-139)
+  if (robot_.halted()) return fail(503, say("system.restarting"));
   auto p = split(req.path);
   if (p.size() < 2 || p[0] != "api" || p[1] != "v1") return fail(404, say("api.not_found"));
   p.erase(p.begin(), p.begin() + 2);
@@ -341,6 +346,7 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
     robot_.logEvent("auth", "notice", say("ev.auth.password_changed"), say("ev.auth.password_changed.text"));
     return jsonResp(200, {{"ok", true}});
   }
+  if (is("POST", {"system", "factory-reset"})) return fromResult(robot_.factoryResetByOwner(body, req.client));
   if (is("GET", {"tokens"})) return jsonResp(200, robot_.tokens());
   if (is("POST", {"tokens"})) return fromResult(robot_.createToken(body));
   if (is("DELETE", {"tokens", "*"})) return fromResult(robot_.revokeToken(p[1]));

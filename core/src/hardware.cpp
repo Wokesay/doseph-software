@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "doseph/hardware.hpp"
 
+#include <algorithm>
+
 namespace doseph {
 
 const char* signalName(Signal c) {
@@ -35,6 +37,16 @@ bool MemoryStorage::write(const std::string& name, const std::string& data) {
       return true;
     }
   files_.emplace_back(name, data);
+  return true;
+}
+
+bool MemoryStorage::remove(const std::string& name) {
+  files_.erase(std::remove_if(files_.begin(), files_.end(), [&](const auto& f) { return f.first == name; }), files_.end());
+  return true;
+}
+
+bool MemoryStorage::clear(const std::string& keep) {
+  files_.erase(std::remove_if(files_.begin(), files_.end(), [&](const auto& f) { return f.first != keep; }), files_.end());
   return true;
 }
 

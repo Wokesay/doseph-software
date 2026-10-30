@@ -55,6 +55,13 @@ class SimHardware : public doseph::IHardware {
   std::optional<bool> feedPump() const override { return w_.output; }
   std::optional<double> feedPumpA() const override { return w_.pumpA(); }
   void allowReturnPump(bool allowed) override { w_.returnLocked = !allowed; }
+  // A reset asked for at the twin, as at the device (SD-139): the panel or the console
+  void askReset(doseph::DeviceReset r) { reset_ = r; }
+  doseph::DeviceReset takeReset() override {
+    const doseph::DeviceReset r = reset_;
+    reset_ = doseph::DeviceReset::None;
+    return r;
+  }
   // A head fitted, removed or changed: the device reports it, the twin pumps with it (SD-108)
   void setHead(int channel, const std::string& head) {
     profile_.channels[static_cast<size_t>(channel - 1)].head = head;
@@ -63,6 +70,7 @@ class SimHardware : public doseph::IHardware {
 
  private:
   World& w_;
+  doseph::DeviceReset reset_ = doseph::DeviceReset::None;
   doseph::Profile profile_;
 };
 

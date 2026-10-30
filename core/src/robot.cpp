@@ -27,6 +27,8 @@ constexpr const char* kMqttFile = "mqtt.json";  // MQTT with its password, apart
 constexpr const char* kDeviceSecretsFile = "devices.json";  // network devices' passwords, never in a backup (SD-132)
 constexpr const char* kPushFile = "push.json";  // the push channels with their secrets, apart from the configuration (SD-124)
 constexpr const char* kEventsFile = "events.json";
+// Left by a factory reset for the next start, which logs it first and removes it (SD-139)
+constexpr const char* kResetFile = "reset.json";
 constexpr const char* kEventsLog = "events.log";
 
 // The local day, YYYY-MM-DD
@@ -57,7 +59,7 @@ Result Result::fail(int st, const Msg& m, json extra) {
 }
 
 Robot::Robot(IHardware& hw, IStorage& storage, const IClock& clock, RandomFn rng)
-    : hw_(hw), store_(storage), clock_(clock), rng_(std::move(rng)), auth_(rng_), act_(hw), journal_(storage) {}
+    : hw_(hw), store_(storage), clock_(clock), rng_(std::move(rng)), auth_(rng_), act_(hw), journal_(store_) {}
 
 json Robot::templates() { return json::parse(embedded::kTemplatesJson); }
 
@@ -110,7 +112,105 @@ std::string Robot::armSetupCode(Ms validFor) {
   return auth_.armSetupCode(clock_.nowMs(), validFor);
 }
 
+std::string Robot::takeCodeToShow() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (auth_.hasPassword()) codeToShow_.clear();  // a password was set meanwhile: nothing to show
+  std::string c;
+  c.swap(codeToShow_);
+  return c;
+}
+
+void Robot::armShownCode() {
+  if (!showCodes_ || auth_.hasPassword() || credentialsLost() || authKept_ || auth_.setupCodeRequired()) return;
+  codeToShow_ = auth_.armSetupCode(clock_.nowMs(), 0);
+}
+
+bool Robot::halted() const {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  return restartWanted_ || resetting_.has_value();
+}
+
+void Robot::resetAccess() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (halted()) return;
+  // The coupled device loses its way in and learns it as when the coupling ends (SD-131); a code
+  // armed for pairing and a pairing under way go too, so nobody pairs in after the reset
+  authKept_ = false;
+  if (peer_) unpair();
+  pairing_.reset();
+  peerPending_.clear();
+  pairStatus_ = nullptr;
+  // The disk first: no password set, then no password file. A power loss between the two leaves the
+  // old password, never a device nobody can sign in to; a step that fails is said, and nothing more
+  // happens, so it is asked for again
+  Config next = cfg_;
+  next.system.passwordSet = false;
+  if (saveConfig(next, std::nullopt).status != 200 || !store_.remove(kAuthFile)) {
+    log_.add(clock_.epoch(), "auth", "alarm", say("ev.auth.access_reset_failed"), say("store.failed"));
+    saveEvents();
+    return;
+  }
+  auth_.resetAccess();
+  // Commands over MQTT are a way in too; the values still go out (SD-130)
+  if (mqtt_.commands) {
+    mqtt_.commands = false;
+    store_.write(kMqttFile, mqttToJson(mqtt_, true).dump());
+    mqttRevision_++;
+  }
+  log_.add(clock_.epoch(), "auth", "alarm", say("ev.auth.access_reset"), say("ev.auth.access_reset.text"));
+  saveEvents();
+  armShownCode();
+}
+
+void Robot::factoryReset(const std::string& by) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (halted()) return;
+  const Ms now = clock_.nowMs();
+  // A start that finds this mark finishes the reset before anything else
+  store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "pending"}}.dump());
+  // Everything off first (R6): the pumps at once, every network device's output, light and a room's
+  // fans too, until its device confirms it or a minute has passed; the coupled device learns it as
+  // when the coupling ends, or loses the link and stops dosing (SD-131)
+  act_.stopAll();
+  outputs_.allOff();
+  outputs_.releaseAll(cfg_, devices_, now);
+  authKept_ = false;
+  if (peer_) unpair();
+  pairing_.reset();
+  peerPending_.clear();
+  resetting_ = Resetting{by, now + kMinute};
+}
+
+void Robot::tickReset(Ms now) {
+  // Only the pumps held off and the network devices' offs, nothing else, until they are done
+  act_.stopAll();
+  outputs_.tickReleases(devices_, now);
+  if (!outputs_.releasing() || now >= resetting_->until) finishFactoryReset();
+}
+
+void Robot::finishFactoryReset() {
+  const std::string by = resetting_ ? resetting_->by : "device";
+  // Every file but the mark goes; the mark then says it is done. A clearing that fails leaves the
+  // mark pending, and the next start does it again
+  if (store_.clear(kResetFile)) store_.write(kResetFile, json{{"at", clock_.epoch()}, {"by", by}, {"state", "done"}}.dump());
+  store_.seal(kResetFile);
+  resetting_.reset();
+  restartWanted_ = true;
+}
+
+Result Robot::factoryResetByOwner(const json& j, const std::string& client) {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  Msg err;
+  if (!auth_.confirm(jstr(j, "password"), clock_.nowMs(), err, client)) {
+    if (err.key == "auth.wrong") log_.add(clock_.epoch(), "auth", "warn", say("ev.auth.failed"), err);
+    return Result::fail(err.key == "auth.locked" ? 429 : 403, err);
+  }
+  factoryReset("owner");
+  return Result::ok({{"restarting", true}});
+}
+
 bool Robot::saveAuth() {
+  if (restartWanted_) return false;
   if (authKept_) return false;  // never over a password file it could not read
   return store_.write(kAuthFile, auth_.toJson().dump());
 }
@@ -400,21 +500,51 @@ void Robot::boot() {
   } else {
     journal_.clear();
   }
+  // After a factory reset, its event comes first; one cut short by a power loss goes on (SD-139)
+  std::optional<std::string> resetPending;
+  if (auto s = store_.read(kResetFile)) {
+    const json j = json::parse(*s, nullptr, false);
+    const std::string by = j.is_object() ? jstr(j, "by") : "";
+    if (j.is_object() && jstr(j, "state") == "done") {
+      log_.add(bootEpoch_, "system", "notice", say("ev.system.factory_reset"), say(by == "owner" ? "ev.system.factory_reset.owner" : "ev.system.factory_reset.device"));
+      store_.remove(kResetFile);
+    } else {
+      resetPending = by.empty() ? "device" : by;
+    }
+  }
   log_.add(bootEpoch_, "system", rt_.stopped ? "warn" : "info", say("ev.boot"),
            rt_.stopped ? say("ev.boot.stopped") : Msg{});
   if (authKept_) log_.add(bootEpoch_, "auth", "alarm", say("ev.auth.kept"), say("auth.kept"));
   saveState(true);
   saveEvents();
+  if (resetPending) factoryReset(*resetPending);
+  else armShownCode();
 }
 
 // ---------------------------------------------------------------- tick
 
 void Robot::tick() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (restartWanted_) return;  // the platform restarts the device (SD-139)
   clock_.poll();
   const Ms now = clock_.nowMs();
   const Epoch epoch = clock_.epoch();
   hw_.poll(now);
+  if (resetting_) {
+    tickReset(now);
+    return;
+  }
+  // A reset asked for at the device (SD-139)
+  switch (hw_.takeReset()) {
+    case DeviceReset::Access:
+      resetAccess();
+      break;
+    case DeviceReset::Factory:
+      factoryReset("device");
+      return;
+    case DeviceReset::None:
+      break;
+  }
   truth_.update(cfg_, hw_, rt_, now, epoch);
   // A probe calibration explains jumps while someone works on it (RAT-042)
   if (probe_ && now - probe_->lastStep < kProbeIdle)
@@ -630,12 +760,14 @@ void Robot::snapshot(Epoch epoch) {
 
 void Robot::flush() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
+  if (restartWanted_) return;  // a factory reset leaves nothing behind (SD-139)
   saveState(true);
   saveEvents();
   snapshot(clock_.epoch());
 }
 
 void Robot::saveState(bool force) {
+  if (restartWanted_) return;
   rt_.clock = clock_.stamp();
   json j = rt_;
   json cmp = j;
@@ -651,6 +783,7 @@ void Robot::saveState(bool force) {
 }
 
 void Robot::saveEvents() {
+  if (restartWanted_) return;
   const std::uint64_t last = log_.lastId();
   if (last == savedEventId_) return;
   if (store_.append(kEventsLog, log_.journalSince(savedEventId_))) savedEventId_ = last;
@@ -1878,7 +2011,7 @@ Result Robot::putPush(const json& j) {
 
 // ---------------------------------------------------------------- coupling (SD-131)
 
-bool Robot::savePeer() { return store_.write(kPeerFile, peer_ ? peerToJson(*peer_, true).dump() : std::string("{}")); }
+bool Robot::savePeer() { return !restartWanted_ && store_.write(kPeerFile, peer_ ? peerToJson(*peer_, true).dump() : std::string("{}")); }
 
 json Robot::coupling() const {
   std::lock_guard<std::recursive_mutex> l(mtx_);
