@@ -5,6 +5,12 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The version on `main` is `0.1.0-dev` again after the release
+  (`docs/RELEASE.md`, step 4). The owner pushes a release's tag, since a
+  Claude session may push only its own branches (step 3).
+
 ## [0.1.0-proto.5] – 2026-10-30
 
 ### Changed

@@ -25,9 +25,15 @@ license.
    - CI green, including `Packages` (all three systems) and the `Release`
      dry run.
 2. **The owner merges** it.
-3. **Tag** the merge commit on `main`: `git tag v0.1.0-proto.N <commit>`
-   and push the tag. The `Release` workflow checks that the tag matches
-   `VERSION`, lies on `main` and has its `CHANGELOG.md` section; builds
+3. **The owner tags** the merge commit on `main`: `git tag
+   v0.1.0-proto.N <commit>` and `git push origin v0.1.0-proto.N`. A
+   Claude session may push only its own branches, so it gives the commit
+   and the commands. Without a clone, a Codespace on `main` runs them.
+   A release made by hand under "Releases" would make the workflow fail,
+   since the release then exists already.
+
+   The `Release` workflow checks that the tag matches `VERSION`, lies on
+   `main` and has its `CHANGELOG.md` section; builds
    the three packages, each with a smoke test; writes the two SBOMs and
    `SHA256SUMS`; attests the files' provenance; and creates the GitHub
    release, marked as a pre-release, with the section as notes.
