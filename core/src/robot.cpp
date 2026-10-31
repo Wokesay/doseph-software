@@ -1737,6 +1737,10 @@ Result Robot::putTank(const json& j) {
     else if (j["system"].is_string()) next.tank.system = j["system"].get<std::string>();
     else return Result::fail(422, say("api.bad_input"));
   }
+  if (j.contains("prepare")) {
+    if (!j["prepare"].is_string()) return Result::fail(422, say("api.bad_input"));
+    next.tank.prepare = j["prepare"].get<std::string>();
+  }
   const bool volumeChanged = !(std::isnan(next.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) && next.tank.volumeL != cfg_.tank.volumeL;
   Result r = saveConfig(next, changed("cfg.what.tank"));
   if (r.status != 200) return r;

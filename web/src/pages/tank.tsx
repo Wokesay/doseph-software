@@ -3,9 +3,9 @@
 // between checks, maintenance and its dates, and the control's settings.
 // The flow through the device is on the water path page.
 import { useEffect, useState } from "preact/hooks";
-import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Sprout, Waves, Wrench } from "lucide-preact";
+import { CalendarCheck, Clock, RefreshCw, SlidersHorizontal, Sprout, Timer, Waves, Wrench } from "lucide-preact";
 import { GROW_SYSTEMS, get, holds, post, put, type GrowSystem, type ServicePlan } from "../api";
-import { day, num, time } from "../format";
+import { day, num, span, time } from "../format";
 import { msg, t } from "../i18n";
 import { LIMITS, config, refreshConfig, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, Field, Modal, NumberInput, Pill, Term } from "../ui";
@@ -95,6 +95,47 @@ function SystemCard() {
         </div>
         <div>
           <Button variant="primary" onClick={() => saveTank({ system })} disabled={system === cfg.tank.system} data-testid="save-system">
+            {t("common.save")}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Who prepares a fresh fill (SD-150): the robot, or the person by hand while the robot only holds.
+// The estimate of a fresh fill, made at each check, helps to choose.
+function PrepareCard() {
+  const cfg = config.value!;
+  const c = state.value!.cycle;
+  const [prepare, setPrepare] = useState(cfg.tank.prepare);
+  const f = c.fresh;
+  const long = f?.ok === true && (f.more || f.totalMin > 24 * 60);
+  return (
+    <Card title={t("tank.prepare")} icon={<Timer size={18} />}>
+      <div class="stack">
+        <p class="muted small">{t("tank.prepareIntro")}</p>
+        <p data-testid="fresh-estimate">
+          {!f
+            ? t("tank.freshNone")
+            : !f.ok
+              ? t("status.prepNone", { reason: msg(f.reason) })
+              : f.more
+                ? t("tank.freshMore", { time: span(f.totalMin * 60000) })
+                : t("tank.fresh", { time: span(f.totalMin * 60000), rounds: f.rounds })}
+        </p>
+        {f?.ok && <p class="muted small">{t("tank.freshTap")}</p>}
+        {f?.ok && f.limited && <p class="muted small">{t("status.prepLimited")}</p>}
+        {f?.ok && f.daily && <p class="muted small">{t("status.prepDaily")}</p>}
+        {long && cfg.tank.prepare === "robot" && <Banner tone="info">{t("tank.freshLong")}</Banner>}
+        <Field label={t("tank.prepare")} hint={prepare === "hand" ? t("tank.prepareHandHint", { gap: num(c.settings.holdGapEc, 1) }) : undefined}>
+          <select class="select input" value={prepare} onChange={(e) => setPrepare((e.target as HTMLSelectElement).value as "robot" | "hand")} name="prepare">
+            <option value="robot">{t("tank.prepare.robot")}</option>
+            <option value="hand">{t("tank.prepare.hand")}</option>
+          </select>
+        </Field>
+        <div class="row">
+          <Button variant="primary" onClick={() => saveTank({ prepare })} disabled={prepare === cfg.tank.prepare} data-testid="save-prepare">
             {t("common.save")}
           </Button>
         </div>
@@ -325,6 +366,7 @@ export function TankPage() {
         <MaintenanceCard />
       </div>
       <SystemCard key={`s${rev}`} />
+      <PrepareCard key={`p${rev}`} />
       <WaitCard key={`w${rev}`} />
       <ServiceCard />
       <ControlCard key={`c${rev}`} />

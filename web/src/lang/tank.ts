@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Texts of the tank page.
 export const de = {
+  "tank.prepare": "Aufbereitung",
+  "tank.prepareIntro": "Eine frische Füllung bringt Doseph in Runden auf die Ziele. Bei sehr großen Tanks kann das Tage dauern; dann ist es schneller, von Hand vorzumischen, und Doseph hält die Werte nur noch.",
+  "tank.prepare.robot": "Doseph bereitet den Tank auf",
+  "tank.prepare.hand": "Von Hand vorgemischt, Doseph hält die Werte",
+  "tank.prepareHandHint": "Doseph gleicht dann nur aus, was höchstens {gap}\u00a0mS/cm unter dem Ziel liegt. Liegt EC weiter darunter, dosiert er nichts und sagt, dass von Hand gemischt werden soll.",
+  "tank.fresh": "Eine frische Füllung aus Osmosewasser bräuchte etwa {time} in {rounds} Runden.",
+  "tank.freshMore": "Eine frische Füllung aus Osmosewasser bräuchte mehr als {time}.",
+  "tank.freshTap": "Leitungswasser bringt etwas EC mit und geht schneller.",
+  "tank.freshLong": "Das ist mehr als ein Tag: Von Hand vormischen geht schneller.",
+  "tank.freshNone": "Noch keine Schätzung: Sie entsteht bei der nächsten Prüfung.",
   "tank.system": "Anbausystem",
   "tank.systemIntro": "Alle Pflanzen am Tank bekommen dasselbe Wasser. Das System setzt die pH-Vorgabe neuer Phasen und welche Vorlagen zuerst kommen; die Steuerung liest es nicht.",
   "tank.system.none": "nicht gewählt",
@@ -75,6 +85,16 @@ export const de = {
 } as const;
 
 export const en: Record<keyof typeof de, string> = {
+  "tank.prepare": "Preparation",
+  "tank.prepareIntro": "Doseph brings a fresh fill to its targets in rounds. In a very large tank that can take days; mixing by hand first is then quicker, and Doseph only holds the values.",
+  "tank.prepare.robot": "Doseph prepares the tank",
+  "tank.prepare.hand": "Mixed by hand, Doseph holds the values",
+  "tank.prepareHandHint": "Doseph then only corrects what is at most {gap}\u00a0mS/cm below the target. With EC further below, it doses nothing and says to mix by hand.",
+  "tank.fresh": "A fresh fill from osmosis water would take about {time} in {rounds} rounds.",
+  "tank.freshMore": "A fresh fill from osmosis water would take more than {time}.",
+  "tank.freshTap": "Tap water brings some EC along and is quicker.",
+  "tank.freshLong": "That is more than a day: mixing by hand first is quicker.",
+  "tank.freshNone": "No estimate yet: it comes with the next check.",
   "tank.system": "Cultivation system",
   "tank.systemIntro": "Every plant on the tank gets the same water. The system sets the pH a new phase is offered and which templates come first; control never reads it.",
   "tank.system.none": "not chosen",

@@ -282,6 +282,7 @@ bool MixCycle::cableCheck(Ctx& c, Actuators& act) {
 
 void MixCycle::stop(Ctx& c, Actuators& act, Doser& doser) {
   restart(c, act, doser);
+  prep_ = {};  // a person stopped it: a preparation starts anew (SD-150)
   enter(c, Phase::Stopped);
   line_ = say("cycle.stopped");
 }
@@ -433,6 +434,27 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   }
   const double ec = measured_.ec, ph = measured_.ph;
   if (isNum(s.ecTarget) && isNum(ec)) watchWater(c, r, ec, s);
+  // A fresh fill of this tank as the robot would prepare it now, to choose who prepares it (SD-150)
+  fresh_ = {};
+  if (isNum(s.ecTarget)) {
+    PrepInput in = prepInput(c, act, s);
+    in.ec = kFreshEc;
+    in.aim = s.ecTarget;
+    in.dayRuns.clear();
+    fresh_ = estimatePrep(c.cfg, r, recipeEffect(r, learnedEcEffect(c.rt, r.id)), in);
+  }
+  // Mixed by hand (SD-150): the robot only holds. EC further below its target than holding corrects
+  // (at least twice the tolerance) is the person's to mix: nothing is dosed, pH neither, since
+  // nutrients come first (RAT-004)
+  if (c.cfg.tank.prepare == "hand" && isNum(s.ecTarget) && isNum(ec)) {
+    const double gap = std::max(kHoldGapEc, 2 * s.ecTol);
+    if (ec < s.ecTarget - gap) {
+      notes_.push_back(say("cycle.note.hand_mix", {{"ec", ec}, {"target", s.ecTarget}, {"gap", gap}}));
+      prep_ = {};
+      holdNow(c, act);
+      return;
+    }
+  }
   const CanisterCfg* down = c.cfg.phDown();
   const bool phLatched = holds(c.rt, "ph.no_effect");
   const bool phHigh = isNum(s.phTarget) && isNum(ph) && ph > s.phTarget + s.phTol;
@@ -460,6 +482,12 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
     // The robot cannot dilute: fresh water lowers EC (RAT-012)
     notes_.push_back(say("cycle.note.ec_above", {{"ec", ec}, {"target", s.ecTarget}}));
     if (c.rt.topUp) notes_.push_back(say("cycle.note.top_up"));
+  }
+  // A preparation ends once EC stands within its band; with its recipe or EC target gone it is
+  // dropped (SD-150)
+  if (prep_.startedAt > 0) {
+    if (!isNum(s.ecTarget) || prep_.recipe != r.id) prep_ = {};
+    else if (isNum(ec) && isNum(aim) && ec >= aim - s.ecTol) endPrep(c, ec);
   }
 
   // pH: lowering only, never a counter-correction (RAT-041); only above the EC floor (RAT-046)
@@ -503,8 +531,10 @@ bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   auto plan = planEcDose(c.cfg, r, s.volumeL, aim - ec, eff.dose, eff.largest, c.cfg.control.maxEcStep, test ? kTestRiseEc : kNaN);
   if (!plan.ok) {
     if (plan.tooSmall) {
-      // A round under 1 s for a part is not dosed: the robot goes on to pH and rests visibly (RAT-050, SD-122)
+      // A round under 1 s for a part is not dosed: the robot goes on to pH and rests visibly (RAT-050,
+      // SD-122); a preparation got as near as the pumps take it (SD-150)
       notes_.push_back(say("cycle.note.ec_too_small", {{"reason", plan.reason}}));
+      if (prep_.startedAt > 0) endPrep(c, ec);
       return false;
     }
     wait(c, act, say("cycle.wait.ec_plan", {{"reason", plan.reason}}));
@@ -515,6 +545,21 @@ bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
       wait(c, act, *why);
       return true;
     }
+  // The preparation (SD-150): a new one where none runs, its recipe or EC target changed, or fresh
+  // water came in below where the last one began; each round estimates anew from where EC stands
+  if (prep_.startedAt == 0 || prep_.recipe != r.id || !(std::fabs(prep_.target - s.ecTarget) <= s.ecTol) || ec < prep_.fromEc - s.ecTol) {
+    prep_ = {};
+    prep_.startedAt = c.epoch;
+    prep_.fromEc = ec;
+    prep_.target = s.ecTarget;
+    prep_.recipe = r.id;
+  }
+  prep_.rounds++;
+  PrepInput in = prepInput(c, act, s);
+  in.ec = ec;
+  in.aim = aim;
+  prep_.est = estimatePrep(c.cfg, r, eff, in);
+  prep_.estAt = c.epoch;
   recordPairs(c, r.id, plan.steps, false);
   kind_ = Kind::Ec;
   queue_ = plan.steps;
@@ -668,6 +713,42 @@ void MixCycle::settlePairs(Ctx& c) {
 
 // The missing parts alone, in the recipe's order; the round learns nothing (RAT-057). A part that
 // cannot be dosed holds the others of its pair. False when the catch-up no longer fits and was dropped.
+PrepInput MixCycle::prepInput(const Ctx& c, const Actuators& act, const CycleSettings& s) const {
+  PrepInput in;
+  in.volumeL = s.volumeL;
+  in.ecTol = s.ecTol;
+  in.maxEcStep = c.cfg.control.maxEcStep;
+  in.maxRounds = c.cfg.control.maxEcRounds;
+  in.roundWaitMs = minutes(s.mixMin) + s.stableMs;
+  in.checkMs = s.holdMs + kFlowProveMs + kFlushMs + s.stableMs;
+  in.runPauseMs = std::max(kRunPauseMinMs, troughPassMs(c.troughL, s.flowLpm, 1));
+  in.channelPauseMs = std::max(kChannelPauseMinMs, troughPassMs(c.troughL, s.flowLpm, kTroughPasses));
+  // pH follows where it can be dosed: one round more, after its rest (an assumption)
+  if (isNum(s.phTarget) && c.cfg.phDown()) in.tailMs = kEcRestS * kSecond + in.roundWaitMs;
+  // The daily run time per channel: the gateway's cap, or the user's daily amount below it (SD-113)
+  for (const auto& b : c.cfg.canisters) {
+    if (b.channel <= 0 || !b.device.empty()) continue;
+    double capMs = act.dailyCapMin(b.channel) * 60000.0;
+    const double flow = c.cfg.channelFlow(b.channel);
+    if (isNum(b.maxMlPerDay) && isNum(flow) && flow > 0) capMs = std::min(capMs, b.maxMlPerDay / flow * 60000.0);
+    in.dayCapMs[b.channel] = static_cast<Ms>(capMs);
+    if (const auto it = c.rt.dayRuns.find(b.channel); it != c.rt.dayRuns.end())
+      for (const auto& [at, ms] : it->second) in.dayRuns[b.channel].push_back({(at - c.epoch) * kSecond, ms});
+  }
+  return in;
+}
+
+void MixCycle::endPrep(Ctx& c, double ec) {
+  // One round is a correction; a preparation of several is logged with how it went
+  if (prep_.rounds >= 2) {
+    const Epoch took = c.epoch - prep_.startedAt;
+    c.log.add(c.epoch, "control", "info", say("ev.prep.done"),
+              say("ev.prep.done.text", {{"from", prep_.fromEc}, {"to", ec}, {"rounds", prep_.rounds}, {"h", static_cast<double>(took) / 3600.0}}),
+              {{"from", prep_.fromEc}, {"to", ec}, {"rounds", prep_.rounds}, {"s", took}});
+  }
+  prep_ = {};
+}
+
 bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, double ec) {
   const RecipeCfg& r = *s.recipe;
   const json parts = c.rt.catchUp.value("parts", json::object());
@@ -1314,6 +1395,18 @@ json MixCycle::status(const Ctx& c) const {
   j["last"] = last_.at > 0 ? json{{"ph", numOrNull(last_.ph)}, {"ec", numOrNull(last_.ec)}, {"temp", numOrNull(last_.temp)}, {"at", last_.at}}
                            : json(nullptr);
   j["mixPending"] = mixPendingMs_ > 0;
+  // A preparation under way and a fresh fill, each with its estimate (SD-150)
+  auto estimate = [&](const PrepEstimate& e, Epoch at) -> json {
+    if (!e.ok) return {{"ok", false}, {"reason", e.reason}};
+    const Epoch end = at + e.totalMs / kSecond;
+    return {{"ok", true},           {"rounds", e.rounds},   {"ml", e.ml},       {"totalMin", e.totalMs / kMinute},
+            {"endAt", end},         {"leftMin", std::max<Epoch>(0, end - c.epoch) / 60},
+            {"more", e.more},       {"limited", e.limited}, {"daily", e.daily}, {"reachEc", numOrNull(e.reachEc)}};
+  };
+  j["prep"] = prep_.startedAt > 0 ? json{{"startedAt", prep_.startedAt}, {"from", prep_.fromEc},  {"target", prep_.target},
+                                         {"rounds", prep_.rounds},        {"estimate", estimate(prep_.est, prep_.estAt)}}
+                                  : json(nullptr);
+  j["fresh"] = fresh_.ok || !fresh_.reason.key.empty() ? estimate(fresh_, c.epoch) : json(nullptr);
   j["checks"] = checks(c);
   j["settings"] = {{"recipe", s.recipe ? json(s.recipe->id) : json(nullptr)},
                    {"ecTarget", numOrNull(s.ecTarget)},
@@ -1328,6 +1421,7 @@ json MixCycle::status(const Ctx& c) const {
                    {"mixUserMin", numOrNull(s.mixUserMin)},
                    {"mixWhy", s.mixWhy},
                    {"stableS", s.stableMs / kSecond},
+                   {"holdGapEc", std::max(kHoldGapEc, 2 * s.ecTol)},
                    {"holdMin", s.holdMs / kMinute}};
   return j;
 }

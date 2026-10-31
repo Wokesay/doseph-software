@@ -4,7 +4,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { Activity, BellRing, CheckCircle2, FlaskConical, Lock, ShieldCheck } from "lucide-preact";
 import { del, get, holds, post, type Alarm, type Check, type Phase, type RobotEvent, type SeriesData } from "../api";
-import { dateTime, day, duration, num, time } from "../format";
+import { dateTime, day, duration, num, span, time } from "../format";
 import { msg, t, type TextKey } from "../i18n";
 import { activeRecipe, config, refreshState, state, toast, toastError } from "../store";
 import { Banner, Button, Card, CheckRow, Pill, Term, type Tone } from "../ui";
@@ -69,6 +69,7 @@ function CycleCard() {
             </span>
           </div>
         )}
+        <PrepBlock />
         {pr?.nextAt != null && (c.phase === "hold" || c.phase === "wait") && (
           <p class="muted small" data-testid="next-check">
             {t("status.nextCheck", { time: time(pr.nextAt) })}
@@ -120,6 +121,34 @@ function CycleCard() {
         <WhyChecks />
       </div>
     </Card>
+  );
+}
+
+// A preparation under way (SD-150): how far EC came from where it began, and how long it should
+// still take; the estimate is made anew at each round
+function PrepBlock() {
+  const c = state.value!.cycle;
+  const p = c.prep;
+  if (!p) return null;
+  const e = p.estimate;
+  const ec = c.last?.ec ?? null;
+  const share = ec !== null && p.target > p.from ? Math.min(1, Math.max(0, (ec - p.from) / (p.target - p.from))) : 0;
+  return (
+    <div class="stack-sm" data-testid="prep">
+      <span class="small" style="font-weight:600">
+        {t("status.prep")} · {t("status.prepRounds", { n: p.rounds })}
+      </span>
+      <div class="progress" role="progressbar" aria-label={t("status.prep")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)}>
+        <span style={`width:${share * 100}%`} />
+      </div>
+      <span class="small muted">
+        {t("status.prepFrom", { from: num(p.from, 2), target: num(p.target, 2), ec: ec === null ? "–" : num(ec, 2) })}
+        {e.ok && <> · {t(e.more ? "status.prepMore" : "status.prepLeft", { left: span(e.leftMin * 60000), time: dateTime(e.endAt) })}</>}
+      </span>
+      {!e.ok && <span class="small muted">{t("status.prepNone", { reason: msg(e.reason) })}</span>}
+      {e.ok && e.limited && <span class="small muted">{t("status.prepLimited")}</span>}
+      {e.ok && e.daily && <span class="small muted">{t("status.prepDaily")}</span>}
+    </div>
   );
 }
 

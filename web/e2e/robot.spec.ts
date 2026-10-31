@@ -461,6 +461,41 @@ test("the cultivation system is chosen on the tank page; a new phase is offered 
   await expect(page.getByRole("dialog")).toContainText("a new phase gets the one for Soil: 6.2–6.8");
 });
 
+test("a preparation shows its progress and estimate; mixed by hand, the robot only holds and says so (SD-150)", async ({ page }) => {
+  await login(page);
+  // The tank page estimates a fresh fill and offers mixing by hand
+  await page.goto("/#/tank");
+  await expect(page.getByTestId("fresh-estimate")).toContainText(/A fresh fill from osmosis water would take about .+ in \d+ rounds\./);
+  // A fresh fill: its first round starts a preparation with its estimate
+  const newFill = async () => {
+    await sim(page, "fill", { volumeL: 100, ec: 0.45, ph: 7.6 });
+    await page.goto("/#/tank");
+    await page.getByTestId("new-tank").click();
+    await page.getByTestId("new-tank-confirm").click();
+    await expect(page.getByText("New tank reported")).toBeVisible();
+  };
+  await newFill();
+  await sim(page, "speed", { speed: 60 });
+  await page.goto("/");
+  const prep = page.getByTestId("prep");
+  await expect(prep).toContainText("Preparation · Round", { timeout: 60_000 });
+  await expect(prep).toContainText(/EC 0\.4\d → target 1\.60/);
+  await expect(prep).toContainText("to go, done around");
+  await expect(prep.getByRole("progressbar")).toBeVisible();
+  await sim(page, "speed", { speed: 1 });
+  // Mixed by hand: a fill far below the target is the person's to mix
+  await page.goto("/#/tank");
+  await page.locator("select[name=prepare]").selectOption("hand");
+  await expect(page.getByText("Doseph then only corrects what is at most 0.3\u00a0mS/cm below the target.")).toBeVisible();
+  await page.getByTestId("save-prepare").click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await newFill();
+  await sim(page, "speed", { speed: 60 });
+  await page.goto("/");
+  await expect(page.getByTestId("cycle-note").filter({ hasText: "Mixed by hand" })).toContainText("mix the tank by hand", { timeout: 60_000 });
+  await expect(page.getByTestId("prep")).toHaveCount(0);
+});
+
 test("an access token is made in the settings, shown once, works within its role and is revoked (SD-129)", async ({ page, request }) => {
   await login(page);
   await page.goto("/#/settings");

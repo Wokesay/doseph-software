@@ -27,8 +27,17 @@ export type CycleSettings = {
   // The waits in force (the user's, else the suggestion) and the suggestions from volume and flow
   // The mixing wait after a dose (SD-112): in force, the robot's own, the user's least; why; the stability window
   mixMin: number | null; mixOwnMin: number | null; mixUserMin: number | null; mixWhy: "turnover" | "user" | "minimum" | "settling" | "settling_default"; stableS: number;
+  // Mixed by hand, the robot corrects EC at most this far below its target (SD-150)
+  holdGapEc: number;
   holdMin: number;
 };
+
+/** How long a preparation takes (SD-150): its rounds, minutes in all and when it should be done;
+ *  `more`: longer than the estimate follows; `limited`: the pumps are slow for the tank; `daily`: the
+ *  daily run time per channel stretches it; `reachEc`: where its rounds end. */
+export type PrepEstimate =
+  | { ok: true; rounds: number; ml: number; totalMin: number; endAt: number; leftMin: number; more: boolean; limited: boolean; daily: boolean; reachEc: number | null }
+  | { ok: false; reason: Msg };
 
 // One thing a kind of dose needs, and whether it holds now (MixCycle::checks)
 export type Check = Msg & { ok: boolean };
@@ -43,6 +52,9 @@ export type Cycle = {
   round: { kind: "ec" | "ph"; n: number; test: boolean; ml: number; from: number | null } | null;
   last: { ph: number | null; ec: number | null; temp: number | null; at: number } | null;
   mixPending: boolean;
+  // A preparation under way and a fresh fill from water without salts, each with its estimate (SD-150)
+  prep: { startedAt: number; from: number; target: number; rounds: number; estimate: PrepEstimate } | null;
+  fresh: PrepEstimate | null;
   checks: { all: Check[]; ec: Check[]; ph: Check[] };
   settings: CycleSettings;
 };
@@ -228,7 +240,8 @@ export type Config = {
   // Quiet hours in local minutes of the day; equal: none (SD-123)
   notify: { quietFromMin: number; quietToMin: number };
   // `system`: the cultivation system (SD-128), "" while none is chosen
-  tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null; system: GrowSystem | "" };
+  // `prepare`: who prepares a fresh fill, the robot or the person by hand while the robot holds (SD-150)
+  tank: { volumeL: number | null; mixMinMin: number | null; holdMin: number | null; system: GrowSystem | ""; prepare: "robot" | "hand" };
   control: { ecTolerance: number; phTolerance: number; maxEcStep: number; ecFloor: number; phMaxMlPerDose: number; maxEcRounds: number; maxPhDoses: number };
   // The locks a person releases that only report (SD-133)
   locks: { reportOnly: string[] };
