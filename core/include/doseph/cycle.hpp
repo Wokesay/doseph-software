@@ -35,6 +35,14 @@ constexpr Ms kStableWindowMaxMs = 10 * kMinute;
 constexpr double kStablePh = 0.05, kStableEc = 0.03;
 constexpr Ms kMeasureMaxMs = 15 * kMinute;    // not stable by the window and this: wait and try again
 constexpr Ms kRetryMs = 5 * kMinute;          // a wait tries again after this
+// Through the trough (SD-147): before the next channel of a round the trough and the return path
+// run clear, a few passes of their water at the flow and at least this long; a dose's partial runs
+// wait one pass, at least 3 s (assumptions)
+constexpr int kTroughPasses = 3;
+constexpr Ms kChannelPauseMinMs = 10 * kSecond;
+constexpr Ms kRunPauseMinMs = 3 * kSecond;
+// How long `passes` passes of the trough's water take at the flow; 0 where either is not known
+Ms troughPassMs(double troughL, double flowLpm, int passes);
 constexpr int kDryTries = 3;                   // pump in the device: tries without flow in a row, then a lock (SD-109)
 constexpr int kDryTriesTank = 2;               // pump in the tank: each try may spill water (SD-127)
 // A dry run from the feed pump's current (SD-127, RAT-049): once it has moved water in a run, less
@@ -214,6 +222,9 @@ class MixCycle {
   bool limited_ = false, testDose_ = false, clean_ = true, doseFailed_ = false;
   Epoch lastEcDoseAt_ = 0;
   int ecRounds_ = 0, phDoses_ = 0, seq_ = 0;
+  // The channel dosed last in this round, and how long the trough ran clear since (SD-147)
+  std::string lastChannel_;
+  Ms clearedMs_ = 0;
   int noEffectEc_ = 0, noEffectPh_ = 0;
   // Rounds of one recipe made smaller to fit the partial-run limit, each too
   // small to judge alone: summed until they should raise EC by 0.06 (RAT-055)

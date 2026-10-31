@@ -73,6 +73,7 @@ Ctx Robot::ctx() {
   c.stopped = rt_.stopped;
   c.flowOk = flowOk();
   c.pumpInTank = hw_.profile().pumpIn != "device";
+  c.troughL = hw_.profile().troughL;
   c.pumpA = hw_.feedPumpA();
   c.probeCalibrating = probe_.has_value();
   c.maintenanceUntil = maintenanceUntil();

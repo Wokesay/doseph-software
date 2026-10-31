@@ -525,7 +525,7 @@ void Doser::remoteTick(const Ctx& c) {
   if (r->state == "done") {
     progress_.run++;
     if (progress_.run >= o.step.runs.size()) finish(c, DoseProgress::State::Done);
-    else pauseUntil_ = c.now + 3 * kSecond;  // pause between partial runs (RAT-055)
+    else pauseUntil_ = c.now + o.pauseMs;  // pause between partial runs (RAT-055, SD-147)
     return;
   }
   progress_.state = DoseProgress::State::Failed;
@@ -603,7 +603,7 @@ void Doser::tick(const Ctx& c, Actuators& act) {
         finish(c, DoseProgress::State::Done);
         return;
       }
-      pauseUntil_ = c.now + 3 * kSecond;  // pause between partial runs (RAT-055)
+      pauseUntil_ = c.now + o.pauseMs;  // pause between partial runs (RAT-055, SD-147)
       return;
     }
     book(c, std::max<Ms>(0, st.actualMs));

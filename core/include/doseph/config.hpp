@@ -24,7 +24,7 @@ constexpr size_t kMaxPhases = 20;  // phases of a plant recipe or a plant (SD-12
 // A liquid on a dosing channel.
 struct CanisterCfg {
   std::string id, name;
-  std::string role = "nutrient";  // nutrient | ph_down (SD-108)
+  std::string role = "nutrient";  // nutrient | ph_down (SD-108) | silicate (SD-147)
   int channel = 0;                // 1..channelCount; 0: on no channel
   std::string pair;               // pair group, e.g. "AB": its parts keep their ratio (RAT-054)
   std::string color = "#4c9a52";

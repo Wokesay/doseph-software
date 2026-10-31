@@ -1904,3 +1904,40 @@ details are decided here by the minimal principle.
 - **Simulator.** `flowFault: "air"` draws air: the rotor gives about 70 %
   of the pulses at the current of a dry run. The example profiles' 0.5 A
   and 3 s are assumptions.
+
+## SD-147: Dosing through the trough: pauses, order and silicate
+
+2026-10-31. From the product hints of 30 Oct in #10 on dosing several
+concentrates through the trough, chosen by the owner. The flows and
+numbers are decided here by the minimal principle. The plausibility
+check and the cleaning reminder follow in their own change (SD-148).
+
+- **A pause before every channel change.** Within a round, before another
+  channel doses, the trough and the return path run clear of the last
+  one's concentrate:
+  - three passes of their water at the measured flow, at least 10 s;
+  - counted only while water flows, so concentrates never meet there.
+
+  The board description gives the water they hold (`troughL`; 0.5 L and
+  2 L in the example profiles). Without it, or without a measured flow,
+  the 10 s hold. The cycle's line says "The trough runs clear before …".
+  The same channel goes on at once.
+- **Pulses.** The pulses are a dose's partial runs (RAT-055). The pause
+  between them is one pass of the trough's water, at least 3 s, so
+  circulation spreads each pulse.
+- **Order.**
+  - The recipe's order holds.
+  - pH− is never in a recipe and comes last (RAT-004).
+  - **Silicate** is a canister's role of its own. In a recipe it goes
+    before every other part, and it is in no pair. The canister editor
+    warns that silicate is best added by hand, before the other
+    nutrients.
+  - **Calcium never right after silicate.** The device does not know
+    which part holds calcium, so the recipe editor says that the part
+    right after silicate must hold none. The pause before it also
+    separates the two.
+- **pH−.** The canister editor says to use only diluted phosphoric acid.
+- **The 10 s, the three passes, one pass and the trough's volumes are
+  assumptions until the bench test.** On large tanks a large share of
+  concentrate passes the trough; whether more must change there follows
+  from a bench test.

@@ -349,8 +349,10 @@ TEST_CASE("Watering: Stop, maintenance and a dose stop a running shot; a restart
   r.ok("POST", "watering/circuits/w1/now", {{"seconds", 100}});
   r.waitUntil("the pump runs", [&] { return runs(r, 0); }, 30);
   r.ok("POST", "maintenance", {{"minutes", 5}});
-  r.step(2 * kSecond);
-  CHECK_FALSE(runs(r, 0));
+  // The shot ends at once; the output's off takes its round trip to the device
+  r.step(kSecond);
+  CHECK(circuitState(r, "w1")["last"]["end"]["key"] == "water.end.maintenance");
+  r.waitUntil("the output is off", [&] { return !runs(r, 0); }, 5);
   r.ok("POST", "maintenance", {{"minutes", 0}});
   waitFit(r);
   const double given = watering(r)["givenL"].get<double>();

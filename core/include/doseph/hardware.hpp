@@ -90,6 +90,9 @@ struct Profile {
   // The least current of the feed pump moving water, A: below it the flow sensor's pulses are no
   // flow, as air turns its rotor too. NaN: the board description gives none.
   double pumpMinA = kNaN;
+  // The water the trough and the return path hold, L (SD-147): a channel change waits for it to
+  // pass a few times, and a dose's partial runs for it to pass once. NaN: not given.
+  double troughL = kNaN;
 };
 
 // The hardware release (SD-110): below the firmware, a leak, high level in

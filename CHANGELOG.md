@@ -7,6 +7,14 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Dosing through the trough (SD-147). Before another channel of a round
+  the trough and the return path run clear for a few passes of their
+  water, while water flows; a dose's partial runs wait one pass.
+  Silicate is a canister's role of its own: it goes first in a recipe,
+  with a warning that it is best added by hand, and the recipe editor
+  says the part after it must hold no calcium. The canister editor says
+  to use only diluted phosphoric acid as pH−.
+
 - The flow signal (SD-146). A flow meter's pulses alone are no longer flow:
   where the device measures the feed pump's current, the pump must also
   draw the current of moving water. Nothing counts as flow, and nothing

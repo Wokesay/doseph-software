@@ -134,7 +134,9 @@ const draftOf = (r: Recipe): Draft => ({
 
 function Editor(p: { draft: Draft; onClose: () => void }) {
   const [d, setD] = useState<Draft>(p.draft);
-  const nutrients = canisters.value.filter((b) => b.role === "nutrient");
+  const nutrients = canisters.value.filter((b) => b.role === "nutrient" || b.role === "silicate");
+  // Silicate goes first; the part right after it must hold no calcium (SD-147)
+  const silicate = d.steps.some((s) => nutrients.find((b) => b.id === s.canister)?.role === "silicate");
   const set = (patch: Partial<Draft>) => setD({ ...d, ...patch });
   const setStep = (i: number, patch: Partial<Draft["steps"][number]>) => set({ steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const save = async () => {
@@ -214,6 +216,7 @@ function Editor(p: { draft: Draft; onClose: () => void }) {
           </button>
         </div>
         <p class="muted small">{t("recipe.partsNote")}</p>
+        {silicate && <p class="small warn-text" data-testid="silicate-order">{t("recipe.silicateOrder")}</p>}
       </div>
     </Modal>
   );

@@ -1046,3 +1046,19 @@ test("a level read after the doses proposes the rate that fits, and a worn pump'
   // Channel 3 gives fewer drops per ml since its tube wore
   await expect(page.getByTestId("drift-3")).toContainText("fewer drops per ml than after its calibration");
 });
+
+test("silicate is a canister's role of its own, with its warning; in a recipe it goes first (SD-147)", async ({ page, request }) => {
+  await scenario(request, "demo");
+  await login(page);
+  await page.goto("/#/channels");
+  await page.getByRole("button", { name: "Edit: CalMag" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("tab", { name: "Silicate" }).click();
+  await expect(dialog.getByTestId("silicate-note")).toContainText("best added by hand");
+  await dialog.getByRole("tab", { name: "pH−" }).click();
+  await expect(dialog.getByText("only diluted phosphoric acid")).toBeVisible();
+  await dialog.getByRole("tab", { name: "Silicate" }).click();
+  // CalMag comes last in the demo's recipe: as silicate it is refused, with the reason
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("CalMag is silicate – it goes first in a recipe")).toBeVisible();
+});
