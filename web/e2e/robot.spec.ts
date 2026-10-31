@@ -217,11 +217,13 @@ test("the water path shows how flow is proven, the chamber and the hardware rele
   await expect(page.getByTestId("release")).toContainText("given");
 });
 
-test("the pH probe is calibrated with two buffers", async ({ page }) => {
+test("the pH probe is calibrated with two buffers; the guide says to let it drip off over the chamber and to put it back", async ({ page }) => {
   await login(page);
   await page.goto("/#/water");
   await page.getByTestId("calibrate-ph").click();
+  await expect(page.getByRole("dialog")).toContainText("Stand each sachet on a flat surface or put it into a glass");
   await page.getByTestId("probe-start").click();
+  await expect(page.getByTestId("probe-step")).toContainText("let it drip off over the chamber");
   await sim(page, "buffer", { kind: "ph", value: 7 });
   await page.waitForTimeout(3000);
   await page.getByTestId("probe-point").click();
@@ -229,6 +231,7 @@ test("the pH probe is calibrated with two buffers", async ({ page }) => {
   await sim(page, "buffer", { kind: "ph", value: 4 });
   await page.waitForTimeout(3000);
   await page.getByTestId("probe-point").click();
+  await expect(page.getByTestId("probe-step")).toContainText("put it back into the measuring chamber");
   await page.getByTestId("probe-save").click();
   await expect(page.getByText("Calibration saved")).toBeVisible();
   await sim(page, "buffer", { kind: "ph" });

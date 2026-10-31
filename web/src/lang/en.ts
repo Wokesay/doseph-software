@@ -92,7 +92,7 @@ const base: Record<keyof typeof deBase, string> = {
   "term.prime": "Prime tube",
   "help.prime": "Pumps until the liquid reaches the end of the tube. Needed before calibrating and after every canister change. Hold the tube's end in a cup, not in the tank.",
   "term.calibrateProbe": "Calibrate probe",
-  "help.calibrateProbe": "pH: dip the probe into two buffer solutions in turn (e.g. pH 7 and 4). EC: into a reference solution (e.g. 1.413 mS/cm). Without calibration the robot only shows values and doses nothing.",
+  "help.calibrateProbe": "pH: dip the probe into two buffer solutions in turn (e.g. pH 7 and 4). EC: into a reference solution (e.g. 1.413 mS/cm). The probe stays plugged in: let it drip off over the measuring chamber before you move it, so that nothing gets onto its connector, and stand the sachet on a flat surface or put it into a glass. Without calibration the robot only shows values and doses nothing.",
   "term.latched": "Locked until released",
   "help.latched": "A dose had no effect, or the test dose did not fit the tank volume. The robot doses nothing of this kind until you have checked the cause and released it.",
   "term.jumpLock": "Jump lock",

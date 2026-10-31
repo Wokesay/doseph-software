@@ -115,6 +115,11 @@ All notable changes to this software. The format follows
 
 ### Changed
 
+- The guided probe calibration says that the probe stays plugged in, to let
+  it drip off over the measuring chamber before moving it so nothing gets
+  onto its connector, to stand the sachet on a flat surface or in a glass,
+  and at the end to put the probe back into the chamber.
+
 - The version on `main` is `0.1.0-dev` again after the release
   (`docs/RELEASE.md`, step 4). The owner pushes a release's tag, since a
   Claude session may push only its own branches (step 3).
