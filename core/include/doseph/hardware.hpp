@@ -93,6 +93,8 @@ struct Profile {
   // The water the trough and the return path hold, L (SD-147): a channel change waits for it to
   // pass a few times, and a dose's partial runs for it to pass once. NaN: not given.
   double troughL = kNaN;
+  // Its cleaning comes with an acid rinse, and more often (SD-148)
+  bool troughAcidRinse = false;
 };
 
 // The hardware release (SD-110): below the firmware, a leak, high level in

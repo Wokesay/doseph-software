@@ -111,3 +111,43 @@ TEST_CASE("Trough: silicate is a canister's role of its own; in a recipe it goes
   c.canisters[0].pair = "AB";
   CHECK(has(validateConfig(c, 4), "cfg.canister.pair_role"));
 }
+
+TEST_CASE("Precipitation: a round that raises EC by less than half per ml of what its recipe did before says precipitation or deposits are possible, as a note; a round that fits again ends it (SD-148)") {
+  harness::Run r(harness::device());
+  auto note = [&] {
+    const json st = r.state();
+    for (const auto& a : st["alarms"])
+      if (a["id"] == "ec.precipitation") return a;
+    return json(nullptr);
+  };
+  // The first rounds learn what the recipe does per ml
+  r.waitUntil("an effect learned", [&] { return r.s.robot().runtime().ecEffects.count("two_part") > 0; }, 6 * 3600);
+  r.waitUntil("the tank holds", [&] { return r.phase() == "hold"; }, 6 * 3600);
+  CHECK(note().is_null());
+  // Two fifths of each part reach the tank (a stand-in for nutrients that precipitate)
+  for (int ch : {2, 3, 4}) r.act("pumpWear", {{"channel", ch}, {"factor", 0.4}});
+  r.act("topup", {{"litres", 20}});
+  r.waitUntil("the note", [&] { return note().is_object(); }, 6 * 3600);
+  CHECK(note()["level"] == "info");
+  CHECK(note()["text"]["key"] == "watch.precipitation.text");
+  CHECK(note()["text"]["args"]["pct"].get<double>() < 50);
+  const json ev = r.events("control");
+  CHECK(std::any_of(ev.begin(), ev.end(), [](const json& e) { return e["title"]["key"] == "ev.ec.precipitation"; }));
+  // All of each part again: the next round fits, and the note ends
+  for (int ch : {2, 3, 4}) {
+    r.act("pumpWear", {{"channel", ch}, {"factor", 2.0}});
+    r.act("pumpWear", {{"channel", ch}, {"factor", 1.25}});
+  }
+  r.waitUntil("the tank holds", [&] { return r.phase() == "hold"; }, 6 * 3600);
+  r.act("topup", {{"litres", 20}});
+  r.waitUntil("the note ends", [&] { return note().is_null(); }, 6 * 3600);
+  // Seen again, a new tank ends it too
+  for (int ch : {2, 3, 4}) r.act("pumpWear", {{"channel", ch}, {"factor", 0.4}});
+  r.waitUntil("the tank holds", [&] { return r.phase() == "hold"; }, 6 * 3600);
+  r.act("topup", {{"litres", 50}});  // the tank has grown: more water for a round as large
+  r.waitUntil("the note again", [&] { return note().is_object(); }, 6 * 3600);
+  r.ok("POST", "tank/new");
+  r.step(6 * kSecond);
+  CHECK(note().is_null());
+  CHECK(r.s.robot().runtime().precipitation.is_null());
+}

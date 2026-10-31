@@ -25,6 +25,8 @@ struct ServiceKind {
 };
 inline constexpr ServiceKind kServiceKinds[] = {
     {"probe.ph.cal", 30}, {"probe.ec.cal", 90}, {"channel.cal", 90}, {"chamber.clean", 30}, {"heads.check", 180}, {"probe.ph.replace", 365},
+    // The trough and the return line (SD-148); with an acid rinse, as the board description says, more often
+    {"trough.clean", 30}, {"trough.rinse", 14},
 };
 int serviceDefaultDays(const std::string& kind);  // 0 for a kind there is none of
 
@@ -47,11 +49,12 @@ struct ServicePlan {
 
 // The items this configuration has: the probes, each channel with a canister, the chamber and
 // its suction filter, and the pump heads while any channel is in use
-std::vector<ServiceItem> serviceItems(const Config& cfg);
+// `acidRinse`: the trough and the return line get an acid rinse (the board description, SD-148)
+std::vector<ServiceItem> serviceItems(const Config& cfg, bool acidRinse = false);
 // Notes when each item was first seen, so a new device or channel is not due at once; returns
 // whether anything changed
-bool noteService(const Config& cfg, RuntimeState& rt, Epoch now);
-ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, const std::string& zone);
+bool noteService(const Config& cfg, RuntimeState& rt, Epoch now, bool acidRinse = false);
+ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, const std::string& zone, bool acidRinse = false);
 json serviceJson(const ServicePlan& p);
 
 }  // namespace doseph

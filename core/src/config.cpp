@@ -1022,6 +1022,7 @@ void to_json(json& j, const RuntimeState& s) {
   j["count"] = countJson(s.count);
   j["planEc"] = s.planEc;
   j["drain"] = s.drain;
+  j["precipitation"] = s.precipitation;
   j["pairRound"] = s.pairRound;
   j["catchUp"] = s.catchUp;
   json pulled = json::object();
@@ -1131,6 +1132,7 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("count")) s.count = countFromJson(j["count"]);
   if (j.contains("planEc") && j["planEc"].is_object()) s.planEc = j["planEc"];
   if (j.contains("drain") && j["drain"].is_object()) s.drain = j["drain"];
+  if (j.contains("precipitation") && j["precipitation"].is_object()) s.precipitation = j["precipitation"];
   if (j.contains("pairRound") && j["pairRound"].is_object()) s.pairRound = j["pairRound"];
   if (j.contains("catchUp") && j["catchUp"].is_object()) s.catchUp = j["catchUp"];
   // A line pulled back for 1 ms to 1 s; anything else counts as not pulled back

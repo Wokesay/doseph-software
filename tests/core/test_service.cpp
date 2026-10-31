@@ -35,11 +35,12 @@ TEST_CASE("Maintenance: the items a configuration has; a new one counts from whe
   Config bare;
   std::vector<std::string> ids;
   for (const auto& i : serviceItems(bare)) ids.push_back(i.id);
-  CHECK(ids == std::vector<std::string>{"probe.ph.cal", "probe.ec.cal", "chamber.clean", "probe.ph.replace"});
+  CHECK(ids == std::vector<std::string>{"probe.ph.cal", "probe.ec.cal", "chamber.clean", "trough.clean", "probe.ph.replace"});
   Config c = withChannels();
   ids.clear();
   for (const auto& i : serviceItems(c)) ids.push_back(i.id);
-  CHECK(ids == std::vector<std::string>{"probe.ph.cal", "probe.ec.cal", "channel.1.cal", "channel.4.cal", "chamber.clean", "heads.check", "probe.ph.replace"});
+  CHECK(ids == std::vector<std::string>{"probe.ph.cal", "probe.ec.cal", "channel.1.cal", "channel.4.cal", "chamber.clean", "trough.clean", "heads.check",
+                                        "probe.ph.replace"});
   RuntimeState rt;
   CHECK(noteService(c, rt, kT0));
   CHECK_FALSE(noteService(c, rt, kT0 + kDay));  // nothing new
@@ -56,6 +57,7 @@ TEST_CASE("Maintenance: each item is due its interval after it was last done or 
   // The EC probe calibrated 7 days before: due at 83 days; the chamber cleaned 55 days in: due at 85
   c.ecCal = {{"at", kT0 - 7 * kDay}};
   rt.serviceDone["chamber.clean"] = kT0 + 55 * kDay;
+  rt.serviceDone["trough.clean"] = kT0 + 52 * kDay;  // due at 82
   // The pH probe calibrated 20 days in: due at 50 days, then every 30 days
   c.phCal = {{"at", kT0 + 20 * kDay}};
   // Channel 1 was calibrated 5 days before: its 85 days come with the pH probe's at 80 (SD-144)
@@ -73,6 +75,7 @@ TEST_CASE("Maintenance: each item is due its interval after it was last done or 
   const Epoch d80 = p.dates[1];
   CHECK(item(p, "probe.ec.cal").date == d80);
   CHECK(item(p, "chamber.clean").date == d80);
+  CHECK(item(p, "trough.clean").date == d80);
   CHECK(item(p, "channel.4.cal").date == d80);
   const LocalTime lt = localTime(d80, "Europe/Berlin");
   CHECK(lt.minuteOfDay == 0);
@@ -119,7 +122,7 @@ TEST_CASE("Maintenance over the API: the plan, an item done, the intervals; an i
   sim::Simulation s(o);
   s.step(10 * kSecond);
   json plan = s.robot().service();
-  REQUIRE(plan["items"].size() == 9);  // two probes, four channels, chamber, heads, a new pH probe
+  REQUIRE(plan["items"].size() == 10);  // two probes, four channels, chamber, trough, heads, a new pH probe
   CHECK(s.robot().serviceDone("no.such").status == 404);
   REQUIRE(s.robot().putService({{"days", {{"chamber.clean", 7}}}}).status == 200);
   CHECK(s.robot().putService({{"days", {{"chamber.clean", 3}}}}).status == 422);
@@ -157,4 +160,22 @@ TEST_CASE("Maintenance: a pump's calibration comes with the pH probe's: it is du
   p = planService(c, rt, kT0 + 70 * kDay, "UTC");
   CHECK(item(p, "channel.1.cal").due == kT0 + 160 * kDay);
   CHECK(item(p, "channel.1.cal").date == item(p, "probe.ph.cal").date + 60 * kDay);
+}
+
+TEST_CASE("Maintenance: the trough and the return line are cleaned every 30 days; where the board description says so, with an acid rinse every 14 days (SD-148)") {
+  Config c = withChannels();
+  RuntimeState rt;
+  noteService(c, rt, kT0);
+  ServicePlan p = planService(c, rt, kT0, "UTC");
+  CHECK(item(p, "trough.clean").kind == "trough.clean");
+  CHECK(item(p, "trough.clean").due == kT0 + 30 * kDay);
+  CHECK(item(p, "trough.clean").label.key == "service.trough.clean");
+  p = planService(c, rt, kT0, "UTC", true);
+  CHECK(item(p, "trough.clean").kind == "trough.rinse");
+  CHECK(item(p, "trough.clean").due == kT0 + 14 * kDay);
+  CHECK(item(p, "trough.clean").label.key == "service.trough.rinse");
+  // Its interval is set by its own kind
+  c.service.days["trough.rinse"] = 21;
+  CHECK(validateConfig(c, 4).empty());
+  CHECK(item(planService(c, rt, kT0, "UTC", true), "trough.clean").due == kT0 + 21 * kDay);
 }

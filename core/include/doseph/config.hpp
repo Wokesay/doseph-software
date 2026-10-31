@@ -471,6 +471,9 @@ struct RuntimeState {
   // SD-140); null without one
   json planEc = nullptr;
   json drain = nullptr;
+  // A round of the recipe in force that raised EC by clearly less per ml than learned before:
+  // {recipe, at, share}, until a round fits again or the tank is new (SD-148); null without one
+  json precipitation = nullptr;
   bool waterLow = false;
   // Light switched by hand (SD-135): {circuit: {on, until}}, until the plan's next change (epoch)
   json lighting = json::object();
