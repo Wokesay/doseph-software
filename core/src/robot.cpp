@@ -1737,6 +1737,10 @@ Result Robot::putTank(const json& j) {
     else if (j["system"].is_string()) next.tank.system = j["system"].get<std::string>();
     else return Result::fail(422, say("api.bad_input"));
   }
+  if (j.contains("prepare")) {
+    if (!j["prepare"].is_string()) return Result::fail(422, say("api.bad_input"));
+    next.tank.prepare = j["prepare"].get<std::string>();
+  }
   const bool volumeChanged = !(std::isnan(next.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) && next.tank.volumeL != cfg_.tank.volumeL;
   Result r = saveConfig(next, changed("cfg.what.tank"));
   if (r.status != 200) return r;
@@ -1744,6 +1748,7 @@ Result Robot::putTank(const json& j) {
     // Another volume: the next dose checks it again (SD-105); a pair is not caught up in another tank (SD-114)
     rt_.newTank = true;
     rt_.latches.erase("tank.volume");
+    cycle_.newFill();
     Ctx c = ctx();
     dropCatchUp(c, say("catchup.new_tank"));
   }
@@ -1812,6 +1817,7 @@ Result Robot::newTank() {
   const Ms now = clock_.nowMs();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   log_.add(clock_.epoch(), "control", "info", say("ev.tank.new"), say("ev.tank.new.text"));
+  cycle_.newFill();  // its preparation starts anew (SD-150)
   restartCycle();
   saveState(true);
   return Result::ok();

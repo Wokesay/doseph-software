@@ -48,6 +48,14 @@ export function duration(ms: number): string {
   return `${Math.floor(m / 60)}${nb}h ${m % 60}${nb}min`;
 }
 
+/** A long span for an estimate, rounded: days and hours from a day on, else as `duration`. */
+export function span(ms: number): string {
+  const nb = "\u00a0";
+  const h = Math.round(ms / 3600000);
+  if (h < 24) return duration(Math.round(ms / 60000) * 60000);
+  return h % 24 ? `${Math.floor(h / 24)}${nb}d ${h % 24}${nb}h` : `${h / 24}${nb}d`;
+}
+
 const dtfs = new Map<string, Intl.DateTimeFormat>();
 function fmt(kind: "dt" | "t" | "d") {
   const key = `${locale()}:${kind}`;

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "doseph/gateway.hpp"
+#include "doseph/prep.hpp"
 
 namespace doseph {
 
@@ -135,6 +136,8 @@ class MixCycle {
     return s;
   }
   void doseFinished(Ctx& c, const DoseProgress& p);
+  // A new fill or another volume: a preparation under way is over (SD-150)
+  void newFill() { prep_ = {}; }
   void recipeChanged(const std::string& id) {
     if (id == roundRecipe_) clean_ = false;
   }
@@ -171,6 +174,9 @@ class MixCycle {
   void recordPairs(Ctx& c, const std::string& recipe, const std::vector<DoseStep>& steps, bool catchUp);
   void settlePairs(Ctx& c);
   bool startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, double ec);
+  // SD-150: what an estimate of a preparation runs on, and the end of one
+  PrepInput prepInput(const Ctx& c, const Actuators& act, const CycleSettings& s) const;
+  void endPrep(Ctx& c, double ec);
 
   Phase phase_ = Phase::Off;
   Ms since_ = 0;        // the phase began (monotonic)
@@ -236,6 +242,17 @@ class MixCycle {
     std::string recipe;
   } small_;
   bool anyDosed_ = false;  // this check dosed: its end is logged
+  // A preparation under way (SD-150): when and where its first round began, the EC target it runs
+  // to, its rounds, and the estimate made at its last round; startedAt 0: none
+  struct Prep {
+    Epoch startedAt = 0;
+    double fromEc = kNaN, target = kNaN;
+    std::string recipe;
+    int rounds = 0;
+    PrepEstimate est;
+    Epoch estAt = 0;
+  } prep_;
+  PrepEstimate fresh_;  // a fresh fill of this tank from water without salts, estimated at the last check
 };
 
 }  // namespace doseph

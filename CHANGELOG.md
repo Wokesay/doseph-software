@@ -7,6 +7,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Large tanks (SD-150). The status shows a preparation under way: where
+  EC began, its rounds, how far it came and when it should be done,
+  estimated from the robot's own rounds and caps. The tank page estimates
+  a fresh fill and offers "mixed by hand, Doseph holds the values": the
+  robot then corrects EC only near its target and otherwise asks to mix
+  by hand.
 - The function key (SD-149). A short press opens a 5-minute window. In it
   the code on the device's label sets the first password over the
   device's setup network, and, once the owner allows it in the app, pairs

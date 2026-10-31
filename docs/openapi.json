@@ -5436,6 +5436,13 @@
               "rockwool",
               "soil"
             ]
+          },
+          "prepare": {
+            "enum": [
+              "robot",
+              "hand"
+            ],
+            "description": "Who prepares a fresh fill: the robot, or the person by hand while the robot only holds (SD-150)"
           }
         }
       },

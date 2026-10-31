@@ -2037,3 +2037,60 @@ security review worked in.
   code, since it survives a factory reset. Whether that is enough under
   EN 18031-1 is the product side's question.
 - **The 5 min and the 15 min are assumptions.**
+
+## SD-150: Large tanks: how long a preparation takes, and a tank mixed by hand
+
+2026-10-31. From the product update of 29 Oct in #10, chosen by the
+owner: the Pro prepares a full tank up to about 30 m³ and holds the
+values up to 100 m³; preparing a fresh fill of a very large tank can take
+more than a day. How the estimate is made and what holding allows are
+decided here by the minimal principle.
+
+- **The estimate** runs the cycle's own round plan forward
+  (`estimatePrep`), at the effect the robot expects, under the caps it
+  doses with:
+  - the partial-run limit per round (RAT-055);
+  - the rounds per check, then the hold until the next check;
+  - the daily run time per channel, the user's daily amount below it
+    and the runs of the last 24 h (SD-113);
+  - the pauses of the trough (SD-147);
+  - the mixing wait and the stable window after each round (SD-112);
+  - one pH round after the EC rounds, where pH− can be dosed (an
+    assumption).
+
+  It guides and promises nothing. Each round estimates anew from where EC
+  stands, counting the rounds its check already dosed. Beyond 1,000 rounds or two weeks it stops and says "more than".
+  Without volume, EC or its target there is none (R5).
+- **The preparation** begins with the first round of a check. A new one
+  begins after a new fill or another volume, when the recipe or its EC
+  target changes, or when EC stands below where the last one began
+  (fresh water came in). It ends once EC stands where the rounds aim:
+  its band, or a little below it while pH− is still to follow (RAT-053).
+  It also ends when a round got too small for the pumps. A preparation
+  of two rounds or more is logged with how it went. A Stop, the cycle
+  going off or a nutrient lock drops it. A preparation whose end has
+  passed, because a wait held it, says it is behind its estimate.
+- **The status** shows where it began, its rounds, how far EC came and
+  when it should be done. It says when the pumps are slow for the tank
+  (each round made smaller) and when the daily run time spreads it over
+  days.
+- **A fresh fill** of the tank is estimated at each check from water
+  without salts: the longest case, since tap water brings some EC along.
+  The tank page shows it. Above a day it suggests mixing by hand.
+- **Mixed by hand, Doseph holds** (`tank.prepare`: `robot` or `hand`).
+  The person mixes a fresh fill by hand to about its targets; the robot
+  then only holds them. It corrects EC at most 0.3 mS/cm below its target,
+  and at least twice the tolerance (an assumption). Further below, it
+  doses nothing, pH neither, since nutrients come first (RAT-004), and it
+  says to mix by hand; the list of why it doses or not says so too.
+  Everything else stays as it is: the test dose of a new fill (SD-105),
+  the caps and the locks. A large top-up of fresh water (SD-132) that
+  takes EC that far below stops the holding too, until a person mixes.
+- **Not changed here.** The caps that make a large tank slow (one channel
+  at a time, RAT-018; 60 min a day per channel and six runs of 60 s per
+  round, SD-113; the settling wait, SD-112) and the largest pH− dose
+  (RAT-050). With the example heads of the simulator (assumptions), a
+  fresh fill of 30 m³ from osmosis water takes about four days: its
+  concentrate alone needs about ten hours of pumping, one channel at a
+  time. Whether the Pro prepares 30 m³ overnight depends on its pumps;
+  that question goes to the product side.

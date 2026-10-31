@@ -77,6 +77,9 @@ struct TankCfg {
   // The cultivation system (SD-128): "hydro", "coco", "rockwool", "soil"; empty: not chosen. It
   // sets what the app offers, never what control does (RAT-076)
   std::string system;
+  // Who prepares a fresh fill (SD-150): "robot", or "hand": the person mixes it by hand to about its
+  // targets and the robot only holds them, correcting EC at most kHoldGapEc below its target
+  std::string prepare = "robot";
 };
 
 // The cultivation systems with the pH range a new phase is offered when its recipe has none

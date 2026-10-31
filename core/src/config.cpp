@@ -436,7 +436,8 @@ void to_json(json& j, const Config& c) {
   j["tank"] = {{"volumeL", numOrNull(c.tank.volumeL)},
                {"mixMinMin", numOrNull(c.tank.mixMinMin)},
                {"holdMin", numOrNull(c.tank.holdMin)},
-               {"system", c.tank.system}};
+               {"system", c.tank.system},
+               {"prepare", c.tank.prepare}};
   j["control"] = {{"ecTolerance", c.control.ecTolerance},       {"phTolerance", c.control.phTolerance},
                   {"maxEcStep", c.control.maxEcStep},           {"ecFloor", c.control.ecFloor},
                   {"phMaxMlPerDose", c.control.phMaxMlPerDose}, {"maxEcRounds", c.control.maxEcRounds},
@@ -610,6 +611,7 @@ Config configFromJson(const json& in) {
   }
   if (t.contains("holdMin")) c.tank.holdMin = numOrNaN(t, "holdMin");
   c.tank.system = jstr(t, "system");
+  if (t.contains("prepare")) c.tank.prepare = jstr(t, "prepare");
   const json& k = objectAt(j, "control");
   auto num = [&](const char* key, double& into) {
     if (k.contains(key)) into = numOrNaN(k, key);
@@ -969,6 +971,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (!c.tank.system.empty() &&
       std::none_of(std::begin(kGrowSystems), std::end(kGrowSystems), [&](const GrowSystem& g) { return c.tank.system == g.id; }))
     err(say("cfg.tank.system"));
+  if (c.tank.prepare != "robot" && c.tank.prepare != "hand") err(say("cfg.tank.prepare"));
   if (!c.active.recipe.empty()) {
     if (!c.recipe(c.active.recipe)) err(say("cfg.active.recipe"));
     if (c.active.until != 0 && c.active.until <= c.active.from) err(say("cfg.active.until"));
