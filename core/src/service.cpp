@@ -25,7 +25,7 @@ int serviceDefaultDays(const std::string& kind) {
   return 0;
 }
 
-std::vector<ServiceItem> serviceItems(const Config& cfg) {
+std::vector<ServiceItem> serviceItems(const Config& cfg, bool acidRinse) {
   std::vector<ServiceItem> out;
   auto add = [&](std::string id, const char* kind, int channel, Msg label) {
     ServiceItem i;
@@ -46,15 +46,18 @@ std::vector<ServiceItem> serviceItems(const Config& cfg) {
     add("channel." + std::to_string(b.channel) + ".cal", "channel.cal", b.channel, say("service.channel.cal", {{"channel", b.channel}, {"name", b.name}}));
   }
   add("chamber.clean", "chamber.clean", 0, say("service.chamber.clean"));
+  // The trough the doses drip into and its return line (SD-148)
+  if (acidRinse) add("trough.clean", "trough.rinse", 0, say("service.trough.rinse"));
+  else add("trough.clean", "trough.clean", 0, say("service.trough.clean"));
   if (anyChannel) add("heads.check", "heads.check", 0, say("service.heads.check"));
   add("probe.ph.replace", "probe.ph.replace", 0, say("service.probe.ph.replace"));
   return out;
 }
 
-bool noteService(const Config& cfg, RuntimeState& rt, Epoch now) {
+bool noteService(const Config& cfg, RuntimeState& rt, Epoch now, bool acidRinse) {
   bool changed = false;
   std::vector<std::string> ids;
-  for (const auto& i : serviceItems(cfg)) {
+  for (const auto& i : serviceItems(cfg, acidRinse)) {
     ids.push_back(i.id);
     if (!rt.serviceSince.count(i.id)) {
       rt.serviceSince[i.id] = now;
@@ -73,9 +76,9 @@ bool noteService(const Config& cfg, RuntimeState& rt, Epoch now) {
   return changed;
 }
 
-ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, const std::string& zone) {
+ServicePlan planService(const Config& cfg, const RuntimeState& rt, Epoch now, const std::string& zone, bool acidRinse) {
   ServicePlan plan;
-  for (auto i : serviceItems(cfg)) {
+  for (auto i : serviceItems(cfg, acidRinse)) {
     // Done by hand, or calibrated, which resets its item by itself; without either, since it was
     // first seen
     Epoch last = 0;

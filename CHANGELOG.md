@@ -7,6 +7,12 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- Precipitation possible, and cleaning the trough (SD-148). A round that
+  raises EC by less than half per ml of what its recipe did before says
+  that precipitation or deposits are possible, as a note. The maintenance
+  plan has "Clean the trough and the return line", every 30 days, or with
+  an acid rinse every 14 days where the board description says so.
+
 - Dosing through the trough (SD-147). Before another channel of a round
   the trough and the return path run clear for a few passes of their
   water, while water flows; a dose's partial runs wait one pass.

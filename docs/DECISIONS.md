@@ -1941,3 +1941,30 @@ check and the cleaning reminder follow in their own change (SD-148).
   assumptions until the bench test.** On large tanks a large share of
   concentrate passes the trough; whether more must change there follows
   from a bench test.
+
+## SD-148: Precipitation possible, and cleaning the trough
+
+2026-10-31. The rest of the product hints of 30 Oct in #10 on dosing
+through the trough (SD-147). The details are decided here by the minimal
+principle.
+
+- **Precipitation or deposits possible.** A clean round can raise EC by
+  less than half per ml of what its recipe learned before. Then the robot
+  says "Precipitation or deposits possible" (an assumption):
+  - an event in the log;
+  - a note (info) while that recipe is in force.
+
+  The note says where to look: the trough, the return line and the
+  canisters. Calcium right after silicate, and concentrates that meet
+  undiluted, can precipitate.
+  - It is said once. A round of that recipe that fits again ends it, and
+    so do another recipe in force and a new tank.
+  - A test dose and a round with no effect at all say nothing here. A
+    round without effect is the latch's (RAT-055).
+  - The robot still learns from the round as before. It holds nothing.
+- **Cleaning the trough.** "Clean the trough and the return line" is a
+  maintenance item (SD-125), every 30 days. Where the board description
+  says the trough gets an acid rinse (`troughAcidRinse`, the Pro example
+  profile), the item says so and comes every 14 days. Each has its own
+  interval, which can be set.
+- **The 50 %, 30 and 14 days are assumptions** until measured with users.

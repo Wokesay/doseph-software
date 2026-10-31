@@ -42,6 +42,7 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
   p.pumpMinA = 0.5;
   // The trough and the return path hold 0.5 L, on the Pro 2 L (assumptions, SD-147)
   p.troughL = name == "pro" ? 2.0 : 0.5;
+  p.troughAcidRinse = name == "pro";  // the Pro's trough passes much concentrate (SD-148)
   return p;
 }
 

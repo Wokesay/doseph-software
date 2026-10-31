@@ -221,7 +221,7 @@ function MaintenanceCard() {
   );
 }
 
-const SERVICE_KINDS = ["probe.ph.cal", "probe.ec.cal", "channel.cal", "chamber.clean", "heads.check", "probe.ph.replace"] as const;
+const SERVICE_KINDS = ["probe.ph.cal", "probe.ec.cal", "channel.cal", "chamber.clean", "trough.clean", "trough.rinse", "heads.check", "probe.ph.replace"] as const;
 
 // Maintenance dates (SD-125): what is due within a week of the earliest joins its date; a
 // calibration resets its item by itself, the rest is marked done here

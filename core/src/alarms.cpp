@@ -38,7 +38,7 @@ Level levelOf(const std::string& id) {
     return Level::Critical;
   if (startsWith(id, "latch.channel.") && endsWith(id, ".siphon")) return Level::Critical;
   if (startsWith(id, "climate.") && endsWith(id, ".co2")) return Level::Critical;  // gas where people work (SD-136)
-  if (startsWith(id, "maint.") || startsWith(id, "plant.")) return Level::Info;
+  if (startsWith(id, "maint.") || startsWith(id, "plant.") || id == "ec.precipitation") return Level::Info;
   return Level::Warning;
 }
 

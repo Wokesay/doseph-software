@@ -59,6 +59,7 @@ of its own.
 | A pair is scaled by one factor at every limit and keeps its ratio; a part missing from a round cut short is caught up first (SD-114) | RAT-054 | ✓ | `config.hpp`, `plan.hpp`, `config.cpp`, `plan.cpp`, `world.cpp`, `cycle.cpp` · test_config.cpp, test_plan.cpp, test_cycle.cpp |
 | Each round doses 0.8 × gap ÷ effect × volume; large doses go in equal partial runs | RAT-055 | ✓ | `config.hpp`, `cycle.hpp`, `plan.hpp`, `cycle.cpp`, `gateway.cpp` · test_cycle.cpp, test_plan.cpp |
 | Before another channel of a round the trough and the return path run clear: three passes of their water at the flow, at least 10 s, counted only while water flows; a dose's partial runs wait one pass, at least 3 s | SD-147 | ✓ | `hardware.hpp`, `cycle.hpp`, `cycle.cpp`, `gateway.cpp` · test_trough.cpp |
+| A clean round that raised EC by less than half per ml of what its recipe learned before says precipitation or deposits are possible, as a note, once; a round that fits again, another recipe in force or a new tank ends it | SD-148 | ✓ | `cycle.hpp`, `cycle.cpp`, `robot.cpp`, `alarms.cpp` · test_trough.cpp |
 | A small learned effect never widens the EC cap | RAT-056 | ✓ | `config.hpp`, `plan.hpp`, `config.cpp`, `plan.cpp` · test_config.cpp, test_plan.cpp |
 | An effect is learned only from clean rounds; a test dose only when it passed | RAT-057 | ✓ | `config.hpp`, `cycle.hpp`, `plan.hpp`, `cycle.cpp` · test_cycle.cpp |
 | Recipe templates follow the chart; the pH target is the middle of the range | RAT-066 | ◐ | `templates.json`, `config.hpp`, `store.ts` · no test of its own |
@@ -157,6 +158,7 @@ of its own.
 | The simulator sends through the system's curl with the secret in a private config file that is deleted after the run | SD-124 | ✓ | `sim/push.cpp` · test_push.cpp |
 | Maintenance items by what the device has, each due its interval after it was done, calibrated or first had; items due within a week of the earliest join its date | SD-125 | ✓ | `service.hpp`, `service.cpp`, `config.cpp` · test_service.cpp |
 | A pump's calibration is due with the last calibration of the pH probe that falls due before it; at once when its drops per ml changed (SD-145) | SD-144 | ✓ | `service.cpp` · test_service.cpp, test_ratecheck.cpp |
+| The trough and the return line are a maintenance item: every 30 days, or with an acid rinse every 14 days where the board description says so | SD-148 | ✓ | `service.hpp`, `service.cpp`, `hardware.hpp` · test_service.cpp |
 | A maintenance item on its date is a note in the morning report and the app until it is done; the watchdog stays as it is | SD-125 | ✓ | `robot.cpp` · test_service.cpp |
 
 ## Plants and phases (SD-128)

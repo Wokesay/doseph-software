@@ -808,6 +808,23 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
         small_ = {};
       }
     }
+    // Clearly less per ml than this recipe learned before: precipitation or deposits may take
+    // nutrients out of the water (SD-148). Said once; a round that fits again ends the note. A round
+    // with no effect at all is the latch's below.
+    if (learnIt && dosed && isNum(judged) && judged >= kNoEffectEc && isNum(judgedMlPerL) && judgedMlPerL > 0) {
+      const double before = learnedEcEffect(c.rt, roundRecipe_);
+      const double share = isNum(before) && before > 0 ? judged / judgedMlPerL / before : kNaN;
+      json& p = c.rt.precipitation;
+      if (isNum(share) && share < kPrecipitationShare) {
+        if (!p.is_object() || jstr(p, "recipe") != roundRecipe_) {
+          p = {{"recipe", roundRecipe_}, {"at", c.epoch}, {"share", share}};
+          c.log.add(c.epoch, "control", "warn", say("ev.ec.precipitation"),
+                    say("watch.precipitation.text", {{"name", dosed->name}, {"pct", share * 100}}), {{"recipe", roundRecipe_}, {"share", share}});
+        }
+      } else if (isNum(share) && p.is_object() && jstr(p, "recipe") == roundRecipe_) {
+        p = nullptr;
+      }
+    }
     // Learned for the recipe the round dosed, within the band (RAT-057)
     if (learnIt && dosed && isNum(judged) && isNum(judgedMlPerL) && judgedMlPerL > 0)
       c.rt.ecEffects[roundRecipe_] = clampEcEffect(judged / judgedMlPerL, recipeEffect(*dosed, kNaN).start);

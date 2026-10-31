@@ -736,13 +736,21 @@ void Robot::tick() {
     // as notes (SD-128)
     movePlants(epoch);
     // Maintenance items on their date join as notes; the watchdog's own verdict stays as it is (SD-125)
-    noteService(cfg_, rt_, epoch);
+    noteService(cfg_, rt_, epoch, hw_.profile().troughAcidRinse);
     alarmWatch_ = watch_;
-    for (const auto& i : planService(cfg_, rt_, epoch, cfg_.system.timezone).items)
+    for (const auto& i : planService(cfg_, rt_, epoch, cfg_.system.timezone, hw_.profile().troughAcidRinse).items)
       if (i.dueNow) alarmWatch_.items.push_back({"maint." + i.id, i.label, "problem", say("service.due")});
     for (const auto& n : plantNotes(cfg_, epoch, cfg_.system.timezone)) alarmWatch_.items.push_back({n.id, n.label, "problem", n.text});
     watchDrain(epoch);
     if (rt_.drain.is_object()) alarmWatch_.items.push_back({"plant.drain", say("watch.drain"), "problem", drainAdvice()});
+    // Precipitation or deposits possible (SD-148): a note while the recipe it was seen with is in force
+    if (rt_.precipitation.is_object()) {
+      const RecipeCfg* pr = cfg_.recipe(jstr(rt_.precipitation, "recipe"));
+      if (!pr || cfg_.active.recipe != pr->id) rt_.precipitation = nullptr;
+      else
+        alarmWatch_.items.push_back({"ec.precipitation", say("watch.precipitation"), "problem",
+                                     say("watch.precipitation.text", {{"name", pr->name}, {"pct", jnum(rt_.precipitation, "share") * 100}})});
+    }
     alarms_.update(alarmWatch_, {cfg_.notify, cfg_.system.timezone, epoch, idle}, rt_);
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
@@ -1259,7 +1267,7 @@ json Robot::calendar(int days) const {
   const Epoch until = localDaysLater(localMidnight(now, tz), std::clamp(days, 1, 366), tz);
   json entries = plantDates(cfg_, now, until, tz);
   // The maintenance dates with their items, today's included (SD-125)
-  const ServicePlan sp = planService(cfg_, rt_, now, tz);
+  const ServicePlan sp = planService(cfg_, rt_, now, tz, hw_.profile().troughAcidRinse);
   for (const Epoch d : sp.dates) {
     if (d > until) continue;
     json items = json::array();
@@ -1585,12 +1593,12 @@ Result Robot::deletePlant(const std::string& id) {
 
 json Robot::service() const {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return serviceJson(planService(cfg_, rt_, clock_.epoch(), cfg_.system.timezone));
+  return serviceJson(planService(cfg_, rt_, clock_.epoch(), cfg_.system.timezone, hw_.profile().troughAcidRinse));
 }
 
 Result Robot::serviceDone(const std::string& id) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  const auto items = serviceItems(cfg_);
+  const auto items = serviceItems(cfg_, hw_.profile().troughAcidRinse);
   if (std::none_of(items.begin(), items.end(), [&](const ServiceItem& i) { return i.id == id; })) return Result::fail(404, say("service.none"));
   rt_.serviceDone[id] = clock_.epoch();
   saveState(true);
@@ -1693,6 +1701,7 @@ Result Robot::newTank() {
   // A person announces a new fill: its jumps are explained, and the next dose is a test dose (SD-105, RAT-042)
   rt_.newTank = true;
   rt_.ecInBand = nullptr;  // a new fill (SD-115)
+  rt_.precipitation = nullptr;  // fresh water (SD-148)
   rt_.topUp = false;
   rt_.watering["givenL"] = 0;  // and the count of litres watered starts anew (SD-134)
   rt_.waterLow = false;

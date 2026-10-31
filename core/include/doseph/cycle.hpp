@@ -69,7 +69,10 @@ constexpr double kVolumeHigh = 2.0, kVolumeLow = 1.0 / 3.0;
 constexpr double kNoEffectEc = 0.02;          // a round that raised EC by less had no effect (RAT-055)
 constexpr double kNoEffectPh = 0.03;          // … a pH− dose that lowered pH by less (RAT-020, RAT-041)
 constexpr double kSmallRoundEc = 0.06;        // rounds made smaller that should raise less are judged as a sum (RAT-055)
-constexpr int kNoEffectLatch = 2;             // rounds without effect in a row, then a latch
+constexpr int kNoEffectLatch = 2;
+// A round that raised EC by less than this share of what the recipe learned before, per ml:
+// precipitation or deposits possible (SD-148, an assumption)
+constexpr double kPrecipitationShare = 0.5;             // rounds without effect in a row, then a latch
 constexpr double kCatchUpMinMl = 0.1;         // a pair part missing less is not caught up (SD-114)
 
 // What a check measured once the readings were stable: the means of the window
