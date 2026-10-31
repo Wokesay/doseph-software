@@ -5082,6 +5082,14 @@
           "setupCode": {
             "type": "boolean"
           },
+          "labelCode": {
+            "type": "boolean",
+            "description": "The setup code is the one on the device's label, taken only in the function key's window (SD-149)"
+          },
+          "keyWindow": {
+            "type": "boolean",
+            "description": "The function key's window is open: 5 min after a short press (SD-149)"
+          },
           "passwordProblem": {
             "oneOf": [
               {

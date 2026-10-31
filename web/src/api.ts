@@ -257,6 +257,8 @@ export type Info = {
   // The device's own identity (SD-129): random, made at the first start, never in a backup
   deviceId: string;
   hasPassword: boolean; setupCode?: boolean; name: string; language?: "de" | "en"; channelCount: number;
+  // The setup code is the one on the device's label, taken in the function key's window (SD-149)
+  labelCode?: boolean; keyWindow?: boolean;
   // Why neither sign-in nor a first password works: the password file is unreadable or gone
   passwordProblem?: Msg | null;
   // What the device has (SD-108); `example`: the simulator's profile, its numbers are assumptions

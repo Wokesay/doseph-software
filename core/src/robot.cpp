@@ -156,8 +156,73 @@ std::string Robot::takeCodeToShow() {
 }
 
 void Robot::armShownCode() {
+  // A device with a code on its label takes that one, and only in the function key's window; it
+  // shows nothing (SD-149)
+  if (const auto label = hw_.labelCode()) {
+    if (!auth_.hasPassword() && !credentialsLost() && !authKept_) auth_.armLabelCode(*label, keyWindowOpen() ? keyUntil_ : 0);
+    return;
+  }
   if (!showCodes_ || auth_.hasPassword() || credentialsLost() || authKept_ || auth_.setupCodeRequired()) return;
   codeToShow_ = auth_.armSetupCode(clock_.nowMs(), 0);
+}
+
+bool Robot::keyWindowOpen() const { return keyUntil_ > 0 && clock_.nowMs() < keyUntil_; }
+
+// A short press of the function key: the window for the label's code opens, for the first password
+// and for pairing as the follower (SD-149)
+void Robot::openKeyWindow(Ms now) {
+  keyUntil_ = now + kKeyWindowMs;
+  keyWrong_ = 0;
+  if (const auto label = hw_.labelCode()) {
+    armShownCode();
+    if (!peer_) {
+      PairingCode c;
+      for (char ch : *label)
+        if (ch != '-' && !std::isspace(static_cast<unsigned char>(ch))) c.code += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+      c.until = keyUntil_;
+      pairing_ = c;
+    }
+  }
+  log_.add(clock_.epoch(), "auth", "info", say("ev.key.window"), say("ev.key.window.text", {{"min", kKeyWindowMs / kMinute}}));
+}
+
+void Robot::endKeyWindow() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  closeKeyWindow();
+}
+
+void Robot::closeKeyWindow() {
+  keyUntil_ = 0;
+  keyWrong_ = 0;
+  if (hw_.labelCode()) {
+    pairing_.reset();
+    armShownCode();
+  }
+}
+
+// A wrong code in the window: the fifth closes it, and the person presses the key again (SD-149)
+void Robot::wrongLabelCode() {
+  if (++keyWrong_ >= kKeyWrongMax && keyWindowOpen()) {
+    closeKeyWindow();
+    log_.add(clock_.epoch(), "auth", "warn", say("ev.key.closed"), say("ev.key.closed.text", {{"count", kKeyWrongMax}}));
+  }
+}
+
+// The ring in the function key (SD-149): the window, a Stop, a critical alarm, a warning, or all well
+void Robot::showStatusLight() {
+  StatusLight s = StatusLight::Ok;
+  if (keyWindowOpen()) s = StatusLight::KeyWindow;
+  else if (rt_.stopped) s = StatusLight::Stopped;
+  else
+    for (const auto& [id, a] : rt_.alarms) {
+      if (!jbool(a, "raised", false)) continue;
+      if (jstr(a, "level") == "critical") {
+        s = StatusLight::Alarm;
+        break;
+      }
+      if (jstr(a, "level") == "warning") s = StatusLight::Warning;
+    }
+  hw_.setStatusLight(s);
 }
 
 bool Robot::halted() const {
@@ -607,6 +672,9 @@ void Robot::tick() {
     case DeviceReset::None:
       break;
   }
+  // The function key's short press, and its window's end (SD-149)
+  if (hw_.takeKeyPress()) openKeyWindow(now);
+  else if (keyUntil_ > 0 && now >= keyUntil_) closeKeyWindow();
   truth_.update(cfg_, hw_, rt_, now, epoch);
   // A probe calibration explains jumps while someone works on it (RAT-042)
   if (probe_ && now - probe_->lastStep < kProbeIdle)
@@ -755,6 +823,7 @@ void Robot::tick() {
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
   }
+  showStatusLight();
   saveState();
   saveEvents();
   // A large write waits while a dosing pump runs (SD-142): the device writes its flash in small pieces
@@ -964,6 +1033,9 @@ json Robot::info() const {
           {"deviceId", deviceId_},
           {"hasPassword", auth_.hasPassword()},
           {"setupCode", auth_.setupCodeRequired()},
+          // The code is on the device's label and taken in the function key's window (SD-149)
+          {"labelCode", hw_.labelCode().has_value()},
+          {"keyWindow", keyWindowOpen()},
           // Why neither sign-in nor a first password works, for the sign-in page
           {"passwordProblem", authKept_ ? json(say("auth.kept")) : credentialsLost() ? json(say("auth.lost")) : json(nullptr)},
           {"name", cfg_.system.name},
@@ -2356,6 +2428,8 @@ json Robot::coupling() const {
 Result Robot::armPairingCode() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
+  // A device with a code on its label pairs with that one, after a press of its function key (SD-149)
+  if (hw_.labelCode()) return Result::fail(409, say("coupling.use_key", {{"min", kKeyWindowMs / kMinute}}));
   static constexpr char kAlphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
   std::uint8_t r[8];
   rng_(r, sizeof r);
@@ -2373,7 +2447,8 @@ Result Robot::pair(const json& j) {
     return Result::fail(409, say("coupling.pending"));
   const std::string address = jstr(j, "address"), code = jstr(j, "code");
   if (!peerAddress(address)) return Result::fail(422, say("coupling.address"));
-  if (code.empty() || code.size() > 16) return Result::fail(422, say("coupling.code"));
+  // A code shown by the other device, or the one on its label with its dashes (SD-149)
+  if (code.empty() || code.size() > 24) return Result::fail(422, say("coupling.code"));
   // The token the follower will use to call this device; revoked again if the pairing fails
   const Auth before = auth_;
   Msg err;
@@ -2408,6 +2483,7 @@ Result Robot::join(const json& j) {
   if (diff != 0) {
     // The fifth wrong try voids the code: 40 bits leave nothing to guess in five
     if (++pairing_->wrong >= PairingCode::kMaxWrong) pairing_.reset();
+    if (hw_.labelCode()) wrongLabelCode();
     log_.add(clock_.epoch(), "coupling", "warn", say("ev.coupling.code_wrong"));
     return Result::fail(403, say("coupling.code"));
   }

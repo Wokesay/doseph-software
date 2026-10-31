@@ -67,6 +67,17 @@ class SimHardware : public doseph::IHardware {
     reset_ = doseph::DeviceReset::None;
     return r;
   }
+  // The function key and the code on the label (SD-149): the panel or the console press it
+  void pressKey() { keyPress_ = true; }
+  bool takeKeyPress() override {
+    const bool p = keyPress_;
+    keyPress_ = false;
+    return p;
+  }
+  void setLabel(const std::string& code) { label_ = code.empty() ? std::nullopt : std::optional<std::string>(code); }
+  std::optional<std::string> labelCode() const override { return label_; }
+  void setStatusLight(doseph::StatusLight s) override { light_ = s; }
+  doseph::StatusLight statusLight() const { return light_; }
   // A head fitted, removed or changed: the device reports it, the twin pumps with it (SD-108)
   void setHead(int channel, const std::string& head) {
     profile_.channels[static_cast<size_t>(channel - 1)].head = head;
@@ -77,6 +88,9 @@ class SimHardware : public doseph::IHardware {
   World& w_;
   doseph::DeviceReset reset_ = doseph::DeviceReset::None;
   doseph::Profile profile_;
+  bool keyPress_ = false;
+  std::optional<std::string> label_;
+  doseph::StatusLight light_ = doseph::StatusLight::Ok;
 };
 
 }  // namespace sim

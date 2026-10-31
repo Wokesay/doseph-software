@@ -282,12 +282,17 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
     if (robot_.passwordKept()) return fail(423, say("auth.kept"));
     if (robot_.credentialsLost()) return fail(423, say("auth.lost"));
+    // The code on the device's label counts only in the function key's window: a photo of the label
+    // is not enough, the person stands at the device (SD-149)
+    if (robot_.hasLabelCode() && !robot_.auth().hasPassword() && !robot_.keyWindowOpen())
+      return fail(403, say("auth.key_window", {{"min", Robot::kKeyWindowMs / kMinute}}));
     const Auth before = robot_.auth();
     const Ms now = clock_.nowMs();
     Msg e = robot_.auth().setInitialPassword(jstr(body, "password"), jstr(body, "code"), now);
     const bool wrongCode = robot_.auth().wrongSetupCodes() > before.wrongSetupCodes();
     if (wrongCode && robot_.auth().logWrongSetupCode(now))
       robot_.logEvent("auth", "warn", say("ev.auth.code_wrong"), say("ev.auth.code_wrong.text", {{"count", robot_.auth().wrongSetupCodes()}}));
+    if (wrongCode && robot_.hasLabelCode()) robot_.wrongLabelCode();
     if (!e.key.empty()) return fail(e.key == "auth.exists" ? 409 : wrongCode ? 403 : 422, e);
     // auth.json first, on disk; only then the lock against a second setup
     if (!robot_.saveAuth()) {

@@ -185,6 +185,8 @@ of its own.
 | A call outside a token's role is refused: an app token never reaches the password or the tokens, an account token never limits, releases, calibration, single pumps or settings, a peer token only reads; a token never goes into a cookie | SD-129 | ✓ | `api.cpp`, `sim/main.cpp` · test_api.cpp, robot.spec.ts |
 | The device ID is random, made once, kept across a restart and never in a backup | SD-129 | ✓ | `robot.cpp` · test_api.cpp, robot.spec.ts |
 | An access reset is asked for at the device only: no password, session, access token, coupling or pairing code, no MQTT commands; the next password is a first one, with the setup code armed at once where the device shows codes; dosing and the settings stay | SD-139 | ✓ | `auth.cpp`, `robot.cpp`, `sim/main.cpp` · test_reset.cpp, robot.spec.ts |
+| Where the device has a code on its label, that code sets the first password only in the function key's window: 5 min after a short press, closed by five wrong codes, its end or a restart; the label's code survives every reset | SD-149 | ✓ | `hardware.hpp`, `auth.cpp`, `robot.cpp`, `api.cpp` · test_functionkey.cpp |
+| The status light shows the function key's window, else a Stop, else a critical alarm, else a warning, else all well | SD-149 | ✓ | `hardware.hpp`, `robot.cpp` · test_functionkey.cpp, robot.spec.ts |
 | A factory reset, at the device or by the owner with the password, switches the pumps and every network output off (confirmed, a minute at most), removes every file and restarts as new with a new device ID; meanwhile nothing is taken, once cleared nothing is written, and one cut short goes on at the next start | SD-139 | ✓ | `robot.cpp`, `gateway.cpp`, `api.cpp`, `hardware.hpp` · test_reset.cpp, robot.spec.ts |
 
 ## Commissioning (SD-129)
@@ -209,6 +211,7 @@ of its own.
 | Rule | Rationale | Status | Implementation · tests |
 |---|---|---|---|
 | Two devices pair only with the code the second one shows: 10 minutes, voided by the fifth wrong try; each then holds a peer token for the other; never with itself, at most one peer | SD-131 | ✓ | `robot.cpp`, `api.cpp` · test_coupling.cpp, robot.spec.ts |
+| A second device with a code on its label shows none: it pairs with the label's code in its function key's window | SD-149 | ✓ | `robot.cpp` · test_functionkey.cpp |
 | The peer and its token live apart from the configuration and never in a backup or an answer of the API; ending the coupling revokes the tokens on both sides, and only the peer's own token may end it there | SD-131 | ✓ | `robot.cpp`, `coupling.cpp` · test_coupling.cpp |
 | The follower plans nothing: its feed pump runs while the leader's does, with every guard of a check, and it doses only on the leader's request through its own gateway, one run at a time | SD-131 | ✓ | `cycle.cpp`, `robot.cpp` · test_coupling.cpp |
 | 10 s without the leader's call cut a run it asked for, book it, and refuse new ones until the leader calls again; after a restart the follower waits for a call (R6) | SD-131 | ✓ | `robot.cpp` · test_coupling.cpp |

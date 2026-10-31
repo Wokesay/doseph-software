@@ -452,7 +452,9 @@ function CouplingCard() {
             <div class="stack-sm">
               <div class="section-title">{t("settings.coupling.asSecond")}</div>
               <p class="muted small">{t("settings.coupling.asSecondHint")}</p>
-              {code && c.code ? (
+              {info.value?.labelCode ? (
+                <p class="small" data-testid="pairing-by-key">{t("settings.coupling.byKey")}</p>
+              ) : code && c.code ? (
                 <p>
                   <code class="mono token" data-testid="pairing-code">{code}</code>{" "}
                   <span class="muted small">{t("settings.coupling.codeUntil", { time: dateTime(c.code.until) })}</span>

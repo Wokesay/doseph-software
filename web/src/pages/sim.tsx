@@ -62,6 +62,8 @@ function PumpCalTwin(p: { w: World; act: (action: string, body?: object) => Prom
 export function SimPanel() {
   const [open, setOpen] = useState(false);
   const [world, setWorld] = useState<World | null>(null);
+  // The device's own face (SD-149): the ring in the function key, and the code on its label
+  const [device, setDevice] = useState<{ statusLight: string; labelCode: string | null } | null>(null);
   const [vol, setVol] = useState<number | null>(100);
   const [ec, setEc] = useState<number | null>(0.45);
   const [ph, setPh] = useState<number | null>(7.6);
@@ -69,8 +71,11 @@ export function SimPanel() {
   const speed = String(state.value?.sim?.speed ?? 1);
 
   const load = () =>
-    get<{ world: World }>("/sim")
-      .then((s) => setWorld(s.world))
+    get<{ world: World; device?: { statusLight: string; labelCode: string | null } }>("/sim")
+      .then((s) => {
+        setWorld(s.world);
+        setDevice(s.device ?? null);
+      })
       .catch(() => {});
   useEffect(() => {
     if (!open) return;
@@ -306,7 +311,16 @@ export function SimPanel() {
       <div class="stack-sm">
         <div class="section-title">{t("sim.atDevice")}</div>
         <p class="faint small">{t("sim.atDeviceNote")}</p>
+        {device && (
+          <p class="small" data-testid="sim-ring">
+            {t("sim.ring", { state: t(`sim.ring.${device.statusLight}` as "sim.ring.ok") })}
+            {device.labelCode && ` · ${t("sim.label", { code: device.labelCode })}`}
+          </p>
+        )}
         <div class="row">
+          <Button size="sm" onClick={() => act("keyPress", {}, t("sim.keyPressed"))} data-testid="sim-key">
+            {t("sim.key")}
+          </Button>
           {(["access", "factory"] as const).map((r) => (
             <Button
               size="sm"

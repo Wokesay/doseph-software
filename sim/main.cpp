@@ -156,6 +156,14 @@ int main(int argc, char** argv) {
   std::cout << "Starting simulator (scenario " << opts.scenario << ") …" << std::flush;
   // The console shows setup codes; automated tests (--allow-reset) set the first password without one
   opts.showSetupCodes = !allowReset;
+  // The code on the device's label (SD-149): made once per run, as the factory prints one per device;
+  // it survives a factory reset within the run
+  if (opts.showSetupCodes) {
+    static constexpr char kAlphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    std::uint8_t r[16];
+    sim::randomBytes(r, sizeof r);
+    for (int i = 0; i < 16; ++i) opts.labelCode += (i > 0 && i % 4 == 0 ? "-" : "") + std::string(1, kAlphabet[r[i] & 31]);
+  }
   sim::Simulation simulation(opts);
   simulation.speed = std::clamp(speed, 0.0, sim::Simulation::kMaxSpeed);
   std::cout << " ready.\n";
@@ -374,6 +382,8 @@ int main(int argc, char** argv) {
     // The first password needs a setup code shown to the owner alone: here the console
     if (const std::string code = simulation.robot().takeCodeToShow(); !code.empty())
       std::cout << "Setup code for the first password: " << code << "\n";
+    if (!opts.labelCode.empty())
+      std::cout << "Code on the device label: " << opts.labelCode << " (type \"key\" and Enter to press the function key)\n";
   }
   if (!haveWeb) std::cout << "Note: no web app found at " << web << "\n";
   std::cout << "To stop: press Ctrl+C or close this window.\n"
@@ -384,9 +394,14 @@ int main(int argc, char** argv) {
   std::thread([&simulation] {
     std::string line;
     while (g_running && std::getline(std::cin, line)) {
-      const bool access = line == "reset access", factory = line == "reset factory";
-      if (!access && !factory) continue;
+      const bool access = line == "reset access", factory = line == "reset factory", key = line == "key";
+      if (!access && !factory && !key) continue;
       std::lock_guard<std::recursive_mutex> l(simulation.mutex());
+      if (key) {
+        simulation.control("keyPress", doseph::json::object());
+        std::cout << "Function key pressed: for 5 min the device takes the code on its label.\n" << std::flush;
+        continue;
+      }
       simulation.control("atDevice", {{"reset", access ? "access" : "factory"}});
       std::cout << (access ? "Access reset: set a new password in the browser.\n" : "Factory reset: the simulator starts as new.\n") << std::flush;
     }

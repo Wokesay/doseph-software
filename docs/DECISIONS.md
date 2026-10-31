@@ -1968,3 +1968,54 @@ principle.
   profile), the item says so and comes every 14 days. Each has its own
   interval, which can be set.
 - **The 50 %, 30 and 14 days are assumptions** until measured with users.
+
+## SD-149: The function key: a window for the label's code, and the ring
+
+2026-10-31. From the product update of 29 Oct in #10 and the product
+side's answer in #99, chosen by the owner. The product side decided the
+key, the label and its code. Hold times, the window and the ring are
+decided here by the minimal principle.
+
+- **The key.** A small sealed key next to Stop, with the status light as a
+  ring in it.
+  - A short press opens its window.
+  - A long press resets: about 10 s is an access reset; holding the key
+    while the device powers on is a factory reset. The firmware measures
+    the hold, shows on the ring which reset comes, and reports it
+    (`takeReset`, SD-139).
+  - The key never stops anything and never releases a Stop. A Stop
+    pressed before a reset holds after it (SD-139, SD-142).
+- **The window.** A short press opens it for 5 min. It lives in memory
+  only, so a restart closes it (R6). Five wrong codes in it close it too;
+  the person presses the key again. Each press is an event.
+- **The code on the label.** The device has no display, so its setup code
+  is printed on its label (`labelCode`, factory data). It never changes
+  and survives every reset, the factory reset included. Where a device
+  has one:
+  - It sets the first password, at the first start and after an access
+    reset, but only in the window. Outside it the robot says to press the
+    key first. A photo of the label is not enough.
+  - It pairs the device as the second one of a coupling (SD-131), again
+    only in its window. Such a device shows no pairing code of its own.
+  - Wrong codes stay in the log, as before (SD-129).
+  - Where a device has no label code (a development board), it shows
+    generated codes as before.
+- **Never in clear text.** The firmware opens its setup network with the
+  code as the WPA3-SAE key, so the code never crosses the air in clear
+  text. The core checks the code only on the device, never on a server.
+- **The ring** shows, in this order:
+  1. the window;
+  2. a Stop;
+  3. a critical alarm;
+  4. a warning;
+  5. all well.
+
+  While the key is held, the firmware shows which reset comes. Colours
+  and blinking are the firmware's.
+- **Keep the label.** The first-password page and the pairing page say
+  that the code is on the label and is needed again after a reset.
+- **Simulator.** An interactive run has a label code, made once per run.
+  The console prints it, and `key` presses the key. The panel shows the
+  ring and the label and has the key. Automated tests run without a
+  label, as before.
+- **The 5 min and the five codes are assumptions.**

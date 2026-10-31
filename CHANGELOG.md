@@ -7,6 +7,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The function key (SD-149). A short press opens a 5-minute window. In it
+  the code on the device's label sets the first password, and pairs the
+  device as the second one of a coupling. Five wrong codes, its end or a
+  restart close it. The status light shows the window, a Stop, an alarm
+  or a warning. In the simulator, the panel and the console's `key` press
+  it, and an interactive run has a label code.
+
 - Precipitation possible, and cleaning the trough (SD-148). A round that
   raises EC by less than half per ml of what its recipe did before says
   that precipitation or deposits are possible, as a note. The maintenance

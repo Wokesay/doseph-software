@@ -116,6 +116,12 @@ device's protection reports (SD-141); a restart of the twin clears a
 power trip and a safety restart. The example profiles mount slots 2 and 4
 so that their pumps deliver with the motor turning the other way (an
 **assumption**, SD-142); the twin pumps by how a slot is mounted.
+The function key (SD-149): `keyPress` presses it briefly, as the panel's
+"Function key" button and the console's `key` do. An interactive
+simulator (not with `--allow-reset`) has a code on its label, printed on
+the console at the start and shown in the panel. It is made once per run
+and survives a factory reset within the run. The panel also shows what
+the ring in the key shows.
 A pump calibration by the user (SD-143): `intake` with
 `{"channel": 2, "where": "water"}` (or `"canister"`) moves a channel's
 intake, and `calWater` with `{"ml": 100}` fills the cylinder or glass.
