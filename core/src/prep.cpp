@@ -25,7 +25,7 @@ PrepEstimate estimatePrep(const Config& cfg, const RecipeCfg& recipe, const Reci
   };
   Ms t = 0;
   double ec = in.ec;
-  int inCheck = 0;
+  int inCheck = std::max(0, in.roundsDone);
   while (ec < in.aim - in.ecTol) {
     if (e.rounds >= kPrepMaxRounds || t >= kPrepMaxMs) {
       e.more = true;
@@ -44,7 +44,8 @@ PrepEstimate estimatePrep(const Config& cfg, const RecipeCfg& recipe, const Reci
       e.reason = d.reason;
       return e;
     }
-    // A channel without room in its daily run time waits until runs of the last 24 h fall out of it
+    // A channel without room in its daily run time waits until runs of the last 24 h fall out of it.
+    // A little optimistic: the cycle tries again every few minutes and starts its check anew
     for (const auto& st : d.steps) {
       const auto cap = st.device.empty() ? in.dayCapMs.find(st.channel) : in.dayCapMs.end();
       if (cap == in.dayCapMs.end()) continue;  // a coupled device's channel counts there

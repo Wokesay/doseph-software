@@ -91,7 +91,7 @@ constexpr Entry kMessages[] = {
     {"watch.maintenance", "Maintenance: not judged"},
     {"cycle.note.ph_too_small", "The pH− dose ({ml:2} ml) is too small for the pump – nothing dosed"},
     {"cycle.note.ec_too_small", "The nutrient round is too small for the pumps – nothing dosed ({reason})"},
-    {"cycle.note.hand_mix", "Mixed by hand: EC {ec:2} is more than {gap:1} below its target {target:2} – mix the tank by hand to about its targets; Doseph then holds them"},
+    {"cycle.note.hand_mix", "Mixed by hand: EC {ec:2} is more than {gap:2} below its target {target:2} – mix the tank by hand to about its targets; Doseph then holds them"},
     // Why the robot doses or not (MixCycle::checks)
     {"check.stopped", "Stopped: nothing runs until Resume"},
     {"check.not_stopped", "Not stopped"},
@@ -122,6 +122,7 @@ constexpr Entry kMessages[] = {
     {"check.rest_over", "The rest after a nutrient dose is over"},
     {"check.rest_left", "Rest after the nutrient dose: {left} left"},
     {"check.ec_first", "Nutrients are being dosed: pH comes after"},
+    {"check.hand_ok", "Mixed by hand: EC is within {gap:2}\u00a0mS/cm of its target, so the robot holds it"},
     {"check.ec_done", "No nutrient round open"},
 
     // Planning (plan.cpp)

@@ -2059,14 +2059,17 @@ decided here by the minimal principle.
     assumption).
 
   It guides and promises nothing. Each round estimates anew from where EC
-  stands. Beyond 1,000 rounds or two weeks it stops and says "more than".
+  stands, counting the rounds its check already dosed. Beyond 1,000 rounds or two weeks it stops and says "more than".
   Without volume, EC or its target there is none (R5).
 - **The preparation** begins with the first round of a check. A new one
-  begins when the recipe or its EC target changes, or when EC stands
-  below where the last one began (fresh water came in). It ends once EC
-  stands within its band, or when a round got too small for the pumps.
-  A preparation of two rounds or more is logged with how it went. A Stop
-  drops it.
+  begins after a new fill or another volume, when the recipe or its EC
+  target changes, or when EC stands below where the last one began
+  (fresh water came in). It ends once EC stands where the rounds aim:
+  its band, or a little below it while pH− is still to follow (RAT-053).
+  It also ends when a round got too small for the pumps. A preparation
+  of two rounds or more is logged with how it went. A Stop, the cycle
+  going off or a nutrient lock drops it. A preparation whose end has
+  passed, because a wait held it, says it is behind its estimate.
 - **The status** shows where it began, its rounds, how far EC came and
   when it should be done. It says when the pumps are slow for the tank
   (each round made smaller) and when the daily run time spreads it over
@@ -2079,8 +2082,10 @@ decided here by the minimal principle.
   then only holds them. It corrects EC at most 0.3 mS/cm below its target,
   and at least twice the tolerance (an assumption). Further below, it
   doses nothing, pH neither, since nutrients come first (RAT-004), and it
-  says to mix by hand. Everything else stays as it is: the test dose of a
-  new fill (SD-105), the caps and the locks.
+  says to mix by hand; the list of why it doses or not says so too.
+  Everything else stays as it is: the test dose of a new fill (SD-105),
+  the caps and the locks. A large top-up of fresh water (SD-132) that
+  takes EC that far below stops the holding too, until a person mixes.
 - **Not changed here.** The caps that make a large tank slow (one channel
   at a time, RAT-018; 60 min a day per channel and six runs of 60 s per
   round, SD-113; the settling wait, SD-112) and the largest pH− dose

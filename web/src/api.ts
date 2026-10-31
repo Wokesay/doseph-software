@@ -33,10 +33,10 @@ export type CycleSettings = {
 };
 
 /** How long a preparation takes (SD-150): its rounds, minutes in all and when it should be done;
- *  `more`: longer than the estimate follows; `limited`: the pumps are slow for the tank; `daily`: the
+ *  `late`: its end has passed (a wait held it); `more`: longer than the estimate follows; `limited`: the pumps are slow for the tank; `daily`: the
  *  daily run time per channel stretches it; `reachEc`: where its rounds end. */
 export type PrepEstimate =
-  | { ok: true; rounds: number; ml: number; totalMin: number; endAt: number; leftMin: number; more: boolean; limited: boolean; daily: boolean; reachEc: number | null }
+  | { ok: true; rounds: number; ml: number; totalMin: number; endAt: number; leftMin: number; late: boolean; more: boolean; limited: boolean; daily: boolean; reachEc: number | null }
   | { ok: false; reason: Msg };
 
 // One thing a kind of dose needs, and whether it holds now (MixCycle::checks)

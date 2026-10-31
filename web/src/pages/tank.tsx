@@ -128,7 +128,7 @@ function PrepareCard() {
         {f?.ok && f.limited && <p class="muted small">{t("status.prepLimited")}</p>}
         {f?.ok && f.daily && <p class="muted small">{t("status.prepDaily")}</p>}
         {long && cfg.tank.prepare === "robot" && <Banner tone="info">{t("tank.freshLong")}</Banner>}
-        <Field label={t("tank.prepare")} hint={prepare === "hand" ? t("tank.prepareHandHint", { gap: num(c.settings.holdGapEc, 1) }) : undefined}>
+        <Field label={t("tank.prepare")} hint={prepare === "hand" ? t("tank.prepareHandHint", { gap: num(c.settings.holdGapEc, 2) }) : undefined}>
           <select class="select input" value={prepare} onChange={(e) => setPrepare((e.target as HTMLSelectElement).value as "robot" | "hand")} name="prepare">
             <option value="robot">{t("tank.prepare.robot")}</option>
             <option value="hand">{t("tank.prepare.hand")}</option>

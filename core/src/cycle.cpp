@@ -424,6 +424,7 @@ void MixCycle::watchWater(Ctx& c, const RecipeCfg& r, double ec, const CycleSett
 
 void MixCycle::evaluate(Ctx& c, Actuators& act) {
   const CycleSettings s = cycleSettings(c);
+  fresh_ = {};
   if (!s.recipe) return;
   const RecipeCfg& r = *s.recipe;
   notes_.clear();
@@ -435,7 +436,6 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   const double ec = measured_.ec, ph = measured_.ph;
   if (isNum(s.ecTarget) && isNum(ec)) watchWater(c, r, ec, s);
   // A fresh fill of this tank as the robot would prepare it now, to choose who prepares it (SD-150)
-  fresh_ = {};
   if (isNum(s.ecTarget)) {
     PrepInput in = prepInput(c, act, s);
     in.ec = kFreshEc;
@@ -486,7 +486,7 @@ void MixCycle::evaluate(Ctx& c, Actuators& act) {
   // A preparation ends once EC stands within its band; with its recipe or EC target gone it is
   // dropped (SD-150)
   if (prep_.startedAt > 0) {
-    if (!isNum(s.ecTarget) || prep_.recipe != r.id) prep_ = {};
+    if (!isNum(s.ecTarget) || prep_.recipe != r.id || holds(c.rt, "ec.no_effect")) prep_ = {};
     else if (isNum(ec) && isNum(aim) && ec >= aim - s.ecTol) endPrep(c, ec);
   }
 
@@ -558,6 +558,7 @@ bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   PrepInput in = prepInput(c, act, s);
   in.ec = ec;
   in.aim = aim;
+  in.roundsDone = ecRounds_;
   prep_.est = estimatePrep(c.cfg, r, eff, in);
   prep_.estAt = c.epoch;
   recordPairs(c, r.id, plan.steps, false);
@@ -711,8 +712,6 @@ void MixCycle::settlePairs(Ctx& c) {
             say("ev.cycle.pair_short.text", {{"names", names}, {"ml", total}}), {{"recipe", recipe}, {"parts", missing}});
 }
 
-// The missing parts alone, in the recipe's order; the round learns nothing (RAT-057). A part that
-// cannot be dosed holds the others of its pair. False when the catch-up no longer fits and was dropped.
 PrepInput MixCycle::prepInput(const Ctx& c, const Actuators& act, const CycleSettings& s) const {
   PrepInput in;
   in.volumeL = s.volumeL;
@@ -749,6 +748,8 @@ void MixCycle::endPrep(Ctx& c, double ec) {
   prep_ = {};
 }
 
+// The missing parts alone, in the recipe's order; the round learns nothing (RAT-057). A part that
+// cannot be dosed holds the others of its pair. False when the catch-up no longer fits and was dropped.
 bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, double ec) {
   const RecipeCfg& r = *s.recipe;
   const json parts = c.rt.catchUp.value("parts", json::object());
@@ -1009,6 +1010,7 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
     return;
   }
   if (!s.off.key.empty() && !c.pumpCalibration) {
+    prep_ = {};  // nothing to prepare for (SD-150)
     if (phase_ != Phase::Off) {
       restart(c, act, doser);  // a round going on is cut: what went in is mixed first later
       if (s.off.key == "cycle.off.ended")
@@ -1308,6 +1310,13 @@ json MixCycle::checks(const Ctx& c) const {
   const bool volumeLatch = holds(c.rt, "tank.volume");
   all.push_back(item(!volumeLatch, say(volumeLatch ? "check.volume_latched" : "check.volume_fits")));
   all.push_back(item(!noFlowLogged_, say(noFlowLogged_ ? "check.no_flow" : "check.flow")));
+  // Mixed by hand, the robot only holds (SD-150): EC far below its target is the person's to mix
+  if (c.cfg.tank.prepare == "hand" && isNum(w.ecTarget) && c.truth.get(Signal::Ec).usable()) {
+    const double gap = std::max(kHoldGapEc, 2 * s.ecTol), now = *c.truth.get(Signal::Ec).value;
+    all.push_back(item(now >= w.ecTarget - gap, now >= w.ecTarget - gap
+                                                    ? say("check.hand_ok", {{"gap", gap}})
+                                                    : say("cycle.note.hand_mix", {{"ec", now}, {"target", w.ecTarget}, {"gap", gap}})));
+  }
   const bool busy = c.channelJob || c.probeCalibrating || c.refilling || c.maintenanceUntil > 0;
   all.push_back(item(!busy, c.maintenanceUntil > 0 ? say("cycle.wait.maintenance", {{"until", c.maintenanceUntil}})
                             : say(c.probeCalibrating ? "check.probe_job"
@@ -1401,7 +1410,8 @@ json MixCycle::status(const Ctx& c) const {
     const Epoch end = at + e.totalMs / kSecond;
     return {{"ok", true},           {"rounds", e.rounds},   {"ml", e.ml},       {"totalMin", e.totalMs / kMinute},
             {"endAt", end},         {"leftMin", std::max<Epoch>(0, end - c.epoch) / 60},
-            {"more", e.more},       {"limited", e.limited}, {"daily", e.daily}, {"reachEc", numOrNull(e.reachEc)}};
+            {"late", end < c.epoch}, {"more", e.more},       {"limited", e.limited}, {"daily", e.daily},
+            {"reachEc", numOrNull(e.reachEc)}};
   };
   j["prep"] = prep_.startedAt > 0 ? json{{"startedAt", prep_.startedAt}, {"from", prep_.fromEc},  {"target", prep_.target},
                                          {"rounds", prep_.rounds},        {"estimate", estimate(prep_.est, prep_.estAt)}}

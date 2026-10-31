@@ -74,7 +74,7 @@ export const msgDe: Record<string, string> = {
   "watch.maintenance": "Wartung: nicht bewertet",
   "cycle.note.ph_too_small": "Die pH−-Gabe ({ml:2} ml) ist zu klein für die Pumpe – nichts dosiert",
   "cycle.note.ec_too_small": "Die Nährstoffrunde ist zu klein für die Pumpen – nichts dosiert ({reason})",
-  "cycle.note.hand_mix": "Von Hand gemischt: EC {ec:2} liegt mehr als {gap:1} unter dem Ziel {target:2} – den Tank von Hand etwa auf seine Ziele mischen; Doseph hält sie dann",
+  "cycle.note.hand_mix": "Von Hand gemischt: EC {ec:2} liegt mehr als {gap:2} unter dem Ziel {target:2} – den Tank von Hand etwa auf seine Ziele mischen; Doseph hält sie dann",
   "check.stopped": "Gestoppt: nichts läuft bis „Fortsetzen“",
   "check.not_stopped": "Nicht gestoppt",
   "check.recipe": "Rezept in Kraft: {name}",
@@ -103,6 +103,7 @@ export const msgDe: Record<string, string> = {
   "check.gate_low": "EC {ec:2} liegt unter {floor:2}: so lässt sich pH nicht messen, erst Nährstoffe",
   "check.rest_over": "Die Ruhe nach einer Nährstoffgabe ist vorbei",
   "check.rest_left": "Ruhe nach der Nährstoffgabe: noch {left}",
+  "check.hand_ok": "Von Hand gemischt: EC liegt höchstens {gap:2}\u00a0mS/cm unter dem Ziel, also hält der Roboter es",
   "check.ec_first": "Nährstoffe werden dosiert: pH kommt danach",
   "check.ec_done": "Keine Nährstoffrunde offen",
 

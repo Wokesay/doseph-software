@@ -157,6 +157,30 @@ TEST_CASE("Cycle: a preparation shows where it began, its rounds and when it sho
   CHECK(logged);
 }
 
+TEST_CASE("Cycle: a new fill starts a new preparation; the cycle going off drops it (SD-150)") {
+  harness::Run r(harness::device());
+  waitFor(r, "the first round", [&] { return r.phase() == "dose"; }, 20 * 60);
+  REQUIRE(r.state()["cycle"]["prep"].is_object());
+  const long long first = r.state()["cycle"]["prep"]["startedAt"];
+  // The second round dosed and mixing (a fill while a channel runs would cut that run)
+  waitFor(r, "a second round mixing", [&] {
+    const json c = r.state()["cycle"];
+    return c["prep"].is_object() && c["prep"]["rounds"] == 2 && c["phase"] == "mix";
+  }, 3 * 3600);
+  // A new fill from the same tap: a preparation of its own, from its first round
+  r.act("fill", {{"volumeL", 100}, {"ec", 0.45}, {"ph", 7.6}});
+  r.ok("POST", "tank/new");
+  waitFor(r, "the new fill's first round", [&] {
+    const json p = r.state()["cycle"]["prep"];
+    return p.is_object() && p["startedAt"].get<long long>() > first;
+  }, 30 * 60);
+  CHECK(r.state()["cycle"]["prep"]["rounds"] == 1);
+  // No recipe in force: nothing to prepare for
+  r.ok("PUT", "active", {{"recipe", ""}});
+  r.step(5 * kSecond);
+  CHECK(r.state()["cycle"]["prep"].is_null());
+}
+
 TEST_CASE("Cycle: mixed by hand, the robot only holds: EC far below its target is not dosed, pH neither, and it says so; near its target it corrects (SD-150, RAT-004)") {
   harness::Run r(harness::device());
   CHECK(r.call("PUT", "tank", {{"prepare", "both"}}).status == 422);
@@ -169,6 +193,19 @@ TEST_CASE("Cycle: mixed by hand, the robot only holds: EC far below its target i
   for (const auto& n : c["notes"]) said = said || n["key"] == "cycle.note.hand_mix";
   CHECK(said);
   CHECK(c["prep"].is_null());
+  for (const auto& e : r.events("control")) {
+    CHECK(e["title"]["key"] != "ev.cycle.ec_round");
+    CHECK(e["title"]["key"] != "ev.cycle.ph_dose");
+  }
+  // The checklist says so too
+  bool listed = false;
+  for (const auto& i : c["checks"]["all"]) listed = listed || (i["key"] == "cycle.note.hand_mix" && i["ok"] == false);
+  CHECK(listed);
+  // Above the EC floor with pH high, still far below the EC target: pH waits for the nutrients too (RAT-004)
+  r.act("fill", {{"volumeL", 100}, {"ec", 1.0}, {"ph", 7.5}});
+  r.ok("POST", "tank/new");
+  waitFor(r, "a new check", [&] { return r.phase() == "measure"; }, 10 * 60);
+  waitFor(r, "its end", [&] { return r.phase() == "hold"; }, 30 * 60);
   for (const auto& e : r.events("control")) {
     CHECK(e["title"]["key"] != "ev.cycle.ec_round");
     CHECK(e["title"]["key"] != "ev.cycle.ph_dose");

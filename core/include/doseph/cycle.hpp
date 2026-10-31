@@ -136,6 +136,8 @@ class MixCycle {
     return s;
   }
   void doseFinished(Ctx& c, const DoseProgress& p);
+  // A new fill or another volume: a preparation under way is over (SD-150)
+  void newFill() { prep_ = {}; }
   void recipeChanged(const std::string& id) {
     if (id == roundRecipe_) clean_ = false;
   }

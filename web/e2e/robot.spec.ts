@@ -486,7 +486,7 @@ test("a preparation shows its progress and estimate; mixed by hand, the robot on
   // Mixed by hand: a fill far below the target is the person's to mix
   await page.goto("/#/tank");
   await page.locator("select[name=prepare]").selectOption("hand");
-  await expect(page.getByText("Doseph then only corrects what is at most 0.3\u00a0mS/cm below the target.")).toBeVisible();
+  await expect(page.getByText("Doseph then only corrects what is at most 0.30\u00a0mS/cm below the target.")).toBeVisible();
   await page.getByTestId("save-prepare").click();
   await expect(page.getByText("Saved")).toBeVisible();
   await newFill();

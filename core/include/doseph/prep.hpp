@@ -32,6 +32,7 @@ struct PrepInput {
   double ec = kNaN, aim = kNaN, ecTol = kNaN;  // where EC stands, what the rounds aim at, the band
   double maxEcStep = 1.0;
   int maxRounds = 10;            // rounds per check; then the robot holds until the next check
+  int roundsDone = 0;            // rounds this check already dosed
   Ms roundWaitMs = 0;            // after each round: the mixing wait and the stable window
   Ms checkMs = 0;                // after the rounds of a check: the hold and the start of the next
   Ms runPauseMs = 0, channelPauseMs = 0;

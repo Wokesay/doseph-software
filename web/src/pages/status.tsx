@@ -143,7 +143,7 @@ function PrepBlock() {
       </div>
       <span class="small muted">
         {t("status.prepFrom", { from: num(p.from, 2), target: num(p.target, 2), ec: ec === null ? "–" : num(ec, 2) })}
-        {e.ok && <> · {t(e.more ? "status.prepMore" : "status.prepLeft", { left: span(e.leftMin * 60000), time: dateTime(e.endAt) })}</>}
+        {e.ok && <> · {e.late ? t("status.prepLate") : t(e.more ? "status.prepMore" : "status.prepLeft", { left: span(e.leftMin * 60000), time: dateTime(e.endAt) })}</>}
       </span>
       {!e.ok && <span class="small muted">{t("status.prepNone", { reason: msg(e.reason) })}</span>}
       {e.ok && e.limited && <span class="small muted">{t("status.prepLimited")}</span>}
