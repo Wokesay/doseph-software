@@ -54,6 +54,7 @@ struct Ctx {
   bool stopped = false;
   bool flowOk = false;  // flow through the device proven now: no dose without it (SD-105)
   bool pumpInTank = true;  // the feed pump lies in the tank: no priming, a short window (SD-127)
+  double troughL = kNaN;   // the water the trough and the return path hold, L (SD-147)
   bool pumpCut = false;    // the hardware switched the feed pump off for no flow (PD-477, SD-127)
   std::optional<double> pumpA{};  // the feed pump's current, where measured (SD-127)
   bool probeCalibrating = false;  // a probe is in a buffer: its readings are not the tank's
@@ -163,6 +164,7 @@ struct DoseOrder {
   // content back where the intake is); runs of the gateway also: refill | pullback
   std::string purpose;
   DoseStep step;
+  Ms pauseMs = 3 * kSecond;  // between its partial runs, the pulses (RAT-055, SD-147)
 };
 
 struct DoseProgress {

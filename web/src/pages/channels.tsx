@@ -59,10 +59,14 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
             onChange={(role) => setB({ ...b, role })}
             options={[
               ["nutrient", t("channels.role.nutrient")],
+              ["silicate", t("channels.role.silicate")],
               ["ph_down", "pH−"],
             ]}
           />
           {otherPhDown && <p class="small warn-text">{t("channels.phDownTaken", { name: otherPhDown.name })}</p>}
+          {/* Through the trough (SD-147) */}
+          {b.role === "silicate" && <p class="small warn-text" data-testid="silicate-note">{t("channels.silicateNote")}</p>}
+          {b.role === "ph_down" && <p class="small muted">{t("channels.phDownNote")}</p>}
         </Field>
         {(peer || device) && (
           <Field label={t("channels.device")} group>
@@ -215,7 +219,7 @@ function CanistersCard(p: { onEdit: (b: Partial<Canister>) => void }) {
               <div class="grow">
                 <div class="title">{b.name}</div>
                 <div class="muted small">
-                  {b.role === "ph_down" ? "pH−" : t("channels.role.nutrient")}
+                  {b.role === "ph_down" ? "pH−" : t(b.role === "silicate" ? "channels.role.silicate" : "channels.role.nutrient")}
                   {b.pair && ` · ${t("channels.pairName", { pair: b.pair })}`}
                   {" · "}
                   {b.channel ? t(b.device ? "channels.channelOnPeer" : "channels.channelN", { channel: b.channel }) : t("channels.noChannel")}

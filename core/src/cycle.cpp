@@ -58,6 +58,11 @@ std::optional<Msg> shortOf(const Ctx& c, const Actuators& act, const DoseStep& d
 
 }  // namespace
 
+Ms troughPassMs(double troughL, double flowLpm, int passes) {
+  if (!isNum(troughL) || troughL <= 0 || !isNum(flowLpm) || flowLpm <= 0) return 0;
+  return static_cast<Ms>(std::llround(passes * troughL / flowLpm * 60000.0));
+}
+
 CycleSettings cycleSettings(const Ctx& c) {
   CycleSettings s;
   const auto& cfg = c.cfg;
@@ -513,6 +518,7 @@ bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   recordPairs(c, r.id, plan.steps, false);
   kind_ = Kind::Ec;
   queue_ = plan.steps;
+  lastChannel_.clear();
   roundRecipe_ = r.id;
   before_ = measured_;
   mlRound_ = 0;
@@ -568,6 +574,7 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   }
   kind_ = Kind::Ph;
   queue_ = {step};
+  lastChannel_.clear();
   roundRecipe_ = s.recipe->id;
   before_ = measured_;
   mlRound_ = 0;
@@ -713,6 +720,7 @@ bool MixCycle::startCatchUp(Ctx& c, Actuators& act, const CycleSettings& s, doub
   recordPairs(c, r.id, steps, true);
   kind_ = Kind::Ec;
   queue_ = steps;
+  lastChannel_.clear();
   roundRecipe_ = r.id;
   before_ = measured_;
   mlRound_ = 0;
@@ -1080,12 +1088,25 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
       }
       if (doser.busy()) break;
       if (!queue_.empty() && !doseFailed_) {
+        // Before another channel the trough and the return path run clear of the last one's
+        // concentrate, while water flows: concentrates never meet there (SD-147)
+        const DoseStep& next = queue_.front();
+        const std::string channel = next.device + ":" + std::to_string(next.channel);
+        const Ms pause = std::max(kChannelPauseMinMs, troughPassMs(c.troughL, s.flowLpm, kTroughPasses));
+        if (!lastChannel_.empty() && channel != lastChannel_ && clearedMs_ < pause) {
+          if (c.flowOk) clearedMs_ += dt;
+          line_ = say("cycle.channel_pause", {{"name", next.name}, {"left", mmss(pause - clearedMs_)}});
+          break;
+        }
         DoseOrder o;
         o.id = std::string(kind_ == Kind::Ec ? "ec-" : "ph-") + std::to_string(++seq_);
         o.purpose = kind_ == Kind::Ec ? "ec" : "ph";
-        o.step = queue_.front();
+        o.step = next;
+        o.pauseMs = std::max(kRunPauseMinMs, troughPassMs(c.troughL, s.flowLpm, 1));
         Msg err;
         if (doser.start(c, act, o, err)) {
+          lastChannel_ = channel;
+          clearedMs_ = 0;
           json& pr = c.rt.pairRound;
           if (pr.is_object() && pr["parts"].contains(o.step.canister)) {
             pr["order"] = o.id;

@@ -40,6 +40,8 @@ std::optional<doseph::Profile> exampleProfile(const std::string& name) {
   // The feed pump moves water above 0.5 A (an assumption, SD-146; the twin draws 0.8 A with water,
   // 0.32 A in air)
   p.pumpMinA = 0.5;
+  // The trough and the return path hold 0.5 L, on the Pro 2 L (assumptions, SD-147)
+  p.troughL = name == "pro" ? 2.0 : 0.5;
   return p;
 }
 

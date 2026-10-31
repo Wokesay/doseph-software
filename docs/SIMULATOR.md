@@ -60,6 +60,7 @@ The device reports what it has (SD-108); `GET /api/v1/info` shows it as
 | Feed pump, low end | 10 L/min | – |
 | Feed pump, start window (SD-146) | 3 s | 3 s |
 | Feed pump, least current with water (SD-146) | 0.5 A | 0.5 A |
+| Trough and return path (SD-147) | 0.5 L | 2 L |
 | Pull back | the pumps run backwards | they cannot |
 | Run time per 24 h (SD-113) | 40 min per head | 20 min per head |
 

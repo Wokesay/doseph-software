@@ -855,7 +855,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   for (const auto& b : c.canisters) {
     if (b.id.empty() || b.id.size() > 40 || !ids.insert(b.id).second) err(say("cfg.canister.id"));
     if (b.name.empty() || b.name.size() > 40) err(say("cfg.canister.name"));
-    if (b.role != "nutrient" && b.role != "ph_down") err(say("cfg.canister.role", {{"name", b.name}}));
+    if (b.role != "nutrient" && b.role != "ph_down" && b.role != "silicate") err(say("cfg.canister.role", {{"name", b.name}}));
     // One pH− canister at most (SD-108)
     if (b.role == "ph_down" && ++phDowns == 2) err(say("cfg.canister.ph_down_twice", {{"name", b.name}}));
     // On the coupled device (SD-131): its ID, and a channel there; one canister per channel there too
@@ -882,6 +882,7 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
     if (r.steps.empty()) err(say("cfg.recipe.empty", {{"name", r.name}}));
     std::set<std::string> pairsIn, seen;
     double scaled = 0;
+    bool other = false;  // a part that is no silicate came already
     for (const auto& s : r.steps) {
       const CanisterCfg* b = c.canister(s.canister);
       if (!b) {
@@ -890,7 +891,10 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
       }
       if (!seen.insert(b->id).second) err(say("cfg.recipe.twice", {{"name", r.name}, {"part", b->name}}));
       // pH correction is never part of a recipe; it always comes last (RAT-004)
-      if (b->role != "nutrient") err(say("cfg.recipe.ph", {{"name", r.name}, {"part", b->name}}));
+      if (b->role == "ph_down") err(say("cfg.recipe.ph", {{"name", r.name}, {"part", b->name}}));
+      // Silicate goes before every other part (SD-147)
+      if (b->role == "silicate" && other) err(say("cfg.recipe.silicate_first", {{"name", r.name}, {"part", b->name}}));
+      other |= b->role != "silicate";
       if (!inRange(s.mlPerL, 0.001, 50)) err(say("cfg.recipe.amount", {{"name", r.name}, {"part", b->name}}));
       if (!b->pair.empty()) pairsIn.insert(b->pair);
       // A fixed part of a pair would leave its partner scaled alone (RAT-054, RAT-085)

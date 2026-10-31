@@ -213,7 +213,7 @@ export type RobotState = {
 };
 
 export type Canister = {
-  id: string; name: string; role: "nutrient" | "ph_down"; channel: number; pair: string; color: string; capacityMl: number | null; maxMlPerDay: number | null;
+  id: string; name: string; role: "nutrient" | "ph_down" | "silicate"; channel: number; pair: string; color: string; capacityMl: number | null; maxMlPerDay: number | null;
   // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
   device: string;
 };
