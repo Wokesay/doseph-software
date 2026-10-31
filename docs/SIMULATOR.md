@@ -25,8 +25,10 @@ Open http://localhost:8080. Options (`--help`):
 | `--prefill H` | hours the demo computes ahead, so the history has data |
 | `--allow-reset` | change the scenario without signing in (automated tests only) |
 
-Without a password set, the console shows the setup code the first
-password needs, as the device will.
+Without a password set, the first password needs the code on the device
+label (SD-149). The console prints it at the start, and the device takes
+it for 5 min after a press of the function key: type `key` and Enter on
+the console. With `--allow-reset` there is no label and no code.
 
 **Pushes** (SD-124): the simulator sends the channels set up in the
 settings (ntfy, Telegram, e-mail) through the computer's `curl`, found on
