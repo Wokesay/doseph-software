@@ -96,7 +96,7 @@ export const deBase = {
   "term.prime": "Schlauch füllen",
   "help.prime": "Pumpt, bis die Flüssigkeit vorne ankommt. Nötig vor dem Einmessen und nach jedem Kanisterwechsel. Halte das Schlauchende in einen Becher, nicht in den Tank.",
   "term.calibrateProbe": "Sonde kalibrieren",
-  "help.calibrateProbe": "pH: Sonde nacheinander in zwei Pufferlösungen tauchen (z. B. pH 7 und 4). EC: in eine Referenzlösung (z. B. 1,413 mS/cm). Ohne Kalibrierung zeigt der Roboter Werte nur an und dosiert nicht.",
+  "help.calibrateProbe": "pH: Sonde nacheinander in zwei Pufferlösungen tauchen (z. B. pH 7 und 4). EC: in eine Referenzlösung (z. B. 1,413 mS/cm). Die Sonde bleibt eingesteckt: Lass sie über der Messkammer abtropfen, bevor du sie umsetzt, damit nichts an die Steckverbindung kommt, und stell das Tütchen auf eine ebene Fläche oder in ein Glas. Ohne Kalibrierung zeigt der Roboter Werte nur an und dosiert nicht.",
   "term.latched": "Gesperrt bis Freigabe",
   "help.latched": "Eine Gabe hatte keine Wirkung oder die Testgabe passte nicht zum Tankvolumen. Der Roboter dosiert diese Art nicht mehr, bis du die Ursache geprüft und freigegeben hast.",
   "term.jumpLock": "Sprungsperre",

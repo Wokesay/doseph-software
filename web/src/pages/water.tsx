@@ -163,7 +163,9 @@ function ProbeDialog(p: { kind: "ph" | "ec"; onClose: () => void }) {
               </>
             ))}
           </div>
-          <p class="muted small">{t(p.kind === "ph" ? (points.length ? "channels.phNext" : "channels.phFirst") : "channels.ecStep")}</p>
+          <p class="muted small" data-testid="probe-step">
+            {t(ready ? "channels.probeBack" : p.kind === "ph" ? (points.length ? "channels.phNext" : "channels.phFirst") : "channels.ecStep")}
+          </p>
           {!ready && (
             <div class="row" style="align-items:flex-end">
               <Field label={t(p.kind === "ph" ? "channels.buffer" : "channels.reference")}>
