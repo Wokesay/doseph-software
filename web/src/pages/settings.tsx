@@ -452,7 +452,30 @@ function CouplingCard() {
             <div class="stack-sm">
               <div class="section-title">{t("settings.coupling.asSecond")}</div>
               <p class="muted small">{t("settings.coupling.asSecondHint")}</p>
-              {code && c.code ? (
+              {info.value?.labelCode ? (
+                <div class="stack-sm" data-testid="pairing-by-key">
+                  <p class="small">{t("settings.coupling.byKey")}</p>
+                  {c.code ? (
+                    <p class="small">{t("settings.coupling.allowedUntil", { time: dateTime(c.code.until) })}</p>
+                  ) : (
+                    <div>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            await post("/coupling/code");
+                            await load();
+                          } catch (e) {
+                            toastError(e);
+                          }
+                        }}
+                        data-testid="allow-pairing"
+                      >
+                        {t("settings.coupling.allow")}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : code && c.code ? (
                 <p>
                   <code class="mono token" data-testid="pairing-code">{code}</code>{" "}
                   <span class="muted small">{t("settings.coupling.codeUntil", { time: dateTime(c.code.until) })}</span>

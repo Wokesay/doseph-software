@@ -42,7 +42,8 @@ curl -sf http://127.0.0.1:18080/api/v1/info
 echo
 curl -sf --compressed http://127.0.0.1:18080/ | grep -q '<div id="app">'
 curl -sf --compressed http://127.0.0.1:18080/history | grep -q '<div id="app">'  # a page's address falls back to the app
-grep -q "Setup code for the first password" build-pkg/args.log
+# The first password needs the code on the device label, printed on the console (SD-149)
+grep -q "Code on the device label: [2-9A-Z]\{4\}-" build-pkg/args.log
 stop "$pid"
 
 # 2. A plain start in a folder of its own; no browser to open on a runner

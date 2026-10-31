@@ -1062,3 +1062,12 @@ test("silicate is a canister's role of its own, with its warning; in a recipe it
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("CalMag is silicate – it goes first in a recipe")).toBeVisible();
 });
+
+test("the function key in the simulator's panel opens its window, and the ring shows it (SD-149)", async ({ page, request }) => {
+  await scenario(request, "demo");
+  await login(page);
+  await page.getByTestId("sim-open").click();
+  await expect(page.getByTestId("sim-ring")).toContainText("Ring: all well");
+  await page.getByTestId("sim-key").click();
+  await expect(page.getByTestId("sim-ring")).toContainText("function key's window open");
+});

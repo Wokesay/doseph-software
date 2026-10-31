@@ -21,6 +21,9 @@ struct ApiRequest {
   std::string token;   // the session or access token, from sessionToken()
   std::string client;  // the peer's address as clientKey() gives it, never from a header; "" when unknown
   std::string via;     // "mqtt" for a command over MQTT; "" over HTTP
+  // It came over the device's own setup network, whose WPA3-SAE key is the code on its label; in the
+  // simulator, from this computer (SD-149). Set by the platform, never from a header.
+  bool setupNetwork = false;
 };
 
 // Origin checks for the transport, without platform headers.

@@ -45,6 +45,9 @@ class Auth {
   // after `now` on (0: no time limit). "" when a
   // password is set.
   std::string armSetupCode(Ms now, Ms validFor = 0);
+  // The code on the device's label as the setup code, taken until `until` (SD-149): before and
+  // after, no first password is set
+  void armLabelCode(const std::string& code, Ms until);
   bool setupCodeRequired() const { return !setupCode_.empty() && !hasPassword(); }
   // Wrong setup codes are counted, never braked: 80 bits leave nothing to
   // guess, and a count shared by every new client would let anyone block the

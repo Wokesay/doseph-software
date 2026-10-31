@@ -56,10 +56,14 @@ struct PeerRequest {
 // The pairing code a device shows to be coupled as the follower: 8 characters of 32 without
 // 0, 1, I and O (40 bits), shown in two groups of four, valid for 10 minutes, voided by the fifth
 // wrong try. In memory only.
+// The proof a leader sends instead of the pairing code (SD-149)
+std::string pairingProof(const std::string& code, const std::string& leaderId, const std::string& token);
+
 struct PairingCode {
   std::string code;  // without the dash
   Ms until = 0;
   int wrong = 0;
+  bool label = false;  // the code on the device's label, armed for the function key's window (SD-149)
   static constexpr Ms kValid = 10 * kMinute;
   static constexpr int kMaxWrong = 5;
 };

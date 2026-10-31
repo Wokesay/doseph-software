@@ -25,8 +25,11 @@ Open http://localhost:8080. Options (`--help`):
 | `--prefill H` | hours the demo computes ahead, so the history has data |
 | `--allow-reset` | change the scenario without signing in (automated tests only) |
 
-Without a password set, the console shows the setup code the first
-password needs, as the device will.
+Without a password set, the first password needs the code on the device
+label (SD-149). The console prints it at the start, and the device takes
+it for 5 min after a press of the function key: type `key` and Enter on
+the console. Requests from this computer count as the device's setup
+network. With `--allow-reset` there is no label and no code.
 
 **Pushes** (SD-124): the simulator sends the channels set up in the
 settings (ntfy, Telegram, e-mail) through the computer's `curl`, found on
@@ -116,6 +119,12 @@ device's protection reports (SD-141); a restart of the twin clears a
 power trip and a safety restart. The example profiles mount slots 2 and 4
 so that their pumps deliver with the motor turning the other way (an
 **assumption**, SD-142); the twin pumps by how a slot is mounted.
+The function key (SD-149): `keyPress` presses it briefly, as the panel's
+"Function key" button and the console's `key` do. An interactive
+simulator (not with `--allow-reset`) has a code on its label, printed on
+the console at the start and shown in the panel. It is made once per run
+and survives a factory reset within the run. The panel also shows what
+the ring in the key shows.
 A pump calibration by the user (SD-143): `intake` with
 `{"channel": 2, "where": "water"}` (or `"canister"`) moves a channel's
 intake, and `calWater` with `{"ml": 100}` fills the cylinder or glass.

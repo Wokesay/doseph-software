@@ -193,6 +193,7 @@ void Simulation::build(bool fresh) {
   // Tap water in a 100 L tank (assumption): EC 0.45 mS/cm, pH 7.6
   world_.fill(100, 0.45, 7.6);
   hw_ = std::make_unique<SimHardware>(world_, std::move(profile));
+  hw_->setLabel(opts_.labelCode);  // factory data: it survives every reset (SD-149)
   if (opts_.dataDir.empty()) store_ = std::make_unique<doseph::MemoryStorage>();
   else store_ = std::make_unique<FileStorage>(opts_.dataDir);
   createRobot();
@@ -207,8 +208,16 @@ void Simulation::configureDemo() {
   auto& r = *robot_;
   if (opts_.password.empty()) opts_.password = "doseph-demo";
   if (!r.auth().hasPassword()) {
-    // The demo sets its password as the owner would, with the code the start armed for it
-    r.auth().setInitialPassword(opts_.password, r.takeCodeToShow(), clock_->nowMs());
+    // The demo sets its password as the owner would, with the code the start armed for it, or with
+    // the one on the label after a press of the function key (SD-149)
+    std::string code = r.takeCodeToShow();
+    if (!opts_.labelCode.empty()) {
+      hw_->pressKey();
+      step(100);
+      code = opts_.labelCode;
+    }
+    r.auth().setInitialPassword(opts_.password, code, clock_->nowMs());
+    r.endKeyWindow();
     r.saveAuth();
     r.markPasswordSet();
   }
@@ -308,6 +317,7 @@ void Simulation::reboot(Ms outageMs) {
   world_.output = false;
   world_.returnLocked = false;
   world_.stopAllPumps();
+  hw_->takeKeyPress();  // a press before the restart opens no window after it (SD-149)
   // A restart switches a tripped rail on again, and the start that follows is a normal one (SD-141)
   auto& fs = world_.faults;
   fs.erase(std::remove_if(fs.begin(), fs.end(), [](const std::string& f) { return f.rfind("power_trip", 0) == 0 || f == "safety_restart"; }), fs.end());
@@ -334,7 +344,11 @@ void Simulation::loadScenario(const std::string& name) {
 
 json Simulation::simState() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
-  return {{"world", world_.toJson()}, {"net", net_.toJson()}, {"speed", speed}, {"scenario", opts_.scenario}};
+  // The device's own face (SD-149): the ring in the function key, and the code on its label
+  static const char* const kLights[] = {"ok", "warning", "alarm", "stopped", "key_window"};
+  const json device = {{"statusLight", kLights[static_cast<int>(hw_->statusLight())]},
+                       {"labelCode", hw_->labelCode() ? json(*hw_->labelCode()) : json(nullptr)}};
+  return {{"world", world_.toJson()}, {"net", net_.toJson()}, {"device", device}, {"speed", speed}, {"scenario", opts_.scenario}};
 }
 
 json Simulation::control(const std::string& action, const json& b) {
@@ -400,6 +414,9 @@ json Simulation::control(const std::string& action, const json& b) {
   } else if (action == "netOnline" || action == "netInput" || action == "netValue" || action == "netId" || action == "netReachable" ||
              action == "netFloat" || action == "climateAir") {
     if (!net_.control(action, b)) return {{"error", doseph::say("api.bad_input")}};
+  } else if (action == "keyPress") {
+    hw_->pressKey();  // a short press of the function key (SD-149)
+    step(100);
   } else if (action == "atDevice") {
     // A reset asked for at the device (SD-139): taken at the next tick
     const std::string r = doseph::jstr(b, "reset");

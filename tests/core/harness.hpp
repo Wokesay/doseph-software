@@ -39,6 +39,7 @@ class Run {
   sim::Simulation s;
   std::string token;
   std::string ip = "192.168.1.20";
+  bool setupNetwork = false;  // the request comes over the device's own setup network (SD-149)
 
   // A request as the HTTP server hands it to the core, without a socket
   doseph::ApiResponse call(const std::string& method, const std::string& path, const json& body = nullptr,
@@ -49,6 +50,7 @@ class Run {
     r.body = body.is_null() ? "" : body.dump();
     r.token = token;
     r.client = doseph::clientKey(ip);
+    r.setupNetwork = setupNetwork;
     r.query = std::move(query);
     return s.api().handle(r);
   }

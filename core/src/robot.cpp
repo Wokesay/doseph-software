@@ -156,8 +156,100 @@ std::string Robot::takeCodeToShow() {
 }
 
 void Robot::armShownCode() {
+  // A device with a code on its label takes that one, and only in the function key's window; it
+  // shows nothing (SD-149)
+  if (hw_.labelCode()) {
+    if (auth_.hasPassword() || credentialsLost() || authKept_) return;
+    // A label that is not a code arms one nobody knows: no first password, never one without a code
+    if (const auto label = validLabel()) auth_.armLabelCode(*label, keyWindowOpen() ? keyUntil_ : 0);
+    else auth_.armSetupCode(clock_.nowMs(), 1);
+    return;
+  }
   if (!showCodes_ || auth_.hasPassword() || credentialsLost() || authKept_ || auth_.setupCodeRequired()) return;
   codeToShow_ = auth_.armSetupCode(clock_.nowMs(), 0);
+}
+
+bool Robot::keyWindowOpen() const { return keyUntil_ > 0 && clock_.nowMs() < keyUntil_; }
+
+namespace {
+
+// A code as the owner typed it: any case, dashes or spaces between the groups
+std::string normalCode(const std::string& code) {
+  std::string out;
+  for (char ch : code)
+    if (ch != '-' && !std::isspace(static_cast<unsigned char>(ch))) out += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  return out;
+}
+
+}  // namespace
+
+// The proof the leader sends instead of the pairing code (SD-149): HMAC-SHA-256 keyed with the code
+// over its own ID and the token it gives the other device, so neither code crosses the network and a
+// proof seen on it pairs nobody else
+std::string pairingProof(const std::string& code, const std::string& leaderId, const std::string& token) {
+  const std::string key = normalCode(code);
+  const std::string msg = "doseph-pair|" + leaderId + "|" + token;
+  const Digest d = hmacSha256(std::vector<std::uint8_t>(key.begin(), key.end()), reinterpret_cast<const std::uint8_t*>(msg.data()), msg.size());
+  return toHex(d.data(), d.size());
+}
+
+// The label's code where it is one: 16 characters of the code's alphabet; anything else fails closed
+// (SD-149)
+std::optional<std::string> Robot::validLabel() const {
+  const auto label = hw_.labelCode();
+  if (!label) return std::nullopt;
+  const std::string c = normalCode(*label);
+  static constexpr char kAlphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  if (c.size() != 16 || c.find_first_not_of(kAlphabet) != std::string::npos) return std::nullopt;
+  return c;
+}
+
+// A short press of the function key: the window for the label's code opens, for the first password;
+// pairing as the follower also needs the owner to allow it in the app meanwhile (SD-149)
+void Robot::openKeyWindow(Ms now) {
+  keyUntil_ = now + kKeyWindowMs;
+  if (hw_.labelCode()) armShownCode();
+  log_.add(clock_.epoch(), "auth", "info", say("ev.key.window"), say("ev.key.window.text", {{"min", kKeyWindowMs / kMinute}}));
+}
+
+void Robot::endKeyWindow() {
+  std::lock_guard<std::recursive_mutex> l(mtx_);
+  closeKeyWindow();
+}
+
+// Its end, a restart or its use close it (SD-149)
+void Robot::closeKeyWindow() {
+  keyUntil_ = 0;
+  if (hw_.labelCode()) {
+    pairing_.reset();
+    armShownCode();
+  }
+}
+
+// A wrong code, or one outside the window: logged, at most once in 15 min; it closes nothing, so
+// nobody on the network blocks the owner's setup (SD-149)
+void Robot::wrongLabelCode() {
+  const Ms now = clock_.nowMs();
+  if (wrongLogged_ && now - *wrongLogged_ < 15 * kMinute) return;
+  wrongLogged_ = now;
+  log_.add(clock_.epoch(), "auth", "warn", say("ev.key.wrong"), say(keyWindowOpen() ? "ev.key.wrong.text" : "ev.key.outside.text"));
+}
+
+// The ring in the function key (SD-149): the window, a Stop, a critical alarm, a warning, or all well
+void Robot::showStatusLight() {
+  StatusLight s = StatusLight::Ok;
+  if (keyWindowOpen()) s = StatusLight::KeyWindow;
+  else if (rt_.stopped) s = StatusLight::Stopped;
+  else
+    for (const auto& [id, a] : rt_.alarms) {
+      if (!jbool(a, "raised", false)) continue;
+      if (jstr(a, "level") == "critical") {
+        s = StatusLight::Alarm;
+        break;
+      }
+      if (jstr(a, "level") == "warning") s = StatusLight::Warning;
+    }
+  hw_.setStatusLight(s);
 }
 
 bool Robot::halted() const {
@@ -607,6 +699,9 @@ void Robot::tick() {
     case DeviceReset::None:
       break;
   }
+  // The function key's short press, and its window's end (SD-149)
+  if (hw_.takeKeyPress()) openKeyWindow(now);
+  else if (keyUntil_ > 0 && now >= keyUntil_) closeKeyWindow();
   truth_.update(cfg_, hw_, rt_, now, epoch);
   // A probe calibration explains jumps while someone works on it (RAT-042)
   if (probe_ && now - probe_->lastStep < kProbeIdle)
@@ -755,6 +850,7 @@ void Robot::tick() {
     // Each notification to every channel set up, in the device's language (SD-124)
     for (const auto& n : alarms_.takeOutbox()) queueDeliveries(deliveriesFor(n, push_, cfg_.system.language, cfg_.system.name, deliveryId_));
   }
+  showStatusLight();
   saveState();
   saveEvents();
   // A large write waits while a dosing pump runs (SD-142): the device writes its flash in small pieces
@@ -964,6 +1060,8 @@ json Robot::info() const {
           {"deviceId", deviceId_},
           {"hasPassword", auth_.hasPassword()},
           {"setupCode", auth_.setupCodeRequired()},
+          // The code is on the device's label and taken in the function key's window (SD-149)
+          {"labelCode", hw_.labelCode().has_value()},
           // Why neither sign-in nor a first password works, for the sign-in page
           {"passwordProblem", authKept_ ? json(say("auth.kept")) : credentialsLost() ? json(say("auth.lost")) : json(nullptr)},
           {"name", cfg_.system.name},
@@ -2356,6 +2454,19 @@ json Robot::coupling() const {
 Result Robot::armPairingCode() {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
+  // A device with a code on its label pairs with that one: the owner allows it here while its function
+  // key's window is open, so neither a press alone nor the app alone opens it (SD-149)
+  if (hw_.labelCode()) {
+    const auto label = validLabel();
+    if (!label) return Result::fail(409, say("coupling.label_invalid"));
+    if (!keyWindowOpen()) return Result::fail(409, say("coupling.use_key", {{"min", kKeyWindowMs / kMinute}}));
+    PairingCode c;
+    c.code = *label;
+    c.until = keyUntil_;
+    c.label = true;
+    pairing_ = c;
+    return Result::ok({{"code", nullptr}, {"label", true}, {"until", clock_.epoch() + (keyUntil_ - clock_.nowMs()) / 1000}});
+  }
   static constexpr char kAlphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
   std::uint8_t r[8];
   rng_(r, sizeof r);
@@ -2373,7 +2484,8 @@ Result Robot::pair(const json& j) {
     return Result::fail(409, say("coupling.pending"));
   const std::string address = jstr(j, "address"), code = jstr(j, "code");
   if (!peerAddress(address)) return Result::fail(422, say("coupling.address"));
-  if (code.empty() || code.size() > 16) return Result::fail(422, say("coupling.code"));
+  // A code shown by the other device, or the one on its label with its dashes (SD-149)
+  if (code.empty() || code.size() > 24) return Result::fail(422, say("coupling.code"));
   // The token the follower will use to call this device; revoked again if the pairing fails
   const Auth before = auth_;
   Msg err;
@@ -2388,7 +2500,8 @@ Result Robot::pair(const json& j) {
   req.address = address;
   req.method = "POST";
   req.path = "/api/v1/coupling/join";
-  req.body = {{"code", code}, {"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}};
+  // Not the code: a proof of it, bound to this device and the token (SD-149)
+  req.body = {{"proof", pairingProof(code, deviceId_, *token)}, {"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}};
   peerOut_.push_back(req);
   peerPending_[req.id] = {"join", address, auth_.tokens().back().id, ""};
   pairStatus_ = {{"state", "pairing"}, {"address", address}, {"error", nullptr}, {"at", clock_.epoch()}};
@@ -2399,15 +2512,19 @@ Result Robot::join(const json& j) {
   std::lock_guard<std::recursive_mutex> l(mtx_);
   if (peer_) return Result::fail(409, say("coupling.already", {{"name", peer_->name}}));
   const Ms now = clock_.nowMs();
-  if (!pairing_ || now >= pairing_->until) return Result::fail(403, say("coupling.code"));
-  std::string typed;  // as the owner typed it: any case, a dash or spaces between the groups
-  for (char ch : jstr(j, "code"))
-    if (ch != '-' && !std::isspace(static_cast<unsigned char>(ch))) typed += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-  unsigned diff = typed.size() == pairing_->code.size() ? 0 : 1;
-  for (size_t i = 0; i < typed.size() && i < pairing_->code.size(); ++i) diff |= static_cast<unsigned>(typed[i] ^ pairing_->code[i]);
+  if (!pairing_ || now >= pairing_->until) {
+    if (hw_.labelCode()) wrongLabelCode();
+    return Result::fail(403, say("coupling.code"));
+  }
+  // The proof of the code, not the code (SD-149), compared in the same time whatever it holds
+  const std::string want = pairingProof(pairing_->code, jstr(j, "id"), jstr(j, "token")), got = jstr(j, "proof");
+  unsigned diff = got.size() == want.size() ? 0 : 1;
+  for (size_t i = 0; i < got.size() && i < want.size(); ++i) diff |= static_cast<unsigned>(got[i] ^ want[i]);
   if (diff != 0) {
-    // The fifth wrong try voids the code: 40 bits leave nothing to guess in five
-    if (++pairing_->wrong >= PairingCode::kMaxWrong) pairing_.reset();
+    // The fifth wrong try voids a shown code: 40 bits leave nothing to guess in five. The label's
+    // 80 bits need no such brake, which anyone could pull to block the owner (SD-149)
+    if (!pairing_->label && ++pairing_->wrong >= PairingCode::kMaxWrong) pairing_.reset();
+    if (pairing_ && pairing_->label) wrongLabelCode();
     log_.add(clock_.epoch(), "coupling", "warn", say("ev.coupling.code_wrong"));
     return Result::fail(403, say("coupling.code"));
   }
@@ -2436,6 +2553,7 @@ Result Robot::join(const json& j) {
     return Result::fail(500, say("store.failed"));
   }
   pairing_.reset();
+  if (hw_.labelCode()) closeKeyWindow();  // used: the window closes (SD-149)
   log_.add(clock_.epoch(), "coupling", "notice", say("ev.coupling.joined", {{"name", p.name}}));
   return Result::ok({{"id", deviceId_}, {"name", cfg_.system.name}, {"token", *token}});
 }

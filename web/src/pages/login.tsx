@@ -75,7 +75,7 @@ export function Login() {
               <p class="muted">{t("login.firstText")}</p>
             </div>
             {needsCode && (
-              <Field label={t("login.code")} hint={t("login.codeHint")}>
+              <Field label={t("login.code")} hint={t(info.value?.labelCode ? "login.labelHint" : "login.codeHint")}>
                 <input class="input" style="font-family:var(--mono)" type="text" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellcheck={false} value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} required name="code" />
               </Field>
             )}

@@ -71,6 +71,14 @@ std::string Auth::armSetupCode(Ms now, Ms validFor) {
   return shown;
 }
 
+void Auth::armLabelCode(const std::string& code, Ms until) {
+  if (hasPassword()) return;
+  setupCode_.clear();
+  for (char ch : code)
+    if (ch != '-' && !std::isspace(static_cast<unsigned char>(ch))) setupCode_ += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  setupCodeUntil_ = std::max<Ms>(until, 1);  // 0 would mean no time limit
+}
+
 bool Auth::logWrongSetupCode(Ms now) {
   if (wrongLogged_ && now - *wrongLogged_ < 15 * kMinute) return false;
   wrongLogged_ = now;

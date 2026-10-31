@@ -1968,3 +1968,72 @@ principle.
   profile), the item says so and comes every 14 days. Each has its own
   interval, which can be set.
 - **The 50 %, 30 and 14 days are assumptions** until measured with users.
+
+## SD-149: The function key: a window for the label's code, and the ring
+
+2026-10-31. From the product update of 29 Oct in #10 and the product
+side's answer in #99, chosen by the owner. The product side decided the
+key, the label and its code. Hold times, the window, the ring and how the
+code is guarded are decided here by the minimal principle, with a
+security review worked in.
+
+- **The key.** A small sealed key next to Stop, with the status light as a
+  ring in it.
+  - A short press opens its window.
+  - A long press resets: about 10 s is an access reset; holding the key
+    while the device powers on is a factory reset. The firmware measures
+    the hold, shows on the ring which reset comes, and reports it
+    (`takeReset`, SD-139). A press before the start, or the hold at
+    power-on, is never reported as a short press.
+  - The key never stops anything and never releases a Stop. A Stop
+    pressed before a reset holds after it (SD-139, SD-142).
+- **The window.** A short press opens it for 5 min. It lives in memory
+  only, so a restart closes it (R6). Its use closes it too: a first
+  password set, or a pairing done. Each press is an event.
+- **The code on the label.** The device has no display, so its setup code
+  is printed on its label (`labelCode`, factory data). It never changes
+  and survives every reset, the factory reset included. Because it is
+  permanent, it never crosses the home network:
+  - **First password**, at the first start and after an access reset: only
+    in the window, and only over the device's own setup network, whose
+    WPA3-SAE key is the code. The firmware opens that network with the key
+    and tells the core which requests come over it; in the simulator
+    that is this computer. A photo of the label is not enough.
+  - **Pairing as the second device** (SD-131): the press opens the
+    window, and the owner, signed in on that device, allows pairing in its
+    app meanwhile. Neither a press alone nor the app alone opens it. The
+    leader sends no code: it sends an HMAC-SHA-256 keyed with the code
+    over its own ID and the token it gives the other device. A proof seen
+    on the network pairs nobody else. The same holds for a code that a
+    device without a label shows.
+  - **Wrong codes**, also outside the window, are logged, at most once in
+    15 min. They close nothing, so nobody on the network can block the
+    owner. With 80 bits, five more tries would not help an attacker.
+    A shown code of 40 bits keeps its brake: the fifth wrong try voids it.
+  - **A label that is no code** (not 16 characters of the code's alphabet)
+    fails closed: no first password and no pairing. The device is to be
+    checked.
+  - `/info` says only whether the device has a label, never whether its
+    window is open.
+  - Where a device has no label code (a development board), it shows
+    generated codes as before.
+- **The ring** shows, in this order:
+  1. the window;
+  2. a Stop;
+  3. a critical alarm;
+  4. a warning;
+  5. all well.
+
+  While the key is held, the firmware shows which reset comes. Colours and
+  blinking are the firmware's.
+- **Keep the label.** The first-password page and the pairing page say
+  that the code is on the label and is needed again after a reset.
+- **Simulator.** An interactive run has a label code, made once per run.
+  The console prints it, and `key` presses the key. Requests from this
+  computer count as the setup network. The panel shows the ring and the
+  label to the owner alone, and only the owner presses the key there.
+  Automated tests run without a label, as before.
+- **Open for the product side.** A second-hand device keeps its label
+  code, since it survives a factory reset. Whether that is enough under
+  EN 18031-1 is the product side's question.
+- **The 5 min and the 15 min are assumptions.**

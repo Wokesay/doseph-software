@@ -145,6 +145,11 @@ struct RunStatus {
 // is asked for (a button, how long it is held) is the device's.
 enum class DeviceReset { None, Access, Factory };
 
+// What the status light, the ring in the function key, shows (SD-149): the key's window open, a
+// Stop, a critical alarm, a warning, or that all is well. While the key is held, the platform shows
+// which reset comes itself.
+enum class StatusLight { Ok, Warning, Alarm, Stopped, KeyWindow };
+
 class IHardware {
  public:
   virtual ~IHardware() = default;
@@ -175,6 +180,14 @@ class IHardware {
   virtual std::optional<double> feedPumpA() const = 0;
   // A reset asked for at the device since the last call; each is taken once (SD-139)
   virtual DeviceReset takeReset() { return DeviceReset::None; }
+  // The function key next to Stop (SD-149): a short press since the last call. Its long press is a
+  // reset (takeReset); it never stops anything, nor releases a Stop. A press before the start, or the
+  // hold of a factory reset at power-on, is never reported as a short press.
+  virtual bool takeKeyPress() { return false; }
+  // The code printed on the device's label, from its factory data: it survives every reset. None:
+  // the device shows generated codes instead (SD-129, SD-131).
+  virtual std::optional<std::string> labelCode() const { return std::nullopt; }
+  virtual void setStatusLight(StatusLight) {}
   // The light at a channel's outlet, in its colour: on, it points a person to the channel (SD-143)
   virtual void setChannelLight(int /*channel*/, bool /*on*/) {}
 };

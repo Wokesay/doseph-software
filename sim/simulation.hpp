@@ -49,6 +49,7 @@ struct Options {
   std::string dataDir;            // empty: in memory only
   std::string password;           // the demo's password
   bool showSetupCodes = false;    // the console shows setup codes (SD-129, SD-139)
+  std::string labelCode;          // the code on the device's label (SD-149); empty: none, codes are shown
   double prefillHours = 24;       // history the demo computes ahead
   doseph::Epoch startEpoch = 0;   // 0: now minus the prefill
 };
