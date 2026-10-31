@@ -282,10 +282,17 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
     std::lock_guard<std::recursive_mutex> l(robot_.mutex());
     if (robot_.passwordKept()) return fail(423, say("auth.kept"));
     if (robot_.credentialsLost()) return fail(423, say("auth.lost"));
-    // The code on the device's label counts only in the function key's window: a photo of the label
-    // is not enough, the person stands at the device (SD-149)
-    if (robot_.hasLabelCode() && !robot_.auth().hasPassword() && !robot_.keyWindowOpen())
-      return fail(403, say("auth.key_window", {{"min", Robot::kKeyWindowMs / kMinute}}));
+    // The code on the device's label (SD-149): a label that is no code takes none; the code counts only
+    // over the device's setup network, so it never crosses the home network, and only in the function
+    // key's window, so a photo of the label is not enough
+    if (robot_.hasLabelCode() && !robot_.auth().hasPassword()) {
+      if (!robot_.validLabel()) return fail(403, say("auth.label_invalid"));
+      if (!req.setupNetwork) return fail(403, say("auth.setup_network"));
+      if (!robot_.keyWindowOpen()) {
+        robot_.wrongLabelCode();
+        return fail(403, say("auth.key_window", {{"min", Robot::kKeyWindowMs / kMinute}}));
+      }
+    }
     const Auth before = robot_.auth();
     const Ms now = clock_.nowMs();
     Msg e = robot_.auth().setInitialPassword(jstr(body, "password"), jstr(body, "code"), now);
@@ -300,6 +307,7 @@ ApiResponse Api::route(const ApiRequest& req, std::optional<Role> as) {
       return fail(500, say("store.failed"));
     }
     robot_.markPasswordSet();
+    if (robot_.hasLabelCode()) robot_.endKeyWindow();  // used: the window closes (SD-149)
     robot_.logEvent("auth", "info", say("ev.auth.password_set"), say("ev.auth.first_setup"));
     Msg err;
     auto tok = robot_.auth().login(jstr(body, "password"), now, err, req.client);

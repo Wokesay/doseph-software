@@ -57,6 +57,8 @@ doseph::ApiRequest toApi(const httplib::Request& req) {
   r.body = req.body;
   r.token = tokenOf(req);
   r.client = doseph::clientKey(req.remote_addr);  // the socket's peer; never X-Forwarded-For
+  // This computer stands for the device's own setup network (SD-149)
+  r.setupNetwork = req.remote_addr == "127.0.0.1" || req.remote_addr == "::1" || req.remote_addr == "::ffff:127.0.0.1";
   return r;
 }
 
@@ -222,7 +224,10 @@ int main(int argc, char** argv) {
       res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
       return;
     }
-    res.set_content(simulation.simState().dump(), "application/json");
+    // The label's code stands for the label on the device: the owner's to see alone (SD-149)
+    doseph::json st = simulation.simState();
+    if (simulation.api().access(toApi(req)) != doseph::Role::Owner) st["device"]["labelCode"] = nullptr;
+    res.set_content(st.dump(), "application/json");
   });
   svr.Post(R"(/api/v1/sim/(\w+))", [&](const httplib::Request& req, httplib::Response& res) {
     std::lock_guard<std::recursive_mutex> l(simulation.mutex());
@@ -236,8 +241,10 @@ int main(int argc, char** argv) {
       res.set_content(doseph::json{{"error", doseph::say("auth.required")}}.dump(), "application/json");
       return;
     }
-    // A reset at the device stands for someone at it: the owner's alone here, never a token's (SD-139)
-    const bool refused = !open && (action == "atDevice" ? *role != doseph::Role::Owner : !doseph::permitted(*role, "POST", {"sim", action}));
+    // A reset or a press of the function key at the device stands for someone at it: the owner's alone
+    // here, never a token's (SD-139, SD-149)
+    const bool atDevice = action == "atDevice" || action == "keyPress";
+    const bool refused = !open && (atDevice ? *role != doseph::Role::Owner : !doseph::permitted(*role, "POST", {"sim", action}));
     if (refused) {  // as any other change (SD-129)
       res.status = 403;
       res.set_content(doseph::json{{"error", doseph::say("auth.role", {{"role", doseph::say(std::string("auth.role.") + doseph::roleName(*role))}})}}.dump(),

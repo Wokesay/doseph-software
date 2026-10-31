@@ -317,6 +317,7 @@ void Simulation::reboot(Ms outageMs) {
   world_.output = false;
   world_.returnLocked = false;
   world_.stopAllPumps();
+  hw_->takeKeyPress();  // a press before the restart opens no window after it (SD-149)
   // A restart switches a tripped rail on again, and the start that follows is a normal one (SD-141)
   auto& fs = world_.faults;
   fs.erase(std::remove_if(fs.begin(), fs.end(), [](const std::string& f) { return f.rfind("power_trip", 0) == 0 || f == "safety_restart"; }), fs.end());

@@ -1378,18 +1378,26 @@
         ],
         "responses": {
           "200": {
-            "description": "The code",
+            "description": "The code shown here; or, on a device with a label code, pairing allowed until the function key's window ends (SD-149)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "code": {
-                      "type": "string",
-                      "pattern": "^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$"
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$",
+                      "description": "null on a device with a label code: the label has it"
                     },
                     "until": {
                       "type": "integer"
+                    },
+                    "label": {
+                      "type": "boolean",
+                      "description": "The code on the device's label is armed (SD-149)"
                     }
                   }
                 }
@@ -1493,14 +1501,16 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "code",
+                  "proof",
                   "id",
                   "name",
                   "token"
                 ],
                 "properties": {
-                  "code": {
-                    "type": "string"
+                  "proof": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "HMAC-SHA-256 keyed with the pairing code over \"doseph-pair|\" + id + \"|\" + token, in hex: the code itself never crosses the network (SD-149)"
                   },
                   "id": {
                     "type": "string"
@@ -5085,10 +5095,6 @@
           "labelCode": {
             "type": "boolean",
             "description": "The setup code is the one on the device's label, taken only in the function key's window (SD-149)"
-          },
-          "keyWindow": {
-            "type": "boolean",
-            "description": "The function key's window is open: 5 min after a short press (SD-149)"
           },
           "passwordProblem": {
             "oneOf": [

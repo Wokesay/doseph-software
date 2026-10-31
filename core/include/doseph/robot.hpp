@@ -98,14 +98,15 @@ class Robot : public RemoteRuns {
   // A factory reset is under way or done: the API takes nothing more
   bool halted() const;
   // The function key's window (SD-149): a short press opens it for 5 min. Within it the code on the
-  // device's label sets the first password and pairs this device as the follower; five wrong codes
-  // close it. Memory only: a restart closes it.
+  // device's label sets the first password (over the setup network), and, with the owner's leave in
+  // the app, pairs this device as the follower. Its use, its end or a restart close it; wrong codes
+  // are logged. Memory only.
   static constexpr Ms kKeyWindowMs = 5 * kMinute;
-  static constexpr int kKeyWrongMax = 5;
   bool hasLabelCode() const { return hw_.labelCode().has_value(); }
+  std::optional<std::string> validLabel() const;  // the label's code, where it is one
   bool keyWindowOpen() const;
   void wrongLabelCode();
-  void endKeyWindow();  // the simulator's demo, once it set its password
+  void endKeyWindow();  // once used: the first password set, or the simulator's demo
 
   // ---- Coupling (PD-457, SD-131): the peer, pairing with a code, leaving
   json coupling() const;
@@ -432,7 +433,7 @@ class Robot : public RemoteRuns {
   void closeKeyWindow();
   void showStatusLight();
   Ms keyUntil_ = 0;
-  int keyWrong_ = 0;
+  std::optional<Ms> wrongLogged_;
   void tickReset(Ms now);
   void finishFactoryReset();
   std::string deviceId_;

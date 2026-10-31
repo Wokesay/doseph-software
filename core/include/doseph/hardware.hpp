@@ -181,7 +181,8 @@ class IHardware {
   // A reset asked for at the device since the last call; each is taken once (SD-139)
   virtual DeviceReset takeReset() { return DeviceReset::None; }
   // The function key next to Stop (SD-149): a short press since the last call. Its long press is a
-  // reset (takeReset); it never stops anything, nor releases a Stop.
+  // reset (takeReset); it never stops anything, nor releases a Stop. A press before the start, or the
+  // hold of a factory reset at power-on, is never reported as a short press.
   virtual bool takeKeyPress() { return false; }
   // The code printed on the device's label, from its factory data: it survives every reset. None:
   // the device shows generated codes instead (SD-129, SD-131).

@@ -28,7 +28,8 @@ Open http://localhost:8080. Options (`--help`):
 Without a password set, the first password needs the code on the device
 label (SD-149). The console prints it at the start, and the device takes
 it for 5 min after a press of the function key: type `key` and Enter on
-the console. With `--allow-reset` there is no label and no code.
+the console. Requests from this computer count as the device's setup
+network. With `--allow-reset` there is no label and no code.
 
 **Pushes** (SD-124): the simulator sends the channels set up in the
 settings (ntfy, Telegram, e-mail) through the computer's `curl`, found on
