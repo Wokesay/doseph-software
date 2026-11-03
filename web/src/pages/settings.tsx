@@ -52,6 +52,8 @@ function DeviceCard() {
   const sys = config.value!.system;
   const [name, setName] = useState(sys.name);
   const [tz, setTz] = useState(sys.timezone);
+  const [currency, setCurrency] = useState(sys.currency);
+  const currencyOk = /^[A-Z]{3}$/.test(currency);
   const zone = timeZone(tz);
   const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
@@ -64,13 +66,16 @@ function DeviceCard() {
           <Field label={t("settings.timezone")} error={tz && !zone ? t("settings.timezoneInvalid") : null} hint={t("settings.timezoneHint", { zone: browserZone })}>
             <input class="input" value={tz} onInput={(e) => setTz((e.target as HTMLInputElement).value)} name="timezone" autoCapitalize="off" spellcheck={false} />
           </Field>
+          <Field label={t("settings.currency")} error={currencyOk ? null : t("settings.currencyInvalid")} hint={t("settings.currencyHint")}>
+            <input class="input" value={currency} maxLength={3} onInput={(e) => setCurrency((e.target as HTMLInputElement).value.toUpperCase())} name="currency" autoCapitalize="characters" spellcheck={false} />
+          </Field>
         </div>
         <div>
           <Button
             variant="primary"
-            disabled={!name.trim() || !zone}
+            disabled={!name.trim() || !zone || !currencyOk}
             onClick={async () => {
-              await put("/system", { name: name.trim(), timezone: zone });
+              await put("/system", { name: name.trim(), timezone: zone, currency });
               await refreshConfig();
               toast(t("settings.saved"));
             }}

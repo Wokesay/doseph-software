@@ -231,6 +231,28 @@ function StartDialog(p: { data: Plants; onClose: () => void; onDone: (d: Plants)
 const amount = (ml: number) => num(ml, ml < 10 ? 1 : 0);
 
 // A completed plant's record, frozen at its end, and its yield by hand (RAT-064, SD-138)
+// The nutrient cost at the prices entered (SD-152): in all where every canister had its price, else
+// those that had one; nothing without any price
+function CostLine(p: { rec: PlantRecord }) {
+  const r = p.rec;
+  const cur = r.currency ?? "EUR";
+  const fmt = (v: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(v);
+    } catch {
+      return `${num(v, 2)} ${cur}`;
+    }
+  };
+  if (r.cost != null) return <div data-testid="record-cost">{t(r.costAtLeast ? "plants.rec.costAtLeast" : "plants.rec.cost", { cost: fmt(r.cost) })}</div>;
+  const priced = r.canisters.filter((c) => c.cost != null);
+  if (!priced.length) return null;
+  return (
+    <div class="muted" data-testid="record-cost">
+      {t("plants.rec.costSome", { list: priced.map((c) => t("plants.rec.costOf", { name: c.name, cost: fmt(c.cost!) })).join(", ") })}
+    </div>
+  );
+}
+
 function RecordLines(p: { rec: PlantRecord }) {
   const r = p.rec;
   const known = r.countedFrom != null && !r.countLost;
@@ -255,6 +277,7 @@ function RecordLines(p: { rec: PlantRecord }) {
               {r.wateredUnknown ? t("plants.rec.wateredUnknown", { l: num(r.wateredL, 1), n: r.wateredUnknown }) : t("plants.rec.watered", { l: num(r.wateredL, 1) })}
             </div>
           )}
+          <CostLine rec={r} />
           {r.with.length > 0 && <div class="muted">{t("plants.rec.with", { names: r.with.join(", ") })}</div>}
         </>
       ) : (

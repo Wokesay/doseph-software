@@ -191,6 +191,8 @@ json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count
   r["countedFrom"] = counted && c.contains("at") && c["at"].is_number_integer() ? c["at"] : json(nullptr);
   r["countLost"] = counted && !same;
   json canisters = json::array();
+  double costSum = 0;
+  bool costKnown = same, costAtLeast = false;
   if (same) {
     const RuntimeState::Count then = countFromJson(c);
     std::set<std::string> ids;
@@ -202,11 +204,18 @@ json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count
       const int unknown = at(now.unknown, id) - at(then.unknown, id);
       if (ml <= 0 && unknown <= 0) continue;
       const CanisterCfg* b = cfg.canister(id);
+      const double given = std::round(std::max(ml, 0.0) * 10) / 10;
+      // Its cost at the price entered when the plant is completed (SD-152); without one, not known
+      const double cost = b && isNum(b->pricePerL) ? std::round(given * b->pricePerL / 1000.0 * 100) / 100 : kNaN;
       canisters.push_back({{"id", id},
                            {"name", b ? b->name : id},
                            {"role", b ? b->role : ""},
-                           {"ml", std::round(std::max(ml, 0.0) * 10) / 10},
-                           {"unknown", std::max(unknown, 0)}});
+                           {"ml", given},
+                           {"unknown", std::max(unknown, 0)},
+                           {"cost", numOrNull(cost)}});
+      if (isNum(cost)) costSum += cost;
+      else costKnown = false;
+      if (unknown > 0) costAtLeast = true;
     }
     r["wateredL"] = std::round(std::max(now.wateredL - then.wateredL, 0.0) * 10) / 10;
     r["wateredUnknown"] = std::max(now.wateredUnknown - then.wateredUnknown, 0);
@@ -215,6 +224,11 @@ json plantRecord(const Config& cfg, const PlantCfg& p, const RuntimeState::Count
     r["wateredUnknown"] = 0;
   }
   r["canisters"] = canisters;
+  // The nutrient cost in all: only where every canister has its price; a run whose amount is not
+  // known makes it a least (SD-152, R5)
+  r["cost"] = costKnown ? json(std::round(costSum * 100) / 100) : json(nullptr);
+  r["costAtLeast"] = costAtLeast;
+  r["currency"] = cfg.system.currency;
   json with = json::array();
   for (const auto& o : cfg.plants)
     if (o.id != p.id && o.start <= end && (o.running() || o.completedAt >= p.start)) with.push_back(o.name);

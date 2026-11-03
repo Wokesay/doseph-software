@@ -14,8 +14,8 @@ plan from the leading plant, phases moving on at local midnight or once
 confirmed, the reminders, the harvest and completing; the cultivation
 system and the calendar; since SD-138 also the record at a plant's end
 (RAT-064) and a new plant recipe's proposal of two phases; since SD-140
-the advice to drain when the EC target falls (RAT-065). What is still open
-from below: cost per canister.
+the advice to drain when the EC target falls (RAT-065); since SD-152 the
+cost per canister in a plant's record.
 
 **The grow run.** One run at a time: a name (at most 40 characters), its
 start, a list of at least one phase, the current phase and when it began,

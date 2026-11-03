@@ -389,8 +389,27 @@ TEST_CASE("Plants: a completed plant's record keeps its days and each phase's, t
   // The tank's amounts while it ran, with the canisters' names and roles as they were at the end; a
   // run whose amount is not known is counted as such
   REQUIRE(r["canisters"].size() == 3);
-  CHECK(r["canisters"][0] == json({{"id", "a"}, {"name", "Part A"}, {"role", "nutrient"}, {"ml", 50.0}, {"unknown", 1}}));
-  CHECK(r["canisters"][1] == json({{"id", "down"}, {"name", "pH−"}, {"role", "ph_down"}, {"ml", 4.0}, {"unknown", 0}}));
+  CHECK(r["canisters"][0] == json({{"id", "a"}, {"name", "Part A"}, {"role", "nutrient"}, {"ml", 50.0}, {"unknown", 1}, {"cost", nullptr}}));
+  CHECK(r["canisters"][1] == json({{"id", "down"}, {"name", "pH−"}, {"role", "ph_down"}, {"ml", 4.0}, {"unknown", 0}, {"cost", nullptr}}));
+  CHECK(r["cost"].is_null());  // no price entered (SD-152)
+  CHECK(r["costAtLeast"] == true);  // a run of unknown amount
+  // With prices, each canister's cost; a canister removed since has none, so the sum is not known
+  Config priced = c;
+  for (auto& b : priced.canisters) b.pricePerL = 20;
+  CHECK(plantRecord(priced, p, now, kZone)["cost"].is_null());
+  // Without it the sum is known; the run of unknown amount makes it a least
+  RuntimeState::Count kept = now;
+  kept.ml.erase("gone");
+  const json q = plantRecord(priced, p, kept, kZone);
+  CHECK(q["canisters"][0]["cost"] == 1.0);   // 50 ml at 20 a litre
+  CHECK(q["canisters"][1]["cost"] == 0.08);  // 4 ml
+  CHECK(q["cost"] == 1.08);
+  CHECK(q["costAtLeast"] == true);
+  // One canister without a price: the sum is not known, the other's cost stays
+  priced.canisters[1].pricePerL = kNaN;
+  const json h = plantRecord(priced, p, kept, kZone);
+  CHECK(h["canisters"][0]["cost"] == 1.0);
+  CHECK(h["cost"].is_null());
   CHECK(r["canisters"][2]["name"] == "gone");  // a canister removed since keeps its ID
   CHECK(r["wateredL"] == 20.0);
   CHECK(r["wateredUnknown"] == 2);
@@ -521,6 +540,10 @@ TEST_CASE("Plants over the API: completing a plant freezes its record with what 
   std::map<std::string, double> booked;
   for (const auto& b : rec["canisters"]) booked[b["id"]] = b["ml"].get<double>();
   for (const auto& [canister, ml] : dosed) CHECK(booked[canister] == doctest::Approx(ml).epsilon(0.01));
+  // No canister has a price: no cost, never 0 (SD-152, R5)
+  CHECK(rec["cost"].is_null());
+  for (const auto& b : rec["canisters"]) CHECK(b["cost"].is_null());
+  CHECK(rec["currency"] == "EUR");
   // After the end: the record stays as it was, the yield can still be entered and changed
   s.step(30 * kMinute, 1000);
   REQUIRE(r.putPlant(id, {{"yieldG", 180.5}}).status == 200);
@@ -680,4 +703,43 @@ TEST_CASE("Plants: a second fall while the drain advice stands keeps where the t
   const json note = drainNote(s.robot());
   REQUIRE(note.is_object());
   CHECK(note["text"]["key"] != "drain.product");
+}
+
+TEST_CASE("Plants: a completed plant's record gives each canister's cost at its price per litre and the cost in all; without a price for one, the sum is not known; a run of unknown amount makes it at least (RAT-064, SD-152, R5)") {
+  sim::Simulation s(demo());
+  Robot& r = s.robot();
+  s.step(10 * kSecond);
+  // A price per litre in the device's currency; the currency is three capital letters
+  CHECK(r.putCanister({{"id", "part_a"}, {"pricePerL", -1}}).status == 422);
+  CHECK(r.putCanister({{"id", "part_a"}, {"pricePerL", "cheap"}}).status == 422);
+  CHECK(r.setSystem({{"currency", "euro"}}).status == 422);
+  REQUIRE(r.setSystem({{"currency", "CHF"}}).status == 200);
+  const json canisters = json(r.config())["canisters"];
+  for (const auto& b : canisters)
+    if (b["role"] == "nutrient" || b["role"] == "ph_down") REQUIRE(r.putCanister({{"id", b["id"]}, {"pricePerL", 40}}).status == 200);
+  json pr = {{"name", "Lettuce"}, {"phases", json::array({{{"name", "Growth"}, {"days", 30}, {"recipe", "two_part"}, {"ecTarget", 1.8}}})}};
+  const std::string prId = r.putPlantRecipe(pr).body["id"];
+  const std::string id = r.startPlant({{"name", "Tray"}, {"plantRecipe", prId}}).body["id"];
+  bool held = false;
+  for (int i = 0; i < 8 * 360 && !held; ++i) {
+    s.step(10 * kSecond, 1000);
+    held = r.state()["cycle"]["phase"] == "hold";
+  }
+  REQUIRE(held);
+  REQUIRE(r.plantComplete(id).status == 200);
+  const json rec = r.plants()["plants"][0]["record"];
+  REQUIRE(rec.is_object());
+  CHECK(rec["currency"] == "CHF");
+  double sum = 0;
+  for (const auto& b : rec["canisters"]) {
+    REQUIRE(b["cost"].is_number());
+    CHECK(b["cost"].get<double>() == doctest::Approx(b["ml"].get<double>() * 40 / 1000).epsilon(0.01));
+    sum += b["cost"].get<double>();
+  }
+  CHECK(sum > 0);
+  CHECK(rec["cost"].get<double>() == doctest::Approx(sum).epsilon(0.001));
+  CHECK(rec["costAtLeast"] == false);
+  // The record is frozen: a later price changes nothing in it
+  REQUIRE(r.putCanister({{"id", "part_a"}, {"pricePerL", 80}}).status == 200);
+  CHECK(r.plants()["plants"][0]["record"] == rec);
 }

@@ -2146,3 +2146,23 @@ minimal principle.
 - **Slow by design.** Each step waits for its mixing (SD-112), so in a
   large tank pH takes many doses. Holding a hand-mixed tank (SD-150)
   needs few.
+
+## SD-152: The cost per canister in a plant's record
+
+2026-11-03. The last open part of the plant's record (RAT-064, step 6 of
+#10). Decided here by the minimal principle.
+
+- **A price per litre** may be entered for each canister, from 0 to
+  100,000, in the device's currency. Empty means no price.
+- **The currency** is a setting of the device: three capital letters as
+  ISO 4217 writes them, EUR until changed. The robot never converts.
+- **The record** gives each canister's cost, at the price in force when
+  the plant is completed, and freezes it with the rest. A later price
+  changes nothing in it.
+- **Nothing stands in for a price** (R5):
+  - A canister without a price, or one removed since, has no cost.
+  - The cost in all is only given where every canister in the record has
+    one. Otherwise the app lists the costs it knows.
+  - A run of unknown amount makes the sum a least ("at least").
+- **The amounts stay the tank's.** Plants that shared it share its cost,
+  as they share its amounts (SD-138).

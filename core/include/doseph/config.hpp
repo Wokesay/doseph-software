@@ -30,6 +30,7 @@ struct CanisterCfg {
   std::string color = "#4c9a52";
   double capacityMl = kNaN;       // its size; NaN: not entered (SD-119)
   double maxMlPerDay = kNaN;      // the user's daily amount, below the channel's cap (SD-113); NaN: none
+  double pricePerL = kNaN;        // what a litre of it costs, in the device's currency (SD-152); NaN: not entered
   // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
   std::string device = "";
 };
@@ -253,6 +254,7 @@ struct SystemCfg {
   std::string name = "Doseph";
   std::string language = "en";  // English first
   std::string timezone = "Europe/Berlin";
+  std::string currency = "EUR";  // ISO 4217 code of the prices entered (SD-152)
   bool passwordSet = false;  // the first password was set once: no setup over the network after that
 };
 
@@ -299,6 +301,8 @@ struct PlantRecipeCfg {
 
 // The largest yield entered by hand, g (RAT-064)
 constexpr double kYieldMaxG = 1e6;
+// The highest price per litre of a canister (SD-152)
+constexpr double kPriceMaxPerL = 100000;
 
 // A plant on the tank (SD-128): started from a plant recipe, whose phases it copied, so a later
 // change of the recipe does not move it. Its progress belongs to it, and a backup carries it.

@@ -429,6 +429,7 @@ void to_json(json& j, const Config& c) {
   j["revision"] = c.revision;
   j["system"] = {{"name", c.system.name},
                  {"language", c.system.language},
+                 {"currency", c.system.currency},
                  {"timezone", c.system.timezone},
                  {"passwordSet", c.system.passwordSet}};
   j["notify"] = {{"quietFromMin", c.notify.quietFromMin}, {"quietToMin", c.notify.quietToMin}};
@@ -487,6 +488,7 @@ void to_json(json& j, const Config& c) {
     canisters.push_back({{"id", b.id}, {"name", b.name}, {"role", b.role}, {"channel", b.channel}, {"pair", b.pair}, {"color", b.color},
                          {"capacityMl", numOrNull(b.capacityMl)},
                          {"maxMlPerDay", numOrNull(b.maxMlPerDay)},
+                         {"pricePerL", numOrNull(b.pricePerL)},
                          {"device", b.device}});
   j["canisters"] = canisters;
   json recipes = json::array();
@@ -591,6 +593,7 @@ Config configFromJson(const json& in) {
   c.system.name = jstr(s, "name", c.system.name);
   c.system.language = jstr(s, "language", c.system.language);
   c.system.timezone = jstr(s, "timezone", c.system.timezone);
+  c.system.currency = jstr(s, "currency", c.system.currency);
   c.system.passwordSet = jbool(s, "passwordSet", false);
   const json& nt = objectAt(j, "notify");
   c.notify.quietFromMin = intOr(nt, "quietFromMin", c.notify.quietFromMin);
@@ -657,6 +660,7 @@ Config configFromJson(const json& in) {
     x.color = jstr(b, "color", x.color);
     x.capacityMl = numOrNaN(b, "capacityMl");
     x.maxMlPerDay = numOrNaN(b, "maxMlPerDay");
+    x.pricePerL = numOrNaN(b, "pricePerL");
     x.device = jstr(b, "device");
     c.canisters.push_back(x);
   }
@@ -753,6 +757,9 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
   if (c.system.name.empty() || c.system.name.size() > 40) err(say("cfg.system.name"));
   if (c.system.language != "en" && c.system.language != "de") err(say("cfg.system.language"));
   if (!isTimeZoneName(c.system.timezone)) err(say("cfg.system.timezone"));
+  // Three capital letters, as ISO 4217 writes a currency (SD-152)
+  if (c.system.currency.size() != 3 || !std::all_of(c.system.currency.begin(), c.system.currency.end(), [](char ch) { return ch >= 'A' && ch <= 'Z'; }))
+    err(say("cfg.system.currency"));
   auto minute = [](int m) { return m >= 0 && m < 24 * 60; };
   if (!minute(c.notify.quietFromMin) || !minute(c.notify.quietToMin)) err(say("cfg.notify.quiet"));
   for (const auto& [kind, days] : c.service.days)
@@ -874,6 +881,8 @@ std::vector<Msg> validateConfig(const Config& c, int channelCount) {
       err(say("cfg.canister.max_per_day", {{"name", b.name}, {"min", 0.1}, {"max", kCapacityMaxMl}}));
     if (!std::isnan(b.capacityMl) && !inRange(b.capacityMl, kCapacityMinMl, kCapacityMaxMl))
       err(say("cfg.canister.capacity", {{"name", b.name}, {"min", kCapacityMinMl}, {"max", kCapacityMaxMl}}));
+    if (!std::isnan(b.pricePerL) && !inRange(b.pricePerL, 0, kPriceMaxPerL))
+      err(say("cfg.canister.price", {{"name", b.name}, {"max", kPriceMaxPerL}}));
     if (!b.pair.empty()) pairCount[b.pair]++;
   }
 
