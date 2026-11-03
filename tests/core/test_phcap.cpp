@@ -16,10 +16,12 @@ using namespace doseph;
 
 namespace {
 
+// Looks once a simulated minute, which runs on in steps of 1 s: every wait here is for doses and
+// mixing of hours, and a look reads the whole state, slow under the sanitizers
 void waitFor(harness::Run& r, const std::string& what, const std::function<bool()>& done, double maxS) {
-  for (double t = 0; t <= maxS; t += 10) {
+  for (double t = 0; t <= maxS; t += 60) {
     if (done()) return;
-    r.step(10 * kSecond);
+    r.step(60 * kSecond);
   }
   FAIL("not within " << maxS << " s: " << what);
 }
