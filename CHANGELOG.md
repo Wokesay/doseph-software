@@ -7,6 +7,11 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The cost per canister in a plant's record (SD-152). A canister may have
+  a price per litre in the device's currency, a new setting; a completed
+  plant's record gives each canister's cost and the sum, or "at least"
+  where a run's amount is not known, and nothing where a price is
+  missing.
 - The largest pH− dose grows in a large tank (SD-151). A dose that
   lowered pH by less than can be measured lets the next be twice as large,
   never beyond one round of its pump, its daily amount or half its

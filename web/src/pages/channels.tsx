@@ -13,7 +13,7 @@ import { Banner, Button, Card, Empty, Field, Modal, NumberInput, Pill, Seg, Term
 const COLORS = ["#c0392b", "#2e86c1", "#d4ac0d", "#239b56", "#8e44ad", "#d35400", "#566573", "#17a589"];
 
 function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void }) {
-  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, maxMlPerDay: null, ...p.canister });
+  const [b, setB] = useState<Partial<Canister>>({ role: "nutrient", channel: 0, pair: "", color: COLORS[canisters.value.length % COLORS.length], capacityMl: null, maxMlPerDay: null, pricePerL: null, ...p.canister });
   // A new canister: how much is in it now; empty leaves the level unknown (SD-119)
   const [stockMl, setStockMl] = useState<number | null>(null);
   // Coupled as the leader: a canister may stand at the other device's channel (SD-131)
@@ -95,6 +95,9 @@ function CanisterEditor(p: { canister: Partial<Canister>; onClose: () => void })
         </Field>
         <Field label={t("channels.maxPerDay")} hint={t("channels.maxPerDayHint")}>
           <NumberInput value={b.maxMlPerDay} onValue={(v) => setB({ ...b, maxMlPerDay: v })} unit="ml" min={0.1} max={25000} step={10} name="maxMlPerDay" />
+        </Field>
+        <Field label={t("channels.price")} hint={t("channels.priceHint")}>
+          <NumberInput value={b.pricePerL ?? null} onValue={(v) => setB({ ...b, pricePerL: v })} unit={`${config.value!.system.currency}/L`} min={0} max={100000} step={0.5} name="pricePerL" />
         </Field>
         {!b.id && (
           <Field label={t("channels.levelNow")} hint={t("channels.levelNowHint")}>

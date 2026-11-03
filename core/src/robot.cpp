@@ -1340,6 +1340,7 @@ Result Robot::setSystem(const json& j) {
   next.system.name = utf8Prefix(jstr(j, "name", next.system.name), 60);
   next.system.language = jstr(j, "language", next.system.language);
   next.system.timezone = jstr(j, "timezone", next.system.timezone);
+  next.system.currency = jstr(j, "currency", next.system.currency);
   return saveConfig(next, changed("cfg.what.system"));
 }
 
@@ -1862,6 +1863,10 @@ Result Robot::putCanister(const json& j) {
   if (j.contains("maxMlPerDay")) {
     if (!j["maxMlPerDay"].is_null() && !j["maxMlPerDay"].is_number()) return Result::fail(422, say("api.bad_input"));
     b->maxMlPerDay = j["maxMlPerDay"].is_number() ? j["maxMlPerDay"].get<double>() : kNaN;
+  }
+  if (j.contains("pricePerL")) {
+    if (!j["pricePerL"].is_null() && !j["pricePerL"].is_number()) return Result::fail(422, say("api.bad_input"));
+    b->pricePerL = j["pricePerL"].is_number() ? j["pricePerL"].get<double>() : kNaN;
   }
   if (j.contains("capacityMl")) {
     if (!j["capacityMl"].is_null() && !j["capacityMl"].is_number()) return Result::fail(422, say("api.bad_input"));

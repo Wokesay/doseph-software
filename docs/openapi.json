@@ -959,6 +959,10 @@
                   "timezone": {
                     "type": "string"
                   },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
                   "language": {
                     "enum": [
                       "de",
@@ -5395,6 +5399,13 @@
               "null"
             ]
           },
+          "pricePerL": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "What a litre of it costs, in the device's currency (SD-152); null: not entered"
+          },
           "stockMl": {
             "type": [
               "number",
@@ -5765,6 +5776,10 @@
               },
               "timezone": {
                 "type": "string"
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
               },
               "language": {
                 "enum": [

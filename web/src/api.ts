@@ -103,8 +103,11 @@ export type PlantRecord = {
   from: number; to: number; days: number; harvestAt: number | null;
   phases: { name: string; days: number | null }[];
   countedFrom: number | null; countLost: boolean;
-  canisters: { id: string; name: string; role: string; ml: number; unknown: number }[];
+  // `cost`: at the price entered when it was completed, null without one (SD-152)
+  canisters: { id: string; name: string; role: string; ml: number; unknown: number; cost?: number | null }[];
   wateredL: number | null; wateredUnknown: number; with: string[];
+  // The cost in all, null unless every canister had its price; at least that with runs of unknown amount
+  cost?: number | null; costAtLeast?: boolean; currency?: string;
 };
 export type Plants = { system: GrowSystem | ""; systems: Record<GrowSystem, [number, number]>; plantRecipes: PlantRecipe[]; plants: Plant[]; lead: string | null; plan: { source: string; recipe: string | null; plant: string | null } };
 export type WaterPlan = {
@@ -228,6 +231,8 @@ export type RobotState = {
 
 export type Canister = {
   id: string; name: string; role: "nutrient" | "ph_down" | "silicate"; channel: number; pair: string; color: string; capacityMl: number | null; maxMlPerDay: number | null;
+  // What a litre of it costs, in the device's currency (SD-152); null: not entered
+  pricePerL?: number | null;
   // "" on this device; the coupled device's ID for a canister on its channel (SD-131)
   device: string;
 };
@@ -238,7 +243,8 @@ export type Recipe = { id: string; name: string; note: string; steps: { canister
 
 export type Config = {
   schemaVersion: number; revision: number;
-  system: { name: string; language: string; timezone: string; passwordSet: boolean };
+  // `currency`: ISO 4217 code of the prices entered (SD-152)
+  system: { name: string; language: string; timezone: string; currency: string; passwordSet: boolean };
   // Quiet hours in local minutes of the day; equal: none (SD-123)
   notify: { quietFromMin: number; quietToMin: number };
   // `system`: the cultivation system (SD-128), "" while none is chosen
