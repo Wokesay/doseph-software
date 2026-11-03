@@ -614,6 +614,12 @@ void Robot::boot() {
     if (r.purpose == "calrun" || r.purpose == "calprime" || r.purpose == "empty") continue;
     // How much went in is not known: the plants' records say so (RAT-064, R5)
     if (r.intoTank()) rt_.count.unknown[r.canister]++;
+    // pH− cut by the restart counts for all it was to give, the safe side (SD-151)
+    if (r.purpose == "ph" && isNum(r.ml)) {
+      PhGrowth g = phGrowth(cfg_, rt_);
+      g.unseenMl += r.ml;
+      setPhGrowth(cfg_, rt_, g);
+    }
     if (r.intoTank())
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
                say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});
@@ -1817,7 +1823,8 @@ Result Robot::newTank() {
   const Ms now = clock_.nowMs();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   log_.add(clock_.epoch(), "control", "info", say("ev.tank.new"), say("ev.tank.new.text"));
-  cycle_.newFill();  // its preparation starts anew (SD-150)
+  cycle_.newFill();
+  resetPhGrowth(rt_);  // new water: a pH− dose grown for the last one, and its count, go (SD-151)  // its preparation starts anew (SD-150)
   restartCycle();
   saveState(true);
   return Result::ok();
@@ -2109,7 +2116,9 @@ Result Robot::importConfig(const json& j) {
   // The pH effect belongs to the pH− canister: another one starts afresh
   const CanisterCfg* phWas = before.phDown();
   const CanisterCfg* phNow = cfg_.phDown();
-  if (!phWas || !phNow || phWas->id != phNow->id || phWas->name != phNow->name) rt_.phEffect = kNaN;
+  if (!phWas || !phNow || phWas->id != phNow->id || phWas->name != phNow->name) {
+    rt_.phEffect = kNaN;
+  }
   // Another volume: the next dose checks it again (SD-105)
   const bool sameVolume = (std::isnan(before.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) || before.tank.volumeL == cfg_.tank.volumeL;
   if (!sameVolume) {
@@ -3500,6 +3509,9 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
     if (!jbool(body, "confirm", false)) return Result::fail(422, say("latch.volume_confirm"));
     confirmVolume(cfg_, rt_, it->second);
   }
+  // A person released pH− without effect: what grew taught nothing, the dose starts again from the
+  // set maximum (SD-151)
+  if (id == "ph.no_effect" && holds(rt_, id)) resetPhGrowth(rt_);
   const json args = it->second.is_object() ? it->second : json::object();
   const bool held = holds(rt_, id);
   rt_.latches.erase(it);

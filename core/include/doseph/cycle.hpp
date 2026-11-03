@@ -71,6 +71,29 @@ constexpr double kNoEffectEc = 0.02;          // a round that raised EC by less 
 constexpr double kNoEffectPh = 0.03;          // … a pH− dose that lowered pH by less (RAT-020, RAT-041)
 constexpr double kSmallRoundEc = 0.06;        // rounds made smaller that should raise less are judged as a sum (RAT-055)
 constexpr int kNoEffectLatch = 2;
+// The largest pH− dose in a large tank (SD-151): a dose at it that lowered pH by less than can be
+// measured was too small for the tank. The next may be twice as large, as long as the pH− dosed since
+// the last measurable fall, with the next, stays within what one dose may do: 0.3 pH at the strongest
+// measured effect (RAT-050). Beyond, it counts as without effect (RAT-041).
+constexpr double kPhUnseenPh = 0.3;
+struct PhGrowth {
+  double ml = kNaN;     // the largest dose grown to; NaN: not grown
+  double unseenMl = 0;  // pH− dosed since the last measurable fall, counted as each dose starts
+  bool valid = false;   // a record of this volume: its count holds
+  bool mlValid = false; // … learned for the set maximum and pH− canister in force too: its dose holds
+};
+// What was learned. The count belongs to the water: another volume starts it afresh, a damaged one
+// counts as used up (R5). The grown dose belongs to the set maximum and the pH− canister as well.
+PhGrowth phGrowth(const Config& cfg, const RuntimeState& rt);
+void setPhGrowth(const Config& cfg, RuntimeState& rt, const PhGrowth& g);
+inline void resetPhGrowth(RuntimeState& rt) { rt.phGrowth = nullptr; }
+// What the doses without a measurable fall may add up to, ml: 0.3 pH at the strongest effect
+inline double phUnseenAllowedMl(double volumeL) { return isNum(volumeL) && volumeL > 0 ? kPhUnseenPh / kPhStartEffect * volumeL : 0; }
+// What one pH− dose can be at most where it grew: one round of its pump (RAT-055), its daily amount
+// (SD-113) and what its canister holds; infinite without any of them
+double phLimitMl(const Config& cfg);
+// The largest pH− dose in force: the set maximum, or the grown one within phLimitMl
+double phMaxMl(const Config& cfg, const RuntimeState& rt);
 // A round that raised EC by less than this share of what the recipe learned before, per ml:
 // precipitation or deposits possible (SD-148, an assumption)
 constexpr double kPrecipitationShare = 0.5;             // rounds without effect in a row, then a latch
@@ -167,6 +190,7 @@ class MixCycle {
   bool startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec, double aim);
   void startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph);
   void learn(Ctx& c, Actuators& act);
+  void phNoEffect(Ctx& c);  // pH− without effect: the lock, or its report (RAT-041, SD-133)
   void holdNow(Ctx& c, Actuators& act);
   // The comparison with the pump running and standing in Hold; true while it runs (SD-127)
   bool cableCheck(Ctx& c, Actuators& act);
@@ -229,6 +253,8 @@ class MixCycle {
   Measured before_;
   double mlRound_ = 0, volRound_ = kNaN, expectedRise_ = kNaN, expectedTest_ = kNaN;
   bool limited_ = false, testDose_ = false, clean_ = true, doseFailed_ = false;
+  double phCapRound_ = kNaN;  // a pH− dose made as large as the largest dose in force: that dose (SD-151)
+  bool phGrownRound_ = false; // the pH− dose was planned larger than the set maximum (SD-151)
   Epoch lastEcDoseAt_ = 0;
   int ecRounds_ = 0, phDoses_ = 0, seq_ = 0;
   // The channel dosed last in this round, and how long the trough ran clear since (SD-147)

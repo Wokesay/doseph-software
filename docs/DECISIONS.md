@@ -2094,3 +2094,55 @@ decided here by the minimal principle.
   concentrate alone needs about ten hours of pumping, one channel at a
   time. Whether the Pro prepares 30 m³ overnight depends on its pumps;
   that question goes to the product side.
+
+## SD-151: The largest pH− dose grows in a large tank
+
+2026-11-03. Chosen by the owner after SD-150. The largest pH− dose (at
+most 20 ml, RAT-050) guards against a wrongly entered volume. In a tank
+of several cubic metres, 20 ml lower pH by less than can be measured
+(0.03): at 30 m³, by about 0.003. Two such doses latched "no effect"
+(RAT-041), so the robot could not hold pH there. Decided here by the
+minimal principle.
+
+- **It grows.** A clean dose at the largest dose in force that lowered pH
+  by less than can be measured was too small for the tank, not without
+  effect. The next may be twice as large, and the event log says so.
+- **Never beyond what it can do.** A grown dose is never larger than
+  one round of its pump can run (six runs of 60 s, RAT-055), its daily
+  amount less the rounding of its runs (SD-113), or half its canister, so
+  it never stops pH− from being dosed, and a refill comes no sooner than
+  for a small dose.
+- **Within one dose.** Every pH− dose counts once its order is taken,
+  for all it is to give: cut, unclean or not, a run cut by a restart
+  too, until one shows a measurable fall. The count belongs to the
+  water: a new fill or another volume starts it afresh, a damaged one
+  counts as used up (R5). The dose grows only while that sum, with the
+  next, stays within what one dose may do: 0.3 pH at the strongest
+  measured effect (RAT-050), 0.06 ml/L of the entered volume. Beyond, a
+  dose without a fall counts as without effect, and two lock pH− as
+  before (RAT-041). Once the sum has reached it, a grown dose locks pH−
+  at once, also after a restart, with its own alarm naming the ml; the
+  grown dose goes. So a probe that does not move, an empty line or a
+  tank far larger than entered never adds more acid than one dose at the
+  strongest effect and one grown dose.
+- **The other caps stay:** 0.3 pH at the effect, 0.3 ml/L, and the
+  test dose's 0.1 pH while the volume is not confirmed (SD-105). A test
+  dose grown beyond the set maximum confirms no volume: with a strongly
+  buffered solution even a tank smaller than entered shows little.
+- **What it was learned for.** The grown dose holds only for the set
+  maximum, the volume and the pH− canister it grew with, however they
+  change: in the app, by an import or a power cut between two saves, also
+  while a dose mixes (it then grows nothing, RAT-057). Another of them, or
+  a new fill, starts again from the set maximum, and a smaller set
+  maximum holds at once (R7). It stays across restarts.
+- **A lock.** It does not grow while "no effect" holds or its report
+  stands (SD-133). Reported only, the robot goes on at the set maximum
+  once the count is used up. A person who releases the lock finds the
+  dose back at the set maximum: the doses that grew it taught nothing
+  about the tank.
+- **A dose that showed** keeps the size it grew to; the learned effect
+  then plans the doses. The tank page shows the grown size beside the
+  set maximum.
+- **Slow by design.** Each step waits for its mixing (SD-112), so in a
+  large tank pH takes many doses. Holding a hand-mixed tank (SD-150)
+  needs few.

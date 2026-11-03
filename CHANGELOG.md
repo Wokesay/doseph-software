@@ -7,6 +7,13 @@ All notable changes to this software. The format follows
 
 ### Added
 
+- The largest pH− dose grows in a large tank (SD-151). A dose that
+  lowered pH by less than can be measured lets the next be twice as large,
+  never beyond one round of its pump, its daily amount or half its
+  canister, as long as all pH− without a measurable fall stays within
+  what one dose may do; then a grown dose locks pH−.
+  The robot can now hold pH in tanks of several cubic metres; the tank
+  page shows the grown size.
 - Large tanks (SD-150). The status shows a preparation under way: where
   EC began, its rounds, how far it came and when it should be done,
   estimated from the robot's own rounds and caps. The tank page estimates

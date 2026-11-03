@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "doseph/faults.hpp"
 #include "doseph/messages.hpp"
@@ -584,11 +585,91 @@ bool MixCycle::startEc(Ctx& c, Actuators& act, const CycleSettings& s, double ec
   return true;
 }
 
+PhGrowth phGrowth(const Config& cfg, const RuntimeState& rt) {
+  PhGrowth g;
+  const json& j = rt.phGrowth;
+  const CanisterCfg* down = cfg.phDown();
+  if (!j.is_object() || !down || jnum(j, "volumeL") != cfg.tank.volumeL) return g;
+  g.valid = true;
+  const double unseen = jnum(j, "unseenMl");
+  if (!isNum(unseen) || unseen < 0) {
+    g.unseenMl = phUnseenAllowedMl(cfg.tank.volumeL);  // damaged: used up, the safe side (R5)
+    return g;
+  }
+  g.unseenMl = unseen;
+  if (jnum(j, "set") != cfg.control.phMaxMlPerDose || jstr(j, "canister") != down->id || jstr(j, "name") != down->name) return g;
+  g.mlValid = true;
+  const double ml = jnum(j, "ml");
+  if (isNum(ml) && ml > 0 && ml <= phUnseenAllowedMl(cfg.tank.volumeL)) g.ml = ml;
+  return g;
+}
+
+void setPhGrowth(const Config& cfg, RuntimeState& rt, const PhGrowth& g) {
+  const CanisterCfg* down = cfg.phDown();
+  if (!down) {
+    rt.phGrowth = nullptr;
+    return;
+  }
+  rt.phGrowth = {{"ml", numOrNull(g.ml)},       {"unseenMl", g.unseenMl}, {"set", cfg.control.phMaxMlPerDose},
+                 {"volumeL", cfg.tank.volumeL}, {"canister", down->id},   {"name", down->name}};
+}
+
+double phLimitMl(const Config& cfg) {
+  double ml = std::numeric_limits<double>::infinity();
+  const CanisterCfg* down = cfg.phDown();
+  if (!down) return ml;
+  const double flow = cfg.canisterFlow(*down);
+  const Limits lim = cfg.limits.bounded();
+  // Each partial run is rounded to whole ms: its daily amount keeps that much room
+  const double roundingMl = isNum(flow) && flow > 0 ? lim.maxPartialRuns * flow / 60000.0 : 0;
+  if (isNum(flow) && flow > 0) ml = std::min(ml, lim.maxPartialRuns * lim.maxRunS * flow / 60.0 * (1 - 1e-9));
+  if (isNum(down->maxMlPerDay) && down->maxMlPerDay > 0) ml = std::min(ml, down->maxMlPerDay * (1 - 1e-6) - roundingMl);
+  // At most half its canister, so a dose waits for a refill no sooner than a small one would
+  if (isNum(down->capacityMl) && down->capacityMl > 0) ml = std::min(ml, down->capacityMl / 2);
+  return ml;
+}
+
+double phMaxMl(const Config& cfg, const RuntimeState& rt) {
+  const double set = cfg.control.phMaxMlPerDose;
+  const PhGrowth g = phGrowth(cfg, rt);
+  if (!isNum(set) || !isNum(g.ml) || g.ml <= set) return set;
+  return std::max(set, std::min(g.ml, phLimitMl(cfg)));
+}
+
+void MixCycle::phNoEffect(Ctx& c) {
+  const bool again = reportStands(c.rt, "ph.no_effect");
+  const bool held = setLatch(c.cfg, c.rt, "ph.no_effect", {{"at", c.epoch}});
+  noEffectPh_ = 0;
+  if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ph.no_effect"), say("ev.ph.no_effect.text"));
+  else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ph.no_effect", nullptr), say("ev.lock.reported.text"));
+}
+
 void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph) {
   const CanisterCfg* down = c.cfg.phDown();
   const double eff = clampEffect(c.rt.phEffect, kPhStartEffect);
   const bool test = c.rt.newTank;
-  auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, c.cfg.control.phMaxMlPerDose, test ? kTestDropPh : kNaN);
+  // A grown dose whose doses without a measurable fall used what one dose may do counts as without
+  // effect, also across a restart; the grown dose goes, the count stays with the water (SD-151)
+  PhGrowth g = phGrowth(c.cfg, c.rt);
+  const double allowedMl = phUnseenAllowedMl(s.volumeL);
+  if (isNum(phMaxMl(c.cfg, c.rt)) && phMaxMl(c.cfg, c.rt) > c.cfg.control.phMaxMlPerDose && g.unseenMl >= allowedMl) {
+    const bool again = reportStands(c.rt, "ph.no_effect");
+    const bool held = setLatch(c.cfg, c.rt, "ph.no_effect", {{"at", c.epoch}});
+    if (held || !again)
+      c.log.add(c.epoch, "alarm", "alarm", held ? say("ev.ph.unseen") : reportedEvent("ph.no_effect", nullptr),
+                held ? say("ev.ph.unseen.text", {{"ml", g.unseenMl}}) : say("ev.lock.reported.text"), {{"unseenMl", g.unseenMl}});
+    noEffectPh_ = 0;
+    g.ml = kNaN;
+    setPhGrowth(c.cfg, c.rt, g);
+    if (held) {
+      notes_.push_back(say("cycle.note.ph_latched"));
+      holdNow(c, act);
+      return;
+    }
+    // Reported only (SD-133): it goes on at the set maximum
+  }
+  const double maxMl = phMaxMl(c.cfg, c.rt);
+  auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, maxMl, test ? kTestDropPh : kNaN);
   if (!plan.ok) {
     wait(c, act, say("cycle.wait.ph_plan", {{"reason", plan.reason}}));
     return;
@@ -628,6 +709,8 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   clean_ = true;
   doseFailed_ = false;
   limited_ = false;
+  phCapRound_ = isNum(maxMl) && plan.ml >= maxMl * (1 - 1e-9) ? maxMl : kNaN;
+  phGrownRound_ = plan.ml > c.cfg.control.phMaxMlPerDose * (1 + 1e-9);
   testDose_ = test;
   expectedTest_ = plan.ml / s.volumeL * eff;
   expectedRise_ = kNaN;
@@ -934,25 +1017,42 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
         wait(c, act, say("cycle.wait.volume", {{"implied", std::round(v * expectedTest_ / drop)}, {"entered", v}}), 0);
         return;
       }
-      if (testDose_ && !misfit && drop >= kNoEffectPh) {
+      // A dose grown beyond the set maximum confirms nothing: the volume may be the cause (SD-151)
+      if (testDose_ && !misfit && drop >= kNoEffectPh && !phGrownRound_) {
         c.rt.newTank = false;
         c.log.add(c.epoch, "control", "info", say("ev.cycle.test_ok_ph"), say("ev.cycle.test_ok_ph.text", {{"entered", v}}));
       }
       // A dose without a measurable fall learns only towards the smaller dose (RAT-041)
       if (drop < kNoEffectPh) {
         c.rt.phEffect = std::max(clampEffect(c.rt.phEffect, kPhStartEffect), kPhStartEffect);
-        noEffectPh_++;
+        // At the largest dose in a large tank it was too small, not without effect: the next may be
+        // twice as large, within what one round, the daily amount and the canister allow, while all
+        // pH− without a fall stays within one dose's 0.3 pH; never while "no effect" stands (SD-151)
+        // The set maximum and the pH− canister must still be those of the dose's start: their record
+        // was written then (RAT-057)
+        PhGrowth g = phGrowth(c.cfg, c.rt);
+        const double next = isNum(phCapRound_) ? std::min(2 * phCapRound_, phLimitMl(c.cfg)) : kNaN;
+        const bool standing = holds(c.rt, "ph.no_effect") || reportStands(c.rt, "ph.no_effect");
+        if (g.mlValid && isNum(next) && !standing && next > phCapRound_ * (1 + 1e-9) && g.unseenMl + next <= phUnseenAllowedMl(v)) {
+          g.ml = next;
+          setPhGrowth(c.cfg, c.rt, g);
+          const double fell = std::max(0.0, drop);
+          c.log.add(c.epoch, "control", "info", say("ev.ph.cap_grown"),
+                    say("ev.ph.cap_grown.text", {{"from", phCapRound_}, {"to", next}, {"drop", fell}}),
+                    {{"from", phCapRound_}, {"to", next}, {"drop", drop}, {"unseenMl", g.unseenMl}});
+        } else {
+          noEffectPh_++;
+        }
       } else {
         if (isNum(mlPerL) && mlPerL > 0) c.rt.phEffect = clampEffect(drop / mlPerL, kPhStartEffect);
+        PhGrowth g = phGrowth(c.cfg, c.rt);
+        if (g.valid) {
+          g.unseenMl = 0;
+          setPhGrowth(c.cfg, c.rt, g);
+        }
         noEffectPh_ = 0;
       }
-      if (noEffectPh_ >= kNoEffectLatch) {
-        const bool again = reportStands(c.rt, "ph.no_effect");
-        const bool held = setLatch(c.cfg, c.rt, "ph.no_effect", {{"at", c.epoch}});
-        noEffectPh_ = 0;
-        if (held) c.log.add(c.epoch, "alarm", "alarm", say("ev.ph.no_effect"), say("ev.ph.no_effect.text"));
-        else if (!again) c.log.add(c.epoch, "alarm", "alarm", reportedEvent("ph.no_effect", nullptr), say("ev.lock.reported.text"));
-      }
+      if (noEffectPh_ >= kNoEffectLatch) phNoEffect(c);
     }
   }
   evaluate(c, act);
@@ -1207,6 +1307,12 @@ void MixCycle::tick(Ctx& c, Actuators& act, Doser& doser) {
         if (doser.start(c, act, o, err)) {
           lastChannel_ = channel;
           clearedMs_ = 0;
+          // pH− counts once its order is taken, for all it is to give: the safe side if it is cut (SD-151)
+          if (kind_ == Kind::Ph && isNum(o.step.ml)) {
+            PhGrowth g = phGrowth(c.cfg, c.rt);
+            g.unseenMl += o.step.ml;
+            setPhGrowth(c.cfg, c.rt, g);
+          }
           json& pr = c.rt.pairRound;
           if (pr.is_object() && pr["parts"].contains(o.step.canister)) {
             pr["order"] = o.id;
@@ -1432,6 +1538,8 @@ json MixCycle::status(const Ctx& c) const {
                    {"mixWhy", s.mixWhy},
                    {"stableS", s.stableMs / kSecond},
                    {"holdGapEc", std::max(kHoldGapEc, 2 * s.ecTol)},
+                   {"phMaxMl", numOrNull(phMaxMl(c.cfg, c.rt))},
+                   {"phMaxGrown", phMaxMl(c.cfg, c.rt) > c.cfg.control.phMaxMlPerDose},
                    {"holdMin", s.holdMs / kMinute}};
   return j;
 }

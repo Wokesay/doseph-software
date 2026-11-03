@@ -191,6 +191,7 @@ function WaitCard() {
 
 function ControlCard() {
   const c = config.value!.control;
+  const s = state.value!.cycle.settings;
   const [v, setV] = useState({ ...c });
   const set = (k: keyof typeof c) => (x: number | null) => setV({ ...v, [k]: x ?? NaN });
   const save = async () => {
@@ -198,8 +199,8 @@ function ControlCard() {
     await refreshConfig();
     toast(t("tank.saved"));
   };
-  const row = (k: keyof typeof c, unit?: string) => (
-    <Field label={t(`tank.ctl.${k}`)}>
+  const row = (k: keyof typeof c, unit?: string, hint?: string) => (
+    <Field label={t(`tank.ctl.${k}`)} hint={hint}>
       <NumberInput value={Number.isNaN(v[k]) ? null : v[k]} onValue={set(k)} unit={unit} name={k} />
     </Field>
   );
@@ -214,7 +215,7 @@ function ControlCard() {
             {row("phTolerance")}
             {row("maxEcStep", "mS/cm")}
             {row("ecFloor", "mS/cm")}
-            {row("phMaxMlPerDose", "ml")}
+            {row("phMaxMlPerDose", "ml", s.phMaxGrown && s.phMaxMl !== null ? t("tank.phMaxGrown", { ml: num(s.phMaxMl, s.phMaxMl < 10 ? 1 : 0) }) : undefined)}
             {row("maxEcRounds")}
             {row("maxPhDoses")}
           </div>
