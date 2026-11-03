@@ -19,7 +19,9 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The core tests under the sanitizers alone take about half an hour on four cores, and the
+    # hosted runners vary by half: 90 min leaves room without letting a hung step run long
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
