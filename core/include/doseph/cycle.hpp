@@ -78,10 +78,12 @@ constexpr int kNoEffectLatch = 2;
 constexpr double kPhUnseenPh = 0.3;
 struct PhGrowth {
   double ml = kNaN;     // the largest dose grown to; NaN: not grown
-  double unseenMl = 0;  // pH− dosed since the last measurable fall, counted at each dose's start
+  double unseenMl = 0;  // pH− dosed since the last measurable fall, counted as each dose starts
+  bool valid = false;   // a record of this volume: its count holds
+  bool mlValid = false; // … learned for the set maximum and pH− canister in force too: its dose holds
 };
-// What was learned for the set maximum, volume and pH− canister in force; with any of them changed,
-// or the record damaged, nothing (R5)
+// What was learned. The count belongs to the water: another volume starts it afresh, a damaged one
+// counts as used up (R5). The grown dose belongs to the set maximum and the pH− canister as well.
 PhGrowth phGrowth(const Config& cfg, const RuntimeState& rt);
 void setPhGrowth(const Config& cfg, RuntimeState& rt, const PhGrowth& g);
 inline void resetPhGrowth(RuntimeState& rt) { rt.phGrowth = nullptr; }
@@ -252,6 +254,7 @@ class MixCycle {
   double mlRound_ = 0, volRound_ = kNaN, expectedRise_ = kNaN, expectedTest_ = kNaN;
   bool limited_ = false, testDose_ = false, clean_ = true, doseFailed_ = false;
   double phCapRound_ = kNaN;  // a pH− dose made as large as the largest dose in force: that dose (SD-151)
+  bool phGrownRound_ = false; // the pH− dose was planned larger than the set maximum (SD-151)
   Epoch lastEcDoseAt_ = 0;
   int ecRounds_ = 0, phDoses_ = 0, seq_ = 0;
   // The channel dosed last in this round, and how long the trough ran clear since (SD-147)

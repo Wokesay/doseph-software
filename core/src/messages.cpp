@@ -410,6 +410,8 @@ constexpr Entry kMessages[] = {
     {"ev.prep.done", "Preparation done"},
     {"ev.prep.done.text", "EC {from:2} → {to:2}\u00a0mS/cm in {rounds} rounds and {h:1}\u00a0h"},
     {"ev.ph.cap_grown", "pH− dose too small for the tank"},
+    {"ev.ph.unseen", "pH− without effect"},
+    {"ev.ph.unseen.text", "{ml:0}\u00a0ml of pH− since the last measurable fall lowered pH by less than can be measured, as much as one dose may do – check the canister, the line and the pH probe, then release the lock"},
     {"ev.ph.cap_grown.text", "{from:0}\u00a0ml lowered pH by only {drop:3}, less than can be measured: the next dose may be up to {to:0}\u00a0ml"},
     {"ev.cycle.no_flow", "No flow"},
     {"ev.cycle.unsteady", "Readings not steady"},

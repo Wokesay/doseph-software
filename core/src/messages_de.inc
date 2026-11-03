@@ -530,6 +530,8 @@ static const struct {
     {"ev.ph.cap_grown.text", "{from:0} ml senkten den pH nur um {drop:3}, weniger als messbar: Die nächste Gabe darf bis {to:0} ml groß sein"},
     {"ev.ph.no_effect", "pH gesperrt: keine Wirkung"},
     {"ev.ph.no_effect.text", "Zwei pH−-Gaben nacheinander senkten pH um weniger als 0,03. Prüf den pH−-Kanister, seine Pumpe und die pH-Sonde, dann gib die Sperre frei."},
+    {"ev.ph.unseen", "pH− ohne Wirkung"},
+    {"ev.ph.unseen.text", "{ml:0} ml pH− seit dem letzten messbaren Abfall senkten den pH weniger als messbar, so viel wie eine Gabe darf – Kanister, Leitung und pH-Sonde prüfen, dann die Sperre freigeben"},
     {"ev.plain", "{text}"},
     {"ev.plan.drain", "EC-Ziel von {from:2} auf {to:2} mS/cm gesenkt"},
     {"ev.plant.changed", "{name} geändert"},

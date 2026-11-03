@@ -614,6 +614,12 @@ void Robot::boot() {
     if (r.purpose == "calrun" || r.purpose == "calprime" || r.purpose == "empty") continue;
     // How much went in is not known: the plants' records say so (RAT-064, R5)
     if (r.intoTank()) rt_.count.unknown[r.canister]++;
+    // pH− cut by the restart counts for all it was to give, the safe side (SD-151)
+    if (r.purpose == "ph" && isNum(r.ml)) {
+      PhGrowth g = phGrowth(cfg_, rt_);
+      g.unseenMl += r.ml;
+      setPhGrowth(cfg_, rt_, g);
+    }
     if (r.intoTank())
       log_.add(bootEpoch_, "dose", "alarm", say("ev.boot.cut_dose", {{"name", r.name}}),
                say("ev.boot.cut_dose.text", {{"name", r.name}, {"ml", numOrNull(r.ml)}}), {{"canister", r.canister}, {"ml", numOrNull(r.ml)}});
@@ -1817,7 +1823,8 @@ Result Robot::newTank() {
   const Ms now = clock_.nowMs();
   for (Signal ch : {Signal::Ph, Signal::Ec, Signal::Temp}) truth_.expectChange(ch, now + 10 * kMinute);
   log_.add(clock_.epoch(), "control", "info", say("ev.tank.new"), say("ev.tank.new.text"));
-  cycle_.newFill();  // its preparation starts anew (SD-150)
+  cycle_.newFill();
+  resetPhGrowth(rt_);  // new water: a pH− dose grown for the last one, and its count, go (SD-151)  // its preparation starts anew (SD-150)
   restartCycle();
   saveState(true);
   return Result::ok();

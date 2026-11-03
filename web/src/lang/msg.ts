@@ -391,6 +391,8 @@ export const msgDe: Record<string, string> = {
   "ev.prep.done": "Aufbereitung fertig",
   "ev.prep.done.text": "EC {from:2} → {to:2}\u00a0mS/cm in {rounds} Runden und {h:1}\u00a0h",
   "ev.ph.cap_grown": "pH−-Gabe zu klein für den Tank",
+  "ev.ph.unseen": "pH− ohne Wirkung",
+  "ev.ph.unseen.text": "{ml:0}\u00a0ml pH− seit dem letzten messbaren Abfall senkten den pH weniger als messbar, so viel wie eine Gabe darf – Kanister, Leitung und pH-Sonde prüfen, dann die Sperre freigeben",
   "ev.ph.cap_grown.text": "{from:0}\u00a0ml senkten den pH nur um {drop:3}, weniger als messbar: Die nächste Gabe darf bis {to:0}\u00a0ml groß sein",
   "ev.cycle.no_flow": "Kein Durchfluss",
   "ev.cycle.unsteady": "Werte nicht ruhig",
