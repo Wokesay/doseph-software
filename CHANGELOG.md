@@ -5,6 +5,8 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-proto.6] – 2026-11-03
+
 ### Added
 
 - The cost per canister in a plant's record (SD-152). A canister may have

@@ -33,11 +33,12 @@ struct Fix {
   PrepEstimate run(const PrepInput& in) const { return estimatePrep(cfg, cfg.recipes[0], eff, in); }
 };
 
-// Looks every 10 s of simulated time, which runs on in steps of 1 s; fails past its deadline
-void waitFor(harness::Run& r, const std::string& what, const std::function<bool()>& done, double maxS) {
-  for (double t = 0; t <= maxS; t += 10) {
+// Looks every `everyS` of simulated time, which runs on in steps of 1 s; fails past its deadline. A
+// look reads the whole state, slow under the sanitizers: waits of hours look once a minute
+void waitFor(harness::Run& r, const std::string& what, const std::function<bool()>& done, double maxS, double everyS = 10) {
+  for (double t = 0; t <= maxS; t += everyS) {
     if (done()) return;
-    r.step(10 * kSecond);
+    r.step(static_cast<Ms>(everyS * kSecond));
   }
   FAIL("not within " << maxS << " s: " << what);
 }
@@ -144,7 +145,7 @@ TEST_CASE("Cycle: a preparation shows where it began, its rounds and when it sho
   REQUIRE(c["fresh"].is_object());
   CHECK(c["fresh"]["ok"] == true);
   CHECK(c["fresh"]["rounds"].get<int>() >= 1);
-  waitFor(r, "on target", [&] { return r.phase() == "hold"; }, 8 * 3600);
+  waitFor(r, "on target", [&] { return r.phase() == "hold"; }, 8 * 3600, 60);
   CHECK(r.state()["cycle"]["prep"].is_null());
   const json done = r.events("control");
   bool logged = false;
@@ -217,5 +218,5 @@ TEST_CASE("Cycle: mixed by hand, the robot only holds: EC far below its target i
     for (const auto& e : r.events("control"))
       if (e["title"]["key"] == "ev.cycle.ec_round" || e["title"]["key"] == "ev.cycle.ph_dose") return true;
     return false;
-  }, 3 * 3600);
+  }, 3 * 3600, 60);
 }
