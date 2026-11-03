@@ -215,7 +215,7 @@ function ControlCard() {
             {row("phTolerance")}
             {row("maxEcStep", "mS/cm")}
             {row("ecFloor", "mS/cm")}
-            {row("phMaxMlPerDose", "ml", s.phMaxGrown && s.phMaxMl !== null ? t("tank.phMaxGrown", { ml: num(s.phMaxMl, 0) }) : undefined)}
+            {row("phMaxMlPerDose", "ml", s.phMaxGrown && s.phMaxMl !== null ? t("tank.phMaxGrown", { ml: num(s.phMaxMl, s.phMaxMl < 10 ? 1 : 0) }) : undefined)}
             {row("maxEcRounds")}
             {row("maxPhDoses")}
           </div>

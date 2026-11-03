@@ -1748,7 +1748,6 @@ Result Robot::putTank(const json& j) {
     // Another volume: the next dose checks it again (SD-105); a pair is not caught up in another tank (SD-114)
     rt_.newTank = true;
     rt_.latches.erase("tank.volume");
-    resetPhCap(rt_);  // a largest pH− dose grown for another volume (SD-151)
     cycle_.newFill();
     Ctx c = ctx();
     dropCatchUp(c, say("catchup.new_tank"));
@@ -2112,14 +2111,12 @@ Result Robot::importConfig(const json& j) {
   const CanisterCfg* phNow = cfg_.phDown();
   if (!phWas || !phNow || phWas->id != phNow->id || phWas->name != phNow->name) {
     rt_.phEffect = kNaN;
-    resetPhCap(rt_);  // and so does its grown largest dose (SD-151)
   }
   // Another volume: the next dose checks it again (SD-105)
   const bool sameVolume = (std::isnan(before.tank.volumeL) && std::isnan(cfg_.tank.volumeL)) || before.tank.volumeL == cfg_.tank.volumeL;
   if (!sameVolume) {
     rt_.newTank = true;
     rt_.latches.erase("tank.volume");
-    resetPhCap(rt_);  // a largest pH− dose grown for another volume (SD-151)
   }
   // Everything off, and the check starts again with what the file says
   act_.stopAll();
@@ -3505,8 +3502,9 @@ Result Robot::ackLatch(const std::string& id, const json& body) {
     if (!jbool(body, "confirm", false)) return Result::fail(422, say("latch.volume_confirm"));
     confirmVolume(cfg_, rt_, it->second);
   }
-  // A person looked at pH− without effect: its doses may grow once more for the tank (SD-151)
-  if (id == "ph.no_effect") rt_.phUnseenMl = 0;
+  // A person released pH− without effect: what grew taught nothing, the dose starts again from the
+  // set maximum (SD-151)
+  if (id == "ph.no_effect" && holds(rt_, id)) resetPhGrowth(rt_);
   const json args = it->second.is_object() ? it->second : json::object();
   const bool held = holds(rt_, id);
   rt_.latches.erase(it);

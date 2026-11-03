@@ -2107,26 +2107,35 @@ minimal principle.
 - **It grows.** A clean dose at the largest dose in force that lowered pH
   by less than can be measured was too small for the tank, not without
   effect. The next may be twice as large, and the event log says so.
-- **Within one dose.** It grows only while the doses without a
-  measurable fall since the last one that showed, with the next, stay
-  within what one dose may do: 0.3 pH at the strongest measured effect
-  (RAT-050), 0.06 ml/L of the entered volume. Beyond, a dose without a
-  fall counts as without effect, and two lock pH− as before (RAT-041).
-  So a probe that does not move, an empty line or a tank far larger
-  than entered never adds more acid than one dose at the strongest
-  effect, plus the two that lock it.
+- **Never beyond what it can do.** A grown dose is never larger than
+  one round of its pump can run (six runs of 60 s, RAT-055), its daily
+  amount (SD-113) or what its canister holds, so it never stops pH−
+  from being dosed at all.
+- **Within one dose.** Every pH− dose counts at its start, for all it is
+  to give: cut, unclean or not, until one shows a measurable fall. The
+  dose grows only while that sum, with the next, stays within what one
+  dose may do: 0.3 pH at the strongest measured effect (RAT-050), 0.06
+  ml/L of the entered volume. Beyond, a dose without a fall counts as
+  without effect, and two lock pH− as before (RAT-041). Once the sum has
+  reached it, a grown dose locks pH− at once, also after a restart, and
+  goes. So a probe that does not move, an empty line or a tank far larger
+  than entered never adds much more acid than one dose at the strongest
+  effect.
 - **The other caps stay:** 0.3 pH at the effect, 0.3 ml/L, and the
-  test dose's 0.1 pH while the volume is not confirmed (SD-105). A tank
-  smaller than entered shows a strong fall at the first 20 ml, so the
-  dose does not grow, and the test dose latches the volume.
-- **It stays** across restarts. It is learned for the tank and the
-  pH− canister: another volume or another pH− canister starts again
-  from the set maximum. A person who released "no effect" lets it grow
-  once more.
+  test dose's 0.1 pH while the volume is not confirmed (SD-105). A test
+  dose grown beyond the set maximum confirms no volume: with a strongly
+  buffered solution even a tank smaller than entered shows little.
+- **What it was learned for.** The grown dose holds only for the set
+  maximum, the volume and the pH− canister it grew with, however they
+  change: in the app, by an import or a power cut between two saves.
+  Another of them starts again from the set maximum, and a smaller set
+  maximum holds at once (R7). It stays across restarts.
+- **A lock.** It does not grow while "no effect" holds or its report
+  stands (SD-133). A person who releases the lock finds the dose back at
+  the set maximum: the doses that grew it taught nothing about the tank.
 - **A dose that showed** keeps the size it grew to; the learned effect
   then plans the doses. The tank page shows the grown size beside the
-  set maximum. Where a smaller set maximum was chosen, it still starts
-  there; it only grows where its doses cannot be measured.
+  set maximum.
 - **Slow by design.** Each step waits for its mixing (SD-112), so in a
   large tank pH takes many doses. Holding a hand-mixed tank (SD-150)
   needs few.

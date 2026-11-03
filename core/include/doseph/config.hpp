@@ -430,10 +430,10 @@ struct RuntimeState {
   std::map<std::string, json> latches;     // latched locks with their reason; reportOnly: holds nothing (SD-133)
   std::map<std::string, json> jumpLocks;   // signal → {until, from, to, at} (RAT-039, RAT-044)
   double phEffect = kNaN;                  // learned effect of pH− (pH per ml/L), only from clean doses
-  // The largest pH− dose grown for a large tank, ml (SD-151); NaN: the set maximum. `phUnseenMl`: the
-  // pH− of the doses since the last measurable fall that showed none
-  double phCapMl = kNaN;
-  double phUnseenMl = 0;
+  // The largest pH− dose grown for a large tank (SD-151): {ml, unseenMl, set, volumeL, canister,
+  // name}, the grown dose, the pH− dosed since the last measurable fall, and what it was learned for:
+  // the set maximum, the volume and the pH− canister; null: nothing grown or counted
+  json phGrowth = nullptr;
   std::map<std::string, double> ecEffects; // learned EC effect per recipe, mS/cm per ml/L of its scaled parts (RAT-057)
   // Canister → its level in ml, counted from use; missing: unknown, never
   // assumed full (RAT-015); may fall below zero (SD-119)
