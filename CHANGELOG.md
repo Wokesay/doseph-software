@@ -5,8 +5,6 @@ All notable changes to this software. The format follows
 
 ## [Unreleased]
 
-## [0.1.0-proto.6] – 2026-11-03
-
 ### Added
 
 - The cost per canister in a plant's record (SD-152). A canister may have
@@ -14,6 +12,16 @@ All notable changes to this software. The format follows
   plant's record gives each canister's cost and the sum, or "at least"
   where a run's amount is not known, and nothing where a price is
   missing.
+
+### Changed
+
+- The version on `main` is `0.1.0-dev` again after the release
+  (docs/RELEASE.md, step 4).
+
+## [0.1.0-proto.6] – 2026-11-03
+
+### Added
+
 - The largest pH− dose grows in a large tank (SD-151). A dose that
   lowered pH by less than can be measured lets the next be twice as large,
   never beyond one round of its pump, its daily amount or half its
