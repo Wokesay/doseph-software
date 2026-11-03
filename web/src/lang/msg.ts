@@ -390,6 +390,8 @@ export const msgDe: Record<string, string> = {
   "ev.cycle.held.text": "pH {ph:2}, EC {ec:2} mS/cm",
   "ev.prep.done": "Aufbereitung fertig",
   "ev.prep.done.text": "EC {from:2} → {to:2}\u00a0mS/cm in {rounds} Runden und {h:1}\u00a0h",
+  "ev.ph.cap_grown": "pH−-Gabe zu klein für den Tank",
+  "ev.ph.cap_grown.text": "{from:0}\u00a0ml senkten den pH nur um {drop:3}, weniger als messbar: Die nächste Gabe darf bis {to:0}\u00a0ml groß sein",
   "ev.cycle.no_flow": "Kein Durchfluss",
   "ev.cycle.unsteady": "Werte nicht ruhig",
   "ev.cycle.unsteady.text": "In der letzten Minute bewegte sich EC um {ec:3} mS/cm und pH um {ph:2} – die Sonden sind vielleicht verschmutzt oder der Tank ist nicht durchmischt",

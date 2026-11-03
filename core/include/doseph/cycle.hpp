@@ -71,6 +71,21 @@ constexpr double kNoEffectEc = 0.02;          // a round that raised EC by less 
 constexpr double kNoEffectPh = 0.03;          // … a pH− dose that lowered pH by less (RAT-020, RAT-041)
 constexpr double kSmallRoundEc = 0.06;        // rounds made smaller that should raise less are judged as a sum (RAT-055)
 constexpr int kNoEffectLatch = 2;
+// The largest pH− dose in a large tank (SD-151): a dose at it that lowered pH by less than can be
+// measured was too small for the tank. The next may be twice as large, as long as the doses without
+// a measurable fall, with the next, stay within what one dose may do: 0.3 pH at the strongest
+// measured effect (RAT-050). Beyond, it counts as without effect (RAT-041).
+constexpr double kPhUnseenPh = 0.3;
+// The grown largest dose dropped: after another volume or another pH− canister
+inline void resetPhCap(RuntimeState& rt) {
+  rt.phCapMl = kNaN;
+  rt.phUnseenMl = 0;
+}
+// The largest pH− dose in force: the set maximum, or larger where it grew for the tank (SD-151)
+inline double phMaxMl(const Config& cfg, const RuntimeState& rt) {
+  const double set = cfg.control.phMaxMlPerDose;
+  return isNum(rt.phCapMl) && (!isNum(set) || rt.phCapMl > set) ? rt.phCapMl : set;
+}
 // A round that raised EC by less than this share of what the recipe learned before, per ml:
 // precipitation or deposits possible (SD-148, an assumption)
 constexpr double kPrecipitationShare = 0.5;             // rounds without effect in a row, then a latch
@@ -229,6 +244,7 @@ class MixCycle {
   Measured before_;
   double mlRound_ = 0, volRound_ = kNaN, expectedRise_ = kNaN, expectedTest_ = kNaN;
   bool limited_ = false, testDose_ = false, clean_ = true, doseFailed_ = false;
+  double phCapRound_ = kNaN;  // a pH− dose made as large as the largest dose in force: that dose (SD-151)
   Epoch lastEcDoseAt_ = 0;
   int ecRounds_ = 0, phDoses_ = 0, seq_ = 0;
   // The channel dosed last in this round, and how long the trough ran clear since (SD-147)

@@ -526,6 +526,8 @@ static const struct {
     {"ev.maintenance_over", "Wartungszeit abgelaufen"},
     {"ev.mqtt.command", "Befehl über MQTT: {command}"},
     {"ev.mqtt.refused", "Befehl über MQTT abgelehnt: {command}"},
+    {"ev.ph.cap_grown", "pH−-Gabe zu klein für den Tank"},
+    {"ev.ph.cap_grown.text", "{from:0} ml senkten den pH nur um {drop:3}, weniger als messbar: Die nächste Gabe darf bis {to:0} ml groß sein"},
     {"ev.ph.no_effect", "pH gesperrt: keine Wirkung"},
     {"ev.ph.no_effect.text", "Zwei pH−-Gaben nacheinander senkten pH um weniger als 0,03. Prüf den pH−-Kanister, seine Pumpe und die pH-Sonde, dann gib die Sperre frei."},
     {"ev.plain", "{text}"},

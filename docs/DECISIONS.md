@@ -2094,3 +2094,39 @@ decided here by the minimal principle.
   concentrate alone needs about ten hours of pumping, one channel at a
   time. Whether the Pro prepares 30 m³ overnight depends on its pumps;
   that question goes to the product side.
+
+## SD-151: The largest pH− dose grows in a large tank
+
+2026-11-03. Chosen by the owner after SD-150. The largest pH− dose (at
+most 20 ml, RAT-050) guards against a wrongly entered volume. In a tank
+of several cubic metres, 20 ml lower pH by less than can be measured
+(0.03): at 30 m³, by about 0.003. Two such doses latched "no effect"
+(RAT-041), so the robot could not hold pH there. Decided here by the
+minimal principle.
+
+- **It grows.** A clean dose at the largest dose in force that lowered pH
+  by less than can be measured was too small for the tank, not without
+  effect. The next may be twice as large, and the event log says so.
+- **Within one dose.** It grows only while the doses without a
+  measurable fall since the last one that showed, with the next, stay
+  within what one dose may do: 0.3 pH at the strongest measured effect
+  (RAT-050), 0.06 ml/L of the entered volume. Beyond, a dose without a
+  fall counts as without effect, and two lock pH− as before (RAT-041).
+  So a probe that does not move, an empty line or a tank far larger
+  than entered never adds more acid than one dose at the strongest
+  effect, plus the two that lock it.
+- **The other caps stay:** 0.3 pH at the effect, 0.3 ml/L, and the
+  test dose's 0.1 pH while the volume is not confirmed (SD-105). A tank
+  smaller than entered shows a strong fall at the first 20 ml, so the
+  dose does not grow, and the test dose latches the volume.
+- **It stays** across restarts. It is learned for the tank and the
+  pH− canister: another volume or another pH− canister starts again
+  from the set maximum. A person who released "no effect" lets it grow
+  once more.
+- **A dose that showed** keeps the size it grew to; the learned effect
+  then plans the doses. The tank page shows the grown size beside the
+  set maximum. Where a smaller set maximum was chosen, it still starts
+  there; it only grows where its doses cannot be measured.
+- **Slow by design.** Each step waits for its mixing (SD-112), so in a
+  large tank pH takes many doses. Holding a hand-mixed tank (SD-150)
+  needs few.

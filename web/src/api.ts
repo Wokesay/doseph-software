@@ -29,6 +29,8 @@ export type CycleSettings = {
   mixMin: number | null; mixOwnMin: number | null; mixUserMin: number | null; mixWhy: "turnover" | "user" | "minimum" | "settling" | "settling_default"; stableS: number;
   // Mixed by hand, the robot corrects EC at most this far below its target (SD-150)
   holdGapEc: number;
+  // The largest pH− dose in force, and whether it grew for a large tank (SD-151)
+  phMaxMl: number | null; phMaxGrown: boolean;
   holdMin: number;
 };
 

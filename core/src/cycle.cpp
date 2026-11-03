@@ -588,7 +588,8 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   const CanisterCfg* down = c.cfg.phDown();
   const double eff = clampEffect(c.rt.phEffect, kPhStartEffect);
   const bool test = c.rt.newTank;
-  auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, c.cfg.control.phMaxMlPerDose, test ? kTestDropPh : kNaN);
+  const double maxMl = phMaxMl(c.cfg, c.rt);
+  auto plan = planPhDose(ph, s.phTarget, eff, s.volumeL, maxMl, test ? kTestDropPh : kNaN);
   if (!plan.ok) {
     wait(c, act, say("cycle.wait.ph_plan", {{"reason", plan.reason}}));
     return;
@@ -628,6 +629,7 @@ void MixCycle::startPh(Ctx& c, Actuators& act, const CycleSettings& s, double ph
   clean_ = true;
   doseFailed_ = false;
   limited_ = false;
+  phCapRound_ = isNum(maxMl) && plan.ml >= maxMl * (1 - 1e-9) ? maxMl : kNaN;
   testDose_ = test;
   expectedTest_ = plan.ml / s.volumeL * eff;
   expectedRise_ = kNaN;
@@ -941,9 +943,21 @@ void MixCycle::learn(Ctx& c, Actuators& act) {
       // A dose without a measurable fall learns only towards the smaller dose (RAT-041)
       if (drop < kNoEffectPh) {
         c.rt.phEffect = std::max(clampEffect(c.rt.phEffect, kPhStartEffect), kPhStartEffect);
-        noEffectPh_++;
+        // At the largest dose in a large tank it was too small, not without effect: the next may be
+        // twice as large while the doses without a fall stay within one dose's 0.3 pH (SD-151)
+        c.rt.phUnseenMl += mlRound_;
+        const double allowedMl = kPhUnseenPh / kPhStartEffect * v;
+        if (isNum(phCapRound_) && isNum(v) && c.rt.phUnseenMl + 2 * phCapRound_ <= allowedMl) {
+          c.rt.phCapMl = 2 * phCapRound_;
+          c.log.add(c.epoch, "control", "info", say("ev.ph.cap_grown"),
+                    say("ev.ph.cap_grown.text", {{"from", phCapRound_}, {"to", c.rt.phCapMl}, {"drop", drop}}),
+                    {{"from", phCapRound_}, {"to", c.rt.phCapMl}, {"drop", drop}, {"unseenMl", c.rt.phUnseenMl}});
+        } else {
+          noEffectPh_++;
+        }
       } else {
         if (isNum(mlPerL) && mlPerL > 0) c.rt.phEffect = clampEffect(drop / mlPerL, kPhStartEffect);
+        c.rt.phUnseenMl = 0;
         noEffectPh_ = 0;
       }
       if (noEffectPh_ >= kNoEffectLatch) {
@@ -1432,6 +1446,8 @@ json MixCycle::status(const Ctx& c) const {
                    {"mixWhy", s.mixWhy},
                    {"stableS", s.stableMs / kSecond},
                    {"holdGapEc", std::max(kHoldGapEc, 2 * s.ecTol)},
+                   {"phMaxMl", numOrNull(phMaxMl(c.cfg, c.rt))},
+                   {"phMaxGrown", isNum(c.rt.phCapMl) && phMaxMl(c.cfg, c.rt) == c.rt.phCapMl},
                    {"holdMin", s.holdMs / kMinute}};
   return j;
 }

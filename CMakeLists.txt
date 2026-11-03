@@ -133,6 +133,7 @@ if(DP_BUILD_TESTS AND DP_BUILD_SIM)
     tests/core/test_flowsignal.cpp
     tests/core/test_trough.cpp
     tests/core/test_prep.cpp
+    tests/core/test_phcap.cpp
     tests/core/test_functionkey.cpp
     tests/core/test_history.cpp
     tests/core/test_localtime.cpp

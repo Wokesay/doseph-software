@@ -362,7 +362,7 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 - **Why:** A dose without effect points to an empty canister, a blocked line or a faulty probe; repeating it blindly risks a large overshoot once the fault clears. Alternating between lowering and raising ("ping-pong") wastes product, adds ions and can oscillate.
 - **Evidence:** —
 - **Implemented in:** `core/include/doseph/cycle.hpp`, `core/src/cycle.cpp`, `core/src/truth.cpp`
-- **Tests:** `tests/core/test_cycle.cpp` "Cycle: EC above its target and pH below it are left as they are, with the reason (RAT-012, RAT-037, RAT-041)"; `tests/core/test_truth.cpp` "Sensor truth: a pH fall names the robot's own dose as one possible cause, and that it only lowers pH (RAT-041)"
+- **Tests:** `tests/core/test_cycle.cpp` "Cycle: EC above its target and pH below it are left as they are, with the reason (RAT-012, RAT-037, RAT-041)"; `tests/core/test_truth.cpp` "Sensor truth: a pH fall names the robot's own dose as one possible cause, and that it only lowers pH (RAT-041)"; `tests/core/test_phcap.cpp` "pH− in a large tank: the doses without a measurable fall stay within what one dose may do, then two without effect lock pH− as before (SD-151, RAT-041)"
 
 ### RAT-042 – Announced interventions explain sensor jumps
 
@@ -431,11 +431,11 @@ cover it. Code, tests and other docs cite only the ID (RAT-001 …).
 
 ### RAT-050 – Effect-based cap and minimum run time for pH-lowering doses
 
-- **Rule:** A pH− dose is capped by its effect: at most 0.3 pH of change, at most 0.3 ml/L and at most the set maximum, planned with a start effect of 5.0 pH per ml/L; a run shorter than 1 s is not made.
+- **Rule:** A pH− dose is capped by its effect: at most 0.3 pH of change, at most 0.3 ml/L and at most the set maximum, planned with a start effect of 5.0 pH per ml/L; a run shorter than 1 s is not made. In a large tank the set maximum grows while its doses cannot be measured, within these caps (SD-151).
 - **Why:** Underestimating the acid means overdosing, and a pH overshoot cannot be undone; overestimating only costs extra rounds. Very short runs are too imprecise.
 - **Evidence:** Measured on the reference installation (2026): 4.9 ml of pH− in 20.4 L of reverse-osmosis-based solution at EC 2.96 (0.24 ml/L) lowered pH by about 1.2, i.e. roughly 5.0 pH per ml/L – 7.5 times what the earlier dose formula assumed. A fixed 20 ml cap would have allowed a drop of about 4.9 pH for a 1.0 pH gap; the effect-based cap gives 1.22 ml (about 1.5 s of pumping) at 20.4 L.
 - **Implemented in:** `core/include/doseph/config.hpp`, `core/include/doseph/plan.hpp`, `core/src/cycle.cpp`, `core/src/gateway.cpp`, `core/src/plan.cpp`
-- **Tests:** `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "pH dose: its cap and the start effect (RAT-050)"
+- **Tests:** `tests/core/test_plan.cpp` "Partial runs: equal in size, none under 1 s, no more than allowed (RAT-050, RAT-055)"; `tests/core/test_plan.cpp` "pH dose: its cap and the start effect (RAT-050)"; `tests/core/test_phcap.cpp` "pH− in a large tank: a dose at the largest dose that lowers pH by less than can be measured lets the next be twice as large, until one shows; the grown dose survives a restart and goes with another volume (SD-151, RAT-050)"
 
 ### RAT-051 – A dry-run lock is binding for every switching path
 

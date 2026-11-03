@@ -1020,6 +1020,8 @@ void to_json(json& j, const RuntimeState& s) {
   j["latches"] = s.latches;
   j["jumpLocks"] = s.jumpLocks;
   j["phEffect"] = numOrNull(s.phEffect);
+  j["phCapMl"] = numOrNull(s.phCapMl);
+  j["phUnseenMl"] = s.phUnseenMl;
   j["ecEffects"] = s.ecEffects;
   j["stockMl"] = s.stockMl;
   j["count"] = countJson(s.count);
@@ -1124,6 +1126,9 @@ RuntimeState runtimeFromJson(const json& j) {
   if (j.contains("jumpLocks")) s.jumpLocks = j["jumpLocks"].get<std::map<std::string, json>>();
   const double ph = jnum(j, "phEffect");
   if (isNum(ph) && ph > 0) s.phEffect = ph;
+  const double cap = jnum(j, "phCapMl"), unseen = jnum(j, "phUnseenMl");
+  if (isNum(cap) && cap > 0) s.phCapMl = cap;
+  if (isNum(unseen) && unseen > 0) s.phUnseenMl = unseen;
   // An entry that is no positive number counts as nothing learned (R5)
   if (j.contains("ecEffects") && j["ecEffects"].is_object())
     for (const auto& [k, v] : j["ecEffects"].items())
