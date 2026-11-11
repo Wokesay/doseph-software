@@ -2166,3 +2166,18 @@ minimal principle.
   - A run of unknown amount makes the sum a least ("at least").
 - **The amounts stay the tank's.** Plants that shared it share its cost,
   as they share its amounts (SD-138).
+
+
+## SD-153: Lead session with routing and routing log adopted from the blueprint
+
+2026-11-11. Chosen by the owner. Process only, no change to the software.
+
+- **The main session is the lead.** It cuts work into packages S, M or L,
+  marks the risky ones, hands them to the helpers in `.claude/agents/` and
+  merges; it builds only the smallest things itself.
+- **Reviews are independent** of the implementer; the safety path (R1–R8,
+  SD-105, SD-106) always gets the strict reviewer.
+- **A routing log** records each package (size, risk, models, result), so
+  the routing can be judged on evidence. Its address is kept out of this
+  public repository.
+- The rules are in `CLAUDE.md`, "Lead session and routing".
