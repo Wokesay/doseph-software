@@ -2168,7 +2168,7 @@ minimal principle.
   as they share its amounts (SD-138).
 
 
-## SD-153: Lead session with routing and routing log adopted from the blueprint
+## SD-153: Lead session with routing and routing log adopted from private sources
 
 2026-11-11. Chosen by the owner. Process only, no change to the software.
 

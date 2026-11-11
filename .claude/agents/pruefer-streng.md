@@ -6,7 +6,7 @@ model: opus
 effort: high
 ---
 
-<!-- Template from Wokesay/produkt-blaupause (templates for .claude/agents), translated and adapted for this repository. -->
+<!-- Template from private sources, translated and adapted for this repository. -->
 
 You review a risky change someone else built. You get the task and the comparison (`git diff BASE...BRANCH`), not the implementer's reasoning.
 

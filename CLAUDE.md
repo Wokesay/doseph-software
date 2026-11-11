@@ -100,5 +100,5 @@ device. The brief and the order of work are in #10.
 | New architecture, new control concept | L | Opus plans and splits, Sonnet builds | `pruefer-streng` (Opus) |
 | Planning, cutting, questions to the owner | – | lead | – |
 
-- Helpers: `sucher`, `umsetzer`, `pruefer`, `pruefer-streng` (templates from Wokesay/produkt-blaupause, rules in its `wissen/entwicklung-mit-ki.md`). New helpers apply only from the next new session; in the session that adds them, the lead uses a general helper with the model from the table.
-- After each package one line goes into the routing log, and a lesson that carries over to other products as a note (format: the blueprint's "Routing testen"; `projekt` = `doseph`). The log's address is not written here, because this repository is public: it is in the `CLAUDE.md` of Wokesay/doseph-hardware. No private details in the entries.
+- Helpers: `sucher`, `umsetzer`, `pruefer`, `pruefer-streng` (templates and rules from private sources). New helpers apply only from the next new session; in the session that adds them, the lead uses a general helper with the model from the table.
+- After each package one line goes into the routing log, and a lesson that carries over to other products as a note (format from private sources; `projekt` = `doseph`). The log's address is not written here, because this repository is public: it is in the private product repository. No private details in the entries.

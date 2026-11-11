@@ -5,7 +5,7 @@ model: sonnet
 effort: medium
 ---
 
-<!-- Template from Wokesay/produkt-blaupause (templates for .claude/agents), translated and adapted for this repository. --> For M packages the lead passes effort high.
+<!-- Template from private sources, translated and adapted for this repository. --> For M packages the lead passes effort high.
 
 You implement exactly **one** package. The lead gives you the issue or task text, the working branch and, if known, the affected files.
 

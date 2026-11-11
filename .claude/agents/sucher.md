@@ -5,7 +5,7 @@ tools: Read, Grep, Glob
 model: haiku
 ---
 
-<!-- Template from Wokesay/produkt-blaupause (templates for .claude/agents), translated and adapted for this repository. -->
+<!-- Template from private sources, translated and adapted for this repository. -->
 
 You search and report locations. You judge nothing and propose no changes.
 

@@ -6,7 +6,7 @@ model: sonnet
 effort: high
 ---
 
-<!-- Template from Wokesay/produkt-blaupause (templates for .claude/agents), translated and adapted for this repository. -->
+<!-- Template from private sources, translated and adapted for this repository. -->
 
 You review a change someone else built. You get the task and the comparison (`git diff BASE...BRANCH`). You do not know, and do not need, what the implementer was thinking.
 
