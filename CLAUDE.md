@@ -84,3 +84,21 @@ device. The brief and the order of work are in #10.
   `web/src/lang/msg.ts`; app texts in `web/src/lang/*.ts`, German and
   English (`tools/i18n_keys.test.mjs`).
 - Commit with clear messages, open a draft PR; the owner merges.
+
+## Lead session and routing
+
+- The main session is the **lead**: it reads the work, cuts it into packages S, M or L (L is split first, not built), marks risky ones, hands them to helpers from `.claude/agents/` and merges the results. It builds only the smallest things itself. Before handing out it shows the split (package, size, risk, model) as a choice. The lead runs on Opus at effort "high"; for splitting large work, architecture or safety questions it may propose "extra high" briefly.
+- Risky (`risiko-hoch`) is everything on the safety path: actuator gateway, watchdog, dosing, dosing journal, restart behaviour, limits (R1–R8, SD-105, SD-106), firmware, workflows, anything with access or secrets.
+
+| Task | Size / risk | Implement | Review |
+|---|---|---|---|
+| Find places, look up docs, SD/RAT IDs | – | `sucher` (Haiku) | – |
+| Texts, docs, CHANGELOG, translations | S | Sonnet, effort medium | lead reads it against the source |
+| Web app, UI, text keys | S/M | `umsetzer` (Sonnet, medium/high) | `pruefer` (Sonnet) and `tools/ci.sh` |
+| Core or simulator logic outside the safety path | M | `umsetzer` (Sonnet, high) | `pruefer` (Sonnet) |
+| Safety path as listed above, new domain rules | risiko-hoch | Sonnet high or Opus | `pruefer-streng` (Opus) and `/security-review` |
+| New architecture, new control concept | L | Opus plans and splits, Sonnet builds | `pruefer-streng` (Opus) |
+| Planning, cutting, questions to the owner | – | lead | – |
+
+- Helpers: `sucher`, `umsetzer`, `pruefer`, `pruefer-streng` (templates and rules from private sources). New helpers apply only from the next new session; in the session that adds them, the lead uses a general helper with the model from the table.
+- After each package one line goes into the routing log, and a lesson that carries over to other products as a note (format from private sources; `projekt` = `doseph`). The log's address is not written here, because this repository is public: it is in the private product repository. No private details in the entries.
